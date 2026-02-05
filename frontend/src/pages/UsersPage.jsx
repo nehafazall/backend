@@ -415,7 +415,7 @@ const UsersPage = () => {
                             <div className="space-y-2">
                                 <Label>Role *</Label>
                                 <Select
-                                    value={formData.role}
+                                    value={formData.role || undefined}
                                     onValueChange={(value) => setFormData({ ...formData, role: value })}
                                 >
                                     <SelectTrigger data-testid="user-role-select">
@@ -433,7 +433,7 @@ const UsersPage = () => {
                             <div className="space-y-2">
                                 <Label>Department</Label>
                                 <Select
-                                    value={formData.department}
+                                    value={formData.department || undefined}
                                     onValueChange={(value) => setFormData({ ...formData, department: value })}
                                 >
                                     <SelectTrigger data-testid="user-dept-select">
@@ -464,7 +464,7 @@ const UsersPage = () => {
                             <div className="space-y-2">
                                 <Label>Region</Label>
                                 <Select
-                                    value={formData.region}
+                                    value={formData.region || undefined}
                                     onValueChange={(value) => setFormData({ ...formData, region: value })}
                                 >
                                     <SelectTrigger data-testid="user-region-select">
