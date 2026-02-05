@@ -77,7 +77,7 @@ const UsersPage = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [roleFilter, setRoleFilter] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -100,7 +100,7 @@ const UsersPage = () => {
         try {
             setLoading(true);
             const params = {};
-            if (roleFilter) params.role = roleFilter;
+            if (roleFilter && roleFilter !== 'all') params.role = roleFilter;
             const response = await userApi.getAll(params);
             setUsers(response.data);
         } catch (error) {
@@ -253,7 +253,7 @@ const UsersPage = () => {
                                 <SelectValue placeholder="All Roles" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Roles</SelectItem>
+                                <SelectItem value="all">All Roles</SelectItem>
                                 {ROLES.map((role) => (
                                     <SelectItem key={role.id} value={role.id}>
                                         {role.label}
