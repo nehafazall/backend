@@ -29,6 +29,10 @@ import {
     Sun,
     Menu,
     X,
+    Building2,
+    BookOpen,
+    Calculator,
+    TrendingUp,
 } from 'lucide-react';
 
 const menuItems = [
