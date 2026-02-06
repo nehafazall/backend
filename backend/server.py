@@ -1588,6 +1588,220 @@ async def delete_lead(lead_id: str, user = Depends(require_roles(["super_admin",
     await log_activity("lead", lead_id, "deleted", user)
     return {"message": "Lead deleted"}
 
+# ==================== LEADS POOL (AGENTIC POOL) ====================
+
+@api_router.get("/leads/pool")
+async def get_leads_pool(user = Depends(get_current_user)):
+    """Get all leads in the agentic pool (unassigned or returned)"""
+    query = {
+        "$or": [
+            {"in_pool": True},
+            {"assigned_to": None},
+            {"assigned_to": ""}
+        ],
+        "stage": {"$nin": ["enrolled", "rejected"]}
+    }
+    
+    leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return leads
+
+@api_router.post("/leads/pool/{lead_id}/assign")
+async def assign_lead_from_pool(lead_id: str, user_id: Optional[str] = None, user = Depends(get_current_user)):
+    """Assign a lead from the pool to an agent (manual or round-robin)"""
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if not lead.get("in_pool") and lead.get("assigned_to"):
+        raise HTTPException(status_code=400, detail="Lead is already assigned")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if user_id:
+        # Manual assignment
+        agent = await db.users.find_one({"id": user_id})
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+    else:
+        # Round-robin assignment
+        region = "international"
+        phone = lead.get("phone", "")
+        if phone.startswith("+971") or phone.startswith("971"):
+            region = "UAE"
+        elif phone.startswith("+91") or phone.startswith("91"):
+            region = "India"
+        agent = await get_round_robin_agent("sales_executive", region)
+        if not agent:
+            raise HTTPException(status_code=400, detail="No available agents")
+    
+    update_data = {
+        "assigned_to": agent["id"],
+        "assigned_to_name": agent["full_name"],
+        "assigned_at": now,
+        "in_pool": False,
+        "sla_status": "ok",
+        "sla_warning_level": 0,
+        "sla_warning_at": None,
+        "sla_breach": False,
+        "first_contact_at": None,  # Reset for new assignment
+        "updated_at": now,
+        "last_activity": now
+    }
+    
+    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    await log_activity("lead", lead_id, "assigned_from_pool", user, {"new_agent": agent["full_name"]})
+    
+    # Notify the agent
+    await create_notification(
+        agent["id"],
+        "Lead Assigned from Pool",
+        f"You have been assigned lead: {lead['full_name']}. Contact within 60 mins!",
+        "info",
+        f"/sales"
+    )
+    
+    return {"message": f"Lead assigned to {agent['full_name']}", "assigned_to": agent["id"]}
+
+@api_router.post("/leads/{lead_id}/return-to-pool")
+async def return_lead_to_pool(lead_id: str, reason: str = "", user = Depends(get_current_user)):
+    """Manually return a lead to the pool"""
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if lead.get("stage") in ["enrolled", "rejected"]:
+        raise HTTPException(status_code=400, detail="Cannot return enrolled/rejected leads to pool")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "assigned_to": None,
+        "assigned_to_name": None,
+        "in_pool": True,
+        "sla_status": "ok",
+        "sla_warning_level": 0,
+        "sla_warning_at": None,
+        "updated_at": now
+    }
+    
+    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    await log_activity("lead", lead_id, "returned_to_pool", user, {"reason": reason})
+    
+    return {"message": "Lead returned to pool"}
+
+# ==================== CUSTOMER MASTER ====================
+
+@api_router.get("/customers")
+async def get_customers(
+    search: Optional[str] = None,
+    limit: int = 100,
+    user = Depends(get_current_user)
+):
+    """Get all customers with transaction history"""
+    query = {}
+    if search:
+        query["$or"] = [
+            {"full_name": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}}
+        ]
+    
+    customers = await db.customers.find(query, {"_id": 0}).sort("last_transaction_at", -1).to_list(limit)
+    return customers
+
+@api_router.get("/customers/{customer_id}")
+async def get_customer(customer_id: str, user = Depends(get_current_user)):
+    """Get a single customer with full transaction history"""
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Enrich transaction data with course names
+    if customer.get("transactions"):
+        for txn in customer["transactions"]:
+            if txn.get("course_id"):
+                course = await db.courses.find_one({"id": txn["course_id"]})
+                txn["course_name"] = course.get("name") if course else None
+    
+    # Get associated lead and student info
+    if customer.get("lead_id"):
+        lead = await db.leads.find_one({"id": customer["lead_id"]}, {"_id": 0})
+        customer["lead_info"] = lead
+    
+    if customer.get("student_id"):
+        student = await db.students.find_one({"id": customer["student_id"]}, {"_id": 0})
+        customer["student_info"] = student
+    
+    return customer
+
+@api_router.get("/customers/by-phone/{phone}")
+async def get_customer_by_phone(phone: str, user = Depends(get_current_user)):
+    """Get customer by phone number"""
+    customer = await db.customers.find_one({"phone": phone}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer
+
+# ==================== SLA MANAGEMENT ENDPOINTS ====================
+
+@api_router.post("/sla/check")
+async def trigger_sla_check(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Manually trigger SLA check (also runs automatically)"""
+    result = await process_sla_checks()
+    return {"message": "SLA check completed", **result}
+
+@api_router.get("/sla/config")
+async def get_sla_config(user = Depends(get_current_user)):
+    """Get current SLA configuration"""
+    return SLA_CONFIG
+
+@api_router.get("/sla/breaches")
+async def get_sla_breaches(user = Depends(get_current_user)):
+    """Get all current SLA breaches"""
+    lead_breaches = await db.leads.find({
+        "$or": [
+            {"sla_status": "breach"},
+            {"sla_status": "warning"}
+        ],
+        "stage": {"$nin": ["enrolled", "rejected"]}
+    }, {"_id": 0}).to_list(1000)
+    
+    student_breaches = await db.students.find({
+        "sla_status": {"$in": ["breach", "warning"]}
+    }, {"_id": 0}).to_list(1000)
+    
+    return {
+        "lead_breaches": lead_breaches,
+        "student_breaches": student_breaches,
+        "total_lead_breaches": len([l for l in lead_breaches if l.get("sla_status") == "breach"]),
+        "total_lead_warnings": len([l for l in lead_breaches if l.get("sla_status") == "warning"]),
+        "total_student_breaches": len([s for s in student_breaches if s.get("sla_status") == "breach"])
+    }
+
+@api_router.put("/students/{student_id}/activation-call")
+async def record_activation_call(student_id: str, call_recording_url: Optional[str] = None, user = Depends(get_current_user)):
+    """Record that activation call was made for a student"""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "activation_call_at": now,
+        "sla_status": "ok",
+        "sla_warning_at": None,
+        "updated_at": now
+    }
+    
+    if call_recording_url:
+        update_data["call_recording_url"] = call_recording_url
+    
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+    await log_activity("student", student_id, "activation_call_recorded", user)
+    
+    return {"message": "Activation call recorded"}
+
 # ==================== STUDENTS (CS & MENTOR CRM) ====================
 
 @api_router.get("/students", response_model=List[StudentResponse])
