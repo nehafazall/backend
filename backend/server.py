@@ -1410,14 +1410,10 @@ async def get_leads(
             course = await db.courses.find_one({"id": lead["course_id"]})
             lead["course_name"] = course.get("name") if course else None
         
-        last_activity = lead.get("last_activity") or lead.get("created_at")
-        if isinstance(last_activity, str):
-            try:
-                last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-                if datetime.now(timezone.utc) - last_activity > timedelta(hours=24):
-                    lead["sla_breach"] = True
-            except:
-                pass
+        # Real-time SLA check using new logic
+        sla_update = await check_lead_sla(lead)
+        if sla_update:
+            lead.update(sla_update)
     
     return leads
 
