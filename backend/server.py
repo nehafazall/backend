@@ -559,6 +559,261 @@ async def calculate_commission(user_id: str, payment_id: str, sale_amount: float
     
     return commission
 
+# ==================== SLA MANAGEMENT ====================
+
+async def check_lead_sla(lead: Dict) -> Dict:
+    """Check SLA status for a lead and return updated SLA fields"""
+    now = datetime.now(timezone.utc)
+    sla_update = {}
+    
+    # Parse timestamps
+    def parse_datetime(dt_str):
+        if not dt_str:
+            return None
+        if isinstance(dt_str, datetime):
+            return dt_str
+        try:
+            return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        except:
+            return None
+    
+    assigned_at = parse_datetime(lead.get("assigned_at"))
+    first_contact_at = parse_datetime(lead.get("first_contact_at"))
+    last_activity = parse_datetime(lead.get("last_activity") or lead.get("created_at"))
+    sla_warning_at = parse_datetime(lead.get("sla_warning_at"))
+    current_stage = lead.get("stage", "new_lead")
+    sla_warning_level = lead.get("sla_warning_level", 0)
+    
+    # Skip if lead is in pool, enrolled, or rejected
+    if lead.get("in_pool") or current_stage in ["enrolled", "rejected"]:
+        return sla_update
+    
+    # Rule 1: New Lead - 60 min first contact
+    if current_stage == "new_lead" and assigned_at and not first_contact_at:
+        mins_since_assign = (now - assigned_at).total_seconds() / 60
+        if mins_since_assign > SLA_CONFIG["new_lead_contact_mins"]:
+            sla_update["sla_status"] = "breach"
+            sla_update["sla_breach"] = True
+            if not lead.get("sla_breach"):  # First time breach
+                sla_update["sla_warning_at"] = now.isoformat()
+    
+    # Rule 2: Inactive Lead - 7 days escalation
+    elif current_stage not in ["new_lead", "enrolled", "rejected"] and last_activity:
+        days_inactive = (now - last_activity).days
+        hours_since_warning = 0
+        if sla_warning_at:
+            hours_since_warning = (now - sla_warning_at).total_seconds() / 3600
+        
+        # Level 0 -> Level 1: 7 days inactive
+        if days_inactive >= SLA_CONFIG["inactive_lead_days"] and sla_warning_level == 0:
+            sla_update["sla_status"] = "warning"
+            sla_update["sla_warning_level"] = 1
+            sla_update["sla_warning_at"] = now.isoformat()
+        
+        # Level 1 -> Level 2: 72 hours after first warning
+        elif sla_warning_level == 1 and hours_since_warning >= SLA_CONFIG["inactive_warning_hours"]:
+            sla_update["sla_status"] = "warning"
+            sla_update["sla_warning_level"] = 2
+            sla_update["sla_warning_at"] = now.isoformat()
+        
+        # Level 2 -> Reassign: 72 hours after second warning
+        elif sla_warning_level == 2 and hours_since_warning >= SLA_CONFIG["inactive_reassign_hours"]:
+            sla_update["sla_status"] = "breach"
+            sla_update["sla_breach"] = True
+            sla_update["in_pool"] = True
+            sla_update["assigned_to"] = None
+            sla_update["assigned_to_name"] = None
+            sla_update["sla_warning_level"] = 0  # Reset for next assignment
+    
+    return sla_update
+
+async def check_student_sla(student: Dict) -> Dict:
+    """Check SLA status for CS activation"""
+    now = datetime.now(timezone.utc)
+    sla_update = {}
+    
+    def parse_datetime(dt_str):
+        if not dt_str:
+            return None
+        if isinstance(dt_str, datetime):
+            return dt_str
+        try:
+            return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        except:
+            return None
+    
+    created_at = parse_datetime(student.get("created_at"))
+    activation_call_at = parse_datetime(student.get("activation_call_at"))
+    current_stage = student.get("stage", "new_student")
+    
+    # Rule 3: CS Activation - 15 min
+    if current_stage == "new_student" and created_at and not activation_call_at:
+        mins_since_create = (now - created_at).total_seconds() / 60
+        if mins_since_create > SLA_CONFIG["cs_activation_mins"]:
+            sla_update["sla_status"] = "breach"
+            if not student.get("sla_warning_at"):
+                sla_update["sla_warning_at"] = now.isoformat()
+    
+    return sla_update
+
+async def process_sla_checks():
+    """Background task to check all SLA statuses and send notifications"""
+    now = datetime.now(timezone.utc)
+    
+    # Check all active leads
+    leads = await db.leads.find({
+        "stage": {"$nin": ["enrolled", "rejected"]},
+        "in_pool": {"$ne": True}
+    }).to_list(10000)
+    
+    for lead in leads:
+        sla_update = await check_lead_sla(lead)
+        if sla_update:
+            old_status = lead.get("sla_status", "ok")
+            new_status = sla_update.get("sla_status", old_status)
+            
+            await db.leads.update_one({"id": lead["id"]}, {"$set": sla_update})
+            
+            # Send notifications on status change
+            if new_status != old_status or sla_update.get("sla_warning_level", 0) > lead.get("sla_warning_level", 0):
+                # Notify sales executive
+                if lead.get("assigned_to"):
+                    await create_notification(
+                        lead["assigned_to"],
+                        f"SLA {new_status.upper()}: {lead['full_name']}",
+                        f"Lead requires immediate attention. Status: {new_status}",
+                        "warning" if new_status == "warning" else "error",
+                        f"/sales"
+                    )
+                
+                # Notify manager on breach or level 2 warning
+                if new_status == "breach" or sla_update.get("sla_warning_level", 0) >= 2:
+                    managers = await db.users.find({
+                        "role": {"$in": ["sales_manager", "team_leader", "admin", "super_admin"]},
+                        "is_active": True
+                    }).to_list(100)
+                    for manager in managers:
+                        await create_notification(
+                            manager["id"],
+                            f"SLA BREACH: Lead {lead['full_name']}",
+                            f"Lead has breached SLA. Assigned to: {lead.get('assigned_to_name', 'Unassigned')}",
+                            "error",
+                            f"/sales"
+                        )
+                
+                # If reassigned to pool, log activity
+                if sla_update.get("in_pool"):
+                    await db.activity_logs.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "entity_type": "lead",
+                        "entity_id": lead["id"],
+                        "action": "sla_reassign_to_pool",
+                        "user_id": "system",
+                        "user_name": "System (SLA)",
+                        "details": {"reason": "Inactive for 10+ days, returned to lead pool"},
+                        "created_at": now.isoformat()
+                    })
+    
+    # Check all new students for CS activation SLA
+    students = await db.students.find({
+        "stage": "new_student",
+        "activation_call_at": None
+    }).to_list(10000)
+    
+    for student in students:
+        sla_update = await check_student_sla(student)
+        if sla_update:
+            old_status = student.get("sla_status", "ok")
+            new_status = sla_update.get("sla_status", old_status)
+            
+            await db.students.update_one({"id": student["id"]}, {"$set": sla_update})
+            
+            if new_status == "breach" and old_status != "breach":
+                # Notify CS agent
+                if student.get("cs_agent_id"):
+                    await create_notification(
+                        student["cs_agent_id"],
+                        f"SLA BREACH: Activation call needed",
+                        f"Student {student['full_name']} needs activation call immediately!",
+                        "error",
+                        f"/cs"
+                    )
+                
+                # Notify CS head
+                cs_heads = await db.users.find({
+                    "role": {"$in": ["cs_head", "admin", "super_admin"]},
+                    "is_active": True
+                }).to_list(100)
+                for head in cs_heads:
+                    await create_notification(
+                        head["id"],
+                        f"CS SLA BREACH: {student['full_name']}",
+                        f"Activation call not made within 15 mins. Agent: {student.get('cs_agent_name', 'Unknown')}",
+                        "error",
+                        f"/cs"
+                    )
+    
+    return {"leads_checked": len(leads), "students_checked": len(students)}
+
+async def create_or_update_customer(lead: Dict, student: Dict, payment: Dict = None):
+    """Create or update customer master record"""
+    phone = lead.get("phone") or student.get("phone")
+    
+    # Find existing customer
+    customer = await db.customers.find_one({"phone": phone})
+    
+    if not customer:
+        customer = {
+            "id": str(uuid.uuid4()),
+            "full_name": lead.get("full_name") or student.get("full_name"),
+            "phone": phone,
+            "email": lead.get("email") or student.get("email"),
+            "country": lead.get("country") or student.get("country"),
+            "lead_id": lead.get("id"),
+            "student_id": student.get("id") if student else None,
+            "total_spent": 0,
+            "transaction_count": 0,
+            "transactions": [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.customers.insert_one(customer)
+    else:
+        # Update student_id if not set
+        if student and not customer.get("student_id"):
+            await db.customers.update_one(
+                {"id": customer["id"]},
+                {"$set": {"student_id": student.get("id"), "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+    
+    # Add transaction if payment provided
+    if payment:
+        transaction = {
+            "payment_id": payment.get("id"),
+            "amount": payment.get("amount", 0),
+            "currency": payment.get("currency", "AED"),
+            "payment_method": payment.get("payment_method"),
+            "payment_type": payment.get("payment_type", "fresh"),
+            "course_id": payment.get("course_id"),
+            "transaction_id": payment.get("transaction_id"),
+            "date": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.customers.update_one(
+            {"id": customer["id"]},
+            {
+                "$push": {"transactions": transaction},
+                "$inc": {"total_spent": payment.get("amount", 0), "transaction_count": 1},
+                "$set": {
+                    "last_transaction_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                },
+                "$min": {"first_transaction_at": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+    
+    return customer
+
 # ==================== BOOTSTRAP ====================
 
 async def bootstrap_super_admin():
