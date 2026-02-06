@@ -8,10 +8,14 @@ import { AuthProvider, ThemeProvider, useAuth } from "@/lib/api";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import SalesCRMPage from "@/pages/SalesCRMPage";
+import SalesDashboard from "@/pages/SalesDashboard";
 import CustomerServicePage from "@/pages/CustomerServicePage";
 import MentorCRMPage from "@/pages/MentorCRMPage";
 import FinancePage from "@/pages/FinancePage";
 import UsersPage from "@/pages/UsersPage";
+import DepartmentsPage from "@/pages/DepartmentsPage";
+import CoursesPage from "@/pages/CoursesPage";
+import CommissionEnginePage from "@/pages/CommissionEnginePage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
@@ -77,28 +81,33 @@ function AppRoutes() {
                 <Route path="dashboard" element={<DashboardPage />} />
                 
                 {/* Sales CRM */}
-                <Route path="sales/*" element={
+                <Route path="sales" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive']}>
                         <SalesCRMPage />
                     </ProtectedRoute>
                 } />
+                <Route path="sales/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive']}>
+                        <SalesDashboard />
+                    </ProtectedRoute>
+                } />
                 
                 {/* Customer Service */}
-                <Route path="cs/*" element={
+                <Route path="cs" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent']}>
                         <CustomerServicePage />
                     </ProtectedRoute>
                 } />
                 
                 {/* Mentor CRM */}
-                <Route path="mentor/*" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor']}>
+                <Route path="mentor" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
                         <MentorCRMPage />
                     </ProtectedRoute>
                 } />
                 
                 {/* Finance */}
-                <Route path="finance/*" element={
+                <Route path="finance" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
                         <FinancePage />
                     </ProtectedRoute>
@@ -106,8 +115,29 @@ function AppRoutes() {
                 
                 {/* User Management */}
                 <Route path="users" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
                         <UsersPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Department Management */}
+                <Route path="departments" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <DepartmentsPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Course Management */}
+                <Route path="courses" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <CoursesPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Commission Engine */}
+                <Route path="commissions" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                        <CommissionEnginePage />
                     </ProtectedRoute>
                 } />
                 
