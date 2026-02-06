@@ -20,105 +20,84 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    Users,
-    Search,
-    DollarSign,
-    CreditCard,
-    Phone,
-    Mail,
-    Eye,
-    TrendingUp,
-    Receipt,
-    Clock,
-    ChevronRight,
-} from 'lucide-react';
+import { Users, Search, DollarSign, Phone, Eye, Receipt, Clock, CreditCard } from 'lucide-react';
+
+const formatCurrency = (amount) => {
+    const val = amount || 0;
+    return 'AED ' + val.toLocaleString();
+};
+
+const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-GB');
+};
 
 const CustomerMasterPage = () => {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [showModal, setShowModal] = useState(false);
 
     useEffect(() => {
-        fetchCustomers();
+        loadCustomers();
     }, []);
 
-    const fetchCustomers = async () => {
+    const loadCustomers = async () => {
+        setLoading(true);
         try {
-            setLoading(true);
             const res = await apiClient.get('/customers');
-            setCustomers(res.data);
-        } catch (error) {
-            toast.error('Failed to fetch customers');
-        } finally {
-            setLoading(false);
+            setCustomers(res.data || []);
+        } catch (err) {
+            toast.error('Failed to load customers');
         }
+        setLoading(false);
     };
 
-    const handleSearch = async () => {
+    const searchCustomers = async () => {
+        setLoading(true);
         try {
-            setLoading(true);
-            const res = await apiClient.get('/customers?search=' + encodeURIComponent(searchTerm));
-            setCustomers(res.data);
-        } catch (error) {
-            toast.error('Failed to search customers');
-        } finally {
-            setLoading(false);
+            const url = '/customers?search=' + encodeURIComponent(searchTerm);
+            const res = await apiClient.get(url);
+            setCustomers(res.data || []);
+        } catch (err) {
+            toast.error('Search failed');
         }
+        setLoading(false);
     };
 
-    const viewCustomerDetails = async (customerId) => {
+    const openDetails = async (id) => {
+        setShowModal(true);
         try {
-            setShowDetailModal(true);
-            const res = await apiClient.get('/customers/' + customerId);
+            const res = await apiClient.get('/customers/' + id);
             setSelectedCustomer(res.data);
-        } catch (error) {
-            toast.error('Failed to fetch customer details');
-            setShowDetailModal(false);
+        } catch (err) {
+            toast.error('Failed to load details');
+            setShowModal(false);
         }
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-AE', {
-            style: 'currency',
-            currency: 'AED',
-            minimumFractionDigits: 0,
-        }).format(amount || 0);
+    const calcTotal = (arr, field) => {
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) {
+            sum += arr[i][field] || 0;
+        }
+        return sum;
     };
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return 'N/A';
-        return new Date(dateStr).toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    const totalRev = calcTotal(customers, 'total_spent');
+    const totalTxn = calcTotal(customers, 'transaction_count');
+    const avgVal = customers.length > 0 ? totalRev / customers.length : 0;
 
-    const totalRevenue = customers.reduce((sum, c) => sum + (c.total_spent || 0), 0);
-    const totalTransactions = customers.reduce((sum, c) => sum + (c.transaction_count || 0), 0);
-
-    return (
-        <div className="space-y-6" data-testid="customer-master-page">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Customer Master</h1>
-                    <p className="text-muted-foreground">
-                        Complete transaction history for all customers
-                    </p>
-                </div>
-            </div>
-
+    const renderStats = () => {
+        return (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card>
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-muted-foreground">Total Customers</p>
+                                <p className="text-sm text-muted-foreground">Customers</p>
                                 <p className="text-3xl font-bold">{customers.length}</p>
                             </div>
                             <Users className="h-8 w-8 text-primary" />
@@ -129,10 +108,8 @@ const CustomerMasterPage = () => {
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                                <p className="text-3xl font-bold text-emerald-500">
-                                    {formatCurrency(totalRevenue)}
-                                </p>
+                                <p className="text-sm text-muted-foreground">Revenue</p>
+                                <p className="text-2xl font-bold text-emerald-500">{formatCurrency(totalRev)}</p>
                             </div>
                             <DollarSign className="h-8 w-8 text-emerald-500" />
                         </div>
@@ -142,8 +119,8 @@ const CustomerMasterPage = () => {
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-muted-foreground">Total Transactions</p>
-                                <p className="text-3xl font-bold text-blue-500">{totalTransactions}</p>
+                                <p className="text-sm text-muted-foreground">Transactions</p>
+                                <p className="text-3xl font-bold text-blue-500">{totalTxn}</p>
                             </div>
                             <Receipt className="h-8 w-8 text-blue-500" />
                         </div>
@@ -153,16 +130,72 @@ const CustomerMasterPage = () => {
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-muted-foreground">Avg. Value</p>
-                                <p className="text-3xl font-bold text-orange-500">
-                                    {formatCurrency(customers.length > 0 ? totalRevenue / customers.length : 0)}
-                                </p>
+                                <p className="text-sm text-muted-foreground">Avg Value</p>
+                                <p className="text-2xl font-bold text-orange-500">{formatCurrency(avgVal)}</p>
                             </div>
-                            <TrendingUp className="h-8 w-8 text-orange-500" />
+                            <DollarSign className="h-8 w-8 text-orange-500" />
                         </div>
                     </CardContent>
                 </Card>
             </div>
+        );
+    };
+
+    const renderRow = (c) => {
+        return (
+            <TableRow key={c.id}>
+                <TableCell>
+                    <p className="font-medium">{c.full_name}</p>
+                </TableCell>
+                <TableCell>
+                    <p className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</p>
+                </TableCell>
+                <TableCell>
+                    <Badge variant="secondary">{c.transaction_count || 0}</Badge>
+                </TableCell>
+                <TableCell>
+                    <span className="font-mono text-emerald-500">{formatCurrency(c.total_spent)}</span>
+                </TableCell>
+                <TableCell>
+                    <span className="text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />{formatDate(c.last_transaction_at)}
+                    </span>
+                </TableCell>
+                <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => openDetails(c.id)}>
+                        <Eye className="h-4 w-4 mr-1" />View
+                    </Button>
+                </TableCell>
+            </TableRow>
+        );
+    };
+
+    const renderTxn = (txn, idx) => {
+        return (
+            <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    <div>
+                        <p className="font-medium">{txn.payment_type || 'Payment'}</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(txn.date)}</p>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className="font-mono font-bold">{formatCurrency(txn.amount)}</p>
+                    <Badge variant="outline">{txn.payment_method || 'N/A'}</Badge>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-6" data-testid="customer-master-page">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Customer Master</h1>
+                <p className="text-muted-foreground">Transaction history for all customers</p>
+            </div>
+
+            {renderStats()}
 
             <Card>
                 <CardHeader>
@@ -175,11 +208,11 @@ const CustomerMasterPage = () => {
                                     placeholder="Search..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                    onKeyDown={(e) => e.key === 'Enter' && searchCustomers()}
                                     className="pl-10"
                                 />
                             </div>
-                            <Button onClick={handleSearch} variant="secondary">Search</Button>
+                            <Button onClick={searchCustomers} variant="secondary">Search</Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -193,7 +226,7 @@ const CustomerMasterPage = () => {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Customer</TableHead>
-                                    <TableHead>Contact</TableHead>
+                                    <TableHead>Phone</TableHead>
                                     <TableHead>Transactions</TableHead>
                                     <TableHead>Total Spent</TableHead>
                                     <TableHead>Last Transaction</TableHead>
@@ -203,47 +236,10 @@ const CustomerMasterPage = () => {
                             <TableBody>
                                 {customers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                                            No customers found
-                                        </TableCell>
+                                        <TableCell colSpan={6} className="text-center py-8">No customers found</TableCell>
                                     </TableRow>
                                 ) : (
-                                    customers.map((customer) => (
-                                        <TableRow key={customer.id}>
-                                            <TableCell>
-                                                <p className="font-medium">{customer.full_name}</p>
-                                                <p className="text-xs text-muted-foreground">{customer.country}</p>
-                                            </TableCell>
-                                            <TableCell>
-                                                <p className="text-sm flex items-center gap-1">
-                                                    <Phone className="h-3 w-3" />{customer.phone}
-                                                </p>
-                                                {customer.email && (
-                                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                                        <Mail className="h-3 w-3" />{customer.email}
-                                                    </p>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant="secondary">{customer.transaction_count || 0}</Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="font-mono font-bold text-emerald-500">
-                                                    {formatCurrency(customer.total_spent)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />{formatDate(customer.last_transaction_at)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" onClick={() => viewCustomerDetails(customer.id)}>
-                                                    <Eye className="h-4 w-4 mr-1" />View
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                    customers.map(renderRow)
                                 )}
                             </TableBody>
                         </Table>
@@ -251,40 +247,34 @@ const CustomerMasterPage = () => {
                 </CardContent>
             </Card>
 
-            <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+            <Dialog open={showModal} onOpenChange={setShowModal}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Customer Details</DialogTitle>
-                        <DialogDescription>Transaction history and info</DialogDescription>
+                        <DialogDescription>Transaction history</DialogDescription>
                     </DialogHeader>
-                    
                     {selectedCustomer && (
                         <div className="space-y-4">
                             <Card>
-                                <CardContent className="pt-6">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Name</p>
-                                            <p className="font-medium">{selectedCustomer.full_name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Phone</p>
-                                            <p className="font-medium">{selectedCustomer.phone}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Email</p>
-                                            <p className="font-medium">{selectedCustomer.email || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Total Spent</p>
-                                            <p className="font-mono font-bold text-emerald-500">
-                                                {formatCurrency(selectedCustomer.total_spent)}
-                                            </p>
-                                        </div>
+                                <CardContent className="pt-6 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Name</p>
+                                        <p className="font-medium">{selectedCustomer.full_name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Phone</p>
+                                        <p className="font-medium">{selectedCustomer.phone}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Email</p>
+                                        <p className="font-medium">{selectedCustomer.email || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Total Spent</p>
+                                        <p className="font-mono text-emerald-500">{formatCurrency(selectedCustomer.total_spent)}</p>
                                     </div>
                                 </CardContent>
                             </Card>
-                            
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="text-lg">Transactions</CardTitle>
@@ -292,21 +282,7 @@ const CustomerMasterPage = () => {
                                 <CardContent>
                                     {selectedCustomer.transactions && selectedCustomer.transactions.length > 0 ? (
                                         <div className="space-y-3">
-                                            {selectedCustomer.transactions.map((txn, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                                    <div className="flex items-center gap-3">
-                                                        <CreditCard className="h-5 w-5 text-primary" />
-                                                        <div>
-                                                            <p className="font-medium">{txn.payment_type || 'Payment'}</p>
-                                                            <p className="text-sm text-muted-foreground">{formatDate(txn.date)}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="font-mono font-bold">{formatCurrency(txn.amount)}</p>
-                                                        <Badge variant="outline">{txn.payment_method}</Badge>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                            {selectedCustomer.transactions.map(renderTxn)}
                                         </div>
                                     ) : (
                                         <p className="text-center text-muted-foreground py-4">No transactions</p>
