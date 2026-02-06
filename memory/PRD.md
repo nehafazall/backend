@@ -3,6 +3,14 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
+### Detailed Requirements (User Provided)
+1. **Departments:** 8 departments - Sales, Finance, Customer Service (CS), Mentors/Academics, Operations, Marketing, HR, Quality Control
+2. **Access Control:** Granular permission matrix (View/Edit/Full) per role per module
+3. **Commission Engine:** Flexible commission rules for courses with percentage/fixed rates
+4. **Sales Dashboard:** Analytics with revenue, commission, conversion rate, leaderboard
+5. **CS Dashboard:** Student metrics, onboarding rates, upgrade revenue, satisfaction scores
+6. **Color Theme:** White (#FFFFFF), Black (#31261D), Red (#EF3340), Grey (#B0B0B0)
+
 ## Architecture Overview
 - **Backend**: FastAPI (Python) with MongoDB
 - **Frontend**: React with Shadcn UI components
@@ -18,80 +26,102 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 6. **Mentor** - Student mentorship, redeposit tracking
 7. **Finance** - Payment verification, reconciliation
 
-## Core Requirements (Static)
-- Role-based access control (RBAC)
-- Lead management with Kanban boards
-- Student management (CS & Mentor)
-- Payment tracking and verification
-- Real-time dashboards
-- Audit trails and activity logs
-- Dark/Light mode theme support
-- Responsive design
+## What's Been Implemented
 
-## What's Been Implemented - Phase 1 MVP (Feb 2026)
-### Backend APIs ✅
-- [x] Authentication (login, JWT tokens)
-- [x] User Management (CRUD, roles, activation)
-- [x] Lead Management (CRUD, stage updates, assignment)
-- [x] Student Management (CRUD, CS & Mentor stages)
-- [x] Payment Management (CRUD, verification workflow)
-- [x] Dashboard Statistics
-- [x] Notifications System
-- [x] Activity Logs
+### Phase 1 MVP (Feb 2026) ✅
+- JWT Authentication with role-based access
+- User Management (CRUD, roles, activation)
+- Lead Management with Kanban (8 stages)
+- Student Management with Kanban (CS & Mentor stages)
+- Payment Management with verification workflow
+- Dashboard with role-specific statistics
+- Notifications System
+- Activity Logs
+- Dark/Light mode theme
 
-### Frontend Pages ✅
-- [x] Login Page (CLT branding, dark theme)
-- [x] Dashboard (role-specific stats and charts)
-- [x] Sales CRM (Kanban board - 8 stages)
-- [x] Customer Service (Kanban board - 7 stages)
-- [x] Mentor CRM (Kanban board - 5 stages)
-- [x] Finance (Kanban board - 6 stages, summary cards)
-- [x] User Management (table with CRUD operations)
-- [x] Settings (profile, permissions, theme toggle)
+### Phase 2 Features (Feb 2026) ✅
+- **Department Management** - View/Create/Edit 8 departments with approval workflow
+- **Course Management** - Full CRUD for courses with pricing
+- **Commission Engine** - Rule creation with percentage/fixed rates per role/course
+- **Sales Dashboard** - Revenue, commission, conversion rate, lead funnel charts, leaderboard
+- **CS Dashboard** - Student pipeline, onboarding rate, upgrade revenue, team leaderboard
+- **Access Control** - Permission matrix UI for granular role-based access
 
-### Automation ✅
-- [x] Round-robin lead assignment
-- [x] Auto-handoff from Sales to CS when enrolled
-- [x] Mentor assignment on student activation
-- [x] SLA breach detection (24-hour rule)
-- [x] Duplicate lead detection by phone
+### Frontend Pages (13 total)
+1. Login Page
+2. Dashboard (role-specific)
+3. Sales CRM (Kanban)
+4. My Sales Dashboard (analytics)
+5. Customer Service (Kanban)
+6. CS Dashboard (analytics)
+7. Mentor CRM (Kanban)
+8. Finance (Kanban)
+9. User Management
+10. Departments
+11. Courses
+12. Commission Engine
+13. Access Control
+14. Settings
+
+### Backend API Endpoints (26+ tested)
+- `/api/auth/login`, `/api/auth/me`
+- `/api/users/` (CRUD)
+- `/api/departments/` (CRUD + approval workflow)
+- `/api/courses/` (CRUD)
+- `/api/commission-rules/` (CRUD)
+- `/api/commissions/`, `/api/commissions/summary`
+- `/api/leads/` (CRUD)
+- `/api/students/` (CRUD)
+- `/api/payments/` (CRUD)
+- `/api/notifications/`
+- `/api/dashboard/stats`, `/api/dashboard/lead-funnel`, `/api/dashboard/leaderboard`
+- `/api/dashboard/student-funnel`, `/api/dashboard/upgrades-by-month`, `/api/dashboard/cs-leaderboard`
+
+### Automation Features ✅
+- Round-robin lead assignment
+- Auto-handoff from Sales to CS on enrollment
+- Mentor assignment on student activation
+- SLA breach detection (24-hour rule)
+- Duplicate lead detection by phone
+- Commission calculation on enrollment/upgrade
 
 ## Prioritized Backlog
 
-### P0 - Critical (Next Sprint)
-- [ ] Email notifications integration (SendGrid)
-- [ ] Meta Ads webhook integration
-- [ ] Google Ads webhook integration
+### P0 - Critical (Completed)
+- [x] Fix frontend blocker (Maximum call stack size exceeded)
+- [x] Department Management UI
+- [x] Granular Access Control UI
+- [x] CS Dashboard
 
 ### P1 - High Priority
+- [ ] Google Sheets Integration for lead import (MVP lead intake)
+- [ ] Email notifications (SendGrid)
+- [ ] Advanced reporting and exports
+- [ ] Bulk lead import functionality
+
+### P2 - Medium Priority  
+- [ ] Meta Ads webhook integration
+- [ ] Google Ads webhook integration
 - [ ] HR & Payroll Module
 - [ ] Asset Management Module
-- [ ] Training & Development Module
-- [ ] Marketing Operations Module
-- [ ] Task & Project Management
-- [ ] Advanced reporting and exports
-
-### P2 - Medium Priority
-- [ ] TEST/PROD environment separation
-- [ ] Biometric attendance integration
 - [ ] WhatsApp/SMS notifications
-- [ ] Commission calculation engine
-- [ ] FX tracking for payments
 
 ### P3 - Nice to Have
 - [ ] Mobile app
 - [ ] AI-powered lead scoring
 - [ ] Predictive analytics
-
-## Next Tasks (Immediate)
-1. Integrate SendGrid for email notifications
-2. Set up Meta Ads webhook endpoint
-3. Set up Google Ads webhook endpoint
-4. Add bulk lead import functionality
-5. Implement advanced filters on Kanban boards
+- [ ] Training & Development Module
+- [ ] Task & Project Management
 
 ## Technical Notes
-- Super Admin: aqib@clt-academy.com / A@qib1234
-- JWT Secret stored in backend/.env
-- All API routes prefixed with /api
-- MongoDB indexes on: email, phone, stage, assigned_to
+- **Super Admin:** aqib@clt-academy.com / A@qib1234
+- **JWT Secret:** stored in backend/.env
+- **All API routes prefixed with /api**
+- **MongoDB indexes on:** email, phone, stage, assigned_to
+- **Test reports:** /app/test_reports/iteration_2.json (26/26 backend tests passed)
+
+## Files Reference
+- Backend: `/app/backend/server.py` (main API)
+- Frontend Routes: `/app/frontend/src/App.js`
+- Navigation: `/app/frontend/src/components/Layout.jsx`
+- New Pages: AccessControlPage.jsx, CSDashboard.jsx
