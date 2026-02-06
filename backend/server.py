@@ -233,6 +233,7 @@ class LeadUpdate(BaseModel):
     course_id: Optional[str] = None
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
+    call_recording_url: Optional[str] = None  # 3CX integration placeholder
 
 class LeadResponse(LeadBase):
     id: str
@@ -246,10 +247,17 @@ class LeadResponse(LeadBase):
     course_name: Optional[str] = None
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
+    call_recording_url: Optional[str] = None  # 3CX integration placeholder
     created_at: datetime
     updated_at: datetime
     last_activity: Optional[datetime] = None
+    assigned_at: Optional[datetime] = None  # When lead was assigned
+    first_contact_at: Optional[datetime] = None  # When first contacted
+    sla_status: str = "ok"  # ok, warning, breach
+    sla_warning_at: Optional[datetime] = None  # When warning was issued
+    sla_warning_level: int = 0  # 0=none, 1=first warning, 2=second warning
     sla_breach: bool = False
+    in_pool: bool = False  # True if in agentic pool
     
     model_config = ConfigDict(extra="ignore")
 
