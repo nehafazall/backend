@@ -1476,6 +1476,23 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
         raise HTTPException(status_code=404, detail="Lead not found")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    now = datetime.now(timezone.utc)
+    
+    # Track first contact - when stage changes from new_lead
+    if "stage" in update_data and existing.get("stage") == "new_lead" and update_data["stage"] != "new_lead":
+        if not existing.get("first_contact_at"):
+            update_data["first_contact_at"] = now.isoformat()
+        # Reset SLA on first contact
+        update_data["sla_status"] = "ok"
+        update_data["sla_breach"] = False
+        update_data["sla_warning_level"] = 0
+        update_data["sla_warning_at"] = None
+    
+    # Any activity resets inactive SLA warning
+    if existing.get("sla_warning_level", 0) > 0 and existing.get("stage") != "new_lead":
+        update_data["sla_status"] = "ok"
+        update_data["sla_warning_level"] = 0
+        update_data["sla_warning_at"] = None
     
     if "stage" in update_data:
         if update_data["stage"] not in LEAD_STAGES:
@@ -1514,7 +1531,7 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                                 team_leader["role"]
                             )
             
-            # Create student record
+            # Create student record with SLA tracking
             student_data = {
                 "id": str(uuid.uuid4()),
                 "lead_id": lead_id,
@@ -1528,8 +1545,12 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "onboarding_complete": False,
                 "classes_attended": 0,
                 "upgrade_eligible": False,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "activation_call_at": None,  # CS SLA tracking
+                "sla_status": "ok",
+                "sla_warning_at": None,
+                "call_recording_url": None,  # 3CX placeholder
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat()
             }
             
             cs_agent = await get_round_robin_agent("cs_agent")
@@ -1538,16 +1559,19 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 student_data["cs_agent_name"] = cs_agent["full_name"]
                 await create_notification(
                     cs_agent["id"],
-                    "New Student Assigned",
-                    f"New student enrolled: {existing['full_name']}",
-                    "success",
+                    "New Student Assigned - URGENT",
+                    f"New student enrolled: {existing['full_name']}. Make activation call within 15 mins!",
+                    "warning",
                     f"/cs/students/{student_data['id']}"
                 )
             
             await db.students.insert_one(student_data)
+            
+            # Create/update customer master record
+            await create_or_update_customer(existing, student_data)
     
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    update_data["last_activity"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = now.isoformat()
+    update_data["last_activity"] = now.isoformat()
     
     await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     await log_activity("lead", lead_id, "updated", user, update_data)
