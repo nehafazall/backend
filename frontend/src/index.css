@@ -6,26 +6,27 @@
 
 @layer base {
     :root {
-        /* Light Theme - CLT Academy */
-        --background: 210 40% 98%;
-        --foreground: 222 84% 5%;
+        /* Light Theme - CLT Academy Brand Colors */
+        /* White: #FFFFFF, Black: #31261D, Red: #EF3340, Grey: #B0B0B0 */
+        --background: 0 0% 100%;
+        --foreground: 17 27% 15%;
         --card: 0 0% 100%;
-        --card-foreground: 222 84% 5%;
+        --card-foreground: 17 27% 15%;
         --popover: 0 0% 100%;
-        --popover-foreground: 222 84% 5%;
-        --primary: 217 91% 60%;
-        --primary-foreground: 210 40% 98%;
-        --secondary: 210 40% 96%;
-        --secondary-foreground: 222 47% 11%;
-        --muted: 210 40% 96%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 210 40% 96%;
-        --accent-foreground: 222 47% 11%;
-        --destructive: 350 89% 60%;
-        --destructive-foreground: 210 40% 98%;
-        --border: 214 32% 91%;
-        --input: 214 32% 91%;
-        --ring: 217 91% 60%;
+        --popover-foreground: 17 27% 15%;
+        --primary: 356 85% 57%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 0 0% 96%;
+        --secondary-foreground: 17 27% 15%;
+        --muted: 0 0% 96%;
+        --muted-foreground: 0 0% 45%;
+        --accent: 356 85% 95%;
+        --accent-foreground: 356 85% 45%;
+        --destructive: 356 85% 57%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 0 0% 90%;
+        --input: 0 0% 90%;
+        --ring: 356 85% 57%;
         --radius: 0.5rem;
         
         /* Semantic Colors */
@@ -33,35 +34,40 @@
         --warning: 38 92% 50%;
         --info: 199 89% 48%;
         
+        /* CLT Brand */
+        --clt-red: 356 85% 57%;
+        --clt-black: 17 27% 15%;
+        --clt-grey: 0 0% 69%;
+        
         /* Chart Colors */
-        --chart-1: 217 91% 60%;
+        --chart-1: 356 85% 57%;
         --chart-2: 160 84% 39%;
         --chart-3: 38 92% 50%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 350 89% 60%;
+        --chart-4: 199 89% 48%;
+        --chart-5: 280 65% 60%;
     }
     
     .dark {
-        /* Dark Theme - CLT Academy */
-        --background: 222 84% 5%;
-        --foreground: 210 40% 98%;
-        --card: 217 33% 17%;
-        --card-foreground: 210 40% 98%;
-        --popover: 217 33% 17%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 217 91% 60%;
-        --primary-foreground: 222 84% 5%;
-        --secondary: 217 33% 17%;
-        --secondary-foreground: 210 40% 98%;
-        --muted: 217 33% 17%;
-        --muted-foreground: 215 20% 65%;
-        --accent: 217 33% 17%;
-        --accent-foreground: 210 40% 98%;
-        --destructive: 350 89% 60%;
-        --destructive-foreground: 210 40% 98%;
-        --border: 217 33% 25%;
-        --input: 217 33% 25%;
-        --ring: 217 91% 60%;
+        /* Dark Theme - CLT Academy Brand Colors */
+        --background: 17 27% 10%;
+        --foreground: 0 0% 98%;
+        --card: 17 27% 15%;
+        --card-foreground: 0 0% 98%;
+        --popover: 17 27% 15%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 356 85% 57%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 17 27% 20%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 17 27% 20%;
+        --muted-foreground: 0 0% 69%;
+        --accent: 17 27% 25%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 356 85% 57%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 17 27% 25%;
+        --input: 17 27% 25%;
+        --ring: 356 85% 57%;
     }
 }
 
