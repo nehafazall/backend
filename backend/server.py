@@ -292,6 +292,8 @@ class StudentUpdate(BaseModel):
     upgrade_closed: bool = False
     upgrade_amount: Optional[float] = None
     satisfaction_score: Optional[int] = None
+    activation_call_at: Optional[datetime] = None
+    call_recording_url: Optional[str] = None  # 3CX integration placeholder
 
 class StudentResponse(StudentBase):
     id: str
@@ -307,10 +309,44 @@ class StudentResponse(StudentBase):
     upgrade_pitched: bool = False
     upgrade_closed: bool = False
     upgrade_amount: Optional[float] = None
+    activation_call_at: Optional[datetime] = None
+    call_recording_url: Optional[str] = None  # 3CX integration placeholder
+    sla_status: str = "ok"  # ok, warning, breach
+    sla_warning_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     
     model_config = ConfigDict(extra="ignore")
+
+# Customer Master Model
+class CustomerBase(BaseModel):
+    full_name: str
+    phone: str
+    email: Optional[EmailStr] = None
+    country: Optional[str] = None
+    lead_id: Optional[str] = None
+    student_id: Optional[str] = None
+
+class CustomerResponse(CustomerBase):
+    id: str
+    total_spent: float = 0
+    transaction_count: int = 0
+    first_transaction_at: Optional[datetime] = None
+    last_transaction_at: Optional[datetime] = None
+    transactions: Optional[List[Dict]] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(extra="ignore")
+
+# SLA Configuration
+SLA_CONFIG = {
+    "new_lead_contact_mins": 60,  # Must contact new lead within 60 mins
+    "inactive_lead_days": 7,  # Warning after 7 days inactive
+    "inactive_warning_hours": 72,  # Second warning after 72 hours
+    "inactive_reassign_hours": 72,  # Reassign after another 72 hours
+    "cs_activation_mins": 15,  # CS must make activation call within 15 mins
+}
 
 class PaymentBase(BaseModel):
     student_id: Optional[str] = None
