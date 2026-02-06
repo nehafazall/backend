@@ -1753,6 +1753,93 @@ async def get_monthly_trend(months: int = 6, user = Depends(get_current_user)):
     result = await db.leads.aggregate(pipeline).to_list(months)
     return result[::-1]  # Reverse to show oldest first
 
+# ==================== CS DASHBOARD ENDPOINTS ====================
+
+@api_router.get("/dashboard/student-funnel")
+async def get_student_funnel(user = Depends(get_current_user)):
+    query = {}
+    if user["role"] == "cs_agent":
+        query["cs_agent_id"] = user["id"]
+    
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    
+    result = await db.students.aggregate(pipeline).to_list(100)
+    
+    stage_order = {stage: i for i, stage in enumerate(STUDENT_STAGES)}
+    result.sort(key=lambda x: stage_order.get(x["_id"], 999))
+    
+    return result
+
+@api_router.get("/dashboard/upgrades-by-month")
+async def get_upgrades_by_month(months: int = 6, user = Depends(get_current_user)):
+    query = {"upgrade_closed": True}
+    if user["role"] == "cs_agent":
+        query["cs_agent_id"] = user["id"]
+    
+    pipeline = [
+        {"$match": query},
+        {"$addFields": {
+            "month": {"$substr": ["$updated_at", 0, 7]}
+        }},
+        {"$group": {
+            "_id": "$month",
+            "count": {"$sum": 1},
+            "revenue": {"$sum": "$upgrade_amount"}
+        }},
+        {"$sort": {"_id": -1}},
+        {"$limit": months}
+    ]
+    
+    result = await db.students.aggregate(pipeline).to_list(months)
+    return result[::-1]
+
+@api_router.get("/dashboard/cs-leaderboard")
+async def get_cs_leaderboard(user = Depends(get_current_user)):
+    # Get all CS agents with their stats
+    cs_agents = await db.users.find({"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True}, {"_id": 0}).to_list(100)
+    
+    leaderboard = []
+    for agent in cs_agents:
+        agent_id = agent["id"]
+        
+        # Count students
+        students = await db.students.count_documents({"cs_agent_id": agent_id})
+        
+        # Count completed onboarding
+        onboarded = await db.students.count_documents({"cs_agent_id": agent_id, "onboarding_complete": True})
+        
+        # Count upgrades
+        upgrades = await db.students.count_documents({"cs_agent_id": agent_id, "upgrade_closed": True})
+        
+        # Sum upgrade revenue
+        revenue_pipeline = [
+            {"$match": {"cs_agent_id": agent_id, "upgrade_closed": True}},
+            {"$group": {"_id": None, "total": {"$sum": "$upgrade_amount"}}}
+        ]
+        revenue_result = await db.students.aggregate(revenue_pipeline).to_list(1)
+        revenue = revenue_result[0]["total"] if revenue_result else 0
+        
+        onboarding_rate = round((onboarded / students * 100) if students > 0 else 0, 1)
+        
+        leaderboard.append({
+            "user_id": agent_id,
+            "name": agent.get("full_name"),
+            "role": agent.get("role"),
+            "students": students,
+            "upgrades": upgrades,
+            "revenue": revenue,
+            "onboarding_rate": onboarding_rate
+        })
+    
+    # Sort by revenue
+    leaderboard.sort(key=lambda x: x["revenue"], reverse=True)
+    
+    return leaderboard
+
 # ==================== GOOGLE SHEETS INTEGRATION ====================
 
 @api_router.post("/integrations/google-sheets/config")
