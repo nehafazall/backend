@@ -12,8 +12,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
-from bson import ObjectId
-import re
+from enum import Enum
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -45,7 +44,13 @@ logger = logging.getLogger(__name__)
 
 ROLES = [
     "super_admin", "admin", "sales_manager", "team_leader", 
-    "sales_executive", "cs_head", "cs_agent", "mentor", "finance", "hr"
+    "sales_executive", "cs_head", "cs_agent", "mentor", 
+    "academic_master", "finance", "hr", "marketing", "operations", "quality_control"
+]
+
+DEPARTMENTS = [
+    "Sales", "Finance", "Customer Service", "Mentors/Academics",
+    "Operations", "Marketing", "HR", "Quality Control"
 ]
 
 LEAD_STAGES = [
@@ -77,6 +82,16 @@ PAYMENT_METHODS = [
     "bank_transfer", "usdt", "cash"
 ]
 
+APPROVAL_STATUS = ["pending", "approved", "rejected"]
+
+PERMISSION_LEVELS = ["none", "view", "edit", "full"]
+
+MODULES = [
+    "dashboard", "sales_crm", "customer_service", "mentor_crm",
+    "finance", "user_management", "department_management",
+    "course_management", "commission_engine", "reports", "settings"
+]
+
 # ==================== MODELS ====================
 
 class UserBase(BaseModel):
@@ -86,7 +101,11 @@ class UserBase(BaseModel):
     department: Optional[str] = None
     phone: Optional[str] = None
     is_active: bool = True
-    region: Optional[str] = None  # UAE, India, International
+    region: Optional[str] = None
+    team_leader_id: Optional[str] = None
+    permissions: Optional[Dict[str, str]] = None  # {module: permission_level}
+    monthly_target: float = 0
+    commission_rate_override: Optional[float] = None
 
 class UserCreate(UserBase):
     password: str
@@ -106,6 +125,89 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: Dict[str, Any]
+
+class DepartmentBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    head_id: Optional[str] = None
+    is_active: bool = True
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+class DepartmentResponse(DepartmentBase):
+    id: str
+    head_name: Optional[str] = None
+    member_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(extra="ignore")
+
+class CourseBase(BaseModel):
+    name: str
+    code: str
+    description: Optional[str] = None
+    base_price: float
+    category: str  # basic, advanced, mentorship, etc.
+    is_active: bool = True
+    addons: Optional[List[Dict]] = None  # [{name, price}]
+
+class CourseCreate(CourseBase):
+    pass
+
+class CourseResponse(CourseBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(extra="ignore")
+
+class CommissionRuleBase(BaseModel):
+    name: str
+    course_id: Optional[str] = None  # None means applies to all
+    course_category: Optional[str] = None
+    role: str  # Which role this applies to
+    commission_type: str  # percentage, fixed, tiered
+    commission_value: float  # Percentage or fixed amount
+    min_sale_amount: float = 0
+    max_sale_amount: Optional[float] = None
+    addon_bonus: Optional[Dict] = None  # {addon_name: bonus_amount}
+    is_active: bool = True
+
+class CommissionRuleCreate(CommissionRuleBase):
+    pass
+
+class CommissionRuleResponse(CommissionRuleBase):
+    id: str
+    course_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(extra="ignore")
+
+class CommissionRecord(BaseModel):
+    user_id: str
+    payment_id: str
+    lead_id: Optional[str] = None
+    student_id: Optional[str] = None
+    course_id: str
+    sale_amount: float
+    commission_amount: float
+    commission_type: str  # fresh_sale, upgrade, redeposit
+    status: str = "pending"  # pending, approved, paid
+    month: str  # YYYY-MM format
+    
+class ApprovalRequest(BaseModel):
+    request_type: str  # user_change, department_change, commission_adjustment
+    entity_type: str
+    entity_id: str
+    requested_by: str
+    changes: Dict
+    reason: Optional[str] = None
+    status: str = "pending"
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
 
 class LeadBase(BaseModel):
     full_name: str
@@ -128,6 +230,9 @@ class LeadUpdate(BaseModel):
     rejection_reason: Optional[str] = None
     follow_up_date: Optional[datetime] = None
     assigned_to: Optional[str] = None
+    course_id: Optional[str] = None
+    sale_amount: Optional[float] = None
+    addons_selected: Optional[List[str]] = None
 
 class LeadResponse(LeadBase):
     id: str
@@ -137,6 +242,10 @@ class LeadResponse(LeadBase):
     rejection_reason: Optional[str] = None
     follow_up_date: Optional[datetime] = None
     call_notes: Optional[str] = None
+    course_id: Optional[str] = None
+    course_name: Optional[str] = None
+    sale_amount: Optional[float] = None
+    addons_selected: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
     last_activity: Optional[datetime] = None
@@ -157,6 +266,7 @@ class StudentBase(BaseModel):
     trading_level: Optional[str] = None
     class_timings: Optional[str] = None
     learning_goals: Optional[str] = None
+    satisfaction_score: Optional[int] = None  # 1-5
 
 class StudentCreate(StudentBase):
     pass
@@ -170,6 +280,10 @@ class StudentUpdate(BaseModel):
     onboarding_complete: bool = False
     classes_attended: int = 0
     upgrade_eligible: bool = False
+    upgrade_pitched: bool = False
+    upgrade_closed: bool = False
+    upgrade_amount: Optional[float] = None
+    satisfaction_score: Optional[int] = None
 
 class StudentResponse(StudentBase):
     id: str
@@ -182,6 +296,9 @@ class StudentResponse(StudentBase):
     onboarding_complete: bool = False
     classes_attended: int = 0
     upgrade_eligible: bool = False
+    upgrade_pitched: bool = False
+    upgrade_closed: bool = False
+    upgrade_amount: Optional[float] = None
     created_at: datetime
     updated_at: datetime
     
@@ -195,6 +312,7 @@ class PaymentBase(BaseModel):
     currency: str = "AED"
     payment_method: str
     transaction_id: Optional[str] = None
+    course_id: Optional[str] = None
     product_course: Optional[str] = None
     team_id: Optional[str] = None
     agent_id: Optional[str] = None
@@ -223,32 +341,11 @@ class PaymentResponse(PaymentBase):
     
     model_config = ConfigDict(extra="ignore")
 
-class ActivityLog(BaseModel):
-    entity_type: str  # lead, student, payment, user
-    entity_id: str
-    action: str
-    user_id: str
-    user_name: str
-    details: Optional[Dict] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class NotificationBase(BaseModel):
-    user_id: str
-    title: str
-    message: str
-    type: str  # info, warning, success, error
-    link: Optional[str] = None
-    read: bool = False
-
-class DashboardStats(BaseModel):
-    total_leads: int = 0
-    leads_today: int = 0
-    hot_leads: int = 0
-    enrolled_today: int = 0
-    pending_follow_ups: int = 0
-    sla_breaches: int = 0
-    total_revenue: float = 0
-    pending_payments: int = 0
+class GoogleSheetConfig(BaseModel):
+    sheet_id: str
+    sheet_name: str = "Sheet1"
+    header_row: int = 1
+    column_mapping: Dict[str, str]  # {lead_field: sheet_column}
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -291,6 +388,17 @@ def require_roles(allowed_roles: List[str]):
         return user
     return role_checker
 
+def check_permission(user: Dict, module: str, required_level: str) -> bool:
+    """Check if user has required permission level for a module"""
+    if user.get("role") == "super_admin":
+        return True
+    
+    permissions = user.get("permissions", {})
+    user_level = permissions.get(module, "none")
+    
+    level_hierarchy = {"none": 0, "view": 1, "edit": 2, "full": 3}
+    return level_hierarchy.get(user_level, 0) >= level_hierarchy.get(required_level, 0)
+
 async def log_activity(entity_type: str, entity_id: str, action: str, user: Dict, details: Dict = None):
     activity = {
         "id": str(uuid.uuid4()),
@@ -317,11 +425,13 @@ async def create_notification(user_id: str, title: str, message: str, notif_type
     }
     await db.notifications.insert_one(notification)
 
-async def get_round_robin_agent(role: str, region: str = None) -> Optional[Dict]:
+async def get_round_robin_agent(role: str, region: str = None, department: str = None) -> Optional[Dict]:
     """Get next available agent using round-robin"""
     query = {"role": role, "is_active": True}
     if region:
         query["region"] = region
+    if department:
+        query["department"] = department
     
     agents = await db.users.find(query).to_list(100)
     if not agents:
@@ -330,11 +440,11 @@ async def get_round_robin_agent(role: str, region: str = None) -> Optional[Dict]
     # Get assignment counts
     assignment_counts = {}
     for agent in agents:
-        if role == "sales_executive":
+        if role in ["sales_executive", "sales_manager", "team_leader"]:
             count = await db.leads.count_documents({"assigned_to": agent["id"]})
-        elif role == "cs_agent":
+        elif role in ["cs_agent", "cs_head"]:
             count = await db.students.count_documents({"cs_agent_id": agent["id"]})
-        elif role == "mentor":
+        elif role in ["mentor", "academic_master"]:
             count = await db.students.count_documents({"mentor_id": agent["id"]})
         else:
             count = 0
@@ -344,12 +454,76 @@ async def get_round_robin_agent(role: str, region: str = None) -> Optional[Dict]
     min_agent = min(agents, key=lambda a: assignment_counts.get(a["id"], 0))
     return min_agent
 
-# ==================== BOOTSTRAP SUPER ADMIN ====================
+async def calculate_commission(user_id: str, payment_id: str, sale_amount: float, 
+                               course_id: str, payment_type: str, user_role: str) -> float:
+    """Calculate commission based on rules"""
+    # Get course
+    course = await db.courses.find_one({"id": course_id}) if course_id else None
+    course_category = course.get("category") if course else None
+    
+    # Find applicable commission rules
+    rules = await db.commission_rules.find({
+        "is_active": True,
+        "role": user_role,
+        "$or": [
+            {"course_id": course_id},
+            {"course_id": None, "course_category": course_category},
+            {"course_id": None, "course_category": None}
+        ]
+    }).to_list(100)
+    
+    if not rules:
+        return 0
+    
+    # Use most specific rule
+    rule = rules[0]
+    for r in rules:
+        if r.get("course_id") == course_id:
+            rule = r
+            break
+        elif r.get("course_category") == course_category and not rule.get("course_id"):
+            rule = r
+    
+    # Check sale amount bounds
+    if sale_amount < rule.get("min_sale_amount", 0):
+        return 0
+    max_amount = rule.get("max_sale_amount")
+    if max_amount and sale_amount > max_amount:
+        return 0
+    
+    # Calculate commission
+    if rule.get("commission_type") == "percentage":
+        commission = sale_amount * (rule.get("commission_value", 0) / 100)
+    else:
+        commission = rule.get("commission_value", 0)
+    
+    # Record commission
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    commission_record = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "payment_id": payment_id,
+        "course_id": course_id,
+        "sale_amount": sale_amount,
+        "commission_amount": commission,
+        "commission_type": payment_type,
+        "status": "pending",
+        "month": month,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.commissions.insert_one(commission_record)
+    
+    return commission
+
+# ==================== BOOTSTRAP ====================
 
 async def bootstrap_super_admin():
     """Create super admin on first initialization"""
     existing = await db.users.find_one({"email": "aqib@clt-academy.com"})
     if not existing:
+        # Default permissions for super admin (full access to everything)
+        default_permissions = {module: "full" for module in MODULES}
+        
         super_admin = {
             "id": str(uuid.uuid4()),
             "email": "aqib@clt-academy.com",
@@ -359,11 +533,29 @@ async def bootstrap_super_admin():
             "department": "Management",
             "is_active": True,
             "region": "UAE",
+            "permissions": default_permissions,
+            "monthly_target": 0,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(super_admin)
         logger.info("Super admin created: aqib@clt-academy.com")
+
+async def bootstrap_departments():
+    """Create default departments"""
+    for dept_name in DEPARTMENTS:
+        existing = await db.departments.find_one({"name": dept_name})
+        if not existing:
+            dept = {
+                "id": str(uuid.uuid4()),
+                "name": dept_name,
+                "description": f"{dept_name} Department",
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.departments.insert_one(dept)
+    logger.info("Default departments created")
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -387,17 +579,373 @@ async def get_me(user = Depends(get_current_user)):
     user_data = {k: v for k, v in user.items() if k != "password" and k != "_id"}
     return user_data
 
+# ==================== DEPARTMENT MANAGEMENT ====================
+
+@api_router.get("/departments", response_model=List[DepartmentResponse])
+async def get_departments(user = Depends(get_current_user)):
+    departments = await db.departments.find({}, {"_id": 0}).to_list(100)
+    
+    # Add head name and member count
+    for dept in departments:
+        if dept.get("head_id"):
+            head = await db.users.find_one({"id": dept["head_id"]})
+            dept["head_name"] = head.get("full_name") if head else None
+        dept["member_count"] = await db.users.count_documents({"department": dept["name"]})
+    
+    return departments
+
+@api_router.post("/departments", response_model=DepartmentResponse)
+async def create_department(data: DepartmentCreate, user = Depends(require_roles(["super_admin"]))):
+    existing = await db.departments.find_one({"name": data.name})
+    if existing:
+        raise HTTPException(status_code=400, detail="Department already exists")
+    
+    new_dept = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.departments.insert_one(new_dept)
+    await log_activity("department", new_dept["id"], "created", user, {"name": data.name})
+    
+    return {k: v for k, v in new_dept.items() if k != "_id"}
+
+@api_router.put("/departments/{dept_id}")
+async def update_department(dept_id: str, data: Dict, user = Depends(get_current_user)):
+    existing = await db.departments.find_one({"id": dept_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Department not found")
+    
+    # If not super_admin, create approval request
+    if user.get("role") != "super_admin":
+        approval = {
+            "id": str(uuid.uuid4()),
+            "request_type": "department_change",
+            "entity_type": "department",
+            "entity_id": dept_id,
+            "requested_by": user["id"],
+            "requested_by_name": user["full_name"],
+            "changes": data,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.approval_requests.insert_one(approval)
+        
+        # Notify super admins
+        super_admins = await db.users.find({"role": "super_admin"}).to_list(100)
+        for admin in super_admins:
+            await create_notification(
+                admin["id"],
+                "Approval Required",
+                f"{user['full_name']} requested changes to {existing['name']} department",
+                "warning",
+                f"/admin/approvals/{approval['id']}"
+            )
+        
+        return {"message": "Change request submitted for approval", "approval_id": approval["id"]}
+    
+    # Super admin can update directly
+    update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.departments.update_one({"id": dept_id}, {"$set": update_data})
+    await log_activity("department", dept_id, "updated", user, update_data)
+    
+    updated = await db.departments.find_one({"id": dept_id}, {"_id": 0})
+    return updated
+
+# ==================== COURSE MANAGEMENT ====================
+
+@api_router.get("/courses", response_model=List[CourseResponse])
+async def get_courses(category: Optional[str] = None, user = Depends(get_current_user)):
+    query = {}
+    if category:
+        query["category"] = category
+    
+    courses = await db.courses.find(query, {"_id": 0}).to_list(100)
+    return courses
+
+@api_router.post("/courses", response_model=CourseResponse)
+async def create_course(data: CourseCreate, user = Depends(require_roles(["super_admin", "admin"]))):
+    existing = await db.courses.find_one({"code": data.code})
+    if existing:
+        raise HTTPException(status_code=400, detail="Course code already exists")
+    
+    new_course = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.courses.insert_one(new_course)
+    await log_activity("course", new_course["id"], "created", user, {"name": data.name})
+    
+    return {k: v for k, v in new_course.items() if k != "_id"}
+
+@api_router.put("/courses/{course_id}")
+async def update_course(course_id: str, data: Dict, user = Depends(require_roles(["super_admin", "admin"]))):
+    existing = await db.courses.find_one({"id": course_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.courses.update_one({"id": course_id}, {"$set": update_data})
+    await log_activity("course", course_id, "updated", user, update_data)
+    
+    updated = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/courses/{course_id}")
+async def delete_course(course_id: str, user = Depends(require_roles(["super_admin"]))):
+    result = await db.courses.delete_one({"id": course_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    await log_activity("course", course_id, "deleted", user)
+    return {"message": "Course deleted"}
+
+# ==================== COMMISSION RULES ====================
+
+@api_router.get("/commission-rules", response_model=List[CommissionRuleResponse])
+async def get_commission_rules(role: Optional[str] = None, user = Depends(get_current_user)):
+    query = {}
+    if role:
+        query["role"] = role
+    
+    rules = await db.commission_rules.find(query, {"_id": 0}).to_list(100)
+    
+    # Add course names
+    for rule in rules:
+        if rule.get("course_id"):
+            course = await db.courses.find_one({"id": rule["course_id"]})
+            rule["course_name"] = course.get("name") if course else None
+    
+    return rules
+
+@api_router.post("/commission-rules", response_model=CommissionRuleResponse)
+async def create_commission_rule(data: CommissionRuleCreate, user = Depends(require_roles(["super_admin", "admin"]))):
+    new_rule = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.commission_rules.insert_one(new_rule)
+    await log_activity("commission_rule", new_rule["id"], "created", user, {"name": data.name})
+    
+    return {k: v for k, v in new_rule.items() if k != "_id"}
+
+@api_router.put("/commission-rules/{rule_id}")
+async def update_commission_rule(rule_id: str, data: Dict, user = Depends(require_roles(["super_admin", "admin"]))):
+    existing = await db.commission_rules.find_one({"id": rule_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Commission rule not found")
+    
+    update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.commission_rules.update_one({"id": rule_id}, {"$set": update_data})
+    await log_activity("commission_rule", rule_id, "updated", user, update_data)
+    
+    updated = await db.commission_rules.find_one({"id": rule_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/commission-rules/{rule_id}")
+async def delete_commission_rule(rule_id: str, user = Depends(require_roles(["super_admin"]))):
+    result = await db.commission_rules.delete_one({"id": rule_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Commission rule not found")
+    
+    await log_activity("commission_rule", rule_id, "deleted", user)
+    return {"message": "Commission rule deleted"}
+
+# ==================== COMMISSIONS ====================
+
+@api_router.get("/commissions")
+async def get_commissions(
+    user_id: Optional[str] = None,
+    month: Optional[str] = None,
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    query = {}
+    
+    # If not admin/super_admin, only show own commissions
+    if user.get("role") not in ["super_admin", "admin", "finance"]:
+        query["user_id"] = user["id"]
+    elif user_id:
+        query["user_id"] = user_id
+    
+    if month:
+        query["month"] = month
+    if status:
+        query["status"] = status
+    
+    commissions = await db.commissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # Add user and course names
+    for comm in commissions:
+        comm_user = await db.users.find_one({"id": comm.get("user_id")})
+        comm["user_name"] = comm_user.get("full_name") if comm_user else None
+        
+        course = await db.courses.find_one({"id": comm.get("course_id")})
+        comm["course_name"] = course.get("name") if course else None
+    
+    return commissions
+
+@api_router.get("/commissions/summary")
+async def get_commission_summary(user_id: Optional[str] = None, user = Depends(get_current_user)):
+    # Determine which user's commissions to show
+    target_user_id = user_id if user.get("role") in ["super_admin", "admin", "finance"] else user["id"]
+    
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    
+    # Current month commissions
+    current_month_pipeline = [
+        {"$match": {"user_id": target_user_id, "month": current_month}},
+        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}}
+    ]
+    current_result = await db.commissions.aggregate(current_month_pipeline).to_list(1)
+    
+    # All time commissions
+    all_time_pipeline = [
+        {"$match": {"user_id": target_user_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}}
+    ]
+    all_time_result = await db.commissions.aggregate(all_time_pipeline).to_list(1)
+    
+    # By commission type
+    by_type_pipeline = [
+        {"$match": {"user_id": target_user_id}},
+        {"$group": {"_id": "$commission_type", "total": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}}
+    ]
+    by_type_result = await db.commissions.aggregate(by_type_pipeline).to_list(100)
+    
+    # By month (last 6 months)
+    by_month_pipeline = [
+        {"$match": {"user_id": target_user_id}},
+        {"$group": {"_id": "$month", "total": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": -1}},
+        {"$limit": 6}
+    ]
+    by_month_result = await db.commissions.aggregate(by_month_pipeline).to_list(6)
+    
+    return {
+        "current_month": {
+            "total": current_result[0]["total"] if current_result else 0,
+            "count": current_result[0]["count"] if current_result else 0
+        },
+        "all_time": {
+            "total": all_time_result[0]["total"] if all_time_result else 0,
+            "count": all_time_result[0]["count"] if all_time_result else 0
+        },
+        "by_type": {r["_id"]: {"total": r["total"], "count": r["count"]} for r in by_type_result},
+        "by_month": [{"month": r["_id"], "total": r["total"], "count": r["count"]} for r in by_month_result]
+    }
+
+# ==================== APPROVAL REQUESTS ====================
+
+@api_router.get("/approval-requests")
+async def get_approval_requests(status: Optional[str] = None, user = Depends(require_roles(["super_admin", "admin"]))):
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.approval_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return requests
+
+@api_router.put("/approval-requests/{request_id}/approve")
+async def approve_request(request_id: str, user = Depends(require_roles(["super_admin"]))):
+    request = await db.approval_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Request already processed")
+    
+    # Apply the changes
+    entity_type = request["entity_type"]
+    entity_id = request["entity_id"]
+    changes = request["changes"]
+    
+    collection_map = {
+        "department": db.departments,
+        "user": db.users,
+        "course": db.courses,
+        "commission_rule": db.commission_rules
+    }
+    
+    collection = collection_map.get(entity_type)
+    if collection:
+        changes["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await collection.update_one({"id": entity_id}, {"$set": changes})
+    
+    # Update request status
+    await db.approval_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "approved",
+            "approved_by": user["id"],
+            "approved_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Notify requester
+    await create_notification(
+        request["requested_by"],
+        "Request Approved",
+        f"Your {request['request_type']} request has been approved",
+        "success"
+    )
+    
+    return {"message": "Request approved"}
+
+@api_router.put("/approval-requests/{request_id}/reject")
+async def reject_request(request_id: str, reason: str = "", user = Depends(require_roles(["super_admin"]))):
+    request = await db.approval_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    await db.approval_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "rejected",
+            "approved_by": user["id"],
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "rejection_reason": reason
+        }}
+    )
+    
+    # Notify requester
+    await create_notification(
+        request["requested_by"],
+        "Request Rejected",
+        f"Your {request['request_type']} request has been rejected. Reason: {reason}",
+        "error"
+    )
+    
+    return {"message": "Request rejected"}
+
 # ==================== USER MANAGEMENT ====================
 
 @api_router.get("/users", response_model=List[UserResponse])
 async def get_users(
     role: Optional[str] = None,
+    department: Optional[str] = None,
     is_active: Optional[bool] = None,
     user = Depends(require_roles(["super_admin", "admin", "sales_manager", "cs_head"]))
 ):
     query = {}
     if role:
         query["role"] = role
+    if department:
+        query["department"] = department
     if is_active is not None:
         query["is_active"] = is_active
     
@@ -413,10 +961,14 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
     if data.role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {ROLES}")
     
+    # Set default permissions based on role
+    default_permissions = get_default_permissions(data.role)
+    
     new_user = {
         "id": str(uuid.uuid4()),
         **data.model_dump(),
         "password": hash_password(data.password),
+        "permissions": data.permissions or default_permissions,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
@@ -426,11 +978,77 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
     
     return {k: v for k, v in new_user.items() if k != "password" and k != "_id"}
 
+def get_default_permissions(role: str) -> Dict[str, str]:
+    """Get default permissions for a role"""
+    permissions = {module: "none" for module in MODULES}
+    
+    if role == "super_admin":
+        permissions = {module: "full" for module in MODULES}
+    elif role == "admin":
+        permissions = {module: "full" for module in MODULES}
+        permissions["settings"] = "edit"
+    elif role in ["sales_manager", "team_leader"]:
+        permissions["dashboard"] = "view"
+        permissions["sales_crm"] = "full"
+        permissions["reports"] = "view"
+        permissions["settings"] = "view"
+    elif role == "sales_executive":
+        permissions["dashboard"] = "view"
+        permissions["sales_crm"] = "edit"
+        permissions["settings"] = "view"
+    elif role == "cs_head":
+        permissions["dashboard"] = "view"
+        permissions["customer_service"] = "full"
+        permissions["reports"] = "view"
+        permissions["settings"] = "view"
+    elif role == "cs_agent":
+        permissions["dashboard"] = "view"
+        permissions["customer_service"] = "edit"
+        permissions["settings"] = "view"
+    elif role in ["mentor", "academic_master"]:
+        permissions["dashboard"] = "view"
+        permissions["mentor_crm"] = "edit"
+        permissions["settings"] = "view"
+    elif role == "finance":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "full"
+        permissions["reports"] = "view"
+        permissions["commission_engine"] = "view"
+        permissions["settings"] = "view"
+    elif role == "hr":
+        permissions["dashboard"] = "view"
+        permissions["user_management"] = "edit"
+        permissions["department_management"] = "view"
+        permissions["settings"] = "view"
+    
+    return permissions
+
 @api_router.put("/users/{user_id}")
-async def update_user(user_id: str, data: Dict, user = Depends(require_roles(["super_admin", "admin"]))):
+async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)):
     existing = await db.users.find_one({"id": user_id})
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Non-super_admin can only update certain fields
+    if user.get("role") != "super_admin":
+        allowed_fields = ["phone", "region"]
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+        
+        if not data:
+            # Create approval request for other changes
+            approval = {
+                "id": str(uuid.uuid4()),
+                "request_type": "user_change",
+                "entity_type": "user",
+                "entity_id": user_id,
+                "requested_by": user["id"],
+                "requested_by_name": user["full_name"],
+                "changes": data,
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.approval_requests.insert_one(approval)
+            return {"message": "Change request submitted for approval"}
     
     update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
     if "password" in update_data:
@@ -467,7 +1085,6 @@ async def get_leads(
     if user["role"] == "sales_executive":
         query["assigned_to"] = user["id"]
     elif user["role"] == "team_leader":
-        # Get team members
         team = await db.users.find({"team_leader_id": user["id"]}).to_list(100)
         team_ids = [t["id"] for t in team] + [user["id"]]
         query["assigned_to"] = {"$in": team_ids}
@@ -485,36 +1102,38 @@ async def get_leads(
     
     leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     
-    # Add assigned user names
     for lead in leads:
         if lead.get("assigned_to"):
             assigned_user = await db.users.find_one({"id": lead["assigned_to"]})
             lead["assigned_to_name"] = assigned_user.get("full_name") if assigned_user else None
         
-        # Check SLA breach (no activity in 24 hours)
+        if lead.get("course_id"):
+            course = await db.courses.find_one({"id": lead["course_id"]})
+            lead["course_name"] = course.get("name") if course else None
+        
         last_activity = lead.get("last_activity") or lead.get("created_at")
         if isinstance(last_activity, str):
-            last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-        if datetime.now(timezone.utc) - last_activity > timedelta(hours=24):
-            lead["sla_breach"] = True
+            try:
+                last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+                if datetime.now(timezone.utc) - last_activity > timedelta(hours=24):
+                    lead["sla_breach"] = True
+            except:
+                pass
     
     return leads
 
 @api_router.post("/leads", response_model=LeadResponse)
 async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user = Depends(get_current_user)):
-    # Check for duplicate by phone
     existing = await db.leads.find_one({"phone": data.phone})
     if existing:
         raise HTTPException(status_code=400, detail=f"Lead with this phone already exists. Assigned to: {existing.get('assigned_to_name', 'Unknown')}")
     
-    # Determine region from phone
     region = "international"
     if data.phone.startswith("+971") or data.phone.startswith("971"):
         region = "UAE"
     elif data.phone.startswith("+91") or data.phone.startswith("91"):
         region = "India"
     
-    # Round-robin assignment
     assigned_agent = await get_round_robin_agent("sales_executive", region)
     
     new_lead = {
@@ -532,7 +1151,6 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
     await db.leads.insert_one(new_lead)
     await log_activity("lead", new_lead["id"], "created", user, {"phone": data.phone})
     
-    # Notify assigned agent
     if assigned_agent:
         await create_notification(
             assigned_agent["id"],
@@ -552,17 +1170,43 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     
-    # Validate stage transition
     if "stage" in update_data:
         if update_data["stage"] not in LEAD_STAGES:
             raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of: {LEAD_STAGES}")
         
-        # Require rejection reason
         if update_data["stage"] == "rejected" and not update_data.get("rejection_reason"):
             raise HTTPException(status_code=400, detail="Rejection reason is required")
         
-        # If enrolled, trigger handoff to CS
         if update_data["stage"] == "enrolled":
+            # Calculate commission for sales executive
+            sale_amount = update_data.get("sale_amount") or existing.get("sale_amount", 0)
+            course_id = update_data.get("course_id") or existing.get("course_id")
+            
+            if existing.get("assigned_to") and sale_amount > 0:
+                assigned_user = await db.users.find_one({"id": existing["assigned_to"]})
+                if assigned_user:
+                    await calculate_commission(
+                        assigned_user["id"],
+                        str(uuid.uuid4()),
+                        sale_amount,
+                        course_id,
+                        "fresh_sale",
+                        assigned_user["role"]
+                    )
+                    
+                    # Also calculate for team leader if exists
+                    if assigned_user.get("team_leader_id"):
+                        team_leader = await db.users.find_one({"id": assigned_user["team_leader_id"]})
+                        if team_leader:
+                            await calculate_commission(
+                                team_leader["id"],
+                                str(uuid.uuid4()),
+                                sale_amount,
+                                course_id,
+                                "fresh_sale",
+                                team_leader["role"]
+                            )
+            
             # Create student record
             student_data = {
                 "id": str(uuid.uuid4()),
@@ -571,6 +1215,7 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "phone": existing["phone"],
                 "email": existing.get("email"),
                 "country": existing.get("country"),
+                "package_bought": course_id,
                 "stage": "new_student",
                 "mentor_stage": "new_student",
                 "onboarding_complete": False,
@@ -580,7 +1225,6 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
             
-            # Assign CS agent
             cs_agent = await get_round_robin_agent("cs_agent")
             if cs_agent:
                 student_data["cs_agent_id"] = cs_agent["id"]
@@ -626,10 +1270,9 @@ async def get_students(
 ):
     query = {}
     
-    # Role-based filtering
     if user["role"] == "cs_agent":
         query["cs_agent_id"] = user["id"]
-    elif user["role"] == "mentor":
+    elif user["role"] in ["mentor", "academic_master"]:
         query["mentor_id"] = user["id"]
     
     if stage:
@@ -658,19 +1301,30 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     
-    # Validate CS stage
     if "stage" in update_data and update_data["stage"] not in STUDENT_STAGES:
         raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of: {STUDENT_STAGES}")
     
-    # Validate mentor stage
     if "mentor_stage" in update_data and update_data["mentor_stage"] not in MENTOR_STAGES:
         raise HTTPException(status_code=400, detail=f"Invalid mentor stage. Must be one of: {MENTOR_STAGES}")
     
-    # Check upgrade eligibility (6+ classes)
     if update_data.get("classes_attended", 0) >= 6:
         update_data["upgrade_eligible"] = True
     
-    # Assign mentor if moving to activated and no mentor
+    # Handle upgrade commission
+    if update_data.get("upgrade_closed") and not existing.get("upgrade_closed"):
+        upgrade_amount = update_data.get("upgrade_amount", 0)
+        if upgrade_amount > 0 and existing.get("cs_agent_id"):
+            cs_agent = await db.users.find_one({"id": existing["cs_agent_id"]})
+            if cs_agent:
+                await calculate_commission(
+                    cs_agent["id"],
+                    str(uuid.uuid4()),
+                    upgrade_amount,
+                    existing.get("package_bought"),
+                    "upgrade",
+                    cs_agent["role"]
+                )
+    
     if update_data.get("stage") == "activated" and not existing.get("mentor_id"):
         mentor = await get_round_robin_agent("mentor")
         if mentor:
@@ -709,7 +1363,6 @@ async def get_payments(
     
     payments = await db.payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     
-    # Add verifier names
     for payment in payments:
         if payment.get("verified_by"):
             verifier = await db.users.find_one({"id": payment["verified_by"]})
@@ -733,7 +1386,6 @@ async def create_payment(data: PaymentCreate, user = Depends(get_current_user)):
     await db.payments.insert_one(new_payment)
     await log_activity("payment", new_payment["id"], "created", user, {"amount": data.amount})
     
-    # Notify finance team
     finance_users = await db.users.find({"role": "finance", "is_active": True}).to_list(100)
     for fin_user in finance_users:
         await create_notification(
@@ -758,14 +1410,12 @@ async def update_payment(payment_id: str, data: PaymentUpdate, user = Depends(ge
         if update_data["stage"] not in PAYMENT_STAGES:
             raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of: {PAYMENT_STAGES}")
         
-        # Record verifier
         if update_data["stage"] == "verified":
             update_data["verified_by"] = user["id"]
         
         if update_data["stage"] == "reconciled":
             update_data["reconciled_at"] = datetime.now(timezone.utc).isoformat()
         
-        # Require discrepancy reason
         if update_data["stage"] == "discrepancy" and not update_data.get("discrepancy_reason"):
             raise HTTPException(status_code=400, detail="Discrepancy reason is required")
     
@@ -827,14 +1477,21 @@ async def get_activity_logs(
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(user = Depends(get_current_user)):
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
     
     stats = {}
+    user_id = user["id"]
+    user_role = user["role"]
     
-    # Lead stats
-    if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
+    # Lead stats for sales roles
+    if user_role in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
         lead_query = {}
-        if user["role"] == "sales_executive":
-            lead_query["assigned_to"] = user["id"]
+        if user_role == "sales_executive":
+            lead_query["assigned_to"] = user_id
+        elif user_role == "team_leader":
+            team = await db.users.find({"team_leader_id": user_id}).to_list(100)
+            team_ids = [t["id"] for t in team] + [user_id]
+            lead_query["assigned_to"] = {"$in": team_ids}
         
         stats["total_leads"] = await db.leads.count_documents(lead_query)
         stats["leads_today"] = await db.leads.count_documents({
@@ -847,6 +1504,15 @@ async def get_dashboard_stats(user = Depends(get_current_user)):
             "stage": "enrolled",
             "updated_at": {"$gte": today_start.isoformat()}
         })
+        stats["enrolled_total"] = await db.leads.count_documents({**lead_query, "stage": "enrolled"})
+        
+        # Revenue for this user's leads
+        revenue_pipeline = [
+            {"$match": {"stage": "enrolled", **lead_query}},
+            {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}}}
+        ]
+        revenue_result = await db.leads.aggregate(revenue_pipeline).to_list(1)
+        stats["total_revenue"] = revenue_result[0]["total"] if revenue_result else 0
         
         # SLA breaches
         all_leads = await db.leads.find(lead_query, {"last_activity": 1, "created_at": 1}).to_list(10000)
@@ -861,50 +1527,194 @@ async def get_dashboard_stats(user = Depends(get_current_user)):
                 except:
                     pass
         stats["sla_breaches"] = sla_breaches
+        
+        # Conversion rate
+        total = stats["total_leads"]
+        enrolled = stats["enrolled_total"]
+        stats["conversion_rate"] = round((enrolled / total * 100) if total > 0 else 0, 1)
+        
+        # Average deal size
+        if enrolled > 0:
+            stats["avg_deal_size"] = round(stats["total_revenue"] / enrolled, 2)
+        else:
+            stats["avg_deal_size"] = 0
+        
+        # Target vs Achievement
+        stats["monthly_target"] = user.get("monthly_target", 0)
+        
+        # Commission for this month
+        comm_query = {"user_id": user_id, "month": current_month}
+        comm_pipeline = [
+            {"$match": comm_query},
+            {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
+        ]
+        comm_result = await db.commissions.aggregate(comm_pipeline).to_list(1)
+        stats["commission_current_month"] = comm_result[0]["total"] if comm_result else 0
+        
+        # All time commission
+        all_comm_pipeline = [
+            {"$match": {"user_id": user_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
+        ]
+        all_comm_result = await db.commissions.aggregate(all_comm_pipeline).to_list(1)
+        stats["commission_all_time"] = all_comm_result[0]["total"] if all_comm_result else 0
     
-    # Student stats
-    if user["role"] in ["super_admin", "admin", "cs_head", "cs_agent", "mentor"]:
+    # Student stats for CS roles
+    if user_role in ["super_admin", "admin", "cs_head", "cs_agent"]:
         student_query = {}
-        if user["role"] == "cs_agent":
-            student_query["cs_agent_id"] = user["id"]
-        elif user["role"] == "mentor":
-            student_query["mentor_id"] = user["id"]
+        if user_role == "cs_agent":
+            student_query["cs_agent_id"] = user_id
         
         stats["total_students"] = await db.students.count_documents(student_query)
         stats["new_students"] = await db.students.count_documents({**student_query, "stage": "new_student"})
         stats["activated_students"] = await db.students.count_documents({**student_query, "stage": "activated"})
         stats["upgrade_eligible"] = await db.students.count_documents({**student_query, "upgrade_eligible": True})
+        stats["upgrade_pitched"] = await db.students.count_documents({**student_query, "upgrade_pitched": True})
+        stats["upgrade_closed"] = await db.students.count_documents({**student_query, "upgrade_closed": True})
+        
+        # Onboarding completion rate
+        onboarded = await db.students.count_documents({**student_query, "onboarding_complete": True})
+        stats["onboarding_rate"] = round((onboarded / stats["total_students"] * 100) if stats["total_students"] > 0 else 0, 1)
+        
+        # Upgrade revenue
+        upgrade_pipeline = [
+            {"$match": {**student_query, "upgrade_closed": True}},
+            {"$group": {"_id": None, "total": {"$sum": "$upgrade_amount"}}}
+        ]
+        upgrade_result = await db.students.aggregate(upgrade_pipeline).to_list(1)
+        stats["upgrade_revenue"] = upgrade_result[0]["total"] if upgrade_result else 0
+        
+        # CS Commission
+        if user_role == "cs_agent":
+            cs_comm_pipeline = [
+                {"$match": {"user_id": user_id, "commission_type": "upgrade", "month": current_month}},
+                {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
+            ]
+            cs_comm_result = await db.commissions.aggregate(cs_comm_pipeline).to_list(1)
+            stats["upgrade_commission_current_month"] = cs_comm_result[0]["total"] if cs_comm_result else 0
+        
+        # Satisfaction score average
+        sat_pipeline = [
+            {"$match": {**student_query, "satisfaction_score": {"$exists": True, "$ne": None}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$satisfaction_score"}}}
+        ]
+        sat_result = await db.students.aggregate(sat_pipeline).to_list(1)
+        stats["avg_satisfaction_score"] = round(sat_result[0]["avg"], 1) if sat_result else 0
     
-    # Payment stats
-    if user["role"] in ["super_admin", "admin", "finance"]:
+    # Mentor stats
+    if user_role in ["super_admin", "admin", "mentor", "academic_master"]:
+        mentor_query = {}
+        if user_role in ["mentor", "academic_master"]:
+            mentor_query["mentor_id"] = user_id
+        
+        stats["mentor_students"] = await db.students.count_documents(mentor_query)
+        stats["discussion_started"] = await db.students.count_documents({**mentor_query, "mentor_stage": "discussion_started"})
+        stats["redeposit_pitched"] = await db.students.count_documents({**mentor_query, "mentor_stage": "pitched_for_redeposit"})
+        stats["redeposit_closed"] = await db.students.count_documents({**mentor_query, "mentor_stage": "closed"})
+    
+    # Payment stats for finance
+    if user_role in ["super_admin", "admin", "finance"]:
         stats["pending_payments"] = await db.payments.count_documents({"stage": {"$in": ["new_payment", "pending_verification"]}})
         stats["verified_payments"] = await db.payments.count_documents({"stage": "verified"})
         stats["discrepancies"] = await db.payments.count_documents({"stage": "discrepancy"})
         
-        # Total revenue
         pipeline = [
             {"$match": {"stage": {"$in": ["verified", "reconciled", "completed"]}}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]
         result = await db.payments.aggregate(pipeline).to_list(1)
-        stats["total_revenue"] = result[0]["total"] if result else 0
+        stats["total_verified_revenue"] = result[0]["total"] if result else 0
     
     return stats
 
 @api_router.get("/dashboard/lead-funnel")
 async def get_lead_funnel(user = Depends(get_current_user)):
+    query = {}
+    if user["role"] == "sales_executive":
+        query["assigned_to"] = user["id"]
+    
     pipeline = [
+        {"$match": query},
         {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
         {"$sort": {"_id": 1}}
     ]
     
     result = await db.leads.aggregate(pipeline).to_list(100)
     
-    # Order by stage sequence
     stage_order = {stage: i for i, stage in enumerate(LEAD_STAGES)}
     result.sort(key=lambda x: stage_order.get(x["_id"], 999))
     
     return result
+
+@api_router.get("/dashboard/sales-by-course")
+async def get_sales_by_course(user = Depends(get_current_user)):
+    query = {"stage": "enrolled"}
+    if user["role"] == "sales_executive":
+        query["assigned_to"] = user["id"]
+    
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$course_id",
+            "count": {"$sum": 1},
+            "revenue": {"$sum": "$sale_amount"}
+        }}
+    ]
+    
+    result = await db.leads.aggregate(pipeline).to_list(100)
+    
+    # Add course names
+    for item in result:
+        if item["_id"]:
+            course = await db.courses.find_one({"id": item["_id"]})
+            item["course_name"] = course.get("name") if course else "Unknown"
+        else:
+            item["course_name"] = "Not Specified"
+    
+    return result
+
+@api_router.get("/dashboard/leaderboard")
+async def get_leaderboard(period: str = "month", user = Depends(get_current_user)):
+    # Get current period
+    if period == "month":
+        start_date = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "week":
+        start_date = datetime.now(timezone.utc) - timedelta(days=7)
+    else:
+        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+    
+    pipeline = [
+        {"$match": {
+            "stage": "enrolled",
+            "updated_at": {"$gte": start_date.isoformat()}
+        }},
+        {"$group": {
+            "_id": "$assigned_to",
+            "deals": {"$sum": 1},
+            "revenue": {"$sum": "$sale_amount"}
+        }},
+        {"$sort": {"revenue": -1}},
+        {"$limit": 10}
+    ]
+    
+    result = await db.leads.aggregate(pipeline).to_list(10)
+    
+    # Add user details
+    leaderboard = []
+    for i, item in enumerate(result):
+        if item["_id"]:
+            user_data = await db.users.find_one({"id": item["_id"]})
+            if user_data:
+                leaderboard.append({
+                    "rank": i + 1,
+                    "user_id": item["_id"],
+                    "name": user_data.get("full_name"),
+                    "role": user_data.get("role"),
+                    "deals": item["deals"],
+                    "revenue": item["revenue"]
+                })
+    
+    return leaderboard
 
 @api_router.get("/dashboard/payment-summary")
 async def get_payment_summary(user = Depends(get_current_user)):
@@ -920,11 +1730,61 @@ async def get_payment_summary(user = Depends(get_current_user)):
     result = await db.payments.aggregate(pipeline).to_list(100)
     return result
 
+@api_router.get("/dashboard/monthly-trend")
+async def get_monthly_trend(months: int = 6, user = Depends(get_current_user)):
+    query = {}
+    if user["role"] == "sales_executive":
+        query["assigned_to"] = user["id"]
+    
+    pipeline = [
+        {"$match": {"stage": "enrolled", **query}},
+        {"$addFields": {
+            "month": {"$substr": ["$updated_at", 0, 7]}
+        }},
+        {"$group": {
+            "_id": "$month",
+            "deals": {"$sum": 1},
+            "revenue": {"$sum": "$sale_amount"}
+        }},
+        {"$sort": {"_id": -1}},
+        {"$limit": months}
+    ]
+    
+    result = await db.leads.aggregate(pipeline).to_list(months)
+    return result[::-1]  # Reverse to show oldest first
+
+# ==================== GOOGLE SHEETS INTEGRATION ====================
+
+@api_router.post("/integrations/google-sheets/config")
+async def save_google_sheets_config(config: GoogleSheetConfig, user = Depends(require_roles(["super_admin", "admin"]))):
+    config_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "google_sheets",
+        **config.model_dump(),
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Upsert config
+    await db.integrations.update_one(
+        {"type": "google_sheets"},
+        {"$set": config_doc},
+        upsert=True
+    )
+    
+    return {"message": "Google Sheets configuration saved", "config_id": config_doc["id"]}
+
+@api_router.get("/integrations/google-sheets/config")
+async def get_google_sheets_config(user = Depends(require_roles(["super_admin", "admin"]))):
+    config = await db.integrations.find_one({"type": "google_sheets"}, {"_id": 0})
+    return config
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "CLT Academy ERP API", "version": "1.0.0"}
+    return {"message": "CLT Academy ERP API", "version": "2.0.0"}
 
 @api_router.get("/health")
 async def health_check():
@@ -944,21 +1804,29 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     await bootstrap_super_admin()
+    await bootstrap_departments()
     
     # Create indexes
     await db.users.create_index("email", unique=True)
     await db.users.create_index("role")
+    await db.users.create_index("department")
     await db.leads.create_index("phone", unique=True)
     await db.leads.create_index("stage")
     await db.leads.create_index("assigned_to")
     await db.students.create_index("phone")
     await db.students.create_index("stage")
     await db.students.create_index("mentor_stage")
+    await db.students.create_index("cs_agent_id")
+    await db.students.create_index("mentor_id")
     await db.payments.create_index("stage")
     await db.notifications.create_index("user_id")
     await db.activity_logs.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.departments.create_index("name", unique=True)
+    await db.courses.create_index("code", unique=True)
+    await db.commissions.create_index([("user_id", 1), ("month", 1)])
+    await db.approval_requests.create_index("status")
     
-    logger.info("CLT Academy ERP started successfully")
+    logger.info("CLT Academy ERP v2.0 started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
