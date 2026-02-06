@@ -16,6 +16,8 @@ import UsersPage from "@/pages/UsersPage";
 import DepartmentsPage from "@/pages/DepartmentsPage";
 import CoursesPage from "@/pages/CoursesPage";
 import CommissionEnginePage from "@/pages/CommissionEnginePage";
+import AccessControlPage from "@/pages/AccessControlPage";
+import CSDashboard from "@/pages/CSDashboard";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
@@ -98,6 +100,11 @@ function AppRoutes() {
                         <CustomerServicePage />
                     </ProtectedRoute>
                 } />
+                <Route path="cs/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent']}>
+                        <CSDashboard />
+                    </ProtectedRoute>
+                } />
                 
                 {/* Mentor CRM */}
                 <Route path="mentor" element={
@@ -138,6 +145,13 @@ function AppRoutes() {
                 <Route path="commissions" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
                         <CommissionEnginePage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Access Control */}
+                <Route path="access-control" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <AccessControlPage />
                     </ProtectedRoute>
                 } />
                 
