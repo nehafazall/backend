@@ -96,6 +96,20 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Leads Pool */}
+                <Route path="leads/pool" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader']}>
+                        <LeadsPoolPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Customer Master */}
+                <Route path="customers" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance']}>
+                        <CustomerMasterPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Customer Service */}
                 <Route path="cs" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent']}>
