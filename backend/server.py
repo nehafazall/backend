@@ -1434,6 +1434,7 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
         region = "India"
     
     assigned_agent = await get_round_robin_agent("sales_executive", region)
+    now = datetime.now(timezone.utc).isoformat()
     
     new_lead = {
         "id": str(uuid.uuid4()),
@@ -1441,10 +1442,17 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
         "stage": "new_lead",
         "assigned_to": assigned_agent["id"] if assigned_agent else None,
         "assigned_to_name": assigned_agent["full_name"] if assigned_agent else None,
+        "assigned_at": now if assigned_agent else None,  # Track when assigned for SLA
+        "first_contact_at": None,  # Will be set when first contacted
+        "sla_status": "ok",
+        "sla_warning_level": 0,
+        "sla_warning_at": None,
         "sla_breach": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "last_activity": datetime.now(timezone.utc).isoformat()
+        "in_pool": not bool(assigned_agent),  # True if no agent available
+        "call_recording_url": None,  # 3CX placeholder
+        "created_at": now,
+        "updated_at": now,
+        "last_activity": now
     }
     
     await db.leads.insert_one(new_lead)
@@ -1454,7 +1462,7 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
         await create_notification(
             assigned_agent["id"],
             "New Lead Assigned",
-            f"You have been assigned a new lead: {data.full_name}",
+            f"You have been assigned a new lead: {data.full_name}. Contact within 60 mins!",
             "info",
             f"/sales/leads/{new_lead['id']}"
         )
