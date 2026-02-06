@@ -33,6 +33,8 @@ import {
     BookOpen,
     Calculator,
     TrendingUp,
+    Headphones,
+    Shield,
 } from 'lucide-react';
 
 const menuItems = [
@@ -58,6 +60,12 @@ const menuItems = [
         title: 'Customer Service',
         icon: Users,
         path: '/cs',
+        roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
+    },
+    {
+        title: 'CS Dashboard',
+        icon: Headphones,
+        path: '/cs/dashboard',
         roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
     },
     {
@@ -95,6 +103,12 @@ const menuItems = [
         icon: Calculator,
         path: '/commissions',
         roles: ['super_admin', 'admin', 'finance'],
+    },
+    {
+        title: 'Access Control',
+        icon: Shield,
+        path: '/access-control',
+        roles: ['super_admin'],
     },
     {
         title: 'Settings',
