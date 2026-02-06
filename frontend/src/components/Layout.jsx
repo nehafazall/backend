@@ -36,12 +36,18 @@ const menuItems = [
         title: 'Dashboard',
         icon: LayoutDashboard,
         path: '/dashboard',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'finance', 'hr'],
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'],
     },
     {
         title: 'Sales CRM',
         icon: Phone,
         path: '/sales',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
+    },
+    {
+        title: 'My Sales Dashboard',
+        icon: TrendingUp,
+        path: '/sales/dashboard',
         roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
     },
     {
@@ -54,7 +60,7 @@ const menuItems = [
         title: 'Mentor CRM',
         icon: GraduationCap,
         path: '/mentor',
-        roles: ['super_admin', 'admin', 'mentor'],
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master'],
     },
     {
         title: 'Finance',
@@ -66,13 +72,31 @@ const menuItems = [
         title: 'User Management',
         icon: UserCircle,
         path: '/users',
+        roles: ['super_admin', 'admin', 'hr'],
+    },
+    {
+        title: 'Departments',
+        icon: Building2,
+        path: '/departments',
+        roles: ['super_admin', 'admin', 'hr'],
+    },
+    {
+        title: 'Courses',
+        icon: BookOpen,
+        path: '/courses',
         roles: ['super_admin', 'admin'],
+    },
+    {
+        title: 'Commission Engine',
+        icon: Calculator,
+        path: '/commissions',
+        roles: ['super_admin', 'admin', 'finance'],
     },
     {
         title: 'Settings',
         icon: Settings,
         path: '/settings',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'finance', 'hr'],
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'],
     },
 ];
 
