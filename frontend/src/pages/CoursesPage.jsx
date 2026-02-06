@@ -9,14 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -43,7 +35,6 @@ import {
     Edit,
     Trash2,
     GraduationCap,
-    DollarSign,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -59,8 +50,8 @@ const CoursesPage = () => {
     const { user } = useAuth();
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [editMode, setEditMode] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
@@ -89,7 +80,7 @@ const CoursesPage = () => {
         }
     };
 
-    const handleCreate = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.name || !formData.code || !formData.base_price || !formData.category) {
             toast.error('Please fill all required fields');
@@ -97,16 +88,22 @@ const CoursesPage = () => {
         }
         
         try {
-            await apiClient.post('/courses', {
+            const payload = {
                 ...formData,
                 base_price: parseFloat(formData.base_price),
-            });
-            toast.success('Course created successfully');
-            setShowCreateModal(false);
-            resetForm();
+            };
+            
+            if (editMode && selectedCourse) {
+                await apiClient.put(`/courses/${selectedCourse.id}`, payload);
+                toast.success('Course updated successfully');
+            } else {
+                await apiClient.post('/courses', payload);
+                toast.success('Course created successfully');
+            }
+            closeModal();
             fetchCourses();
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Failed to create course');
+            toast.error(error.response?.data?.detail || 'Failed to save course');
         }
     };
 
@@ -121,24 +118,8 @@ const CoursesPage = () => {
             is_active: course.is_active,
             addons: course.addons || [],
         });
-        setShowEditModal(true);
-    };
-
-    const handleUpdate = async (e) => {
-        e.preventDefault();
-        if (!selectedCourse) return;
-        
-        try {
-            await apiClient.put(`/courses/${selectedCourse.id}`, {
-                ...formData,
-                base_price: parseFloat(formData.base_price),
-            });
-            toast.success('Course updated successfully');
-            setShowEditModal(false);
-            fetchCourses();
-        } catch (error) {
-            toast.error(error.response?.data?.detail || 'Failed to update course');
-        }
+        setEditMode(true);
+        setShowModal(true);
     };
 
     const handleDelete = async (courseId) => {
@@ -151,6 +132,28 @@ const CoursesPage = () => {
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Failed to delete course');
         }
+    };
+
+    const openCreateModal = () => {
+        setSelectedCourse(null);
+        setFormData({
+            name: '',
+            code: '',
+            description: '',
+            base_price: '',
+            category: '',
+            is_active: true,
+            addons: [],
+        });
+        setEditMode(false);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setSelectedCourse(null);
+        setEditMode(false);
+        setNewAddon({ name: '', price: '' });
     };
 
     const addAddon = () => {
@@ -169,19 +172,6 @@ const CoursesPage = () => {
         });
     };
 
-    const resetForm = () => {
-        setFormData({
-            name: '',
-            code: '',
-            description: '',
-            base_price: '',
-            category: '',
-            is_active: true,
-            addons: [],
-        });
-        setNewAddon({ name: '', price: '' });
-    };
-
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-AE', {
             style: 'currency',
@@ -194,21 +184,19 @@ const CoursesPage = () => {
 
     return (
         <div className="space-y-6" data-testid="courses-page">
-            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Course Management</h1>
                     <p className="text-muted-foreground">Manage courses and their pricing</p>
                 </div>
                 {isSuperAdmin && (
-                    <Button onClick={() => setShowCreateModal(true)} data-testid="create-course-btn">
+                    <Button onClick={openCreateModal} data-testid="create-course-btn">
                         <Plus className="h-4 w-4 mr-2" />
                         Add Course
                     </Button>
                 )}
             </div>
 
-            {/* Courses Grid */}
             {loading ? (
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
@@ -303,22 +291,15 @@ const CoursesPage = () => {
                 </div>
             )}
 
-            {/* Create/Edit Modal */}
-            <Dialog open={showCreateModal || showEditModal} onOpenChange={(open) => {
-                if (!open) {
-                    setShowCreateModal(false);
-                    setShowEditModal(false);
-                    resetForm();
-                }
-            }}>
+            <Dialog open={showModal} onOpenChange={closeModal}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>{showEditModal ? 'Edit Course' : 'Create Course'}</DialogTitle>
+                        <DialogTitle>{editMode ? 'Edit Course' : 'Create Course'}</DialogTitle>
                         <DialogDescription>
-                            {showEditModal ? 'Update course information' : 'Add a new course to the system'}
+                            {editMode ? 'Update course information' : 'Add a new course to the system'}
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={showEditModal ? handleUpdate : handleCreate} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Course Name *</Label>
@@ -378,7 +359,6 @@ const CoursesPage = () => {
                             />
                         </div>
                         
-                        {/* Add-ons Section */}
                         <div className="space-y-3">
                             <Label>Add-ons</Label>
                             <div className="flex gap-2">
@@ -407,7 +387,7 @@ const CoursesPage = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => removeAddon(i)}
-                                                className="ml-1 text-muted-foreground hover:text-foreground"
+                                                className="ml-1 hover:text-foreground"
                                             >
                                                 ×
                                             </button>
@@ -426,15 +406,11 @@ const CoursesPage = () => {
                         </div>
                         
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => {
-                                setShowCreateModal(false);
-                                setShowEditModal(false);
-                                resetForm();
-                            }}>
+                            <Button type="button" variant="outline" onClick={closeModal}>
                                 Cancel
                             </Button>
                             <Button type="submit">
-                                {showEditModal ? 'Update Course' : 'Create Course'}
+                                {editMode ? 'Update Course' : 'Create Course'}
                             </Button>
                         </DialogFooter>
                     </form>
