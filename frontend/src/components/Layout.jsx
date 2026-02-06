@@ -35,6 +35,8 @@ import {
     TrendingUp,
     Headphones,
     Shield,
+    Inbox,
+    UserCheck,
 } from 'lucide-react';
 
 const menuItems = [
@@ -55,6 +57,18 @@ const menuItems = [
         icon: TrendingUp,
         path: '/sales/dashboard',
         roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
+    },
+    {
+        title: 'Leads Pool',
+        icon: Inbox,
+        path: '/leads/pool',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'],
+    },
+    {
+        title: 'Customer Master',
+        icon: UserCheck,
+        path: '/customers',
+        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'],
     },
     {
         title: 'Customer Service',
