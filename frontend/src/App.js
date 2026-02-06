@@ -18,6 +18,8 @@ import CoursesPage from "@/pages/CoursesPage";
 import CommissionEnginePage from "@/pages/CommissionEnginePage";
 import AccessControlPage from "@/pages/AccessControlPage";
 import CSDashboard from "@/pages/CSDashboard";
+import LeadsPoolPage from "@/pages/LeadsPoolPage";
+import CustomerMasterPage from "@/pages/CustomerMasterPage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
