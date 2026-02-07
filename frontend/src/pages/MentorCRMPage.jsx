@@ -217,6 +217,9 @@ const MentorCRMPage = () => {
                             data-testid="search-mentor-students"
                         />
                     </div>
+                    {['super_admin', 'admin', 'academic_master'].includes(user?.role) && (
+                        <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />
+                    )}
                 </div>
             </div>
 
