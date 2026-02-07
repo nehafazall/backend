@@ -2433,6 +2433,584 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==================== ENVIRONMENT MANAGEMENT ====================
+
+@api_router.get("/environment/current")
+async def get_current_environment(user = Depends(get_current_user)):
+    """Get the current environment mode"""
+    config = await db.system_config.find_one({"key": "environment_mode"})
+    current_mode = config.get("value", "production") if config else "production"
+    
+    # Check user's environment access
+    user_access = user.get("environment_access") or ["production"]
+    if user["role"] == "super_admin":
+        user_access = ENVIRONMENT_MODES
+    
+    return {
+        "current_mode": current_mode,
+        "user_access": user_access,
+        "available_modes": ENVIRONMENT_MODES
+    }
+
+@api_router.put("/environment/mode")
+async def set_environment_mode(mode: str, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Set the environment mode (requires admin access)"""
+    if mode not in ENVIRONMENT_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid mode. Must be one of: {ENVIRONMENT_MODES}")
+    
+    # Check if user has access to this mode
+    user_access = user.get("environment_access") or ["production"]
+    if user["role"] != "super_admin" and mode not in user_access:
+        raise HTTPException(status_code=403, detail=f"You don't have access to {mode} mode")
+    
+    await db.system_config.update_one(
+        {"key": "environment_mode"},
+        {"$set": {"value": mode, "updated_by": user["id"], "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    await log_activity("system", "environment", "mode_changed", user, {"new_mode": mode})
+    
+    return {"message": f"Environment mode set to {mode}", "mode": mode}
+
+@api_router.put("/users/{user_id}/environment-access")
+async def update_user_environment_access(user_id: str, access: List[str], user = Depends(require_roles(["super_admin"]))):
+    """Update a user's environment access (Super Admin only)"""
+    for mode in access:
+        if mode not in ENVIRONMENT_MODES:
+            raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"environment_access": access, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"Environment access updated for {target_user['full_name']}", "access": access}
+
+# ==================== IMPORT/EXPORT FUNCTIONALITY ====================
+
+@api_router.get("/import/templates/{template_type}")
+async def get_import_template(template_type: str, user = Depends(get_current_user)):
+    """Get CSV import template with headers and instructions"""
+    templates = {
+        "leads": {
+            "filename": "leads_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "email", "country", "city", 
+                "lead_source", "course_of_interest", "campaign_name", "notes"
+            ],
+            "required_fields": ["full_name", "phone"],
+            "optional_fields": ["email", "country", "city", "lead_source", "course_of_interest", "campaign_name", "notes"],
+            "example_row": {
+                "full_name": "John Doe",
+                "phone": "+971501234567",
+                "email": "john@example.com",
+                "country": "UAE",
+                "city": "Dubai",
+                "lead_source": "Meta Ads",
+                "course_of_interest": "Advanced Trading",
+                "campaign_name": "Feb2024_UAE",
+                "notes": "Interested in weekend batches"
+            },
+            "instructions": [
+                "Fields marked with * are mandatory",
+                "Phone must include country code (e.g., +971501234567)",
+                "Duplicate phone numbers will be skipped",
+                "Lead source options: Meta Ads, Google Ads, Website, Referral, Walk-in, Other",
+                "Leads will be auto-assigned via round-robin to sales executives"
+            ]
+        },
+        "customers": {
+            "filename": "customers_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "email", "country", "package_bought*",
+                "payment_amount*", "payment_method*", "payment_date*", "closed_by*",
+                "cs_agent_email", "mentor_email", "notes"
+            ],
+            "required_fields": ["full_name", "phone", "package_bought", "payment_amount", "payment_method", "payment_date", "closed_by"],
+            "optional_fields": ["email", "country", "cs_agent_email", "mentor_email", "notes"],
+            "example_row": {
+                "full_name": "Jane Smith",
+                "phone": "+971502345678",
+                "email": "jane@example.com",
+                "country": "UAE",
+                "package_bought": "Advanced Trading Course",
+                "payment_amount": "5000",
+                "payment_method": "stripe",
+                "payment_date": "2024-01-15",
+                "closed_by": "salesperson@clt-academy.com",
+                "cs_agent_email": "cs@clt-academy.com",
+                "mentor_email": "mentor@clt-academy.com",
+                "notes": "VIP customer"
+            },
+            "instructions": [
+                "Fields marked with * are mandatory",
+                "Phone must include country code",
+                "closed_by should be the email of the sales person who closed this customer",
+                "payment_method options: stripe, unipay, tabby, tamara, bank_transfer, usdt, cash",
+                "payment_date format: YYYY-MM-DD",
+                "Customers imported here will NOT go through round-robin",
+                "If cs_agent_email or mentor_email provided, they will be auto-assigned"
+            ]
+        },
+        "students_cs": {
+            "filename": "students_cs_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "email", "country", "package_bought*",
+                "cs_agent_email*", "mentor_email", "batch_plan", "preferred_language",
+                "trading_level", "class_timings", "notes"
+            ],
+            "required_fields": ["full_name", "phone", "package_bought", "cs_agent_email"],
+            "optional_fields": ["email", "country", "mentor_email", "batch_plan", "preferred_language", "trading_level", "class_timings", "notes"],
+            "example_row": {
+                "full_name": "Ahmed Ali",
+                "phone": "+971503456789",
+                "email": "ahmed@example.com",
+                "country": "UAE",
+                "package_bought": "Basic Trading Course",
+                "cs_agent_email": "cs@clt-academy.com",
+                "mentor_email": "mentor@clt-academy.com",
+                "batch_plan": "Weekend Morning",
+                "preferred_language": "English",
+                "trading_level": "Beginner",
+                "class_timings": "10:00 AM - 12:00 PM",
+                "notes": "Prefers online classes"
+            },
+            "instructions": [
+                "Fields marked with * are mandatory",
+                "cs_agent_email MUST be a valid CS agent email from the system",
+                "mentor_email is optional but must be valid if provided",
+                "batch_plan options: Weekday Morning, Weekday Evening, Weekend Morning, Weekend Evening",
+                "trading_level options: Beginner, Intermediate, Advanced",
+                "Students imported will be assigned to specified CS agent (NOT round-robin)"
+            ]
+        },
+        "students_mentor": {
+            "filename": "students_mentor_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "email", "country", "package_bought*",
+                "mentor_email*", "cs_agent_email", "mentor_stage", "learning_goals", "notes"
+            ],
+            "required_fields": ["full_name", "phone", "package_bought", "mentor_email"],
+            "optional_fields": ["email", "country", "cs_agent_email", "mentor_stage", "learning_goals", "notes"],
+            "example_row": {
+                "full_name": "Sara Khan",
+                "phone": "+971504567890",
+                "email": "sara@example.com",
+                "country": "UAE",
+                "package_bought": "Pro Trading Course",
+                "mentor_email": "mentor@clt-academy.com",
+                "cs_agent_email": "cs@clt-academy.com",
+                "mentor_stage": "discussion_started",
+                "learning_goals": "Master technical analysis",
+                "notes": "Experienced trader"
+            },
+            "instructions": [
+                "Fields marked with * are mandatory",
+                "mentor_email MUST be a valid mentor email from the system",
+                "mentor_stage options: new_student, discussion_started, pitched_for_redeposit, interested, closed",
+                "Students imported will be assigned to specified mentor (NOT round-robin)"
+            ]
+        }
+    }
+    
+    if template_type not in templates:
+        raise HTTPException(status_code=400, detail=f"Invalid template type. Available: {list(templates.keys())}")
+    
+    return templates[template_type]
+
+@api_router.post("/import/leads")
+async def import_leads(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))):
+    """Import leads from CSV data - uses round-robin assignment"""
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            # Validate required fields
+            if not row.get("full_name") or not row.get("phone"):
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields (full_name, phone)")
+                continue
+            
+            # Check for duplicate
+            existing = await db.leads.find_one({"phone": row["phone"]})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Phone {row['phone']} already exists")
+                continue
+            
+            # Determine region for round-robin
+            phone = row["phone"]
+            region = "international"
+            if phone.startswith("+971") or phone.startswith("971"):
+                region = "UAE"
+            elif phone.startswith("+91") or phone.startswith("91"):
+                region = "India"
+            
+            # Get agent via round-robin
+            assigned_agent = await get_round_robin_agent("sales_executive", region)
+            
+            new_lead = {
+                "id": str(uuid.uuid4()),
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "lead_source": row.get("lead_source", "Import"),
+                "course_of_interest": row.get("course_of_interest"),
+                "campaign_name": row.get("campaign_name"),
+                "notes": row.get("notes"),
+                "stage": "new_lead",
+                "assigned_to": assigned_agent["id"] if assigned_agent else None,
+                "assigned_to_name": assigned_agent["full_name"] if assigned_agent else None,
+                "assigned_at": now if assigned_agent else None,
+                "first_contact_at": None,
+                "sla_status": "ok",
+                "sla_warning_level": 0,
+                "sla_breach": False,
+                "in_pool": not bool(assigned_agent),
+                "imported_by": user["id"],
+                "import_source": "csv_import",
+                "created_at": now,
+                "updated_at": now,
+                "last_activity": now
+            }
+            
+            await db.leads.insert_one(new_lead)
+            results["success"] += 1
+            
+            # Notify assigned agent
+            if assigned_agent:
+                await create_notification(
+                    assigned_agent["id"],
+                    "New Lead Assigned (Import)",
+                    f"New lead imported: {row['full_name']}. Contact within 60 mins!",
+                    "info",
+                    "/sales"
+                )
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    await log_activity("import", "leads", "bulk_import", user, {"results": results})
+    
+    return results
+
+@api_router.post("/import/customers")
+async def import_customers(data: List[Dict], user = Depends(require_roles(["super_admin", "admin"]))):
+    """Import customers directly - NO round-robin, tracks who closed them"""
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            # Validate required fields
+            required = ["full_name", "phone", "package_bought", "payment_amount", "payment_method", "payment_date", "closed_by"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check for duplicate customer
+            existing = await db.customers.find_one({"phone": row["phone"]})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Customer with phone {row['phone']} already exists")
+                continue
+            
+            # Find the sales person who closed this customer
+            closed_by_user = await db.users.find_one({"email": row["closed_by"]})
+            closed_by_id = closed_by_user["id"] if closed_by_user else None
+            closed_by_name = closed_by_user["full_name"] if closed_by_user else row["closed_by"]
+            
+            # Find CS agent if provided
+            cs_agent = None
+            if row.get("cs_agent_email"):
+                cs_agent = await db.users.find_one({"email": row["cs_agent_email"]})
+            
+            # Find mentor if provided
+            mentor = None
+            if row.get("mentor_email"):
+                mentor = await db.users.find_one({"email": row["mentor_email"]})
+            
+            # Create lead record (as enrolled)
+            lead_id = str(uuid.uuid4())
+            lead = {
+                "id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "stage": "enrolled",
+                "assigned_to": closed_by_id,
+                "assigned_to_name": closed_by_name,
+                "sale_amount": float(row["payment_amount"]),
+                "in_pool": False,
+                "imported_by": user["id"],
+                "import_source": "customer_import",
+                "created_at": now,
+                "updated_at": now,
+                "last_activity": now
+            }
+            await db.leads.insert_one(lead)
+            
+            # Create student record
+            student_id = str(uuid.uuid4())
+            student = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "package_bought": row["package_bought"],
+                "stage": "activated",
+                "mentor_stage": "new_student",
+                "cs_agent_id": cs_agent["id"] if cs_agent else None,
+                "cs_agent_name": cs_agent["full_name"] if cs_agent else None,
+                "mentor_id": mentor["id"] if mentor else None,
+                "mentor_name": mentor["full_name"] if mentor else None,
+                "onboarding_complete": True,
+                "activation_call_at": now,
+                "sla_status": "ok",
+                "imported_by": user["id"],
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.students.insert_one(student)
+            
+            # Create customer record
+            customer_id = str(uuid.uuid4())
+            transaction = {
+                "payment_id": str(uuid.uuid4()),
+                "amount": float(row["payment_amount"]),
+                "currency": "AED",
+                "payment_method": row["payment_method"],
+                "payment_type": "fresh",
+                "date": row["payment_date"]
+            }
+            
+            customer = {
+                "id": customer_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "lead_id": lead_id,
+                "student_id": student_id,
+                "closed_by_id": closed_by_id,
+                "closed_by_name": closed_by_name,
+                "total_spent": float(row["payment_amount"]),
+                "transaction_count": 1,
+                "transactions": [transaction],
+                "first_transaction_at": row["payment_date"],
+                "last_transaction_at": row["payment_date"],
+                "imported_by": user["id"],
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.customers.insert_one(customer)
+            
+            # Create payment record
+            payment = {
+                "id": transaction["payment_id"],
+                "student_id": student_id,
+                "lead_id": lead_id,
+                "amount": float(row["payment_amount"]),
+                "currency": "AED",
+                "payment_method": row["payment_method"],
+                "payment_type": "fresh",
+                "stage": "completed",
+                "created_by": user["id"],
+                "imported_by": user["id"],
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.payments.insert_one(payment)
+            
+            results["success"] += 1
+            
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    await log_activity("import", "customers", "bulk_import", user, {"results": results})
+    
+    return results
+
+@api_router.post("/import/students/cs")
+async def import_students_cs(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "cs_head"]))):
+    """Import students for Customer Service - assigns to specified CS agent"""
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            # Validate required fields
+            required = ["full_name", "phone", "package_bought", "cs_agent_email"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check for duplicate
+            existing = await db.students.find_one({"phone": row["phone"]})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Student with phone {row['phone']} already exists")
+                continue
+            
+            # Find CS agent
+            cs_agent = await db.users.find_one({"email": row["cs_agent_email"]})
+            if not cs_agent:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: CS agent with email {row['cs_agent_email']} not found")
+                continue
+            
+            # Find mentor if provided
+            mentor = None
+            if row.get("mentor_email"):
+                mentor = await db.users.find_one({"email": row["mentor_email"]})
+            
+            # Create student record
+            student = {
+                "id": str(uuid.uuid4()),
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "package_bought": row["package_bought"],
+                "batch_plan": row.get("batch_plan"),
+                "preferred_language": row.get("preferred_language"),
+                "trading_level": row.get("trading_level"),
+                "class_timings": row.get("class_timings"),
+                "stage": "new_student",
+                "mentor_stage": "new_student",
+                "cs_agent_id": cs_agent["id"],
+                "cs_agent_name": cs_agent["full_name"],
+                "mentor_id": mentor["id"] if mentor else None,
+                "mentor_name": mentor["full_name"] if mentor else None,
+                "onboarding_complete": False,
+                "sla_status": "ok",
+                "imported_by": user["id"],
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.students.insert_one(student)
+            
+            # Notify CS agent
+            await create_notification(
+                cs_agent["id"],
+                "Student Assigned (Import)",
+                f"Student imported and assigned: {row['full_name']}",
+                "info",
+                "/cs"
+            )
+            
+            results["success"] += 1
+            
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    await log_activity("import", "students_cs", "bulk_import", user, {"results": results})
+    
+    return results
+
+@api_router.post("/import/students/mentor")
+async def import_students_mentor(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master"]))):
+    """Import students for Mentor CRM - assigns to specified mentor"""
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            # Validate required fields
+            required = ["full_name", "phone", "package_bought", "mentor_email"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check if student exists - if so, update mentor assignment
+            existing = await db.students.find_one({"phone": row["phone"]})
+            
+            # Find mentor
+            mentor = await db.users.find_one({"email": row["mentor_email"]})
+            if not mentor:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Mentor with email {row['mentor_email']} not found")
+                continue
+            
+            # Find CS agent if provided
+            cs_agent = None
+            if row.get("cs_agent_email"):
+                cs_agent = await db.users.find_one({"email": row["cs_agent_email"]})
+            
+            if existing:
+                # Update existing student with mentor assignment
+                update_data = {
+                    "mentor_id": mentor["id"],
+                    "mentor_name": mentor["full_name"],
+                    "mentor_stage": row.get("mentor_stage", "new_student"),
+                    "learning_goals": row.get("learning_goals"),
+                    "updated_at": now
+                }
+                await db.students.update_one({"id": existing["id"]}, {"$set": update_data})
+                results["success"] += 1
+            else:
+                # Create new student record
+                student = {
+                    "id": str(uuid.uuid4()),
+                    "full_name": row["full_name"],
+                    "phone": row["phone"],
+                    "email": row.get("email"),
+                    "country": row.get("country"),
+                    "package_bought": row["package_bought"],
+                    "learning_goals": row.get("learning_goals"),
+                    "stage": "activated",
+                    "mentor_stage": row.get("mentor_stage", "new_student"),
+                    "cs_agent_id": cs_agent["id"] if cs_agent else None,
+                    "cs_agent_name": cs_agent["full_name"] if cs_agent else None,
+                    "mentor_id": mentor["id"],
+                    "mentor_name": mentor["full_name"],
+                    "onboarding_complete": True,
+                    "sla_status": "ok",
+                    "imported_by": user["id"],
+                    "created_at": now,
+                    "updated_at": now
+                }
+                await db.students.insert_one(student)
+                results["success"] += 1
+            
+            # Notify mentor
+            await create_notification(
+                mentor["id"],
+                "Student Assigned (Import)",
+                f"Student imported and assigned: {row['full_name']}",
+                "info",
+                "/mentor"
+            )
+            
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    await log_activity("import", "students_mentor", "bulk_import", user, {"results": results})
+    
+    return results
+
+# ==================== APP LIFECYCLE ====================
+
 @app.on_event("startup")
 async def startup_event():
     await bootstrap_super_admin()
