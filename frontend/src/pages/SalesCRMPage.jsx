@@ -27,9 +27,11 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
+import ReminderModal from '@/components/ReminderModal';
 import {
     Plus,
     Search,
@@ -41,6 +43,7 @@ import {
     AlertTriangle,
     User,
     Clock,
+    Bell,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
