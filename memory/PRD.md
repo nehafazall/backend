@@ -3,83 +3,51 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest User Requirements (SLA & Customer Management)
+## Latest Features (Environment & Import)
 
-### SLA Rules Implemented
-1. **New Lead Contact SLA (60 minutes)**
-   - New leads assigned via round-robin must be contacted within 60 minutes
-   - If not contacted → SLA Breach → Notify Sales Executive + Manager
+### Environment Toggle System
+- **Modes**: Development, Testing, Production
+- **Access Control**: Super Admin can grant environment access to specific users via User Management
+- **Workflow**: Develop → Test → Go Live
+- **Location**: Header bar shows current environment mode
 
-2. **Inactive Lead Escalation (7 days → 72h → 72h → Reassign)**
-   - No activity for 7 days → First Warning to Sales Executive
-   - No activity after 72 hours → Second Warning + Notify Manager
-   - No activity after another 72 hours → Lead returns to Agentic Pool → Auto-reassign
+### Bulk Import Functionality
+Import available at 4 locations:
+1. **Sales CRM** - Import Leads (round-robin assignment)
+2. **Customer Master** - Import Existing Customers (NO round-robin, tracks closer)
+3. **Customer Service** - Import Students (assign CS agent + mentor)
+4. **Mentor CRM** - Import Students (assign mentor)
 
-3. **CS Activation SLA (15 minutes)**
-   - When lead is enrolled → Assigned to CS Agent
-   - No activation call recorded → Warning
-   - After 15 minutes → SLA Breach → Notify CS Leader
+### CSV Templates (Downloadable)
+Each template includes:
+- Required fields (marked with *)
+- Optional fields
+- Example row
+- Instructions
+- Validation rules
 
-### New Features
-- **Leads Pool (Agentic Pool)** - Unassigned/returned leads waiting for distribution
-- **Customer Master** - Complete transaction history per customer
-- **3CX Integration Placeholder** - Call recording URL field ready for future integration
+## SLA Rules (Implemented)
+1. **New Lead Contact**: 60 minutes → Notify exec + manager
+2. **Inactive Lead Escalation**: 7 days → 72h → 72h → Auto-reassign to pool
+3. **CS Activation**: 15 minutes → Notify CS leader
 
 ## Architecture Overview
 - **Backend**: FastAPI (Python) with MongoDB
 - **Frontend**: React with Shadcn UI components
 - **Authentication**: JWT-based with role-based access control
-- **Database**: MongoDB with proper indexing
+- **Database**: MongoDB
 
-## What's Been Implemented
-
-### Phase 1 MVP ✅
-- JWT Authentication with role-based access
-- User Management (CRUD, roles, activation)
-- Lead Management with Kanban (8 stages)
-- Student Management with Kanban (CS & Mentor stages)
-- Payment Management with verification workflow
-- Dashboard with role-specific statistics
-- Notifications System
-- Activity Logs
-- Dark/Light mode theme
-
-### Phase 2 Features ✅
-- Department Management with approval workflow
-- Course Management with CRUD
-- Commission Engine with flexible rules
-- Sales Dashboard with analytics
-- CS Dashboard with metrics
-- Access Control permission matrix
-
-### Phase 3 Features (Current) ✅
-- **SLA Management System**
-  - Configurable SLA rules
-  - Automatic breach detection
-  - Escalation notifications
-  - Auto-reassignment to pool
-- **Leads Pool (Agentic Pool)**
-  - View unassigned leads
-  - Manual or round-robin assignment
-  - SLA status display
-- **Customer Master**
-  - All customers with transaction history
-  - Search functionality
-  - Detailed view with payment history
-- **3CX Integration Placeholder**
-  - `call_recording_url` field on leads and students
-
-### Frontend Pages (15 total)
+## Frontend Pages (17 total)
 1. Login Page
-2. Dashboard (role-specific)
-3. Sales CRM (Kanban)
-4. My Sales Dashboard (analytics)
-5. **Leads Pool (NEW)**
-6. **Customer Master (NEW)**
-7. Customer Service (Kanban)
-8. CS Dashboard (analytics)
-9. Mentor CRM (Kanban)
-10. Finance (Kanban)
+2. Dashboard
+3. Sales CRM (+ Import)
+4. My Sales Dashboard
+5. Leads Pool
+6. Customer Master (+ Import)
+7. Customer Service (+ Import)
+8. CS Dashboard
+9. Mentor CRM (+ Import)
+10. Finance
 11. User Management
 12. Departments
 13. Courses
@@ -87,69 +55,66 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 15. Access Control
 16. Settings
 
-### Backend API Endpoints
-**SLA Endpoints:**
-- `GET /api/sla/config` - Get SLA configuration
-- `GET /api/sla/breaches` - Get current breaches
-- `POST /api/sla/check` - Trigger SLA check
+## Import Template Fields
 
-**Leads Pool Endpoints:**
-- `GET /api/leads/pool` - Get unassigned leads
-- `POST /api/leads/pool/{id}/assign` - Assign lead (manual or round-robin)
-- `POST /api/leads/{id}/return-to-pool` - Return lead to pool
+### Leads Import
+**Required**: full_name, phone
+**Optional**: email, country, city, lead_source, course_of_interest, campaign_name, notes
+**Behavior**: Auto-assigned via round-robin
 
-**Customer Master Endpoints:**
-- `GET /api/customers` - List all customers
-- `GET /api/customers/{id}` - Get customer details
-- `GET /api/customers/by-phone/{phone}` - Get by phone
+### Customers Import
+**Required**: full_name, phone, package_bought, payment_amount, payment_method, payment_date, closed_by
+**Optional**: email, country, cs_agent_email, mentor_email, notes
+**Behavior**: NO round-robin, tracks who closed the deal
 
-**Existing Endpoints:**
-- Auth, Users, Departments, Courses, Commission Rules
-- Leads, Students, Payments, Notifications
-- Dashboard stats, funnels, leaderboards
+### Students CS Import
+**Required**: full_name, phone, package_bought, cs_agent_email
+**Optional**: email, country, mentor_email, batch_plan, preferred_language, trading_level, class_timings, notes
+**Behavior**: Assigned to specified CS agent
 
-## SLA Configuration
-```json
-{
-  "new_lead_contact_mins": 60,
-  "inactive_lead_days": 7,
-  "inactive_warning_hours": 72,
-  "inactive_reassign_hours": 72,
-  "cs_activation_mins": 15
-}
-```
+### Students Mentor Import
+**Required**: full_name, phone, package_bought, mentor_email
+**Optional**: email, country, cs_agent_email, mentor_stage, learning_goals, notes
+**Behavior**: Assigned to specified mentor
+
+## API Endpoints
+
+### Environment
+- `GET /api/environment/current` - Get current mode and user access
+- `PUT /api/environment/mode` - Change environment mode
+- `PUT /api/users/{id}/environment-access` - Update user's environment access
+
+### Import
+- `GET /api/import/templates/{type}` - Get template (leads, customers, students_cs, students_mentor)
+- `POST /api/import/leads` - Import leads
+- `POST /api/import/customers` - Import customers
+- `POST /api/import/students/cs` - Import for CS
+- `POST /api/import/students/mentor` - Import for mentors
 
 ## Prioritized Backlog
 
 ### P1 - High Priority
+- [ ] 3CX Integration for call recordings
 - [ ] Google Sheets Integration for lead import
 - [ ] Email notifications (SendGrid)
-- [ ] 3CX Integration for call recordings
-- [ ] Advanced reporting and exports
 
 ### P2 - Medium Priority
 - [ ] Meta Ads webhook integration
 - [ ] Google Ads webhook integration
-- [ ] HR & Payroll Module
-- [ ] Asset Management Module
 - [ ] WhatsApp/SMS notifications
 
 ### P3 - Nice to Have
 - [ ] Mobile app
 - [ ] AI-powered lead scoring
-- [ ] Predictive analytics
-- [ ] Training & Development Module
-- [ ] Task & Project Management
+- [ ] HR & Payroll Module
 
 ## Technical Notes
 - **Super Admin:** aqib@clt-academy.com / A@qib1234
 - **All API routes prefixed with /api**
 - **MongoDB indexes on:** email, phone, stage, assigned_to
-- **Test reports:** /app/test_reports/iteration_3.json (15/15 tests passed)
 
 ## Files Reference
 - Backend: `/app/backend/server.py`
 - Frontend Routes: `/app/frontend/src/App.js`
-- Navigation: `/app/frontend/src/components/Layout.jsx`
-- New Pages: `LeadsPoolPage.jsx`, `CustomerMasterPage.jsx`
-- Test Files: `/app/backend/tests/test_sla_features.py`
+- Import Component: `/app/frontend/src/components/ImportButton.jsx`
+- Environment Component: `/app/frontend/src/components/EnvironmentSwitcher.jsx`
