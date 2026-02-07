@@ -38,6 +38,7 @@ import {
     Shield,
     Inbox,
     UserCheck,
+    Bell,
 } from 'lucide-react';
 
 const menuItems = [
@@ -46,6 +47,12 @@ const menuItems = [
         icon: LayoutDashboard,
         path: '/dashboard',
         roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'],
+    },
+    {
+        title: "Today's Follow-ups",
+        icon: Bell,
+        path: '/followups',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master'],
     },
     {
         title: 'Sales CRM',
