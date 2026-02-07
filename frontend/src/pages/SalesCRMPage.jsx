@@ -326,10 +326,13 @@ const SalesCRMPage = () => {
                         />
                     </div>
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (
-                        <Button onClick={() => setShowCreateModal(true)} data-testid="create-lead-btn">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Lead
-                        </Button>
+                        <>
+                            <ImportButton templateType="leads" title="Import Leads" onSuccess={fetchLeads} />
+                            <Button onClick={() => setShowCreateModal(true)} data-testid="create-lead-btn">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Lead
+                            </Button>
+                        </>
                     )}
                 </div>
             </div>
