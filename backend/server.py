@@ -307,6 +307,11 @@ class StudentUpdate(BaseModel):
     satisfaction_score: Optional[int] = None
     activation_call_at: Optional[datetime] = None
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
+    # Reminder fields
+    reminder_date: Optional[datetime] = None
+    reminder_time: Optional[str] = None  # HH:MM format
+    reminder_note: Optional[str] = None
+    reminder_type: Optional[str] = None  # upgrade, redeposit, general
 
 class StudentResponse(StudentBase):
     id: str
@@ -326,6 +331,12 @@ class StudentResponse(StudentBase):
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
     sla_status: str = "ok"  # ok, warning, breach
     sla_warning_at: Optional[datetime] = None
+    # Reminder fields
+    reminder_date: Optional[datetime] = None
+    reminder_time: Optional[str] = None
+    reminder_note: Optional[str] = None
+    reminder_type: Optional[str] = None
+    reminder_completed: bool = False
     created_at: datetime
     updated_at: datetime
     
