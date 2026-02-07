@@ -13,6 +13,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import EnvironmentSwitcher from '@/components/EnvironmentSwitcher';
 import {
     LayoutDashboard,
     Users,
