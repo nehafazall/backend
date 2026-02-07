@@ -92,6 +92,9 @@ MODULES = [
     "course_management", "commission_engine", "reports", "settings"
 ]
 
+# Environment Modes
+ENVIRONMENT_MODES = ["development", "testing", "production"]
+
 # ==================== MODELS ====================
 
 class UserBase(BaseModel):
@@ -106,6 +109,7 @@ class UserBase(BaseModel):
     permissions: Optional[Dict[str, str]] = None  # {module: permission_level}
     monthly_target: float = 0
     commission_rate_override: Optional[float] = None
+    environment_access: Optional[List[str]] = None  # ["development", "testing", "production"]
 
 class UserCreate(UserBase):
     password: str
