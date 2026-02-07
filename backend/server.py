@@ -1709,6 +1709,252 @@ async def return_lead_to_pool(lead_id: str, reason: str = "", user = Depends(get
     
     return {"message": "Lead returned to pool"}
 
+# ==================== REMINDERS & FOLLOW-UPS ====================
+
+@api_router.post("/leads/{lead_id}/reminder")
+async def set_lead_reminder(lead_id: str, reminder_date: str, reminder_time: str, reminder_note: str = "", user = Depends(get_current_user)):
+    """Set a reminder for a lead"""
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "reminder_date": reminder_date,
+        "reminder_time": reminder_time,
+        "reminder_note": reminder_note,
+        "reminder_completed": False,
+        "reminder_set_by": user["id"],
+        "reminder_set_at": now,
+        "updated_at": now
+    }
+    
+    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    await log_activity("lead", lead_id, "reminder_set", user, {"date": reminder_date, "time": reminder_time})
+    
+    return {"message": "Reminder set", "reminder_date": reminder_date, "reminder_time": reminder_time}
+
+@api_router.post("/leads/{lead_id}/reminder/complete")
+async def complete_lead_reminder(lead_id: str, user = Depends(get_current_user)):
+    """Mark a lead reminder as completed"""
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"reminder_completed": True, "last_activity": now, "updated_at": now}}
+    )
+    
+    return {"message": "Reminder completed"}
+
+@api_router.delete("/leads/{lead_id}/reminder")
+async def delete_lead_reminder(lead_id: str, user = Depends(get_current_user)):
+    """Delete a lead reminder"""
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "reminder_date": None,
+            "reminder_time": None,
+            "reminder_note": None,
+            "reminder_completed": False,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Reminder deleted"}
+
+@api_router.post("/students/{student_id}/reminder")
+async def set_student_reminder(student_id: str, reminder_date: str, reminder_time: str, reminder_type: str = "general", reminder_note: str = "", user = Depends(get_current_user)):
+    """Set a reminder for a student (upgrade/redeposit)"""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    if reminder_type not in ["upgrade", "redeposit", "general"]:
+        raise HTTPException(status_code=400, detail="Invalid reminder type")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "reminder_date": reminder_date,
+        "reminder_time": reminder_time,
+        "reminder_note": reminder_note,
+        "reminder_type": reminder_type,
+        "reminder_completed": False,
+        "reminder_set_by": user["id"],
+        "reminder_set_at": now,
+        "updated_at": now
+    }
+    
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+    await log_activity("student", student_id, "reminder_set", user, {"type": reminder_type, "date": reminder_date})
+    
+    return {"message": "Reminder set", "reminder_type": reminder_type}
+
+@api_router.post("/students/{student_id}/reminder/complete")
+async def complete_student_reminder(student_id: str, user = Depends(get_current_user)):
+    """Mark a student reminder as completed"""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.students.update_one(
+        {"id": student_id},
+        {"$set": {"reminder_completed": True, "updated_at": now}}
+    )
+    
+    return {"message": "Reminder completed"}
+
+@api_router.get("/followups/today")
+async def get_todays_followups(user = Depends(get_current_user)):
+    """Get all follow-ups due today for the current user"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    query_base = {"reminder_date": today, "reminder_completed": {"$ne": True}}
+    
+    # Filter by user role
+    if user["role"] == "sales_executive":
+        lead_query = {**query_base, "assigned_to": user["id"]}
+    elif user["role"] in ["cs_agent", "cs_head"]:
+        lead_query = {**query_base}  # CS doesn't have leads
+    elif user["role"] in ["mentor", "academic_master"]:
+        lead_query = {**query_base}  # Mentors don't have leads
+    else:
+        lead_query = query_base
+    
+    # Get leads with reminders
+    leads = []
+    if user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master"]:
+        if user["role"] == "sales_executive":
+            leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
+        else:
+            leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
+    
+    # Get students with reminders (CS for upgrades, Mentors for redeposits)
+    students = []
+    if user["role"] in ["cs_agent", "cs_head"]:
+        if user["role"] == "cs_agent":
+            students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
+        else:
+            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+    elif user["role"] in ["mentor", "academic_master"]:
+        if user["role"] == "mentor":
+            students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
+        else:
+            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+    elif user["role"] in ["super_admin", "admin"]:
+        students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+    
+    # Categorize by time
+    def get_time_slot(time_str):
+        if not time_str:
+            return "unscheduled"
+        try:
+            hour = int(time_str.split(":")[0])
+            if hour < 12:
+                return "morning"
+            elif hour < 17:
+                return "afternoon"
+            else:
+                return "evening"
+        except:
+            return "unscheduled"
+    
+    # Group follow-ups
+    followups = {
+        "morning": [],
+        "afternoon": [],
+        "evening": [],
+        "unscheduled": []
+    }
+    
+    for lead in leads:
+        lead["entity_type"] = "lead"
+        lead["reminder_type"] = "sales"
+        slot = get_time_slot(lead.get("reminder_time"))
+        followups[slot].append(lead)
+    
+    for student in students:
+        student["entity_type"] = "student"
+        slot = get_time_slot(student.get("reminder_time"))
+        followups[slot].append(student)
+    
+    # Sort each slot by time
+    for slot in followups:
+        followups[slot].sort(key=lambda x: x.get("reminder_time") or "99:99")
+    
+    total = len(leads) + len(students)
+    
+    return {
+        "date": today,
+        "total_followups": total,
+        "followups": followups,
+        "leads_count": len(leads),
+        "students_count": len(students)
+    }
+
+@api_router.get("/followups/upcoming")
+async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)):
+    """Get follow-ups for the next N days"""
+    today = datetime.now(timezone.utc)
+    end_date = (today + timedelta(days=days)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    
+    query_base = {
+        "reminder_date": {"$gte": today_str, "$lte": end_date},
+        "reminder_completed": {"$ne": True}
+    }
+    
+    # Get leads
+    leads = []
+    if user["role"] == "sales_executive":
+        leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
+    elif user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master"]:
+        leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
+    
+    # Get students
+    students = []
+    if user["role"] == "cs_agent":
+        students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
+    elif user["role"] == "mentor":
+        students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
+    elif user["role"] in ["super_admin", "admin", "cs_head", "academic_master"]:
+        students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+    
+    # Group by date
+    by_date = {}
+    
+    for lead in leads:
+        lead["entity_type"] = "lead"
+        lead["reminder_type"] = "sales"
+        date = lead.get("reminder_date", today_str)
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(lead)
+    
+    for student in students:
+        student["entity_type"] = "student"
+        date = student.get("reminder_date", today_str)
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(student)
+    
+    return {
+        "days": days,
+        "total": len(leads) + len(students),
+        "by_date": by_date
+    }
+
 # ==================== CUSTOMER MASTER ====================
 
 @api_router.get("/customers")
