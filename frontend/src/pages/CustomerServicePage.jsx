@@ -231,6 +231,9 @@ const CustomerServicePage = () => {
                             data-testid="search-students"
                         />
                     </div>
+                    {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
+                        <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />
+                    )}
                 </div>
             </div>
 
