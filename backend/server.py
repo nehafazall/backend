@@ -238,6 +238,10 @@ class LeadUpdate(BaseModel):
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
+    # Reminder fields
+    reminder_date: Optional[datetime] = None
+    reminder_time: Optional[str] = None  # HH:MM format
+    reminder_note: Optional[str] = None
 
 class LeadResponse(LeadBase):
     id: str
@@ -262,6 +266,11 @@ class LeadResponse(LeadBase):
     sla_warning_level: int = 0  # 0=none, 1=first warning, 2=second warning
     sla_breach: bool = False
     in_pool: bool = False  # True if in agentic pool
+    # Reminder fields
+    reminder_date: Optional[datetime] = None
+    reminder_time: Optional[str] = None
+    reminder_note: Optional[str] = None
+    reminder_completed: bool = False
     
     model_config = ConfigDict(extra="ignore")
 
