@@ -20,6 +20,7 @@ import AccessControlPage from "@/pages/AccessControlPage";
 import CSDashboard from "@/pages/CSDashboard";
 import LeadsPoolPage from "@/pages/LeadsPoolPage";
 import CustomerMasterPage from "@/pages/CustomerMasterPage";
+import FollowupsPage from "@/pages/FollowupsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
