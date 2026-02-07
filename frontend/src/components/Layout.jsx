@@ -300,6 +300,9 @@ const Layout = () => {
                     </h1>
 
                     <div className="flex items-center gap-2">
+                        {/* Environment Switcher */}
+                        <EnvironmentSwitcher />
+                        
                         {/* Theme Toggle */}
                         <Button
                             variant="ghost"
