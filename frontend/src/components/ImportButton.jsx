@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -37,14 +37,9 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
 
     const downloadTemplate = () => {
         if (!template) return;
-        
-        const headers = template.headers.map(h => h.replace('*', '')).join(',');
-        const exampleValues = template.headers.map(h => {
-            const key = h.replace('*', '');
-            return template.example_row[key] || '';
-        }).join(',');
-        
-        const csv = headers + '\n' + exampleValues;
+        const headers = template.headers.join(',');
+        const example = Object.values(template.example_row).join(',');
+        const csv = headers + '\n' + example;
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -58,59 +53,46 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
     const parseCSV = (text) => {
         const lines = text.trim().split('\n');
         if (lines.length < 2) return [];
-        
         const headers = lines[0].split(',').map(h => h.trim().replace('*', ''));
         const data = [];
-        
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',').map(v => v.trim());
             const row = {};
-            headers.forEach((h, idx) => {
-                if (values[idx]) row[h] = values[idx];
-            });
+            for (let j = 0; j < headers.length; j++) {
+                if (values[j]) row[headers[j]] = values[j];
+            }
             if (Object.keys(row).length > 0) data.push(row);
         }
-        
         return data;
     };
 
     const handleFileSelect = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        
         const reader = new FileReader();
         reader.onload = (event) => {
-            const text = event.target.result;
-            const data = parseCSV(text);
+            const data = parseCSV(event.target.result);
             setParsedData(data);
-            toast.success('File parsed: ' + data.length + ' rows found');
+            toast.success(data.length + ' rows found');
         };
         reader.readAsText(file);
     };
 
     const handleImport = async () => {
-        if (!parsedData || parsedData.length === 0) {
-            toast.error('No data to import');
-            return;
-        }
-        
+        if (!parsedData) return;
         setImporting(true);
         try {
-            const endpoint = '/import/' + (templateType === 'students_cs' ? 'students/cs' : 
-                                           templateType === 'students_mentor' ? 'students/mentor' : 
-                                           templateType);
+            let endpoint = '/import/' + templateType;
+            if (templateType === 'students_cs') endpoint = '/import/students/cs';
+            if (templateType === 'students_mentor') endpoint = '/import/students/mentor';
             const res = await apiClient.post(endpoint, parsedData);
             setResults(res.data);
-            
             if (res.data.success > 0) {
                 toast.success('Imported ' + res.data.success + ' records');
                 if (onSuccess) onSuccess();
             }
-            if (res.data.failed > 0) {
-                toast.error(res.data.failed + ' records failed');
-            }
         } catch (err) {
-            toast.error('Import failed: ' + (err.response?.data?.detail || err.message));
+            toast.error('Import failed');
         }
         setImporting(false);
     };
@@ -119,7 +101,34 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
         setShowModal(false);
         setResults(null);
         setParsedData(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const renderRequired = () => {
+        if (!template) return null;
+        return template.required_fields.map(f => (
+            <Badge key={f} className="bg-red-500 mr-1 mb-1">{f} *</Badge>
+        ));
+    };
+
+    const renderOptional = () => {
+        if (!template) return null;
+        return template.optional_fields.map(f => (
+            <Badge key={f} variant="outline" className="mr-1 mb-1">{f}</Badge>
+        ));
+    };
+
+    const renderInstructions = () => {
+        if (!template) return null;
+        return template.instructions.map((inst, idx) => (
+            <li key={idx}>{inst}</li>
+        ));
+    };
+
+    const renderErrors = () => {
+        if (!results || !results.errors) return null;
+        return results.errors.slice(0, 10).map((err, idx) => (
+            <li key={idx} className="text-red-400">{err}</li>
+        ));
     };
 
     return (
@@ -130,15 +139,13 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
             </Button>
 
             <Dialog open={showModal} onOpenChange={resetModal}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileSpreadsheet className="h-5 w-5" />
                             Import {title}
                         </DialogTitle>
-                        <DialogDescription>
-                            Upload a CSV file to import data in bulk
-                        </DialogDescription>
+                        <DialogDescription>Upload CSV file to import data</DialogDescription>
                     </DialogHeader>
 
                     {template && !results && (
@@ -147,26 +154,14 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                                 <CardHeader className="py-3">
                                     <CardTitle className="text-sm">Required Fields</CardTitle>
                                 </CardHeader>
-                                <CardContent className="py-2">
-                                    <div className="flex flex-wrap gap-2">
-                                        {template.required_fields.map(f => (
-                                            <Badge key={f} className="bg-red-500">{f} *</Badge>
-                                        ))}
-                                    </div>
-                                </CardContent>
+                                <CardContent className="py-2">{renderRequired()}</CardContent>
                             </Card>
 
                             <Card>
                                 <CardHeader className="py-3">
                                     <CardTitle className="text-sm">Optional Fields</CardTitle>
                                 </CardHeader>
-                                <CardContent className="py-2">
-                                    <div className="flex flex-wrap gap-2">
-                                        {template.optional_fields.map(f => (
-                                            <Badge key={f} variant="outline">{f}</Badge>
-                                        ))}
-                                    </div>
-                                </CardContent>
+                                <CardContent className="py-2">{renderOptional()}</CardContent>
                             </Card>
 
                             <Card>
@@ -174,20 +169,15 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                                     <CardTitle className="text-sm">Instructions</CardTitle>
                                 </CardHeader>
                                 <CardContent className="py-2">
-                                    <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
-                                        {template.instructions.map((inst, idx) => (
-                                            <li key={idx}>{inst}</li>
-                                        ))}
+                                    <ul className="text-sm list-disc list-inside text-muted-foreground">
+                                        {renderInstructions()}
                                     </ul>
                                 </CardContent>
                             </Card>
 
-                            <div className="flex gap-2">
-                                <Button onClick={downloadTemplate} variant="secondary" className="flex-1">
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Download Template
-                                </Button>
-                            </div>
+                            <Button onClick={downloadTemplate} variant="secondary" className="w-full">
+                                <Download className="h-4 w-4 mr-2" />Download Template
+                            </Button>
 
                             <div className="border-2 border-dashed rounded-lg p-6 text-center">
                                 <input
@@ -200,19 +190,13 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                                 />
                                 <label htmlFor="csv-upload" className="cursor-pointer">
                                     <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                                    <p className="text-sm text-muted-foreground">
-                                        Click to select CSV file or drag and drop
-                                    </p>
+                                    <p className="text-sm text-muted-foreground">Click to select CSV file</p>
                                 </label>
                             </div>
 
                             {parsedData && (
                                 <div className="bg-muted/50 rounded-lg p-4">
-                                    <p className="font-medium">Ready to import: {parsedData.length} records</p>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Preview: {parsedData.slice(0, 3).map(r => r.full_name || r.phone).join(', ')}
-                                        {parsedData.length > 3 && '...'}
-                                    </p>
+                                    <p className="font-medium">Ready: {parsedData.length} records</p>
                                 </div>
                             )}
                         </div>
@@ -221,21 +205,21 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                     {results && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-3 gap-4">
-                                <Card className="bg-emerald-500/10 border-emerald-500/20">
+                                <Card className="bg-emerald-500/10">
                                     <CardContent className="pt-6 text-center">
                                         <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
                                         <p className="text-2xl font-bold text-emerald-500">{results.success}</p>
                                         <p className="text-sm">Success</p>
                                     </CardContent>
                                 </Card>
-                                <Card className="bg-yellow-500/10 border-yellow-500/20">
+                                <Card className="bg-yellow-500/10">
                                     <CardContent className="pt-6 text-center">
                                         <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
                                         <p className="text-2xl font-bold text-yellow-500">{results.skipped}</p>
                                         <p className="text-sm">Skipped</p>
                                     </CardContent>
                                 </Card>
-                                <Card className="bg-red-500/10 border-red-500/20">
+                                <Card className="bg-red-500/10">
                                     <CardContent className="pt-6 text-center">
                                         <XCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
                                         <p className="text-2xl font-bold text-red-500">{results.failed}</p>
@@ -243,21 +227,13 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                                     </CardContent>
                                 </Card>
                             </div>
-
                             {results.errors && results.errors.length > 0 && (
                                 <Card>
                                     <CardHeader className="py-3">
                                         <CardTitle className="text-sm text-red-500">Errors</CardTitle>
                                     </CardHeader>
-                                    <CardContent className="py-2 max-h-40 overflow-y-auto">
-                                        <ul className="text-sm space-y-1 text-muted-foreground">
-                                            {results.errors.slice(0, 10).map((err, idx) => (
-                                                <li key={idx} className="text-red-400">{err}</li>
-                                            ))}
-                                            {results.errors.length > 10 && (
-                                                <li>...and {results.errors.length - 10} more errors</li>
-                                            )}
-                                        </ul>
+                                    <CardContent className="py-2">
+                                        <ul className="text-sm">{renderErrors()}</ul>
                                     </CardContent>
                                 </Card>
                             )}
@@ -269,7 +245,7 @@ const ImportButton = ({ templateType, title, onSuccess }) => {
                             <>
                                 <Button variant="outline" onClick={resetModal}>Cancel</Button>
                                 <Button onClick={handleImport} disabled={!parsedData || importing}>
-                                    {importing ? 'Importing...' : 'Import Data'}
+                                    {importing ? 'Importing...' : 'Import'}
                                 </Button>
                             </>
                         ) : (
