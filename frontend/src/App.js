@@ -85,6 +85,13 @@ function AppRoutes() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 
+                {/* Today's Follow-ups */}
+                <Route path="followups" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master']}>
+                        <FollowupsPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Sales CRM */}
                 <Route path="sales" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive']}>
