@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, apiClient } from '@/lib/api';
+import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -11,25 +11,20 @@ import {
 } from '@/components/ui/select';
 import { FlaskConical, TestTube, Rocket } from 'lucide-react';
 
-const envConfig = {
-    development: { label: 'Development', icon: FlaskConical, color: 'bg-purple-500' },
-    testing: { label: 'Testing', icon: TestTube, color: 'bg-yellow-500' },
-    production: { label: 'Production', icon: Rocket, color: 'bg-emerald-500' }
-};
-
 const EnvironmentSwitcher = () => {
-    const { user } = useAuth();
-    const [envData, setEnvData] = useState(null);
+    const [currentMode, setCurrentMode] = useState('production');
+    const [userAccess, setUserAccess] = useState(['production']);
     const [switching, setSwitching] = useState(false);
 
     useEffect(() => {
-        fetchEnvironment();
+        loadEnvironment();
     }, []);
 
-    const fetchEnvironment = async () => {
+    const loadEnvironment = async () => {
         try {
             const res = await apiClient.get('/environment/current');
-            setEnvData(res.data);
+            setCurrentMode(res.data.current_mode || 'production');
+            setUserAccess(res.data.user_access || ['production']);
         } catch (err) {
             console.error('Failed to fetch environment');
         }
@@ -39,50 +34,49 @@ const EnvironmentSwitcher = () => {
         setSwitching(true);
         try {
             await apiClient.put('/environment/mode?mode=' + mode);
-            setEnvData(prev => ({ ...prev, current_mode: mode }));
-            toast.success('Switched to ' + envConfig[mode].label + ' mode');
+            setCurrentMode(mode);
+            toast.success('Switched to ' + mode + ' mode');
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'Failed to switch environment');
+            toast.error('Failed to switch environment');
         }
         setSwitching(false);
     };
 
-    if (!envData) return null;
+    const getIcon = (mode) => {
+        if (mode === 'development') return FlaskConical;
+        if (mode === 'testing') return TestTube;
+        return Rocket;
+    };
 
-    const canSwitch = envData.user_access.length > 1 || user?.role === 'super_admin';
-    const currentConfig = envConfig[envData.current_mode] || envConfig.production;
-    const Icon = currentConfig.icon;
+    const getColor = (mode) => {
+        if (mode === 'development') return 'bg-purple-500';
+        if (mode === 'testing') return 'bg-yellow-500';
+        return 'bg-emerald-500';
+    };
+
+    const canSwitch = userAccess.length > 1;
+    const Icon = getIcon(currentMode);
 
     if (!canSwitch) {
         return (
-            <Badge className={currentConfig.color + ' text-white gap-1'}>
+            <Badge className={getColor(currentMode) + ' text-white gap-1'}>
                 <Icon className="h-3 w-3" />
-                {currentConfig.label}
+                {currentMode}
             </Badge>
         );
     }
 
     return (
-        <Select value={envData.current_mode} onValueChange={handleChange} disabled={switching}>
-            <SelectTrigger className="w-[150px] h-8">
-                <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4" />
-                    <SelectValue />
-                </div>
+        <Select value={currentMode} onValueChange={handleChange} disabled={switching}>
+            <SelectTrigger className="w-[140px] h-8">
+                <SelectValue />
             </SelectTrigger>
             <SelectContent>
-                {envData.user_access.map(mode => {
-                    const config = envConfig[mode];
-                    const ModeIcon = config.icon;
-                    return (
-                        <SelectItem key={mode} value={mode}>
-                            <div className="flex items-center gap-2">
-                                <ModeIcon className="h-4 w-4" />
-                                {config.label}
-                            </div>
-                        </SelectItem>
-                    );
-                })}
+                {userAccess.map(mode => (
+                    <SelectItem key={mode} value={mode}>
+                        {mode}
+                    </SelectItem>
+                ))}
             </SelectContent>
         </Select>
     );
