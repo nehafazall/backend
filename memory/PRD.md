@@ -3,13 +3,27 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-### Detailed Requirements (User Provided)
-1. **Departments:** 8 departments - Sales, Finance, Customer Service (CS), Mentors/Academics, Operations, Marketing, HR, Quality Control
-2. **Access Control:** Granular permission matrix (View/Edit/Full) per role per module
-3. **Commission Engine:** Flexible commission rules for courses with percentage/fixed rates
-4. **Sales Dashboard:** Analytics with revenue, commission, conversion rate, leaderboard
-5. **CS Dashboard:** Student metrics, onboarding rates, upgrade revenue, satisfaction scores
-6. **Color Theme:** White (#FFFFFF), Black (#31261D), Red (#EF3340), Grey (#B0B0B0)
+## Latest User Requirements (SLA & Customer Management)
+
+### SLA Rules Implemented
+1. **New Lead Contact SLA (60 minutes)**
+   - New leads assigned via round-robin must be contacted within 60 minutes
+   - If not contacted → SLA Breach → Notify Sales Executive + Manager
+
+2. **Inactive Lead Escalation (7 days → 72h → 72h → Reassign)**
+   - No activity for 7 days → First Warning to Sales Executive
+   - No activity after 72 hours → Second Warning + Notify Manager
+   - No activity after another 72 hours → Lead returns to Agentic Pool → Auto-reassign
+
+3. **CS Activation SLA (15 minutes)**
+   - When lead is enrolled → Assigned to CS Agent
+   - No activation call recorded → Warning
+   - After 15 minutes → SLA Breach → Notify CS Leader
+
+### New Features
+- **Leads Pool (Agentic Pool)** - Unassigned/returned leads waiting for distribution
+- **Customer Master** - Complete transaction history per customer
+- **3CX Integration Placeholder** - Call recording URL field ready for future integration
 
 ## Architecture Overview
 - **Backend**: FastAPI (Python) with MongoDB
@@ -17,18 +31,9 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 - **Authentication**: JWT-based with role-based access control
 - **Database**: MongoDB with proper indexing
 
-## User Personas
-1. **Super Admin** - Full system access, user management, all modules
-2. **Admin** - System configuration, user management
-3. **Sales Manager/Team Leader** - Manage sales team, view reports
-4. **Sales Executive** - Handle leads, make calls, update status
-5. **CS Head/Agent** - Manage enrolled students, onboarding
-6. **Mentor** - Student mentorship, redeposit tracking
-7. **Finance** - Payment verification, reconciliation
-
 ## What's Been Implemented
 
-### Phase 1 MVP (Feb 2026) ✅
+### Phase 1 MVP ✅
 - JWT Authentication with role-based access
 - User Management (CRUD, roles, activation)
 - Lead Management with Kanban (8 stages)
@@ -39,67 +44,90 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 - Activity Logs
 - Dark/Light mode theme
 
-### Phase 2 Features (Feb 2026) ✅
-- **Department Management** - View/Create/Edit 8 departments with approval workflow
-- **Course Management** - Full CRUD for courses with pricing
-- **Commission Engine** - Rule creation with percentage/fixed rates per role/course
-- **Sales Dashboard** - Revenue, commission, conversion rate, lead funnel charts, leaderboard
-- **CS Dashboard** - Student pipeline, onboarding rate, upgrade revenue, team leaderboard
-- **Access Control** - Permission matrix UI for granular role-based access
+### Phase 2 Features ✅
+- Department Management with approval workflow
+- Course Management with CRUD
+- Commission Engine with flexible rules
+- Sales Dashboard with analytics
+- CS Dashboard with metrics
+- Access Control permission matrix
 
-### Frontend Pages (13 total)
+### Phase 3 Features (Current) ✅
+- **SLA Management System**
+  - Configurable SLA rules
+  - Automatic breach detection
+  - Escalation notifications
+  - Auto-reassignment to pool
+- **Leads Pool (Agentic Pool)**
+  - View unassigned leads
+  - Manual or round-robin assignment
+  - SLA status display
+- **Customer Master**
+  - All customers with transaction history
+  - Search functionality
+  - Detailed view with payment history
+- **3CX Integration Placeholder**
+  - `call_recording_url` field on leads and students
+
+### Frontend Pages (15 total)
 1. Login Page
 2. Dashboard (role-specific)
 3. Sales CRM (Kanban)
 4. My Sales Dashboard (analytics)
-5. Customer Service (Kanban)
-6. CS Dashboard (analytics)
-7. Mentor CRM (Kanban)
-8. Finance (Kanban)
-9. User Management
-10. Departments
-11. Courses
-12. Commission Engine
-13. Access Control
-14. Settings
+5. **Leads Pool (NEW)**
+6. **Customer Master (NEW)**
+7. Customer Service (Kanban)
+8. CS Dashboard (analytics)
+9. Mentor CRM (Kanban)
+10. Finance (Kanban)
+11. User Management
+12. Departments
+13. Courses
+14. Commission Engine
+15. Access Control
+16. Settings
 
-### Backend API Endpoints (26+ tested)
-- `/api/auth/login`, `/api/auth/me`
-- `/api/users/` (CRUD)
-- `/api/departments/` (CRUD + approval workflow)
-- `/api/courses/` (CRUD)
-- `/api/commission-rules/` (CRUD)
-- `/api/commissions/`, `/api/commissions/summary`
-- `/api/leads/` (CRUD)
-- `/api/students/` (CRUD)
-- `/api/payments/` (CRUD)
-- `/api/notifications/`
-- `/api/dashboard/stats`, `/api/dashboard/lead-funnel`, `/api/dashboard/leaderboard`
-- `/api/dashboard/student-funnel`, `/api/dashboard/upgrades-by-month`, `/api/dashboard/cs-leaderboard`
+### Backend API Endpoints
+**SLA Endpoints:**
+- `GET /api/sla/config` - Get SLA configuration
+- `GET /api/sla/breaches` - Get current breaches
+- `POST /api/sla/check` - Trigger SLA check
 
-### Automation Features ✅
-- Round-robin lead assignment
-- Auto-handoff from Sales to CS on enrollment
-- Mentor assignment on student activation
-- SLA breach detection (24-hour rule)
-- Duplicate lead detection by phone
-- Commission calculation on enrollment/upgrade
+**Leads Pool Endpoints:**
+- `GET /api/leads/pool` - Get unassigned leads
+- `POST /api/leads/pool/{id}/assign` - Assign lead (manual or round-robin)
+- `POST /api/leads/{id}/return-to-pool` - Return lead to pool
+
+**Customer Master Endpoints:**
+- `GET /api/customers` - List all customers
+- `GET /api/customers/{id}` - Get customer details
+- `GET /api/customers/by-phone/{phone}` - Get by phone
+
+**Existing Endpoints:**
+- Auth, Users, Departments, Courses, Commission Rules
+- Leads, Students, Payments, Notifications
+- Dashboard stats, funnels, leaderboards
+
+## SLA Configuration
+```json
+{
+  "new_lead_contact_mins": 60,
+  "inactive_lead_days": 7,
+  "inactive_warning_hours": 72,
+  "inactive_reassign_hours": 72,
+  "cs_activation_mins": 15
+}
+```
 
 ## Prioritized Backlog
 
-### P0 - Critical (Completed)
-- [x] Fix frontend blocker (Maximum call stack size exceeded)
-- [x] Department Management UI
-- [x] Granular Access Control UI
-- [x] CS Dashboard
-
 ### P1 - High Priority
-- [ ] Google Sheets Integration for lead import (MVP lead intake)
+- [ ] Google Sheets Integration for lead import
 - [ ] Email notifications (SendGrid)
+- [ ] 3CX Integration for call recordings
 - [ ] Advanced reporting and exports
-- [ ] Bulk lead import functionality
 
-### P2 - Medium Priority  
+### P2 - Medium Priority
 - [ ] Meta Ads webhook integration
 - [ ] Google Ads webhook integration
 - [ ] HR & Payroll Module
@@ -115,13 +143,13 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 
 ## Technical Notes
 - **Super Admin:** aqib@clt-academy.com / A@qib1234
-- **JWT Secret:** stored in backend/.env
 - **All API routes prefixed with /api**
 - **MongoDB indexes on:** email, phone, stage, assigned_to
-- **Test reports:** /app/test_reports/iteration_2.json (26/26 backend tests passed)
+- **Test reports:** /app/test_reports/iteration_3.json (15/15 tests passed)
 
 ## Files Reference
-- Backend: `/app/backend/server.py` (main API)
+- Backend: `/app/backend/server.py`
 - Frontend Routes: `/app/frontend/src/App.js`
 - Navigation: `/app/frontend/src/components/Layout.jsx`
-- New Pages: AccessControlPage.jsx, CSDashboard.jsx
+- New Pages: `LeadsPoolPage.jsx`, `CustomerMasterPage.jsx`
+- Test Files: `/app/backend/tests/test_sla_features.py`
