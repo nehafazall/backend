@@ -191,9 +191,12 @@ const CustomerMasterPage = () => {
 
     return (
         <div className="space-y-6" data-testid="customer-master-page">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Customer Master</h1>
-                <p className="text-muted-foreground">Transaction history for all customers</p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Customer Master</h1>
+                    <p className="text-muted-foreground">Transaction history for all customers</p>
+                </div>
+                <ImportButton templateType="customers" title="Import Customers" onSuccess={loadCustomers} />
             </div>
 
             {renderStats()}
