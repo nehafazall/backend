@@ -416,9 +416,6 @@ function TradingChartBackground() {
 }
 
 function HomePageContent({ user, visibleSections, selectSection }) {
-    const { theme } = useTheme();
-    const isDark = theme === 'dark';
-    
     return (
         <div className="min-h-[calc(100vh-4rem)] relative overflow-hidden" data-testid="home-launcher">
             {/* Trading chart background with 15-20% opacity */}
