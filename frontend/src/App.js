@@ -48,7 +48,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return children;
 };
 
-// Public Route (redirect to dashboard if authenticated)
+// Public Route (redirect to home if authenticated)
 const PublicRoute = ({ children }) => {
     const { isAuthenticated, loading } = useAuth();
     
@@ -61,7 +61,7 @@ const PublicRoute = ({ children }) => {
     }
     
     if (isAuthenticated) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/home" replace />;
     }
     
     return children;
