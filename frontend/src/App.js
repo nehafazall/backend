@@ -200,6 +200,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* QC Dashboard */}
+                <Route path="qc-dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'sales_manager']}>
+                        <QCDashboardPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Settings */}
                 <Route path="settings" element={<SettingsPage />} />
             </Route>
