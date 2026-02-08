@@ -32,6 +32,7 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import {
     Search,
     Phone,
