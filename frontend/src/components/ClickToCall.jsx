@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, PhoneCall, PhoneOff, ExternalLink } from 'lucide-react';
+import { Phone, PhoneCall, Copy, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Tooltip,
@@ -7,8 +7,18 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+
+// 3CX Web Client URL - this should match your 3CX server
+const THREECX_WEB_CLIENT = 'https://clt-academy.3cx.ae:5001';
 
 /**
  * Click-to-Call Button Component
@@ -30,7 +40,10 @@ export function ClickToCall({
 
     if (!phoneNumber) return null;
 
-    const handleClick = async () => {
+    // Clean phone number for 3CX
+    const cleanNumber = phoneNumber.replace(/\s+/g, '').replace(/[()-]/g, '');
+
+    const handleCall3CXWebClient = async () => {
         setIsDialing(true);
         
         try {
@@ -41,72 +54,102 @@ export function ClickToCall({
                     contact_id: contactId
                 }
             });
-            
-            // Open 3CX click-to-call protocol
-            // This will trigger the 3CX desktop or web app
-            const threeCXUrl = `tel:${phoneNumber}`;
-            window.open(threeCXUrl, '_self');
-            
-            // Also try the 3CX specific protocol
-            setTimeout(() => {
-                window.open(`callto:${phoneNumber}`, '_self');
-            }, 100);
-            
-            toast.success(`Calling ${contactName || phoneNumber}...`, {
-                description: 'Connect via your 3CX client',
-                duration: 3000
-            });
-            
         } catch (error) {
-            console.error('Click-to-call error:', error);
-            // Still try to make the call even if logging fails
-            window.open(`tel:${phoneNumber}`, '_self');
-            toast.info(`Dialing ${phoneNumber}...`);
-        } finally {
-            setTimeout(() => setIsDialing(false), 2000);
+            console.error('Click-to-call logging error:', error);
         }
+        
+        // Open 3CX Web Client with the phone number
+        const threeCXCallUrl = `${THREECX_WEB_CLIENT}/#/call?phone=${encodeURIComponent(cleanNumber)}`;
+        window.open(threeCXCallUrl, '_blank');
+        
+        toast.success(`Opening 3CX to call ${contactName || phoneNumber}...`, {
+            description: 'Click "Call" in the 3CX window',
+            duration: 4000
+        });
+        
+        setTimeout(() => setIsDialing(false), 2000);
     };
 
-    const handleCopy = (e) => {
-        e.stopPropagation();
+    const handleCallTelProtocol = async () => {
+        setIsDialing(true);
+        
+        try {
+            await api.post('/3cx/click-to-call', null, {
+                params: {
+                    phone_number: phoneNumber,
+                    contact_id: contactId
+                }
+            });
+        } catch (error) {
+            console.error('Click-to-call logging error:', error);
+        }
+        
+        // Use tel: protocol - works with 3CX Click2Call extension
+        window.location.href = `tel:${cleanNumber}`;
+        
+        toast.info(`Dialing ${contactName || phoneNumber}...`, {
+            description: 'Requires 3CX Click2Call extension',
+            duration: 3000
+        });
+        
+        setTimeout(() => setIsDialing(false), 2000);
+    };
+
+    const handleCopy = () => {
         navigator.clipboard.writeText(phoneNumber);
         toast.success('Phone number copied!');
     };
 
     return (
         <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                        variant={variant}
-                        size={size}
-                        onClick={handleClick}
-                        disabled={isDialing}
-                        className={`${className} ${isDialing ? 'animate-pulse' : ''}`}
-                        data-testid="click-to-call-btn"
-                    >
-                        {isDialing ? (
-                            <PhoneCall className="h-4 w-4 text-green-500 animate-bounce" />
-                        ) : (
-                            <Phone className="h-4 w-4" />
-                        )}
-                        {showLabel && (
-                            <span className="ml-2">{isDialing ? 'Calling...' : 'Call'}</span>
-                        )}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="flex items-center gap-2">
-                    <span>Click to call: {phoneNumber}</span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        onClick={handleCopy}
-                    >
-                        <ExternalLink className="h-3 w-3" />
-                    </Button>
-                </TooltipContent>
-            </Tooltip>
+            <DropdownMenu>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant={variant}
+                                size={size}
+                                disabled={isDialing}
+                                className={`${className} ${isDialing ? 'animate-pulse' : ''}`}
+                                data-testid="click-to-call-btn"
+                            >
+                                {isDialing ? (
+                                    <PhoneCall className="h-4 w-4 text-green-500 animate-bounce" />
+                                ) : (
+                                    <Phone className="h-4 w-4" />
+                                )}
+                                {showLabel && (
+                                    <span className="ml-2">{isDialing ? 'Calling...' : 'Call'}</span>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                        Click to call: {phoneNumber}
+                    </TooltipContent>
+                </Tooltip>
+                
+                <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={handleCall3CXWebClient} className="cursor-pointer">
+                        <Phone className="mr-2 h-4 w-4 text-green-500" />
+                        <span>Call via 3CX Web Client</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleCallTelProtocol} className="cursor-pointer">
+                        <PhoneCall className="mr-2 h-4 w-4 text-blue-500" />
+                        <span>Call via tel: protocol</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleCopy} className="cursor-pointer">
+                        <Copy className="mr-2 h-4 w-4" />
+                        <span>Copy number</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-xs text-muted-foreground" disabled>
+                        <Settings className="mr-2 h-3 w-3" />
+                        <span>{phoneNumber}</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </TooltipProvider>
     );
 }
