@@ -97,10 +97,17 @@ const StudentCard = ({ student, onView, onSetReminder }) => {
             </div>
             
             <div className="space-y-2 text-sm">
-                <p className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 text-muted-foreground">
                     <Phone className="h-3 w-3" />
-                    <span className="font-mono">{student.phone}</span>
-                </p>
+                    <span className="font-mono flex-1">{student.phone}</span>
+                    <ClickToCall 
+                        phoneNumber={student.phone} 
+                        contactId={student.id} 
+                        contactName={student.full_name}
+                        size="sm"
+                        className="h-6 w-6"
+                    />
+                </div>
                 {student.preferred_language && (
                     <p className="flex items-center gap-2 text-muted-foreground">
                         <MessageSquare className="h-3 w-3" />
