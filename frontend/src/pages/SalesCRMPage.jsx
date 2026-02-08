@@ -32,6 +32,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
+import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import {
     Plus,
     Search,
