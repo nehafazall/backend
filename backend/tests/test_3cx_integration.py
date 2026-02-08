@@ -179,11 +179,23 @@ class Test3CXCallHistory:
 class Test3CXRecentCalls:
     """Tests for 3CX Recent Calls endpoint"""
     
-    def test_recent_calls(self):
+    @pytest.fixture(scope="class")
+    def auth_token(self):
+        """Get authentication token"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
+        })
+        if response.status_code == 200:
+            return response.json().get("access_token")
+        pytest.skip("Authentication failed")
+    
+    def test_recent_calls(self, auth_token):
         """Test recent calls endpoint"""
+        headers = {"Authorization": f"Bearer {auth_token}"}
         response = requests.get(f"{BASE_URL}/api/3cx/recent-calls", params={
             "limit": 10
-        })
+        }, headers=headers)
         assert response.status_code == 200
         
         data = response.json()
