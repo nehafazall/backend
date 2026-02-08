@@ -23,9 +23,6 @@ import {
     DollarSign,
     Settings,
     LogOut,
-    ChevronLeft,
-    ChevronRight,
-    ChevronDown,
     Bell,
     Moon,
     Sun,
@@ -41,63 +38,117 @@ import {
     UserCheck,
     Briefcase,
     Lock,
+    Home,
 } from 'lucide-react';
 
-function SectionHeader({ title, icon: Icon, isOpen, onClick, isActive }) {
+const SECTIONS = {
+    sales: {
+        id: 'sales',
+        title: 'Sales',
+        icon: Phone,
+        color: 'bg-blue-500',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
+        items: [
+            { title: 'Sales CRM', icon: Phone, path: '/sales' },
+            { title: 'Sales Dashboard', icon: TrendingUp, path: '/sales/dashboard' },
+            { title: "Today's Follow-ups", icon: Bell, path: '/followups' },
+        ],
+    },
+    cs: {
+        id: 'cs',
+        title: 'Customer Service',
+        icon: Headphones,
+        color: 'bg-emerald-500',
+        roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
+        items: [
+            { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
+            { title: 'Customer Service', icon: Users, path: '/cs' },
+        ],
+    },
+    academics: {
+        id: 'academics',
+        title: 'Academics',
+        icon: GraduationCap,
+        color: 'bg-orange-500',
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master'],
+        items: [
+            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor' },
+            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard' },
+        ],
+    },
+    operations: {
+        id: 'operations',
+        title: 'Operations',
+        icon: Briefcase,
+        color: 'bg-purple-500',
+        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations', 'team_leader', 'sales_executive', 'cs_agent', 'mentor', 'academic_master', 'marketing', 'quality_control'],
+        items: [
+            { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+            { title: 'Leads Pool', icon: Inbox, path: '/leads/pool', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
+            { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
+            { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
+            { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
+        ],
+    },
+    security: {
+        id: 'security',
+        title: 'Security',
+        icon: Lock,
+        color: 'bg-red-500',
+        roles: ['super_admin', 'admin', 'hr'],
+        items: [
+            { title: 'Access Control', icon: Shield, path: '/access-control', roles: ['super_admin'] },
+            { title: 'User Management', icon: UserCircle, path: '/users' },
+        ],
+    },
+    finance: {
+        id: 'finance',
+        title: 'Finance',
+        icon: DollarSign,
+        color: 'bg-cyan-500',
+        roles: ['super_admin', 'admin', 'finance'],
+        items: [
+            { title: 'Finance', icon: DollarSign, path: '/finance' },
+            { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
+        ],
+    },
+};
+
+function SectionIcon({ section, onClick }) {
+    const Icon = section.icon;
     return (
         <button
             onClick={onClick}
-            className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold tracking-wider transition-colors ${isActive ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'}`}
+            className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300 group"
+            data-testid={`section-icon-${section.id}`}
         >
-            <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                <span>{title}</span>
+            <div className={`w-16 h-16 rounded-2xl ${section.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform`}>
+                <Icon className="h-8 w-8" />
             </div>
-            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+            <span className="font-medium text-sm">{section.title}</span>
         </button>
     );
 }
 
-function NavItem({ title, icon: Icon, path, isActive, onClick, collapsed }) {
-    if (collapsed) {
-        return (
-            <button onClick={onClick} className={`sidebar-item w-full justify-center ${isActive ? 'active' : ''}`} title={title}>
-                <Icon className="h-5 w-5" />
-            </button>
-        );
-    }
+function SidebarNavItem({ item, isActive, onClick }) {
+    const Icon = item.icon;
     return (
-        <button onClick={onClick} className={`sidebar-item w-full pl-10 ${isActive ? 'active' : ''}`} data-testid={`nav-${title.toLowerCase().replace(/['\s]/g, '-')}`}>
-            <Icon className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate text-sm">{title}</span>
+        <button
+            onClick={onClick}
+            className={`sidebar-item w-full ${isActive ? 'active' : ''}`}
+            data-testid={`nav-${item.title.toLowerCase().replace(/['\s]/g, '-')}`}
+        >
+            <Icon className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">{item.title}</span>
         </button>
     );
-}
-
-function NotificationList({ items }) {
-    if (!items || items.length === 0) return null;
-    const sliced = items.slice(0, 10);
-    const elements = [];
-    for (let i = 0; i < sliced.length; i++) {
-        const n = sliced[i];
-        elements.push(
-            <DropdownMenuItem key={n.id} className={`flex flex-col items-start p-3 ${!n.read ? 'bg-muted/50' : ''}`}>
-                <span className="font-medium text-sm">{n.title}</span>
-                <span className="text-xs text-muted-foreground mt-1">{n.message}</span>
-            </DropdownMenuItem>
-        );
-    }
-    return <>{elements}</>;
 }
 
 function Layout() {
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [activeSection, setActiveSection] = useState(null);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    const [openSections, setOpenSections] = useState({
-        sales: true, cs: true, academics: true, operations: true, security: true, finance: true
-    });
     
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
@@ -119,6 +170,25 @@ function Layout() {
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+        if (currentPath === '/home' || currentPath === '/') {
+            setActiveSection(null);
+            return;
+        }
+        
+        const sectionKeys = Object.keys(SECTIONS);
+        for (let i = 0; i < sectionKeys.length; i++) {
+            const key = sectionKeys[i];
+            const section = SECTIONS[key];
+            for (let j = 0; j < section.items.length; j++) {
+                if (currentPath === section.items[j].path || currentPath.startsWith(section.items[j].path + '/')) {
+                    setActiveSection(key);
+                    return;
+                }
+            }
+        }
+    }, [currentPath]);
+
     function handleLogout() {
         logout();
         toast.success('Logged out successfully');
@@ -130,11 +200,24 @@ function Layout() {
         setMobileMenuOpen(false);
     }
 
-    function toggleSection(id) {
-        setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+    function goHome() {
+        setActiveSection(null);
+        navigate('/home');
+    }
+
+    function selectSection(sectionId) {
+        setActiveSection(sectionId);
+        const section = SECTIONS[sectionId];
+        if (section && section.items.length > 0) {
+            const firstItem = section.items.find(item => !item.roles || item.roles.includes(userRole));
+            if (firstItem) {
+                navigate(firstItem.path);
+            }
+        }
     }
 
     function hasRole(roles) {
+        if (!roles) return true;
         return roles.includes(userRole);
     }
 
@@ -143,128 +226,97 @@ function Layout() {
         return map[r] || 'bg-slate-500';
     }
 
-    const salesRoles = ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'];
-    const csRoles = ['super_admin', 'admin', 'cs_head', 'cs_agent'];
-    const academicRoles = ['super_admin', 'admin', 'mentor', 'academic_master'];
-    const opsRoles = ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations', 'team_leader', 'sales_executive', 'cs_agent', 'mentor', 'academic_master', 'marketing', 'quality_control'];
-    const securityRoles = ['super_admin', 'admin', 'hr'];
-    const financeRoles = ['super_admin', 'admin', 'finance'];
+    const currentSection = activeSection ? SECTIONS[activeSection] : null;
+    const isHomePage = !activeSection || currentPath === '/home';
+
+    const visibleSections = [];
+    const sectionKeys = Object.keys(SECTIONS);
+    for (let i = 0; i < sectionKeys.length; i++) {
+        const key = sectionKeys[i];
+        const section = SECTIONS[key];
+        if (section.roles.includes(userRole)) {
+            visibleSections.push(section);
+        }
+    }
+
+    const sidebarItems = [];
+    if (currentSection) {
+        for (let i = 0; i < currentSection.items.length; i++) {
+            const item = currentSection.items[i];
+            if (hasRole(item.roles)) {
+                sidebarItems.push(item);
+            }
+        }
+    }
+
+    const notificationItems = [];
+    const notifSlice = notifications.slice(0, 10);
+    for (let i = 0; i < notifSlice.length; i++) {
+        const n = notifSlice[i];
+        notificationItems.push(
+            <DropdownMenuItem key={n.id} className={`flex flex-col items-start p-3 ${!n.read ? 'bg-muted/50' : ''}`}>
+                <span className="font-medium text-sm">{n.title}</span>
+                <span className="text-xs text-muted-foreground mt-1">{n.message}</span>
+            </DropdownMenuItem>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background">
-            <button className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-800 text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-
-            <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-                <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
-                    {!sidebarCollapsed ? (
-                        <img src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" alt="CLT Academy" className="h-10 w-auto" />
-                    ) : (
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">C</div>
-                    )}
-                </div>
-
-                <ScrollArea className="flex-1 py-4">
-                    <nav>
-                        {/* SALES */}
-                        {hasRole(salesRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="SALES" icon={Phone} isOpen={openSections.sales} onClick={() => toggleSection('sales')} isActive={currentPath.startsWith('/sales') || currentPath === '/followups'} />}
-                                {(sidebarCollapsed || openSections.sales) && (
-                                    <div className="mt-1 space-y-1">
-                                        <NavItem title="Sales CRM" icon={Phone} path="/sales" isActive={currentPath === '/sales'} onClick={() => goTo('/sales')} collapsed={sidebarCollapsed} />
-                                        <NavItem title="Sales Dashboard" icon={TrendingUp} path="/sales/dashboard" isActive={currentPath === '/sales/dashboard'} onClick={() => goTo('/sales/dashboard')} collapsed={sidebarCollapsed} />
-                                        <NavItem title="Today's Follow-ups" icon={Bell} path="/followups" isActive={currentPath === '/followups'} onClick={() => goTo('/followups')} collapsed={sidebarCollapsed} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* CUSTOMER SERVICE */}
-                        {hasRole(csRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="CUSTOMER SERVICE" icon={Headphones} isOpen={openSections.cs} onClick={() => toggleSection('cs')} isActive={currentPath.startsWith('/cs')} />}
-                                {(sidebarCollapsed || openSections.cs) && (
-                                    <div className="mt-1 space-y-1">
-                                        <NavItem title="CS Dashboard" icon={Headphones} path="/cs/dashboard" isActive={currentPath === '/cs/dashboard'} onClick={() => goTo('/cs/dashboard')} collapsed={sidebarCollapsed} />
-                                        <NavItem title="Customer Service" icon={Users} path="/cs" isActive={currentPath === '/cs'} onClick={() => goTo('/cs')} collapsed={sidebarCollapsed} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* ACADEMICS */}
-                        {hasRole(academicRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="ACADEMICS" icon={GraduationCap} isOpen={openSections.academics} onClick={() => toggleSection('academics')} isActive={currentPath.startsWith('/mentor')} />}
-                                {(sidebarCollapsed || openSections.academics) && (
-                                    <div className="mt-1 space-y-1">
-                                        <NavItem title="Mentor CRM" icon={GraduationCap} path="/mentor" isActive={currentPath === '/mentor'} onClick={() => goTo('/mentor')} collapsed={sidebarCollapsed} />
-                                        <NavItem title="Mentor Dashboard" icon={TrendingUp} path="/mentor/dashboard" isActive={currentPath === '/mentor/dashboard'} onClick={() => goTo('/mentor/dashboard')} collapsed={sidebarCollapsed} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* OPERATIONS */}
-                        {hasRole(opsRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="OPERATIONS" icon={Briefcase} isOpen={openSections.operations} onClick={() => toggleSection('operations')} isActive={currentPath === '/dashboard' || currentPath.startsWith('/leads') || currentPath === '/customers' || currentPath === '/departments' || currentPath === '/courses'} />}
-                                {(sidebarCollapsed || openSections.operations) && (
-                                    <div className="mt-1 space-y-1">
-                                        <NavItem title="Dashboard" icon={LayoutDashboard} path="/dashboard" isActive={currentPath === '/dashboard'} onClick={() => goTo('/dashboard')} collapsed={sidebarCollapsed} />
-                                        {hasRole(['super_admin', 'admin', 'sales_manager', 'team_leader']) && <NavItem title="Leads Pool" icon={Inbox} path="/leads/pool" isActive={currentPath === '/leads/pool'} onClick={() => goTo('/leads/pool')} collapsed={sidebarCollapsed} />}
-                                        {hasRole(['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance']) && <NavItem title="Customer Master" icon={UserCheck} path="/customers" isActive={currentPath === '/customers'} onClick={() => goTo('/customers')} collapsed={sidebarCollapsed} />}
-                                        {hasRole(['super_admin', 'admin', 'hr']) && <NavItem title="Departments" icon={Building2} path="/departments" isActive={currentPath === '/departments'} onClick={() => goTo('/departments')} collapsed={sidebarCollapsed} />}
-                                        {hasRole(['super_admin', 'admin']) && <NavItem title="Courses" icon={BookOpen} path="/courses" isActive={currentPath === '/courses'} onClick={() => goTo('/courses')} collapsed={sidebarCollapsed} />}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* SECURITY */}
-                        {hasRole(securityRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="SECURITY" icon={Lock} isOpen={openSections.security} onClick={() => toggleSection('security')} isActive={currentPath === '/access-control' || currentPath === '/users'} />}
-                                {(sidebarCollapsed || openSections.security) && (
-                                    <div className="mt-1 space-y-1">
-                                        {hasRole(['super_admin']) && <NavItem title="Access Control" icon={Shield} path="/access-control" isActive={currentPath === '/access-control'} onClick={() => goTo('/access-control')} collapsed={sidebarCollapsed} />}
-                                        <NavItem title="User Management" icon={UserCircle} path="/users" isActive={currentPath === '/users'} onClick={() => goTo('/users')} collapsed={sidebarCollapsed} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* FINANCE */}
-                        {hasRole(financeRoles) && (
-                            <div className="mb-2">
-                                {!sidebarCollapsed && <SectionHeader title="FINANCE" icon={DollarSign} isOpen={openSections.finance} onClick={() => toggleSection('finance')} isActive={currentPath === '/finance' || currentPath === '/commissions'} />}
-                                {(sidebarCollapsed || openSections.finance) && (
-                                    <div className="mt-1 space-y-1">
-                                        <NavItem title="Finance" icon={DollarSign} path="/finance" isActive={currentPath === '/finance'} onClick={() => goTo('/finance')} collapsed={sidebarCollapsed} />
-                                        <NavItem title="Commission Engine" icon={Calculator} path="/commissions" isActive={currentPath === '/commissions'} onClick={() => goTo('/commissions')} collapsed={sidebarCollapsed} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Settings */}
-                        <div className="border-t border-slate-800 mt-4 pt-4 px-2">
-                            <button onClick={() => goTo('/settings')} className={`sidebar-item w-full ${currentPath === '/settings' ? 'active' : ''}`}>
-                                <Settings className="h-5 w-5 flex-shrink-0" />
-                                {!sidebarCollapsed && <span className="truncate">Settings</span>}
-                            </button>
-                        </div>
-                    </nav>
-                </ScrollArea>
-
-                <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 items-center justify-center text-slate-400 hover:text-white hover:bg-slate-600 transition-colors">
-                    {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {/* Mobile menu toggle */}
+            {!isHomePage && (
+                <button className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-800 text-white" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+                    {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                 </button>
+            )}
 
-                <div className="border-t border-slate-800 p-4">
-                    {!sidebarCollapsed ? (
+            {/* Sidebar - only show when a section is selected */}
+            {!isHomePage && currentSection && (
+                <aside className={`sidebar expanded ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+                    <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
+                        <img src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" alt="CLT Academy" className="h-10 w-auto" />
+                    </div>
+
+                    <ScrollArea className="flex-1 py-4">
+                        <nav className="px-2 space-y-1">
+                            {/* Home button */}
+                            <button onClick={goHome} className="sidebar-item w-full mb-4 bg-slate-800/50" data-testid="nav-home">
+                                <Home className="h-5 w-5 flex-shrink-0" />
+                                <span className="truncate">Home</span>
+                            </button>
+
+                            {/* Section header */}
+                            <div className="px-3 py-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-lg ${currentSection.color} flex items-center justify-center text-white`}>
+                                        <currentSection.icon className="h-4 w-4" />
+                                    </div>
+                                    <span className="font-semibold text-sm">{currentSection.title}</span>
+                                </div>
+                            </div>
+
+                            {/* Section items */}
+                            {sidebarItems.map(item => (
+                                <SidebarNavItem
+                                    key={item.path}
+                                    item={item}
+                                    isActive={currentPath === item.path}
+                                    onClick={() => goTo(item.path)}
+                                />
+                            ))}
+
+                            {/* Settings at bottom */}
+                            <div className="border-t border-slate-800 mt-4 pt-4">
+                                <button onClick={() => goTo('/settings')} className={`sidebar-item w-full ${currentPath === '/settings' ? 'active' : ''}`}>
+                                    <Settings className="h-5 w-5 flex-shrink-0" />
+                                    <span className="truncate">Settings</span>
+                                </button>
+                            </div>
+                        </nav>
+                    </ScrollArea>
+
+                    {/* User info */}
+                    <div className="border-t border-slate-800 p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">{user?.full_name?.charAt(0) || 'U'}</div>
                             <div className="flex-1 min-w-0">
@@ -272,16 +324,18 @@ function Layout() {
                                 <Badge className={`${getRoleBadgeColor(userRole)} text-white text-xs mt-1`}>{userRole?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'User'}</Badge>
                             </div>
                         </div>
-                    ) : (
-                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium mx-auto">{user?.full_name?.charAt(0) || 'U'}</div>
-                    )}
-                </div>
-            </aside>
+                    </div>
+                </aside>
+            )}
 
-            <main className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+            {/* Main content */}
+            <main className={!isHomePage && currentSection ? 'lg:ml-64' : ''}>
+                {/* Header */}
                 <header className="h-16 bg-card border-b border-border px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40">
-                    <div className="lg:hidden w-8" />
-                    <h1 className="text-lg font-semibold text-foreground hidden lg:block">CLT Academy ERP</h1>
+                    <div className="flex items-center gap-3">
+                        {!isHomePage && <div className="lg:hidden w-8" />}
+                        <h1 className="text-lg font-semibold text-foreground">CLT Academy ERP</h1>
+                    </div>
                     <div className="flex items-center gap-2">
                         <EnvironmentSwitcher />
                         <Button variant="ghost" size="icon" onClick={toggleTheme}>{theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</Button>
@@ -296,8 +350,7 @@ function Layout() {
                                 <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <ScrollArea className="h-64">
-                                    {notifications.length === 0 && <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div>}
-                                    <NotificationList items={notifications} />
+                                    {notifications.length === 0 ? <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div> : notificationItems}
                                 </ScrollArea>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -314,10 +367,29 @@ function Layout() {
                         </DropdownMenu>
                     </div>
                 </header>
-                <div className="p-4 lg:p-6"><Outlet /></div>
+
+                {/* Page content */}
+                <div className="p-4 lg:p-6">
+                    {isHomePage ? (
+                        <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center" data-testid="home-launcher">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
+                                <p className="text-muted-foreground">Select a module to get started</p>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
+                                {visibleSections.map(section => (
+                                    <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <Outlet />
+                    )}
+                </div>
             </main>
 
-            {mobileMenuOpen && <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setMobileMenuOpen(false)} />}
+            {/* Mobile overlay */}
+            {mobileMenuOpen && !isHomePage && <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setMobileMenuOpen(false)} />}
         </div>
     );
 }
