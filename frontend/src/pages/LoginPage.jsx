@@ -29,8 +29,7 @@ function LoginPage() {
         
         try {
             await login(email, password);
-            // Redirect to animation page instead of showing animation here
-            navigate('/welcome');
+            // PublicRoute will automatically redirect to /welcome after login
         } catch (error) {
             const message = error.response?.data?.detail || 'Login failed. Please check your credentials.';
             toast.error(message);
