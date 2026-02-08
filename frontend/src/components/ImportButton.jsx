@@ -12,38 +12,23 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Download, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Upload, Download, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
 
-function RequiredFields({ fields }) {
-    if (!fields) return null;
-    const items = [];
-    for (let i = 0; i < fields.length; i++) {
-        items.push(<Badge key={fields[i]} className="bg-red-500 mr-1 mb-1">{fields[i]} *</Badge>);
-    }
-    return <div>{items}</div>;
-}
+const TYPE_CONFIG = {
+    leads: { title: 'Leads', endpoint: '/import/leads', useJson: true },
+    customers: { title: 'Customers', endpoint: '/import/customers', useJson: true },
+    students_cs: { title: 'CS Students', endpoint: '/import/students/cs', useJson: true },
+    students_mentor: { title: 'Mentor Students', endpoint: '/import/students/mentor', useJson: true },
+    courses: { title: 'Courses', endpoint: '/import/courses', useJson: false },
+    users: { title: 'Users', endpoint: '/import/users', useJson: false },
+};
 
-function OptionalFields({ fields }) {
-    if (!fields) return null;
-    const items = [];
-    for (let i = 0; i < fields.length; i++) {
-        items.push(<Badge key={fields[i]} variant="outline" className="mr-1 mb-1">{fields[i]}</Badge>);
-    }
-    return <div>{items}</div>;
-}
-
-function Instructions({ list }) {
-    if (!list) return null;
-    const items = [];
-    for (let i = 0; i < list.length; i++) {
-        items.push(<li key={i}>{list[i]}</li>);
-    }
-    return <ul className="text-sm list-disc list-inside text-muted-foreground">{items}</ul>;
-}
-
-function ImportButton({ templateType, title, onSuccess }) {
+function ImportButton({ type, onSuccess }) {
+    const config = TYPE_CONFIG[type] || { title: type, endpoint: `/import/${type}`, useJson: true };
     const [open, setOpen] = useState(false);
     const [template, setTemplate] = useState(null);
+    const [file, setFile] = useState(null);
     const [data, setData] = useState(null);
     const [results, setResults] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -52,60 +37,101 @@ function ImportButton({ templateType, title, onSuccess }) {
     async function loadTemplate() {
         setBusy(true);
         try {
-            const r = await apiClient.get('/import/templates/' + templateType);
+            const r = await apiClient.get(`/import/templates/${type}`);
             setTemplate(r.data);
             setOpen(true);
         } catch (e) {
-            toast.error('Failed');
+            toast.error('Failed to load template');
         }
         setBusy(false);
     }
 
     function download() {
         if (!template) return;
-        const h = template.headers.join(',');
-        const v = Object.values(template.example_row).join(',');
-        const blob = new Blob([h + '\n' + v], { type: 'text/csv' });
+        let content = template.template;
+        const blob = new Blob([content], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = template.filename;
+        a.download = `${type}_template.csv`;
         a.click();
     }
 
-    function parseFile(e) {
+    function handleFileSelect(e) {
         const f = e.target.files[0];
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            const lines = evt.target.result.trim().split('\n');
-            const headers = lines[0].split(',').map(function(h) { return h.trim().replace('*', ''); });
-            const rows = [];
-            for (let i = 1; i < lines.length; i++) {
-                const vals = lines[i].split(',');
-                const obj = {};
-                for (let j = 0; j < headers.length; j++) {
-                    if (vals[j] && vals[j].trim()) obj[headers[j]] = vals[j].trim();
+        setFile(f);
+        
+        if (config.useJson) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const lines = evt.target.result.trim().split('\n');
+                    const headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, '').replace('*', ''));
+                    const rows = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const vals = parseCSVLine(lines[i]);
+                        const obj = {};
+                        for (let j = 0; j < headers.length; j++) {
+                            if (vals[j] && vals[j].trim()) obj[headers[j]] = vals[j].trim();
+                        }
+                        if (Object.keys(obj).length > 0) rows.push(obj);
+                    }
+                    setData(rows);
+                    toast.success(`${rows.length} rows parsed`);
+                } catch (err) {
+                    toast.error('Failed to parse CSV');
                 }
-                if (Object.keys(obj).length > 0) rows.push(obj);
+            };
+            reader.readAsText(f);
+        } else {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const lines = evt.target.result.trim().split('\n');
+                setData({ rowCount: lines.length - 1 });
+                toast.success(`${lines.length - 1} rows ready`);
+            };
+            reader.readAsText(f);
+        }
+    }
+
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim().replace(/^\"|\"$/g, ''));
+                current = '';
+            } else {
+                current += char;
             }
-            setData(rows);
-            toast.success(rows.length + ' rows');
-        };
-        reader.readAsText(f);
+        }
+        result.push(current.trim().replace(/^\"|\"$/g, ''));
+        return result;
     }
 
     async function doImport() {
-        if (!data) return;
+        if (!data && !file) return;
         setBusy(true);
         try {
-            let url = '/import/' + templateType;
-            if (templateType === 'students_cs') url = '/import/students/cs';
-            if (templateType === 'students_mentor') url = '/import/students/mentor';
-            const r = await apiClient.post(url, data);
-            setResults(r.data);
-            if (r.data.success > 0 && onSuccess) onSuccess();
+            let r;
+            if (config.useJson) {
+                r = await apiClient.post(config.endpoint, data);
+            } else {
+                const formData = new FormData();
+                formData.append('file', file);
+                r = await apiClient.post(config.endpoint, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+            setResults(r.data.results || r.data);
+            toast.success(r.data.message || 'Import complete');
+            if (onSuccess) onSuccess();
         } catch (e) {
-            toast.error('Failed');
+            toast.error(e.response?.data?.detail || 'Import failed');
         }
         setBusy(false);
     }
@@ -114,81 +140,158 @@ function ImportButton({ templateType, title, onSuccess }) {
         setOpen(false);
         setResults(null);
         setData(null);
+        setFile(null);
         setTemplate(null);
     }
 
+    const RequiredBadges = template?.fields?.required?.map(f => (
+        <Badge key={f} className="bg-red-500 mr-1 mb-1">{f}*</Badge>
+    ));
+
+    const OptionalBadges = template?.fields?.optional?.map(f => (
+        <Badge key={f} variant="outline" className="mr-1 mb-1">{f}</Badge>
+    ));
+
     return (
-        <div>
-            <Button onClick={loadTemplate} variant="outline" disabled={busy}>
-                <Upload className="h-4 w-4 mr-2" />{title}
+        <>
+            <Button onClick={loadTemplate} variant="outline" disabled={busy} data-testid={`import-${type}-btn`}>
+                <Upload className="h-4 w-4 mr-2" />Import
             </Button>
 
             <Dialog open={open} onOpenChange={close}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh]">
                     <DialogHeader>
-                        <DialogTitle>Import {title}</DialogTitle>
-                        <DialogDescription>Upload CSV</DialogDescription>
+                        <DialogTitle>Import {config.title}</DialogTitle>
+                        <DialogDescription>Upload a CSV file to bulk import</DialogDescription>
                     </DialogHeader>
 
-                    {template && !results && (
-                        <div className="space-y-4">
-                            <Card>
-                                <CardHeader className="py-3"><CardTitle className="text-sm">Required</CardTitle></CardHeader>
-                                <CardContent className="py-2"><RequiredFields fields={template.required_fields} /></CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader className="py-3"><CardTitle className="text-sm">Optional</CardTitle></CardHeader>
-                                <CardContent className="py-2"><OptionalFields fields={template.optional_fields} /></CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader className="py-3"><CardTitle className="text-sm">Instructions</CardTitle></CardHeader>
-                                <CardContent className="py-2"><Instructions list={template.instructions} /></CardContent>
-                            </Card>
-                            <Button onClick={download} variant="secondary" className="w-full">
-                                <Download className="h-4 w-4 mr-2" />Download Template
-                            </Button>
-                            <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                <input ref={inputRef} type="file" accept=".csv" onChange={parseFile} className="hidden" id="csv-file" />
-                                <label htmlFor="csv-file" className="cursor-pointer">
-                                    <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                                    <p className="text-sm">Select CSV</p>
-                                </label>
-                            </div>
-                            {data && <div className="bg-muted/50 rounded-lg p-4"><p>{data.length} rows ready</p></div>}
-                        </div>
-                    )}
+                    <ScrollArea className="max-h-[60vh]">
+                        {template && !results && (
+                            <div className="space-y-4 pr-4">
+                                <Card>
+                                    <CardHeader className="py-3">
+                                        <CardTitle className="text-sm">Required Fields</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="py-2">
+                                        <div className="flex flex-wrap">{RequiredBadges}</div>
+                                    </CardContent>
+                                </Card>
+                                
+                                <Card>
+                                    <CardHeader className="py-3">
+                                        <CardTitle className="text-sm">Optional Fields</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="py-2">
+                                        <div className="flex flex-wrap">{OptionalBadges}</div>
+                                    </CardContent>
+                                </Card>
 
-                    {results && (
-                        <div className="grid grid-cols-3 gap-4">
-                            <Card className="bg-emerald-500/10">
-                                <CardContent className="pt-6 text-center">
-                                    <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
-                                    <p className="text-2xl font-bold text-emerald-500">{results.success}</p>
-                                    <p className="text-sm">Success</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="bg-yellow-500/10">
-                                <CardContent className="pt-6 text-center">
-                                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
-                                    <p className="text-2xl font-bold text-yellow-500">{results.skipped}</p>
-                                    <p className="text-sm">Skipped</p>
-                                </CardContent>
-                            </Card>
-                            <Card className="bg-red-500/10">
-                                <CardContent className="pt-6 text-center">
-                                    <XCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
-                                    <p className="text-2xl font-bold text-red-500">{results.failed}</p>
-                                    <p className="text-sm">Failed</p>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
+                                {template.instructions && (
+                                    <Card>
+                                        <CardHeader className="py-3">
+                                            <CardTitle className="text-sm">Instructions</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="py-2">
+                                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/50 p-3 rounded">
+                                                {template.instructions}
+                                            </pre>
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                <Button onClick={download} variant="secondary" className="w-full">
+                                    <Download className="h-4 w-4 mr-2" />Download Template
+                                </Button>
+
+                                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                                    <input 
+                                        ref={inputRef} 
+                                        type="file" 
+                                        accept=".csv" 
+                                        onChange={handleFileSelect} 
+                                        className="hidden" 
+                                        id={`csv-file-${type}`}
+                                    />
+                                    <label htmlFor={`csv-file-${type}`} className="cursor-pointer">
+                                        <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                                        <p className="text-sm font-medium">Click to select CSV file</p>
+                                        <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>
+                                    </label>
+                                </div>
+
+                                {data && (
+                                    <div className="bg-emerald-500/10 rounded-lg p-4 flex items-center gap-3">
+                                        <FileText className="h-6 w-6 text-emerald-500" />
+                                        <div>
+                                            <p className="font-medium text-emerald-500">
+                                                {config.useJson ? data.length : data.rowCount} rows ready
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">{file?.name}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {results && (
+                            <div className="space-y-4 pr-4">
+                                <div className="grid grid-cols-3 gap-4">
+                                    <Card className="bg-emerald-500/10">
+                                        <CardContent className="pt-6 text-center">
+                                            <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
+                                            <p className="text-2xl font-bold text-emerald-500">
+                                                {results.created || results.success || 0}
+                                            </p>
+                                            <p className="text-sm">Created</p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="bg-blue-500/10">
+                                        <CardContent className="pt-6 text-center">
+                                            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+                                            <p className="text-2xl font-bold text-blue-500">
+                                                {results.updated || results.skipped || 0}
+                                            </p>
+                                            <p className="text-sm">{results.updated !== undefined ? 'Updated' : 'Skipped'}</p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="bg-red-500/10">
+                                        <CardContent className="pt-6 text-center">
+                                            <XCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                                            <p className="text-2xl font-bold text-red-500">
+                                                {results.errors?.length || results.failed || 0}
+                                            </p>
+                                            <p className="text-sm">Errors</p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {results.errors && results.errors.length > 0 && (
+                                    <Card className="border-red-500/50">
+                                        <CardHeader className="py-3">
+                                            <CardTitle className="text-sm text-red-500">Error Details</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="py-2">
+                                            <ScrollArea className="h-32">
+                                                <ul className="text-xs space-y-1">
+                                                    {results.errors.map((err, i) => (
+                                                        <li key={i} className="text-muted-foreground">{err}</li>
+                                                    ))}
+                                                </ul>
+                                            </ScrollArea>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+                    </ScrollArea>
 
                     <DialogFooter>
                         {!results ? (
                             <div className="flex gap-2">
                                 <Button variant="outline" onClick={close}>Cancel</Button>
-                                <Button onClick={doImport} disabled={!data || busy}>Import</Button>
+                                <Button onClick={doImport} disabled={!data || busy}>
+                                    {busy ? 'Importing...' : 'Import'}
+                                </Button>
                             </div>
                         ) : (
                             <Button onClick={close}>Close</Button>
@@ -196,7 +299,7 @@ function ImportButton({ templateType, title, onSuccess }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 }
 
