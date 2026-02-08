@@ -44,6 +44,7 @@ import {
     DollarSign,
     MoreVertical,
     Bell,
+    PhoneCall,
 } from 'lucide-react';
 
 const MENTOR_STAGES = [
