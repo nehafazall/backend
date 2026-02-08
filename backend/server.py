@@ -1439,6 +1439,16 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
     await db.users.insert_one(new_user)
     await log_activity("user", new_user["id"], "created", user, {"email": data.email})
     
+    # Audit log for user creation
+    await log_audit(
+        user,
+        "create",
+        "user",
+        entity_id=new_user["id"],
+        entity_name=data.full_name,
+        details={"email": data.email, "role": data.role, "department": data.department}
+    )
+    
     return {k: v for k, v in new_user.items() if k != "password" and k != "_id"}
 
 def get_default_permissions(role: str) -> Dict[str, str]:
