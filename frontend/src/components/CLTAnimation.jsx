@@ -124,12 +124,9 @@ function ClockToC({ phase }) {
     const isTransforming = phase >= 2;
     const isComplete = phase >= 3;
     
-    // Calculate rotation based on phase - fast spinning
-    const getHandRotation = (isMinute) => {
-        if (!isSpinning) return isMinute ? 0 : 0;
-        // Multiple full rotations during spin phase
-        return isMinute ? 2160 : 720; // Minute hand spins 6x, hour hand 2x
-    };
+    // Calculate rotation - very fast spinning animation
+    const hourRotation = isSpinning ? 1080 : 0; // 3 full rotations
+    const minuteRotation = isSpinning ? 2880 : 0; // 8 full rotations (faster)
 
     return (
         <div className="relative w-36 h-36">
@@ -169,7 +166,7 @@ function ClockToC({ phase }) {
                     className="transition-all duration-500"
                 />
                 
-                {/* Hour hand */}
+                {/* Hour hand - spins fast */}
                 <line
                     x1="50"
                     y1="50"
@@ -178,15 +175,16 @@ function ClockToC({ phase }) {
                     stroke="#ffffff"
                     strokeWidth="4"
                     strokeLinecap="round"
+                    className={isSpinning ? "animate-spin-fast" : ""}
                     style={{
                         opacity: isComplete ? 0 : 1,
-                        transform: `rotate(${getHandRotation(false)}deg)`,
+                        transform: `rotate(${hourRotation}deg)`,
                         transformOrigin: '50px 50px',
-                        transition: isSpinning ? 'transform 2s ease-in-out' : 'transform 0.3s, opacity 0.5s'
+                        transition: isSpinning ? 'transform 1.8s cubic-bezier(0.4, 0, 0.2, 1)' : 'transform 0.3s, opacity 0.5s'
                     }}
                 />
                 
-                {/* Minute hand */}
+                {/* Minute hand - spins even faster */}
                 <line
                     x1="50"
                     y1="50"
@@ -197,9 +195,26 @@ function ClockToC({ phase }) {
                     strokeLinecap="round"
                     style={{
                         opacity: isComplete ? 0 : 1,
-                        transform: `rotate(${getHandRotation(true)}deg)`,
+                        transform: `rotate(${minuteRotation}deg)`,
                         transformOrigin: '50px 50px',
-                        transition: isSpinning ? 'transform 2s ease-in-out' : 'transform 0.3s, opacity 0.5s'
+                        transition: isSpinning ? 'transform 1.8s cubic-bezier(0.4, 0, 0.2, 1)' : 'transform 0.3s, opacity 0.5s'
+                    }}
+                />
+                
+                {/* Second hand - spins fastest */}
+                <line
+                    x1="50"
+                    y1="50"
+                    x2="50"
+                    y2="14"
+                    stroke="#ef4444"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    style={{
+                        opacity: isSpinning ? 1 : 0,
+                        transform: `rotate(${isSpinning ? 4320 : 0}deg)`,
+                        transformOrigin: '50px 50px',
+                        transition: isSpinning ? 'transform 1.8s cubic-bezier(0.4, 0, 0.2, 1)' : 'opacity 0.3s'
                     }}
                 />
                 
@@ -222,14 +237,22 @@ function ClockToC({ phase }) {
                     />
                 ))}
                 
-                {/* Speed lines during spinning */}
+                {/* Speed blur effect during spinning */}
                 {isSpinning && (
-                    <g className="animate-pulse">
-                        <circle cx="50" cy="50" r="35" fill="none" stroke="#3b82f6" strokeWidth="1" opacity="0.3" />
-                        <circle cx="50" cy="50" r="30" fill="none" stroke="#06b6d4" strokeWidth="1" opacity="0.2" />
+                    <g>
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" strokeWidth="2" opacity="0.4" className="animate-pulse" />
+                        <circle cx="50" cy="50" r="32" fill="none" stroke="#06b6d4" strokeWidth="1" opacity="0.3" className="animate-pulse" />
+                        <circle cx="50" cy="50" r="26" fill="none" stroke="#00ffff" strokeWidth="1" opacity="0.2" className="animate-pulse" />
                     </g>
                 )}
             </svg>
+            
+            {/* Time flying text effect */}
+            {isSpinning && (
+                <div className="absolute -right-2 top-0 text-xs text-cyan-400 animate-bounce">
+                    ⚡
+                </div>
+            )}
         </div>
     );
 }
