@@ -13,6 +13,8 @@ import { Moon, Sun, User, Shield, Bell, Palette, Phone, Download, Copy, External
 const SettingsPage = () => {
     const { user } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const [loading3CX, setLoading3CX] = useState(false);
+    const [templateData, setTemplateData] = useState(null);
 
     const formatRole = (role) => {
         return role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'User';
@@ -32,6 +34,41 @@ const SettingsPage = () => {
             hr: 'bg-rose-500',
         };
         return colors[role] || 'bg-slate-500';
+    };
+
+    const fetch3CXTemplate = async () => {
+        setLoading3CX(true);
+        try {
+            const response = await api.get('/3cx/template');
+            setTemplateData(response.data);
+        } catch (error) {
+            toast.error('Failed to fetch 3CX template');
+            console.error(error);
+        } finally {
+            setLoading3CX(false);
+        }
+    };
+
+    const download3CXTemplate = () => {
+        if (!templateData?.xml_template) {
+            toast.error('Please fetch the template first');
+            return;
+        }
+        const blob = new Blob([templateData.xml_template], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'CLT_Academy_3CX_CRM_Template.xml';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('Template downloaded!');
+    };
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Copied to clipboard!');
     };
 
     return (
