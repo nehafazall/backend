@@ -43,7 +43,7 @@ import {
     Lock,
 } from 'lucide-react';
 
-const navSections = [
+const NAV_SECTIONS = [
     {
         id: 'sales',
         title: 'SALES',
@@ -113,75 +113,80 @@ const navSections = [
 function NavSection({ section, isCollapsed, userRole, currentPath, onNavigate }) {
     const [isOpen, setIsOpen] = useState(true);
     
-    const hasAccess = section.roles.includes(userRole);
-    if (!hasAccess) return null;
+    if (!section.roles.includes(userRole)) return null;
     
-    const visibleItems = section.items.filter(item => item.roles.includes(userRole));
+    const visibleItems = section.items.filter(function(item) {
+        return item.roles.includes(userRole);
+    });
+    
     if (visibleItems.length === 0) return null;
 
     const SectionIcon = section.icon;
-    const hasActiveItem = visibleItems.some(item => currentPath.startsWith(item.path));
+    
+    let hasActiveItem = false;
+    for (let i = 0; i < visibleItems.length; i++) {
+        if (currentPath.startsWith(visibleItems[i].path)) {
+            hasActiveItem = true;
+            break;
+        }
+    }
 
     if (isCollapsed) {
-        return (
-            <div className="mb-2">
-                {visibleItems.map((item) => {
-                    const isActive = currentPath.startsWith(item.path);
-                    const ItemIcon = item.icon;
-                    return (
-                        <button
-                            key={item.path}
-                            onClick={() => onNavigate(item.path)}
-                            className={`sidebar-item w-full justify-center ${isActive ? 'active' : ''}`}
-                            title={item.title}
-                        >
-                            <ItemIcon className="h-5 w-5" />
-                        </button>
-                    );
-                })}
-            </div>
+        const collapsedItems = [];
+        for (let i = 0; i < visibleItems.length; i++) {
+            const item = visibleItems[i];
+            const isActive = currentPath.startsWith(item.path);
+            const ItemIcon = item.icon;
+            collapsedItems.push(
+                <button
+                    key={item.path}
+                    onClick={function() { onNavigate(item.path); }}
+                    className={'sidebar-item w-full justify-center ' + (isActive ? 'active' : '')}
+                    title={item.title}
+                >
+                    <ItemIcon className="h-5 w-5" />
+                </button>
+            );
+        }
+        return <div className="mb-2">{collapsedItems}</div>;
+    }
+
+    const expandedItems = [];
+    for (let i = 0; i < visibleItems.length; i++) {
+        const item = visibleItems[i];
+        const isActive = currentPath.startsWith(item.path);
+        const ItemIcon = item.icon;
+        expandedItems.push(
+            <button
+                key={item.path}
+                onClick={function() { onNavigate(item.path); }}
+                className={'sidebar-item w-full pl-10 ' + (isActive ? 'active' : '')}
+                data-testid={'nav-' + item.title.toLowerCase().replace(/\s/g, '-').replace(/'/g, '')}
+            >
+                <ItemIcon className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate text-sm">{item.title}</span>
+            </button>
         );
     }
 
     return (
         <div className="mb-2">
             <button
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold tracking-wider transition-colors ${
-                    hasActiveItem ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'
-                }`}
+                onClick={function() { setIsOpen(!isOpen); }}
+                className={'w-full flex items-center justify-between px-4 py-2 text-xs font-semibold tracking-wider transition-colors ' + (hasActiveItem ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200')}
             >
                 <div className="flex items-center gap-2">
                     <SectionIcon className="h-4 w-4" />
                     <span>{section.title}</span>
                 </div>
-                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                <ChevronDown className={'h-4 w-4 transition-transform ' + (isOpen ? '' : '-rotate-90')} />
             </button>
-            
-            {isOpen && (
-                <div className="mt-1 space-y-1">
-                    {visibleItems.map((item) => {
-                        const isActive = currentPath.startsWith(item.path);
-                        const ItemIcon = item.icon;
-                        return (
-                            <button
-                                key={item.path}
-                                onClick={() => onNavigate(item.path)}
-                                className={`sidebar-item w-full pl-10 ${isActive ? 'active' : ''}`}
-                                data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
-                            >
-                                <ItemIcon className="h-4 w-4 flex-shrink-0" />
-                                <span className="truncate text-sm">{item.title}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+            {isOpen && <div className="mt-1 space-y-1">{expandedItems}</div>}
         </div>
     );
 }
 
-const Layout = () => {
+function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
@@ -192,76 +197,106 @@ const Layout = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    React.useEffect(() => {
-        const fetchNotifications = async () => {
+    React.useEffect(function() {
+        async function fetchNotifications() {
             try {
                 const response = await notificationApi.getAll();
                 setNotifications(response.data);
-                setUnreadCount(response.data.filter(n => !n.read).length);
+                const unread = response.data.filter(function(n) { return !n.read; });
+                setUnreadCount(unread.length);
             } catch (error) {
                 console.error('Failed to fetch notifications:', error);
             }
-        };
+        }
         
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
+        return function() { clearInterval(interval); };
     }, []);
 
-    const handleLogout = () => {
+    function handleLogout() {
         logout();
         toast.success('Logged out successfully');
         navigate('/login');
-    };
+    }
 
-    const handleMarkAllRead = async () => {
+    async function handleMarkAllRead() {
         try {
             await notificationApi.markAllRead();
-            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+            const updated = notifications.map(function(n) { return { ...n, read: true }; });
+            setNotifications(updated);
             setUnreadCount(0);
         } catch (error) {
             toast.error('Failed to mark notifications as read');
         }
-    };
+    }
 
-    const handleNavigate = (path) => {
+    function handleNavigate(path) {
         navigate(path);
         setMobileMenuOpen(false);
-    };
+    }
 
-    const getRoleBadgeColor = (role) => {
-        const colors = {
-            super_admin: 'bg-purple-500',
-            admin: 'bg-blue-500',
-            sales_manager: 'bg-green-500',
-            team_leader: 'bg-cyan-500',
-            sales_executive: 'bg-yellow-500',
-            cs_head: 'bg-pink-500',
-            cs_agent: 'bg-indigo-500',
-            mentor: 'bg-orange-500',
-            finance: 'bg-emerald-500',
-            hr: 'bg-rose-500',
-        };
-        return colors[role] || 'bg-slate-500';
-    };
+    function getRoleBadgeColor(role) {
+        if (role === 'super_admin') return 'bg-purple-500';
+        if (role === 'admin') return 'bg-blue-500';
+        if (role === 'sales_manager') return 'bg-green-500';
+        if (role === 'team_leader') return 'bg-cyan-500';
+        if (role === 'sales_executive') return 'bg-yellow-500';
+        if (role === 'cs_head') return 'bg-pink-500';
+        if (role === 'cs_agent') return 'bg-indigo-500';
+        if (role === 'mentor') return 'bg-orange-500';
+        if (role === 'finance') return 'bg-emerald-500';
+        if (role === 'hr') return 'bg-rose-500';
+        return 'bg-slate-500';
+    }
 
-    const formatRole = (role) => {
-        return role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'User';
-    };
+    function formatRole(role) {
+        if (!role) return 'User';
+        return role.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    const navSectionElements = [];
+    for (let i = 0; i < NAV_SECTIONS.length; i++) {
+        navSectionElements.push(
+            <NavSection
+                key={NAV_SECTIONS[i].id}
+                section={NAV_SECTIONS[i]}
+                isCollapsed={sidebarCollapsed}
+                userRole={user?.role}
+                currentPath={location.pathname}
+                onNavigate={handleNavigate}
+            />
+        );
+    }
+
+    const notificationItems = [];
+    const notifSlice = notifications.slice(0, 10);
+    for (let i = 0; i < notifSlice.length; i++) {
+        const notif = notifSlice[i];
+        notificationItems.push(
+            <DropdownMenuItem 
+                key={notif.id}
+                className={'flex flex-col items-start p-3 cursor-pointer ' + (!notif.read ? 'bg-muted/50' : '')}
+                onClick={function() { if (notif.link) navigate(notif.link); }}
+            >
+                <span className="font-medium text-sm">{notif.title}</span>
+                <span className="text-xs text-muted-foreground mt-1">{notif.message}</span>
+            </DropdownMenuItem>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background">
             <button
                 className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-800 text-white"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onClick={function() { setMobileMenuOpen(!mobileMenuOpen); }}
                 data-testid="mobile-menu-toggle"
             >
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
 
             <aside 
-                className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} 
-                    ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+                className={'sidebar ' + (sidebarCollapsed ? 'collapsed' : 'expanded') + ' ' + (mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0')}
                 data-testid="sidebar"
             >
                 <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
@@ -272,29 +307,17 @@ const Layout = () => {
                             className="h-10 w-auto"
                         />
                     ) : (
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">
-                            C
-                        </div>
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold">C</div>
                     )}
                 </div>
 
                 <ScrollArea className="flex-1 py-4">
                     <nav>
-                        {navSections.map((section) => (
-                            <NavSection
-                                key={section.id}
-                                section={section}
-                                isCollapsed={sidebarCollapsed}
-                                userRole={user?.role}
-                                currentPath={location.pathname}
-                                onNavigate={handleNavigate}
-                            />
-                        ))}
-                        
+                        {navSectionElements}
                         <div className="border-t border-slate-800 mt-4 pt-4 px-2">
                             <button
-                                onClick={() => handleNavigate('/settings')}
-                                className={`sidebar-item w-full ${location.pathname === '/settings' ? 'active' : ''}`}
+                                onClick={function() { handleNavigate('/settings'); }}
+                                className={'sidebar-item w-full ' + (location.pathname === '/settings' ? 'active' : '')}
                                 data-testid="nav-settings"
                             >
                                 <Settings className="h-5 w-5 flex-shrink-0" />
@@ -305,7 +328,7 @@ const Layout = () => {
                 </ScrollArea>
 
                 <button
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    onClick={function() { setSidebarCollapsed(!sidebarCollapsed); }}
                     className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 items-center justify-center text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
                     data-testid="sidebar-toggle"
                 >
@@ -320,7 +343,7 @@ const Layout = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
-                                <Badge className={`${getRoleBadgeColor(user?.role)} text-white text-xs mt-1`}>
+                                <Badge className={getRoleBadgeColor(user?.role) + ' text-white text-xs mt-1'}>
                                     {formatRole(user?.role)}
                                 </Badge>
                             </div>
@@ -333,13 +356,10 @@ const Layout = () => {
                 </div>
             </aside>
 
-            <main className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+            <main className={'transition-all duration-300 ' + (sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64')}>
                 <header className="h-16 bg-card border-b border-border px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40">
                     <div className="lg:hidden w-8" />
-                    
-                    <h1 className="text-lg font-semibold text-foreground hidden lg:block">
-                        CLT Academy ERP
-                    </h1>
+                    <h1 className="text-lg font-semibold text-foreground hidden lg:block">CLT Academy ERP</h1>
 
                     <div className="flex items-center gap-2">
                         <EnvironmentSwitcher />
@@ -363,27 +383,14 @@ const Layout = () => {
                                 <DropdownMenuLabel className="flex items-center justify-between">
                                     <span>Notifications</span>
                                     {unreadCount > 0 && (
-                                        <button onClick={handleMarkAllRead} className="text-xs text-blue-500 hover:underline">
-                                            Mark all read
-                                        </button>
+                                        <button onClick={handleMarkAllRead} className="text-xs text-blue-500 hover:underline">Mark all read</button>
                                     )}
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <ScrollArea className="h-64">
                                     {notifications.length === 0 ? (
                                         <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div>
-                                    ) : (
-                                        notifications.slice(0, 10).map((notif) => (
-                                            <DropdownMenuItem 
-                                                key={notif.id}
-                                                className={`flex flex-col items-start p-3 cursor-pointer ${!notif.read ? 'bg-muted/50' : ''}`}
-                                                onClick={() => notif.link && navigate(notif.link)}
-                                            >
-                                                <span className="font-medium text-sm">{notif.title}</span>
-                                                <span className="text-xs text-muted-foreground mt-1">{notif.message}</span>
-                                            </DropdownMenuItem>
-                                        ))
-                                    )}
+                                    ) : notificationItems}
                                 </ScrollArea>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -404,13 +411,11 @@ const Layout = () => {
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                                    <Settings className="h-4 w-4 mr-2" />
-                                    Settings
+                                <DropdownMenuItem onClick={function() { navigate('/settings'); }}>
+                                    <Settings className="h-4 w-4 mr-2" />Settings
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleLogout} className="text-red-500">
-                                    <LogOut className="h-4 w-4 mr-2" />
-                                    Logout
+                                    <LogOut className="h-4 w-4 mr-2" />Logout
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -425,11 +430,11 @@ const Layout = () => {
             {mobileMenuOpen && (
                 <div 
                     className="lg:hidden fixed inset-0 bg-black/50 z-30"
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={function() { setMobileMenuOpen(false); }}
                 />
             )}
         </div>
     );
-};
+}
 
 export default Layout;
