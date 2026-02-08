@@ -261,15 +261,24 @@ function GraduateToL({ phase }) {
     const isVisible = phase >= 3;
     const isBowing = phase >= 3 && phase < 4;
     const hasCapOn = phase >= 4;
+    const isCelebrating = phase >= 4 && phase < 5;
     const isSitting = phase >= 5;
     const chairFading = phase >= 6;
     const isLetter = phase >= 6;
+    
+    // Calculate body rotation for bowing
+    const bodyRotation = isBowing ? 25 : 0;
+    const bodyY = isSitting ? 20 : 0;
     
     return (
         <div className="relative w-36 h-36">
             <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
                 {/* L Letter (appears when chair fades) */}
-                <g style={{ opacity: isLetter ? 1 : 0, transition: 'opacity 0.8s' }}>
+                <g style={{ 
+                    opacity: isLetter ? 1 : 0, 
+                    transition: 'opacity 0.8s',
+                    transform: isLetter ? 'scale(1)' : 'scale(0.8)',
+                }}>
                     {/* Vertical bar of L */}
                     <rect
                         x="20"
@@ -290,23 +299,36 @@ function GraduateToL({ phase }) {
                     />
                 </g>
                 
+                {/* Chair - appears during sitting phase */}
+                <g style={{
+                    opacity: isSitting && !chairFading ? 1 : 0,
+                    transform: isSitting ? 'scale(1)' : 'scale(0.8)',
+                    transition: 'all 0.6s ease-out'
+                }}>
+                    {/* Chair back */}
+                    <rect x="25" y="45" width="8" height="35" rx="2" fill="#475569" />
+                    {/* Chair seat */}
+                    <rect x="25" y="70" width="45" height="8" rx="2" fill="#64748b" />
+                    {/* Chair legs */}
+                    <line x1="30" y1="78" x2="25" y2="95" stroke="#475569" strokeWidth="5" strokeLinecap="round" />
+                    <line x1="65" y1="78" x2="70" y2="95" stroke="#475569" strokeWidth="5" strokeLinecap="round" />
+                </g>
+                
                 {/* Graduate figure */}
                 <g 
                     style={{ 
                         opacity: isVisible && !isLetter ? 1 : 0,
-                        transform: isBowing ? 'rotate(15deg)' : isSitting ? 'translateY(15px)' : 'translateY(0)',
-                        transformOrigin: '50px 80px',
+                        transform: `rotate(${bodyRotation}deg) translateY(${bodyY}px)`,
+                        transformOrigin: '50px 85px',
                         transition: 'all 0.8s ease-in-out'
                     }}
                 >
-                    {/* Body */}
-                    <rect
-                        x="42"
-                        y="45"
-                        width="16"
-                        height="35"
-                        rx="4"
-                        fill="#fbbf24"
+                    {/* Gown/Body */}
+                    <path
+                        d="M 35 48 L 40 80 L 60 80 L 65 48 Q 50 42 35 48"
+                        fill="#1e40af"
+                        stroke="#1e3a8a"
+                        strokeWidth="1"
                     />
                     
                     {/* Head */}
@@ -318,71 +340,94 @@ function GraduateToL({ phase }) {
                     />
                     
                     {/* Face features */}
-                    <circle cx="45" cy="30" r="2" fill="#1e293b" />
-                    <circle cx="55" cy="30" r="2" fill="#1e293b" />
-                    <path d="M 46 36 Q 50 40 54 36" fill="none" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="45" cy="30" r="2.5" fill="#1e293b" />
+                    <circle cx="55" cy="30" r="2.5" fill="#1e293b" />
+                    {/* Smile */}
+                    <path 
+                        d={isCelebrating ? "M 44 36 Q 50 42 56 36" : "M 46 36 Q 50 39 54 36"} 
+                        fill="none" 
+                        stroke="#1e293b" 
+                        strokeWidth="2" 
+                        strokeLinecap="round" 
+                    />
                     
                     {/* Arms */}
                     <g style={{
-                        transform: hasCapOn && !isSitting ? 'rotate(-20deg)' : 'rotate(0deg)',
-                        transformOrigin: '42px 50px',
-                        transition: 'transform 0.5s'
+                        transform: isCelebrating ? 'translateY(-5px)' : 'translateY(0)',
+                        transition: 'transform 0.3s ease-out'
                     }}>
-                        <line x1="42" y1="50" x2="28" y2={hasCapOn && !isSitting ? "35" : "60"} stroke="#fbbf24" strokeWidth="6" strokeLinecap="round" />
+                        {/* Left arm */}
+                        <line 
+                            x1="38" 
+                            y1="52" 
+                            x2={isCelebrating ? "20" : "30"} 
+                            y2={isCelebrating ? "35" : "65"} 
+                            stroke="#fcd34d" 
+                            strokeWidth="6" 
+                            strokeLinecap="round" 
+                            style={{ transition: 'all 0.4s ease-out' }}
+                        />
+                        {/* Right arm */}
+                        <line 
+                            x1="62" 
+                            y1="52" 
+                            x2={isCelebrating ? "80" : "70"} 
+                            y2={isCelebrating ? "35" : "65"} 
+                            stroke="#fcd34d" 
+                            strokeWidth="6" 
+                            strokeLinecap="round"
+                            style={{ transition: 'all 0.4s ease-out' }}
+                        />
                     </g>
-                    <g style={{
-                        transform: hasCapOn && !isSitting ? 'rotate(20deg)' : 'rotate(0deg)',
-                        transformOrigin: '58px 50px',
-                        transition: 'transform 0.5s'
-                    }}>
-                        <line x1="58" y1="50" x2="72" y2={hasCapOn && !isSitting ? "35" : "60"} stroke="#fbbf24" strokeWidth="6" strokeLinecap="round" />
-                    </g>
+                    
+                    {/* Hands with diploma */}
+                    {isCelebrating && (
+                        <g>
+                            {/* Diploma scroll */}
+                            <rect x="75" y="30" width="15" height="12" rx="2" fill="#f8fafc" />
+                            <line x1="78" y1="34" x2="87" y2="34" stroke="#94a3b8" strokeWidth="1" />
+                            <line x1="78" y1="38" x2="85" y2="38" stroke="#94a3b8" strokeWidth="1" />
+                        </g>
+                    )}
                     
                     {/* Legs */}
-                    <line x1="46" y1="78" x2="40" y2="95" stroke="#1e40af" strokeWidth="6" strokeLinecap="round" 
-                        style={{
-                            transform: isSitting ? 'rotate(45deg)' : 'rotate(0deg)',
-                            transformOrigin: '46px 78px',
-                            transition: 'transform 0.6s'
-                        }}
-                    />
-                    <line x1="54" y1="78" x2="60" y2="95" stroke="#1e40af" strokeWidth="6" strokeLinecap="round"
-                        style={{
-                            transform: isSitting ? 'rotate(-45deg)' : 'rotate(0deg)',
-                            transformOrigin: '54px 78px',
-                            transition: 'transform 0.6s'
-                        }}
-                    />
+                    <g style={{
+                        transform: isSitting ? 'rotate(60deg)' : 'rotate(0deg)',
+                        transformOrigin: '50px 78px',
+                        transition: 'transform 0.6s ease-out'
+                    }}>
+                        <line x1="45" y1="78" x2="38" y2="95" stroke="#1e40af" strokeWidth="6" strokeLinecap="round" />
+                        <line x1="55" y1="78" x2="62" y2="95" stroke="#1e40af" strokeWidth="6" strokeLinecap="round" />
+                    </g>
                     
-                    {/* Graduation cap */}
+                    {/* Graduation cap - drops down onto head */}
                     <g style={{
                         opacity: hasCapOn ? 1 : 0,
-                        transform: hasCapOn ? 'translateY(0)' : 'translateY(-20px)',
-                        transition: 'all 0.5s ease-out'
+                        transform: hasCapOn ? 'translateY(0)' : 'translateY(-30px)',
+                        transition: 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)' // bouncy effect
                     }}>
                         <polygon
-                            points="30,22 50,12 70,22 50,28"
+                            points="28,22 50,10 72,22 50,28"
                             fill="#1e293b"
                         />
-                        <rect x="48" y="12" width="4" height="4" fill="#1e293b" />
-                        <line x1="50" y1="20" x2="68" y2="30" stroke="#fbbf24" strokeWidth="2" />
-                        <circle cx="68" cy="32" r="4" fill="#fbbf24" />
+                        <rect x="47" y="10" width="6" height="6" fill="#1e293b" />
+                        {/* Tassel */}
+                        <line x1="50" y1="19" x2="70" y2="32" stroke="#fbbf24" strokeWidth="2" />
+                        <circle cx="70" cy="34" r="4" fill="#fbbf24" />
                     </g>
                 </g>
                 
-                {/* Chair */}
-                <g style={{
-                    opacity: isSitting && !chairFading ? 1 : 0,
-                    transition: 'opacity 0.8s'
-                }}>
-                    {/* Chair seat */}
-                    <rect x="32" y="75" width="36" height="6" rx="2" fill="#64748b" />
-                    {/* Chair back */}
-                    <rect x="32" y="55" width="6" height="26" rx="2" fill="#64748b" />
-                    {/* Chair legs */}
-                    <line x1="35" y1="81" x2="30" y2="95" stroke="#64748b" strokeWidth="4" strokeLinecap="round" />
-                    <line x1="65" y1="81" x2="70" y2="95" stroke="#64748b" strokeWidth="4" strokeLinecap="round" />
-                </g>
+                {/* Celebration particles */}
+                {isCelebrating && (
+                    <g className="animate-pulse">
+                        <circle cx="30" cy="25" r="2" fill="#fbbf24" />
+                        <circle cx="70" cy="20" r="2" fill="#fbbf24" />
+                        <circle cx="25" cy="40" r="1.5" fill="#3b82f6" />
+                        <circle cx="75" cy="45" r="1.5" fill="#3b82f6" />
+                        <text x="15" y="30" fontSize="10">🎉</text>
+                        <text x="72" y="25" fontSize="10">🎓</text>
+                    </g>
+                )}
             </svg>
         </div>
     );
