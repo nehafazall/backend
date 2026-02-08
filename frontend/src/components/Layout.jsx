@@ -453,24 +453,5 @@ function HomePageContent({ user, visibleSections, selectSection }) {
         </div>
     );
 }
-                    />
-                </div>
-                
-                {/* Welcome message */}
-                <div className="text-center mb-12">
-                    <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
-                    <p className="text-muted-foreground">Select a module to get started</p>
-                </div>
-                
-                {/* Section icons grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
-                    {visibleSections.map(section => (
-                        <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
 
 export default Layout;
