@@ -44,6 +44,7 @@ import {
     TrendingUp,
     MoreVertical,
     Bell,
+    PhoneCall,
 } from 'lucide-react';
 
 const CS_STAGES = [
