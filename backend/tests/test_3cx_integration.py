@@ -352,6 +352,7 @@ class Test3CXContactCreate:
             }
         )
         assert response1.status_code == 200
+        first_contact_id = response1.json().get("contact_id")
         
         # Try to create again with same phone
         response2 = requests.post(
@@ -366,6 +367,8 @@ class Test3CXContactCreate:
         assert response2.status_code == 200
         data = response2.json()
         assert "contact_id" in data
+        # Should return the same contact ID
+        assert data["contact_id"] == first_contact_id
         print("✓ Duplicate contact creation returns existing contact")
 
 
