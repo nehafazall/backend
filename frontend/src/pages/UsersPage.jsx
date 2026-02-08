@@ -36,6 +36,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Plus,
     Search,
@@ -44,6 +45,8 @@ import {
     Trash2,
     UserCheck,
     UserX,
+    Monitor,
+    FlaskConical,
 } from 'lucide-react';
 
 const ROLES = [
@@ -90,6 +93,7 @@ const UsersPage = () => {
         phone: '',
         region: '',
         is_active: true,
+        environment_access: [],
     });
 
     useEffect(() => {
@@ -132,6 +136,7 @@ const UsersPage = () => {
                 phone: '',
                 region: '',
                 is_active: true,
+                environment_access: [],
             });
             fetchUsers();
         } catch (error) {
@@ -150,6 +155,7 @@ const UsersPage = () => {
             phone: user.phone || '',
             region: user.region || '',
             is_active: user.is_active,
+            environment_access: user.environment_access || [],
         });
         setShowEditModal(true);
     };
@@ -308,6 +314,19 @@ const UsersPage = () => {
                                             <TableCell>{getRoleBadge(user.role)}</TableCell>
                                             <TableCell>{user.department || '-'}</TableCell>
                                             <TableCell>{user.region || '-'}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    {user.environment_access?.includes('development') && (
+                                                        <Badge className="bg-blue-500 text-white text-xs">Dev</Badge>
+                                                    )}
+                                                    {user.environment_access?.includes('testing') && (
+                                                        <Badge className="bg-amber-500 text-white text-xs">Test</Badge>
+                                                    )}
+                                                    {(!user.environment_access || user.environment_access.length === 0) && (
+                                                        <span className="text-xs text-muted-foreground">Prod only</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell>
                                                 {user.is_active ? (
                                                     <Badge className="bg-emerald-500 text-white">Active</Badge>
@@ -480,6 +499,57 @@ const UsersPage = () => {
                                 </Select>
                             </div>
                         </div>
+
+                        {currentUser?.role === 'super_admin' && (
+                            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                                <Label className="text-sm font-medium">Environment Access</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Grant access to non-production environments
+                                </p>
+                                <div className="flex gap-6">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="env_dev"
+                                            checked={formData.environment_access?.includes('development')}
+                                            onCheckedChange={(checked) => {
+                                                const access = formData.environment_access || [];
+                                                setFormData({
+                                                    ...formData,
+                                                    environment_access: checked
+                                                        ? [...access, 'development']
+                                                        : access.filter(e => e !== 'development')
+                                                });
+                                            }}
+                                            data-testid="env-dev-checkbox"
+                                        />
+                                        <Label htmlFor="env_dev" className="flex items-center gap-1 text-sm">
+                                            <Monitor className="h-4 w-4 text-blue-500" />
+                                            Development
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="env_test"
+                                            checked={formData.environment_access?.includes('testing')}
+                                            onCheckedChange={(checked) => {
+                                                const access = formData.environment_access || [];
+                                                setFormData({
+                                                    ...formData,
+                                                    environment_access: checked
+                                                        ? [...access, 'testing']
+                                                        : access.filter(e => e !== 'testing')
+                                                });
+                                            }}
+                                            data-testid="env-test-checkbox"
+                                        />
+                                        <Label htmlFor="env_test" className="flex items-center gap-1 text-sm">
+                                            <FlaskConical className="h-4 w-4 text-amber-500" />
+                                            Testing
+                                        </Label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
@@ -586,6 +656,57 @@ const UsersPage = () => {
                             />
                             <Label htmlFor="is_active">Active</Label>
                         </div>
+
+                        {currentUser?.role === 'super_admin' && (
+                            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                                <Label className="text-sm font-medium">Environment Access</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Grant access to non-production environments
+                                </p>
+                                <div className="flex gap-6">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="edit_env_dev"
+                                            checked={formData.environment_access?.includes('development')}
+                                            onCheckedChange={(checked) => {
+                                                const access = formData.environment_access || [];
+                                                setFormData({
+                                                    ...formData,
+                                                    environment_access: checked
+                                                        ? [...access, 'development']
+                                                        : access.filter(e => e !== 'development')
+                                                });
+                                            }}
+                                            data-testid="edit-env-dev-checkbox"
+                                        />
+                                        <Label htmlFor="edit_env_dev" className="flex items-center gap-1 text-sm">
+                                            <Monitor className="h-4 w-4 text-blue-500" />
+                                            Development
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="edit_env_test"
+                                            checked={formData.environment_access?.includes('testing')}
+                                            onCheckedChange={(checked) => {
+                                                const access = formData.environment_access || [];
+                                                setFormData({
+                                                    ...formData,
+                                                    environment_access: checked
+                                                        ? [...access, 'testing']
+                                                        : access.filter(e => e !== 'testing')
+                                                });
+                                            }}
+                                            data-testid="edit-env-test-checkbox"
+                                        />
+                                        <Label htmlFor="edit_env_test" className="flex items-center gap-1 text-sm">
+                                            <FlaskConical className="h-4 w-4 text-amber-500" />
+                                            Testing
+                                        </Label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
