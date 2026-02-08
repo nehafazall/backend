@@ -3,7 +3,31 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (Launcher Navigation - December 2025)
+## Latest Features (Login & Home Page Redesign - December 2025)
+
+### Redesigned Login Page
+- **Split Layout**: Logo on left, login form on right (desktop)
+- **CLT Logo**: Large logo with "CLT Academy" + "Enterprise Resource Planning" text
+- **Trading Chart Background**: SVG trading chart graphics at 15-20% opacity
+- **System Status**: "System Online" indicator with green pulse
+- **Login Form**: Glass-morphism card with email, password, eye toggle
+- **Demo Credentials**: Displayed at bottom for easy access
+- **Mobile Responsive**: Logo moves to top on mobile devices
+
+### Logo Animation After Login
+- **Animated Rings**: Expanding circles animation
+- **Logo Reveal**: Fade-in with glow effect
+- **Loading Bar**: Progress indicator
+- **Particle Effects**: Floating particles in background
+- **Duration**: ~2.4 seconds before redirecting to home
+
+### Enhanced Home Page
+- **CLT Logo Centered**: Large logo at top of page
+- **Trading Chart Background**: SVG graphics at 20% opacity
+- **Welcome Message**: "Welcome, {firstName}!" personalized greeting
+- **Module Icons**: 6 colored icons in grid layout
+
+## Previous Features (Launcher Navigation)
 
 ### Launcher-Style Home Screen
 After login, users see a centered icon launcher instead of sidebar:
@@ -229,5 +253,5 @@ Each template includes:
 - Courses: `/app/frontend/src/pages/CoursesPage.jsx`
 
 ## Test Reports
-- Latest: `/app/test_reports/iteration_6.json`
+- Latest: `/app/test_reports/iteration_7.json`
 - Backend Tests: `/app/backend/tests/test_new_features.py`
