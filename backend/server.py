@@ -3564,6 +3564,8 @@ async def startup_event():
     await db.courses.create_index("code", unique=True)
     await db.commissions.create_index([("user_id", 1), ("month", 1)])
     await db.approval_requests.create_index("status")
+    await db.call_logs.create_index([("contact_id", 1), ("call_date", -1)])
+    await db.call_logs.create_index("phone_number")
     
     logger.info("CLT Academy ERP v2.0 started successfully")
 
