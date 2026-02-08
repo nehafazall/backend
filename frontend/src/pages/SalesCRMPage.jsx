@@ -123,10 +123,17 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
             </div>
             
             <div className="space-y-2 text-sm">
-                <p className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 text-muted-foreground">
                     <Phone className="h-3 w-3" />
-                    <span className="font-mono">{lead.phone}</span>
-                </p>
+                    <span className="font-mono flex-1">{lead.phone}</span>
+                    <ClickToCall 
+                        phoneNumber={lead.phone} 
+                        contactId={lead.id} 
+                        contactName={lead.full_name}
+                        size="sm"
+                        className="h-6 w-6"
+                    />
+                </div>
                 {lead.email && (
                     <p className="flex items-center gap-2 text-muted-foreground truncate">
                         <Mail className="h-3 w-3" />
