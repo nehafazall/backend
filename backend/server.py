@@ -3574,6 +3574,483 @@ async def import_students_mentor(data: List[Dict], user = Depends(require_roles(
     
     return results
 
+# ==================== 3CX INTEGRATION ENDPOINTS ====================
+
+def normalize_phone(phone: str) -> str:
+    """Normalize phone number by removing non-digits"""
+    import re
+    return re.sub(r'\D', '', phone)
+
+@api_router.get("/3cx/contact-lookup")
+async def threecx_contact_lookup(phone_number: str):
+    """
+    3CX Contact Lookup by Phone Number
+    Called by 3CX when receiving inbound calls to identify the caller
+    """
+    normalized = normalize_phone(phone_number)
+    
+    # Search in leads first
+    lead = await db.leads.find_one({
+        "$or": [
+            {"phone": {"$regex": normalized + "$"}},
+            {"phone": {"$regex": normalized[-10:] + "$"}} if len(normalized) > 10 else {"phone": normalized}
+        ]
+    })
+    
+    if lead:
+        return ThreeCXContactResponse(
+            found=True,
+            contact_id=lead["id"],
+            first_name=lead.get("full_name", "").split()[0] if lead.get("full_name") else "",
+            last_name=" ".join(lead.get("full_name", "").split()[1:]) if lead.get("full_name") else "",
+            email=lead.get("email"),
+            phone_mobile=lead.get("phone"),
+            company_name=lead.get("company"),
+            contact_url=f"/sales/{lead['id']}",
+            contact_type="lead"
+        )
+    
+    # Search in students
+    student = await db.students.find_one({
+        "$or": [
+            {"phone": {"$regex": normalized + "$"}},
+            {"phone": {"$regex": normalized[-10:] + "$"}} if len(normalized) > 10 else {"phone": normalized}
+        ]
+    })
+    
+    if student:
+        return ThreeCXContactResponse(
+            found=True,
+            contact_id=student["id"],
+            first_name=student.get("full_name", "").split()[0] if student.get("full_name") else "",
+            last_name=" ".join(student.get("full_name", "").split()[1:]) if student.get("full_name") else "",
+            email=student.get("email"),
+            phone_mobile=student.get("phone"),
+            company_name=student.get("package_bought"),
+            contact_url=f"/cs/{student['id']}",
+            contact_type="student"
+        )
+    
+    # Search in customers
+    customer = await db.customers.find_one({
+        "$or": [
+            {"phone": {"$regex": normalized + "$"}},
+            {"phone": {"$regex": normalized[-10:] + "$"}} if len(normalized) > 10 else {"phone": normalized}
+        ]
+    })
+    
+    if customer:
+        return ThreeCXContactResponse(
+            found=True,
+            contact_id=customer["id"],
+            first_name=customer.get("full_name", "").split()[0] if customer.get("full_name") else "",
+            last_name=" ".join(customer.get("full_name", "").split()[1:]) if customer.get("full_name") else "",
+            email=customer.get("email"),
+            phone_mobile=customer.get("phone"),
+            company_name=customer.get("current_package"),
+            contact_url=f"/customers/{customer['id']}",
+            contact_type="customer"
+        )
+    
+    return ThreeCXContactResponse(found=False)
+
+@api_router.get("/3cx/contact-search")
+async def threecx_contact_search(search_text: str, limit: int = 20):
+    """
+    3CX Contact Search
+    Allows searching contacts from 3CX interface
+    """
+    pattern = {"$regex": search_text, "$options": "i"}
+    results = []
+    
+    # Search leads
+    leads = await db.leads.find({
+        "$or": [
+            {"full_name": pattern},
+            {"email": pattern},
+            {"phone": pattern},
+            {"company": pattern}
+        ]
+    }).to_list(length=limit)
+    
+    for lead in leads:
+        results.append(ThreeCXContactResponse(
+            found=True,
+            contact_id=lead["id"],
+            first_name=lead.get("full_name", "").split()[0] if lead.get("full_name") else "",
+            last_name=" ".join(lead.get("full_name", "").split()[1:]) if lead.get("full_name") else "",
+            email=lead.get("email"),
+            phone_mobile=lead.get("phone"),
+            company_name=lead.get("company"),
+            contact_url=f"/sales/{lead['id']}",
+            contact_type="lead"
+        ))
+    
+    # Search students
+    students = await db.students.find({
+        "$or": [
+            {"full_name": pattern},
+            {"email": pattern},
+            {"phone": pattern}
+        ]
+    }).to_list(length=limit - len(results))
+    
+    for student in students:
+        results.append(ThreeCXContactResponse(
+            found=True,
+            contact_id=student["id"],
+            first_name=student.get("full_name", "").split()[0] if student.get("full_name") else "",
+            last_name=" ".join(student.get("full_name", "").split()[1:]) if student.get("full_name") else "",
+            email=student.get("email"),
+            phone_mobile=student.get("phone"),
+            company_name=student.get("package_bought"),
+            contact_url=f"/cs/{student['id']}",
+            contact_type="student"
+        ))
+    
+    return {"contacts": results, "total": len(results)}
+
+@api_router.post("/3cx/contact-create")
+async def threecx_contact_create(request: ThreeCXContactCreateRequest):
+    """
+    3CX Contact Creation
+    Creates a new lead when receiving call from unknown number
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if contact already exists
+    normalized = normalize_phone(request.phone_number)
+    existing_lead = await db.leads.find_one({"phone": {"$regex": normalized[-10:] + "$"}})
+    if existing_lead:
+        return {
+            "success": True,
+            "contact_id": existing_lead["id"],
+            "message": "Contact already exists",
+            "contact_url": f"/sales/{existing_lead['id']}"
+        }
+    
+    # Create new lead
+    lead_id = str(uuid.uuid4())
+    full_name = f"{request.first_name or 'Unknown'} {request.last_name or 'Caller'}".strip()
+    
+    new_lead = {
+        "id": lead_id,
+        "full_name": full_name,
+        "phone": request.phone_number,
+        "email": request.email,
+        "company": request.company_name,
+        "source": "inbound_call",
+        "stage": "new_lead",
+        "country": None,
+        "notes": "Created from inbound call via 3CX",
+        "in_pool": True,
+        "assigned_to": None,
+        "assigned_to_name": None,
+        "created_at": now,
+        "updated_at": now,
+        "last_activity": now
+    }
+    
+    await db.leads.insert_one(new_lead)
+    
+    logger.info(f"3CX: Created new lead {lead_id} from inbound call {request.phone_number}")
+    
+    return {
+        "success": True,
+        "contact_id": lead_id,
+        "first_name": request.first_name or "Unknown",
+        "last_name": request.last_name or "Caller",
+        "contact_url": f"/sales/{lead_id}"
+    }
+
+@api_router.post("/3cx/call-journal")
+async def threecx_call_journal(request: ThreeCXCallJournalRequest):
+    """
+    3CX Call Journaling
+    Logs call details when call completes
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    call_id = str(uuid.uuid4())
+    
+    # Determine contact type and get contact info
+    contact_type = None
+    contact_name = None
+    
+    if request.contact_id:
+        lead = await db.leads.find_one({"id": request.contact_id})
+        if lead:
+            contact_type = "lead"
+            contact_name = lead.get("full_name")
+            # Update lead's last activity and call recording
+            update_data = {"last_activity": now, "updated_at": now}
+            if request.recording_file:
+                update_data["call_recording_url"] = request.recording_file
+            await db.leads.update_one({"id": request.contact_id}, {"$set": update_data})
+        else:
+            student = await db.students.find_one({"id": request.contact_id})
+            if student:
+                contact_type = "student"
+                contact_name = student.get("full_name")
+                # Update student's call recording
+                update_data = {"updated_at": now}
+                if request.recording_file:
+                    update_data["call_recording_url"] = request.recording_file
+                await db.students.update_one({"id": request.contact_id}, {"$set": update_data})
+    
+    # Create call log entry
+    call_log = {
+        "id": call_id,
+        "contact_id": request.contact_id,
+        "contact_type": contact_type,
+        "contact_name": contact_name or request.name,
+        "phone_number": request.phone_number,
+        "call_type": request.call_type,
+        "call_direction": request.call_direction,
+        "call_duration": request.call_duration,
+        "call_date": request.timestamp or now,
+        "recording_file": request.recording_file,
+        "agent_extension": request.agent_extension,
+        "notes": request.notes,
+        "logged_at": now,
+        "system": "3CX"
+    }
+    
+    await db.call_logs.insert_one(call_log)
+    
+    logger.info(f"3CX: Call logged - {request.call_direction} {request.call_type} to {request.phone_number}, duration: {request.call_duration}s")
+    
+    return {
+        "success": True,
+        "call_id": call_id,
+        "message": "Call logged successfully"
+    }
+
+@api_router.get("/3cx/call-history/{contact_id}")
+async def get_call_history(contact_id: str, user = Depends(get_current_user)):
+    """Get call history for a specific contact"""
+    calls = await db.call_logs.find({"contact_id": contact_id}).sort("call_date", -1).to_list(length=100)
+    
+    return {
+        "calls": [
+            {
+                "call_id": call["id"],
+                "call_type": call.get("call_type"),
+                "call_direction": call.get("call_direction"),
+                "call_duration": call.get("call_duration", 0),
+                "call_date": call.get("call_date"),
+                "recording_url": call.get("recording_file"),
+                "agent_extension": call.get("agent_extension"),
+                "notes": call.get("notes")
+            }
+            for call in calls
+        ],
+        "total": len(calls)
+    }
+
+@api_router.get("/3cx/recent-calls")
+async def get_recent_calls(limit: int = 50, user = Depends(get_current_user)):
+    """Get recent calls across all contacts"""
+    calls = await db.call_logs.find().sort("call_date", -1).to_list(length=limit)
+    
+    return {
+        "calls": [
+            {
+                "call_id": call["id"],
+                "contact_id": call.get("contact_id"),
+                "contact_type": call.get("contact_type"),
+                "contact_name": call.get("contact_name"),
+                "phone_number": call.get("phone_number"),
+                "call_type": call.get("call_type"),
+                "call_direction": call.get("call_direction"),
+                "call_duration": call.get("call_duration", 0),
+                "call_date": call.get("call_date"),
+                "recording_url": call.get("recording_file")
+            }
+            for call in calls
+        ],
+        "total": len(calls)
+    }
+
+@api_router.post("/3cx/click-to-call")
+async def click_to_call(phone_number: str, contact_id: Optional[str] = None, user = Depends(get_current_user)):
+    """
+    Initiate a click-to-call request
+    This endpoint can be called from the frontend to log outbound call attempts
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    call_id = str(uuid.uuid4())
+    
+    # Get contact info if provided
+    contact_type = None
+    contact_name = None
+    
+    if contact_id:
+        lead = await db.leads.find_one({"id": contact_id})
+        if lead:
+            contact_type = "lead"
+            contact_name = lead.get("full_name")
+        else:
+            student = await db.students.find_one({"id": contact_id})
+            if student:
+                contact_type = "student"
+                contact_name = student.get("full_name")
+    
+    # Log the click-to-call attempt
+    call_log = {
+        "id": call_id,
+        "contact_id": contact_id,
+        "contact_type": contact_type,
+        "contact_name": contact_name,
+        "phone_number": phone_number,
+        "call_type": "Outbound",
+        "call_direction": "Outbound",
+        "call_duration": 0,
+        "call_date": now,
+        "initiated_by": user["id"],
+        "initiated_by_name": user.get("full_name"),
+        "status": "initiated",
+        "logged_at": now,
+        "system": "ERP_Click2Call"
+    }
+    
+    await db.call_logs.insert_one(call_log)
+    
+    logger.info(f"Click-to-call initiated by {user.get('full_name')} to {phone_number}")
+    
+    return {
+        "success": True,
+        "call_id": call_id,
+        "phone_number": phone_number,
+        "message": "Call initiated - connect via 3CX client"
+    }
+
+@api_router.get("/3cx/template")
+async def get_3cx_crm_template():
+    """
+    Returns the 3CX CRM Integration Template XML
+    Download this and upload to your 3CX server at:
+    https://clt-academy.3cx.ae:5001/#/office/integrations/crm
+    """
+    # Get the backend URL from environment or use placeholder
+    backend_url = os.environ.get('BACKEND_URL', 'https://your-erp-backend-url.com')
+    
+    template = f'''<?xml version="1.0" encoding="utf-8"?>
+<Crm>
+  <CrmName>CLT Academy ERP</CrmName>
+  <Version>1.0</Version>
+  <Connection Url="{backend_url}" />
+  
+  <Authentication Type="NoAuth" />
+  
+  <Scenarios>
+    <!-- Contact Lookup by Phone Number -->
+    <Scenario Id="LookupContactByPhoneNumber" Type="REST">
+      <Request Method="GET" Url="{backend_url}/api/3cx/contact-lookup?phone_number=[Number]" />
+      <Rules>
+        <Rule Type="Any">found=true</Rule>
+      </Rules>
+      <Variables>
+        <Variable Name="ContactID" Path="contact_id" />
+        <Variable Name="FirstName" Path="first_name" />
+        <Variable Name="LastName" Path="last_name" />
+        <Variable Name="Email" Path="email" />
+        <Variable Name="PhoneMobile" Path="phone_mobile" />
+        <Variable Name="CompanyName" Path="company_name" />
+        <Variable Name="ContactUrl" Path="contact_url" />
+      </Variables>
+      <Outputs>
+        <Output Type="ContactUrl" Value="[ContactUrl]" />
+        <Output Type="FirstName" Value="[FirstName]" />
+        <Output Type="LastName" Value="[LastName]" />
+        <Output Type="Email" Value="[Email]" />
+        <Output Type="PhoneMobile" Value="[PhoneMobile]" />
+        <Output Type="CompanyName" Value="[CompanyName]" />
+      </Outputs>
+    </Scenario>
+
+    <!-- Contact Search -->
+    <Scenario Id="SearchContacts" Type="REST">
+      <Request Method="GET" Url="{backend_url}/api/3cx/contact-search?search_text=[SearchText]" />
+      <Rules>
+        <Rule Type="Any">total&gt;0</Rule>
+      </Rules>
+      <Variables>
+        <Variable Name="Results" Path="contacts" />
+      </Variables>
+      <Outputs>
+        <Output Type="Results" Value="[Results]" />
+      </Outputs>
+    </Scenario>
+
+    <!-- Create Contact from Unknown Number -->
+    <Scenario Id="CreateContactFromUnknownNumber" Type="REST">
+      <Request Method="POST" Url="{backend_url}/api/3cx/contact-create" RequestContentType="application/json">
+        <Body>
+{{
+  "phone_number": "[Number]",
+  "first_name": "[Name]",
+  "last_name": ""
+}}
+        </Body>
+      </Request>
+      <Rules>
+        <Rule Type="Any">success=true</Rule>
+      </Rules>
+      <Variables>
+        <Variable Name="ContactID" Path="contact_id" />
+        <Variable Name="ContactUrl" Path="contact_url" />
+      </Variables>
+      <Outputs>
+        <Output Type="ContactUrl" Value="[ContactUrl]" />
+      </Outputs>
+    </Scenario>
+
+    <!-- Call Journaling -->
+    <Scenario Id="ReportCall" Type="REST">
+      <Request Method="POST" Url="{backend_url}/api/3cx/call-journal" RequestContentType="application/json">
+        <Body>
+{{
+  "call_type": "[CallType]",
+  "phone_number": "[Number]",
+  "call_direction": "[CallDirection]",
+  "name": "[Name]",
+  "contact_id": "[EntityId]",
+  "call_duration": [Duration],
+  "timestamp": "[CallStartTimeUTC]",
+  "recording_file": "[RecordingUrl]",
+  "agent_extension": "[Agent]"
+}}
+        </Body>
+      </Request>
+      <Rules>
+        <Rule Type="Any">success=true</Rule>
+      </Rules>
+    </Scenario>
+  </Scenarios>
+</Crm>'''
+    
+    return {
+        "template": template,
+        "instructions": {
+            "step1": "Go to https://clt-academy.3cx.ae:5001/#/office/integrations/crm",
+            "step2": "Click 'Add' or 'Import' to add a new CRM integration",
+            "step3": "Copy the XML template above and save it as 'clt_academy_erp.xml'",
+            "step4": "Upload the XML file to 3CX",
+            "step5": "Replace 'your-erp-backend-url.com' with your actual ERP backend URL",
+            "step6": "Test the integration by making a test call"
+        },
+        "backend_url_placeholder": backend_url,
+        "endpoints": {
+            "contact_lookup": "/api/3cx/contact-lookup?phone_number={phone}",
+            "contact_search": "/api/3cx/contact-search?search_text={text}",
+            "contact_create": "/api/3cx/contact-create",
+            "call_journal": "/api/3cx/call-journal",
+            "call_history": "/api/3cx/call-history/{contact_id}",
+            "recent_calls": "/api/3cx/recent-calls",
+            "click_to_call": "/api/3cx/click-to-call"
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
