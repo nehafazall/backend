@@ -2678,6 +2678,354 @@ async def get_google_sheets_config(user = Depends(require_roles(["super_admin", 
     config = await db.integrations.find_one({"type": "google_sheets"}, {"_id": 0})
     return config
 
+# ==================== MENTOR DASHBOARD ====================
+
+@api_router.get("/mentor/dashboard")
+async def get_mentor_dashboard(user = Depends(get_current_user)):
+    """Get mentor's comprehensive dashboard data"""
+    # Determine which mentor's data to show
+    if user.get("role") in ["mentor", "academic_master"]:
+        mentor_id = user["id"]
+    elif user.get("role") in ["super_admin", "admin"]:
+        # Admins can see aggregate or specify mentor_id via query param
+        mentor_id = None  # Show aggregate for all mentors
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Build query
+    query = {"mentor_id": mentor_id} if mentor_id else {"mentor_id": {"$exists": True, "$ne": None}}
+    
+    # Get all students assigned to this mentor
+    students = await db.students.find(query, {"_id": 0}).to_list(10000)
+    total_students = len(students)
+    
+    # Count by mentor_stage
+    student_stages = {}
+    for student in students:
+        stage = student.get("mentor_stage", "new_student")
+        student_stages[stage] = student_stages.get(stage, 0) + 1
+    
+    # Students connected (had at least one interaction - stage changed from new_student)
+    students_connected = sum(1 for s in students if s.get("mentor_stage") != "new_student")
+    students_balance = total_students - students_connected
+    
+    # Upgrades helped (closed stage)
+    upgrades_helped = student_stages.get("closed", 0)
+    
+    # Get commissions for this mentor
+    commission_query = {"user_id": mentor_id} if mentor_id else {}
+    commissions = await db.commissions.find(commission_query, {"_id": 0}).to_list(10000)
+    
+    total_commission = sum(c.get("commission_amount", 0) for c in commissions)
+    commission_received = sum(c.get("commission_amount", 0) for c in commissions if c.get("status") == "paid")
+    commission_balance = total_commission - commission_received
+    
+    # Get payments/revenue brought in (from upgrades and redeposits)
+    student_ids = [s["id"] for s in students]
+    payment_query = {"student_id": {"$in": student_ids}, "payment_type": {"$in": ["upgrade", "redeposit"]}}
+    payments = await db.payments.find(payment_query, {"_id": 0}).to_list(10000)
+    
+    total_revenue = sum(p.get("amount", 0) for p in payments)
+    
+    # Calculate withdrawn (this would come from a withdrawals collection or commission status)
+    total_withdrawn = commission_received  # For now, withdrawn equals received commissions
+    current_net = total_revenue - total_withdrawn
+    
+    # Get recent activities (last 10 stage changes or actions)
+    recent_activities = []
+    activity_logs = await db.activity_logs.find({
+        "entity_type": "student",
+        "entity_id": {"$in": student_ids}
+    }, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    
+    for log in activity_logs:
+        student = next((s for s in students if s["id"] == log.get("entity_id")), None)
+        if student:
+            recent_activities.append({
+                "student_name": student.get("full_name", "Unknown"),
+                "action": log.get("action", "").replace("_", " ").title(),
+                "time": log.get("created_at", ""),
+                "amount": log.get("details", {}).get("amount") if log.get("details") else None
+            })
+    
+    return {
+        "total_students": total_students,
+        "total_revenue": total_revenue,
+        "total_withdrawn": total_withdrawn,
+        "current_net": current_net,
+        "total_commission": total_commission,
+        "commission_received": commission_received,
+        "commission_balance": commission_balance,
+        "upgrades_helped": upgrades_helped,
+        "students_connected": students_connected,
+        "students_balance": students_balance,
+        "student_stages": student_stages,
+        "recent_activities": recent_activities
+    }
+
+# ==================== BULK IMPORT: COURSES & USERS ====================
+
+@api_router.get("/import/templates/courses")
+async def get_courses_template(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Get CSV template for bulk course import"""
+    template = """name*,code*,base_price*,category*,description,is_active
+"Basic Trading Course","BTC001",1500,"basic","Introduction to trading fundamentals",true
+"Advanced Trading Masterclass","ATC002",3500,"advanced","Advanced strategies and techniques",true
+"Mentorship Program","MNT003",5000,"mentorship","One-on-one mentorship with expert traders",true"""
+    
+    instructions = """
+COURSES IMPORT TEMPLATE INSTRUCTIONS
+=====================================
+
+Required Fields (marked with *):
+- name*: Course name
+- code*: Unique course code (alphanumeric)
+- base_price*: Price in AED (number)
+- category*: One of: basic, advanced, mentorship, market_code, profit_matrix
+
+Optional Fields:
+- description: Course description
+- is_active: true/false (default: true)
+
+Notes:
+- Course codes must be unique
+- Duplicate codes will update existing courses
+- Price should be numeric without currency symbol
+"""
+    
+    return {
+        "template": template,
+        "instructions": instructions,
+        "fields": {
+            "required": ["name", "code", "base_price", "category"],
+            "optional": ["description", "is_active"]
+        }
+    }
+
+@api_router.get("/import/templates/users")
+async def get_users_template(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Get CSV template for bulk user import"""
+    template = """email*,full_name*,role*,password*,department,phone,region,team_leader_email
+"john.sales@clt-academy.com","John Smith","sales_executive","TempPass123!","Sales","+971501234567","UAE","manager@clt-academy.com"
+"sarah.cs@clt-academy.com","Sarah Johnson","cs_agent","TempPass123!","Customer Service","+971509876543","UAE",""
+"ahmed.mentor@clt-academy.com","Ahmed Ali","mentor","TempPass123!","Mentorship","+971505555555","International",""
+"mike.finance@clt-academy.com","Mike Wilson","finance","TempPass123!","Finance","+971508888888","UAE",""
+"hr.admin@clt-academy.com","HR Manager","hr","TempPass123!","HR","+971507777777","UAE",""
+"""
+    
+    instructions = """
+USERS IMPORT TEMPLATE INSTRUCTIONS
+===================================
+
+Required Fields (marked with *):
+- email*: Valid email address (must be unique)
+- full_name*: User's full name
+- role*: One of: admin, sales_manager, team_leader, sales_executive, cs_head, cs_agent, mentor, academic_master, finance, hr, marketing, operations, quality_control
+- password*: Temporary password (users should change on first login)
+
+Optional Fields:
+- department: One of: Sales, Customer Service, Mentorship, Finance, HR, Marketing, Operations, Management
+- phone: Phone number with country code
+- region: One of: UAE, India, International
+- team_leader_email: Email of the team leader (for sales_executive role)
+
+ROLE-BASED ACCESS (Auto-derived):
+- sales_executive → Sales CRM access
+- sales_manager/team_leader → Sales CRM + Team management
+- cs_agent → Customer Service access
+- cs_head → Customer Service + Team management
+- mentor → Mentor CRM access
+- academic_master → Mentor CRM + Management
+- finance → Finance module access
+- hr → User/Department management
+- admin → Full access except super_admin features
+
+Notes:
+- Duplicate emails will be skipped (not updated)
+- Password requirements: Min 8 characters
+- Users will be set as active by default
+"""
+    
+    return {
+        "template": template,
+        "instructions": instructions,
+        "fields": {
+            "required": ["email", "full_name", "role", "password"],
+            "optional": ["department", "phone", "region", "team_leader_email"]
+        },
+        "valid_roles": ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "finance", "hr", "marketing", "operations", "quality_control"],
+        "valid_departments": ["Sales", "Customer Service", "Mentorship", "Finance", "HR", "Marketing", "Operations", "Management"],
+        "valid_regions": ["UAE", "India", "International"]
+    }
+
+@api_router.post("/import/courses")
+async def import_courses(file: UploadFile, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Bulk import courses from CSV"""
+    import csv
+    import io
+    
+    content = await file.read()
+    try:
+        decoded = content.decode('utf-8')
+    except:
+        decoded = content.decode('latin-1')
+    
+    reader = csv.DictReader(io.StringIO(decoded))
+    
+    results = {"created": 0, "updated": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            name = row.get("name", "").strip()
+            code = row.get("code", "").strip()
+            base_price = row.get("base_price", "").strip()
+            category = row.get("category", "").strip().lower()
+            
+            if not name or not code or not base_price or not category:
+                results["errors"].append(f"Row {row_num}: Missing required fields")
+                continue
+            
+            try:
+                base_price = float(base_price.replace(",", ""))
+            except:
+                results["errors"].append(f"Row {row_num}: Invalid price '{base_price}'")
+                continue
+            
+            valid_categories = ["basic", "advanced", "mentorship", "market_code", "profit_matrix"]
+            if category not in valid_categories:
+                results["errors"].append(f"Row {row_num}: Invalid category '{category}'")
+                continue
+            
+            # Check if course exists
+            existing = await db.courses.find_one({"code": code})
+            
+            is_active = row.get("is_active", "true").strip().lower() in ["true", "1", "yes"]
+            
+            course_data = {
+                "name": name,
+                "code": code,
+                "base_price": base_price,
+                "category": category,
+                "description": row.get("description", "").strip(),
+                "is_active": is_active,
+                "updated_at": now
+            }
+            
+            if existing:
+                await db.courses.update_one({"code": code}, {"$set": course_data})
+                results["updated"] += 1
+            else:
+                course_data["id"] = str(uuid.uuid4())
+                course_data["created_at"] = now
+                await db.courses.insert_one(course_data)
+                results["created"] += 1
+                
+        except Exception as e:
+            results["errors"].append(f"Row {row_num}: {str(e)}")
+    
+    await log_activity("courses", "bulk_import", "imported", user, {
+        "created": results["created"],
+        "updated": results["updated"],
+        "errors": len(results["errors"])
+    })
+    
+    return {
+        "message": f"Import complete: {results['created']} created, {results['updated']} updated",
+        "results": results
+    }
+
+@api_router.post("/import/users")
+async def import_users(file: UploadFile, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Bulk import users from CSV with auto-derived permissions"""
+    import csv
+    import io
+    
+    content = await file.read()
+    try:
+        decoded = content.decode('utf-8')
+    except:
+        decoded = content.decode('latin-1')
+    
+    reader = csv.DictReader(io.StringIO(decoded))
+    
+    results = {"created": 0, "skipped": 0, "errors": []}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    valid_roles = ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "finance", "hr", "marketing", "operations", "quality_control"]
+    
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            email = row.get("email", "").strip().lower()
+            full_name = row.get("full_name", "").strip()
+            role = row.get("role", "").strip().lower()
+            password = row.get("password", "").strip()
+            
+            if not email or not full_name or not role or not password:
+                results["errors"].append(f"Row {row_num}: Missing required fields")
+                continue
+            
+            if role not in valid_roles:
+                results["errors"].append(f"Row {row_num}: Invalid role '{role}'")
+                continue
+            
+            if len(password) < 8:
+                results["errors"].append(f"Row {row_num}: Password must be at least 8 characters")
+                continue
+            
+            # Check if user exists
+            existing = await db.users.find_one({"email": email})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {row_num}: Email '{email}' already exists - skipped")
+                continue
+            
+            # Get team leader ID if specified
+            team_leader_id = None
+            team_leader_email = row.get("team_leader_email", "").strip().lower()
+            if team_leader_email:
+                team_leader = await db.users.find_one({"email": team_leader_email})
+                if team_leader:
+                    team_leader_id = team_leader["id"]
+            
+            # Get default permissions based on role
+            permissions = get_default_permissions(role)
+            
+            user_data = {
+                "id": str(uuid.uuid4()),
+                "email": email,
+                "password": hash_password(password),
+                "full_name": full_name,
+                "role": role,
+                "department": row.get("department", "").strip() or None,
+                "phone": row.get("phone", "").strip() or None,
+                "region": row.get("region", "").strip() or None,
+                "team_leader_id": team_leader_id,
+                "permissions": permissions,
+                "is_active": True,
+                "monthly_target": 0,
+                "environment_access": ["production"],
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            await db.users.insert_one(user_data)
+            results["created"] += 1
+                
+        except Exception as e:
+            results["errors"].append(f"Row {row_num}: {str(e)}")
+    
+    await log_activity("users", "bulk_import", "imported", user, {
+        "created": results["created"],
+        "skipped": results["skipped"],
+        "errors": len(results["errors"])
+    })
+    
+    return {
+        "message": f"Import complete: {results['created']} created, {results['skipped']} skipped",
+        "results": results
+    }
+
 # ==================== HEALTH CHECK ====================
 
 @api_router.get("/")
