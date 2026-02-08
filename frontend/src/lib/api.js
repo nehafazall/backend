@@ -48,6 +48,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [justLoggedIn, setJustLoggedIn] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('clt_token');
@@ -75,6 +76,7 @@ export const AuthProvider = ({ children }) => {
         
         localStorage.setItem('clt_token', access_token);
         localStorage.setItem('clt_user', JSON.stringify(userData));
+        setJustLoggedIn(true);
         setUser(userData);
         
         return userData;
@@ -84,6 +86,11 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('clt_token');
         localStorage.removeItem('clt_user');
         setUser(null);
+        setJustLoggedIn(false);
+    };
+
+    const clearJustLoggedIn = () => {
+        setJustLoggedIn(false);
     };
 
     const value = {
@@ -92,6 +99,8 @@ export const AuthProvider = ({ children }) => {
         logout,
         loading,
         isAuthenticated: !!user,
+        justLoggedIn,
+        clearJustLoggedIn,
     };
 
     return (
