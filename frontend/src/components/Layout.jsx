@@ -38,6 +38,7 @@ import {
     UserCheck,
     Briefcase,
     Lock,
+    FileText,
     Home,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
