@@ -217,6 +217,117 @@ const SettingsPage = () => {
                 </CardContent>
             </Card>
 
+            {/* 3CX Phone Integration Section - Only for admins */}
+            {['super_admin', 'admin'].includes(user?.role) && (
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <Phone className="h-5 w-5" />
+                            <CardTitle>3CX Phone Integration</CardTitle>
+                        </div>
+                        <CardDescription>Configure your 3CX phone system integration</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                            <h4 className="font-medium text-blue-600 dark:text-blue-400 mb-2">Setup Instructions</h4>
+                            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                                <li>Click "Fetch Template" to generate your CRM integration XML</li>
+                                <li>Download the XML file</li>
+                                <li>Go to your 3CX Management Console → Integrations → CRM</li>
+                                <li>Upload the downloaded XML template</li>
+                                <li>Enable the integration and test with a sample call</li>
+                            </ol>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Button 
+                                onClick={fetch3CXTemplate} 
+                                disabled={loading3CX}
+                                data-testid="fetch-3cx-template-btn"
+                            >
+                                {loading3CX ? 'Fetching...' : 'Fetch Template'}
+                            </Button>
+                            
+                            {templateData && (
+                                <>
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={download3CXTemplate}
+                                        data-testid="download-3cx-template-btn"
+                                    >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download XML
+                                    </Button>
+                                    <a 
+                                        href="https://clt-academy.3cx.ae:5001/#/office/integrations/crm" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Button variant="outline">
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            Open 3CX Console
+                                        </Button>
+                                    </a>
+                                </>
+                            )}
+                        </div>
+
+                        {templateData && (
+                            <div className="space-y-4 mt-4">
+                                <Separator />
+                                
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                    <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                                        Template Generated Successfully
+                                    </span>
+                                </div>
+
+                                {/* API Endpoints */}
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Available API Endpoints</Label>
+                                    <div className="space-y-2 text-sm">
+                                        {templateData.endpoints && Object.entries(templateData.endpoints).map(([key, url]) => (
+                                            <div key={key} className="flex items-center justify-between p-2 bg-muted rounded">
+                                                <div>
+                                                    <span className="font-mono text-xs text-muted-foreground">{key}:</span>
+                                                    <span className="ml-2 font-mono text-xs">{url}</span>
+                                                </div>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    onClick={() => copyToClipboard(url)}
+                                                >
+                                                    <Copy className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* XML Preview */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">XML Template Preview</Label>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm"
+                                            onClick={() => copyToClipboard(templateData.xml_template)}
+                                        >
+                                            <Copy className="h-4 w-4 mr-1" />
+                                            Copy XML
+                                        </Button>
+                                    </div>
+                                    <pre className="p-4 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-64 border">
+                                        {templateData.xml_template?.slice(0, 1500)}...
+                                    </pre>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* System Info */}
             <Card>
                 <CardHeader>
