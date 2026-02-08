@@ -1769,8 +1769,26 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
     update_data["updated_at"] = now.isoformat()
     update_data["last_activity"] = now.isoformat()
     
+    # Capture changes for audit
+    changes_for_audit = {}
+    for key in update_data:
+        if key not in ["updated_at", "last_activity"] and existing.get(key) != update_data.get(key):
+            changes_for_audit[key] = {"old": existing.get(key), "new": update_data.get(key)}
+    
     await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     await log_activity("lead", lead_id, "updated", user, update_data)
+    
+    # Audit log for lead update (only if meaningful changes)
+    if changes_for_audit:
+        await log_audit(
+            user,
+            "update",
+            "lead",
+            entity_id=lead_id,
+            entity_name=existing.get("full_name"),
+            changes=changes_for_audit,
+            details={"phone": existing.get("phone"), "stage": update_data.get("stage", existing.get("stage"))}
+        )
     
     updated = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     return updated
