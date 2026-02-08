@@ -84,8 +84,7 @@ function LoginPage() {
                         <img 
                             src={CLT_LOGO_URL}
                             alt="CLT Academy"
-                            className="h-20 w-auto mx-auto mb-4"
-                            style={{ filter: 'brightness(0) invert(1)' }}
+                            className="h-20 w-auto mx-auto mb-4 logo-dark-mode"
                         />
                     </div>
 
