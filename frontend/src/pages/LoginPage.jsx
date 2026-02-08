@@ -59,15 +59,11 @@ function LoginPage() {
             {/* Left Side - Logo */}
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
                 <div className="text-center">
-                    <div className="relative h-40 w-40 mx-auto mb-8">
+                    <div className="h-40 w-auto mx-auto mb-8 flex items-center justify-center">
                         <img 
                             src={CLT_LOGO_URL}
                             alt="CLT Academy"
-                            className="h-40 w-auto mx-auto drop-shadow-2xl"
-                            style={{ 
-                                filter: 'brightness(0) invert(1)',
-                                mixBlendMode: 'lighten'
-                            }}
+                            className="h-40 w-auto drop-shadow-2xl logo-dark-mode"
                             data-testid="login-logo"
                         />
                     </div>
