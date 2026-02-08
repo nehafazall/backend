@@ -417,6 +417,53 @@ class GoogleSheetConfig(BaseModel):
     header_row: int = 1
     column_mapping: Dict[str, str]  # {lead_field: sheet_column}
 
+# ==================== 3CX INTEGRATION MODELS ====================
+
+class ThreeCXContactResponse(BaseModel):
+    found: bool = False
+    contact_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_mobile: Optional[str] = None
+    phone_business: Optional[str] = None
+    company_name: Optional[str] = None
+    contact_url: Optional[str] = None
+    contact_type: Optional[str] = None  # "lead" or "student"
+
+class ThreeCXCallJournalRequest(BaseModel):
+    call_type: str  # "Inbound", "Outbound", "Missed", "Notanswered"
+    phone_number: str
+    call_direction: str  # "Inbound" or "Outbound"
+    name: Optional[str] = None
+    contact_id: Optional[str] = None
+    call_duration: int = 0
+    timestamp: Optional[str] = None
+    recording_file: Optional[str] = None
+    agent_extension: Optional[str] = None
+    notes: Optional[str] = None
+
+class ThreeCXContactCreateRequest(BaseModel):
+    phone_number: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    company_name: Optional[str] = None
+
+class CallLogResponse(BaseModel):
+    call_id: str
+    contact_id: Optional[str] = None
+    contact_type: Optional[str] = None
+    contact_name: Optional[str] = None
+    phone_number: str
+    call_type: str
+    call_direction: str
+    call_duration: int
+    call_date: str
+    recording_url: Optional[str] = None
+    agent_extension: Optional[str] = None
+    notes: Optional[str] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 def hash_password(password: str) -> str:
