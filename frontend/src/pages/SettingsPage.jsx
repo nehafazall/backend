@@ -312,14 +312,14 @@ const SettingsPage = () => {
                                         <Button 
                                             variant="ghost" 
                                             size="sm"
-                                            onClick={() => copyToClipboard(templateData.xml_template)}
+                                            onClick={() => copyToClipboard(templateData.template)}
                                         >
                                             <Copy className="h-4 w-4 mr-1" />
                                             Copy XML
                                         </Button>
                                     </div>
                                     <pre className="p-4 bg-muted rounded-lg text-xs font-mono overflow-auto max-h-64 border">
-                                        {templateData.xml_template?.slice(0, 1500)}...
+                                        {templateData.template?.slice(0, 1500)}...
                                     </pre>
                                 </div>
                             </div>
