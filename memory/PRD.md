@@ -5,17 +5,20 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 
 ## Latest Features (Login Animation & 3CX Placeholder - December 2025)
 
-### Post-Login Animation (Completed)
-After successful login, users see a 5-6 second branded animation:
+### Post-Login Animation (Completed - Modern EdTech Theme)
+After successful login, users see a vibrant 11-second branded animation:
 - **Route**: `/welcome` - dedicated page for animation
-- **Phase 1 (0-1.5s)**: Clock animation (C) - clock face with rotating hands
-- **Phase 2 (1.5-2.7s)**: Graduate animation (L) - graduate figure with cap and diploma
-- **Phase 3 (2.7-3.9s)**: Trading candles animation (T) - candlestick chart
-- **Phase 4 (3.9-4.8s)**: Letters combine into CLT logo
-- **Phase 5 (4.8-5.5s)**: "ACADEMY" text appears below
-- **Phase 6 (5.5-6.2s)**: Fade out and redirect to `/home`
-- **Loading Bar**: Progress indicator with status text (Initializing... → Loading workspace... → Welcome!)
-- **Background**: Grid pattern with floating particles
+- **Visual Style**: Modern dark theme with cyan/magenta/green gradient orbs, grid pattern, floating particles
+- **Story Flow**:
+  1. **Student Phase (0-3s)**: Cute yellow character at laptop, thought bubble "📈?", books fly in (📕📗📙📘)
+  2. **Trading Phase (3-4.5s)**: Glassmorphism chart cards appear (BTC/USD +12.4%, ETH/USD -3.2%, Candlestick patterns)
+  3. **Lightbulb Moment (4.5-6s)**: Giant 💡 with rays, "Aha!" and "Got it!" bubbles, stars appear
+  4. **CLT Formation (6-7.5s)**: Neon gradient letters animate in (C=cyan, L=magenta, T=green) with glow effects
+  5. **ACADEMY Text (7.5-8.5s)**: Rainbow gradient text fades in below CLT
+  6. **Celebration (8.5-10s)**: Confetti emojis (🎉🎊💰📈🏆⭐🚀💎🔥✨), falling coins 🪙, "Ready to Trade!" button
+  7. **Rocket Launch (10-11s)**: 🚀 launches to top-right, fade out to home
+- **Interactive**: Mouse tracking affects gradient orb positions
+- **Loading Bar**: Gradient progress with contextual messages
 
 ### 3CX Call Recording Placeholder (Completed)
 Added to all CRM detail modals for future integration:
