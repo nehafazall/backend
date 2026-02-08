@@ -3,7 +3,32 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (Login & Home Page Redesign - December 2025)
+## Latest Features (Login Animation & 3CX Placeholder - December 2025)
+
+### Post-Login Animation (Completed)
+After successful login, users see a 5-6 second branded animation:
+- **Route**: `/welcome` - dedicated page for animation
+- **Phase 1 (0-1.5s)**: Clock animation (C) - clock face with rotating hands
+- **Phase 2 (1.5-2.7s)**: Graduate animation (L) - graduate figure with cap and diploma
+- **Phase 3 (2.7-3.9s)**: Trading candles animation (T) - candlestick chart
+- **Phase 4 (3.9-4.8s)**: Letters combine into CLT logo
+- **Phase 5 (4.8-5.5s)**: "ACADEMY" text appears below
+- **Phase 6 (5.5-6.2s)**: Fade out and redirect to `/home`
+- **Loading Bar**: Progress indicator with status text (Initializing... → Loading workspace... → Welcome!)
+- **Background**: Grid pattern with floating particles
+
+### 3CX Call Recording Placeholder (Completed)
+Added to all CRM detail modals for future integration:
+- **Location**: Sales CRM lead detail, CS student detail, Mentor CRM student detail
+- **UI Elements**:
+  - Phone icon with "3CX Call Recording" label
+  - "Coming Soon" badge
+  - Disabled input field with placeholder text
+  - Explanatory text about future integration
+- **Field**: `call_recording_url` (will be populated when 3CX integration is complete)
+- **Test ID**: `data-testid="call-recording-url"`
+
+## Previous Features (Login & Home Page Redesign)
 
 ### Redesigned Login Page
 - **Split Layout**: Logo on left, login form on right (desktop)
