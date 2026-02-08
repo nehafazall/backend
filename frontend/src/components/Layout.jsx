@@ -279,7 +279,10 @@ function Layout() {
                             <DropdownMenuContent align="end" className="w-80">
                                 <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <ScrollArea className="h-64">{notifications.length === 0 ? <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div> : notifications.slice(0, 10).map(n => <DropdownMenuItem key={n.id} className={`flex flex-col items-start p-3 ${!n.read ? 'bg-muted/50' : ''}`}><span className="font-medium text-sm">{n.title}</span><span className="text-xs text-muted-foreground mt-1">{n.message}</span></DropdownMenuItem>)}</ScrollArea>
+                                <ScrollArea className="h-64">
+                                    {notifications.length === 0 && <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div>}
+                                    <NotificationList items={notifications} />
+                                </ScrollArea>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <DropdownMenu>
