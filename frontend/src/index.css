@@ -259,6 +259,21 @@
     animation: float 3s ease-in-out infinite;
 }
 
+/* Logo styling for dark backgrounds - makes white background transparent */
+.logo-dark-mode {
+    filter: brightness(0) invert(1);
+    mix-blend-mode: screen;
+}
+
+/* Logo styling for light mode in the app */
+.dark .logo-theme-aware {
+    filter: brightness(0) invert(1);
+}
+
+.logo-theme-aware {
+    transition: filter 0.3s ease;
+}
+
 /* Debug wrapper */
 [data-debug-wrapper="true"] {
     display: contents !important;
