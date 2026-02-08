@@ -434,10 +434,7 @@ function HomePageContent({ user, visibleSections, selectSection }) {
                     <img 
                         src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
                         alt="CLT Academy"
-                        className="h-40 md:h-48 lg:h-56 w-auto mx-auto"
-                        style={{ 
-                            filter: isDark ? 'brightness(0) invert(1)' : 'none'
-                        }}
+                        className="h-40 md:h-48 lg:h-56 w-auto mx-auto logo-theme-aware"
                         data-testid="home-logo"
                     />
                 </div>
