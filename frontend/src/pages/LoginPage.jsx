@@ -271,10 +271,7 @@ function LogoAnimation({ onComplete }) {
                 <img 
                     src={CLT_LOGO_URL}
                     alt="CLT Academy"
-                    className="h-32 w-auto mx-auto mb-6"
-                    style={{ 
-                        filter: 'brightness(0) invert(1) drop-shadow(0 0 30px rgba(59,130,246,0.5))'
-                    }}
+                    className="h-32 w-auto mx-auto mb-6 logo-dark-mode"
                 />
                 <h1 
                     className="text-4xl font-bold text-white transition-all ease-out"
