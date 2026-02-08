@@ -3937,6 +3937,171 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
         "message": "Call initiated - connect via 3CX client"
     }
 
+# ==================== QC / CALL QUALITY ENDPOINTS ====================
+
+class CallQCUpdate(BaseModel):
+    recording_url: Optional[str] = None
+    qc_rating: Optional[int] = None  # 1-5 rating
+    qc_notes: Optional[str] = None
+    qc_status: Optional[str] = None  # pending, reviewed, flagged
+
+@api_router.put("/3cx/calls/{call_id}/qc")
+async def update_call_qc(call_id: str, update: CallQCUpdate, user = Depends(get_current_user)):
+    """
+    Update call QC information (recording URL, rating, notes)
+    Used by QC team to add recording links and ratings
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Find the call
+    call = await db.call_logs.find_one({"id": call_id})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    # Build update data
+    update_data = {"updated_at": now}
+    
+    if update.recording_url is not None:
+        update_data["recording_file"] = update.recording_url
+    if update.qc_rating is not None:
+        update_data["qc_rating"] = update.qc_rating
+    if update.qc_notes is not None:
+        update_data["qc_notes"] = update.qc_notes
+    if update.qc_status is not None:
+        update_data["qc_status"] = update.qc_status
+    
+    update_data["qc_reviewed_by"] = user["id"]
+    update_data["qc_reviewed_by_name"] = user.get("full_name")
+    update_data["qc_reviewed_at"] = now
+    
+    await db.call_logs.update_one({"id": call_id}, {"$set": update_data})
+    
+    # Also update the contact's latest recording URL if provided
+    if update.recording_url and call.get("contact_id"):
+        contact_id = call["contact_id"]
+        if call.get("contact_type") == "lead":
+            await db.leads.update_one(
+                {"id": contact_id}, 
+                {"$set": {"call_recording_url": update.recording_url, "updated_at": now}}
+            )
+        elif call.get("contact_type") == "student":
+            await db.students.update_one(
+                {"id": contact_id}, 
+                {"$set": {"call_recording_url": update.recording_url, "updated_at": now}}
+            )
+    
+    logger.info(f"QC update for call {call_id} by {user.get('full_name')}")
+    
+    return {
+        "success": True,
+        "call_id": call_id,
+        "message": "Call QC information updated"
+    }
+
+@api_router.get("/3cx/calls/qc-queue")
+async def get_qc_queue(
+    status: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 100,
+    user = Depends(get_current_user)
+):
+    """
+    Get calls pending QC review
+    Returns calls with their QC status for the QC dashboard
+    """
+    query = {}
+    
+    # Filter by QC status
+    if status:
+        if status == "pending":
+            query["qc_status"] = {"$in": [None, "pending"]}
+        else:
+            query["qc_status"] = status
+    
+    # Filter by date range
+    if from_date:
+        query["call_date"] = {"$gte": from_date}
+    if to_date:
+        if "call_date" in query:
+            query["call_date"]["$lte"] = to_date
+        else:
+            query["call_date"] = {"$lte": to_date}
+    
+    # Only get answered calls (they have recordings)
+    query["call_type"] = {"$in": ["Inbound", "Outbound"]}
+    
+    calls = await db.call_logs.find(query).sort("call_date", -1).to_list(length=limit)
+    
+    # Get 3CX recordings page URL for quick access
+    threecx_recordings_url = "https://clt-academy.3cx.ae:5001/#/office/recordings"
+    
+    return {
+        "calls": [
+            {
+                "call_id": call["id"],
+                "contact_id": call.get("contact_id"),
+                "contact_type": call.get("contact_type"),
+                "contact_name": call.get("contact_name"),
+                "phone_number": call.get("phone_number"),
+                "call_type": call.get("call_type"),
+                "call_direction": call.get("call_direction"),
+                "call_duration": call.get("call_duration", 0),
+                "call_date": call.get("call_date"),
+                "agent_extension": call.get("agent_extension"),
+                "recording_url": call.get("recording_file"),
+                "qc_status": call.get("qc_status", "pending"),
+                "qc_rating": call.get("qc_rating"),
+                "qc_notes": call.get("qc_notes"),
+                "qc_reviewed_by": call.get("qc_reviewed_by_name"),
+                "qc_reviewed_at": call.get("qc_reviewed_at"),
+                "threecx_recordings_link": f"{threecx_recordings_url}?number={call.get('phone_number', '')}"
+            }
+            for call in calls
+        ],
+        "total": len(calls),
+        "threecx_recordings_url": threecx_recordings_url
+    }
+
+@api_router.get("/3cx/calls/{call_id}")
+async def get_call_details(call_id: str, user = Depends(get_current_user)):
+    """Get detailed information about a specific call"""
+    call = await db.call_logs.find_one({"id": call_id})
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    # Get contact details
+    contact_details = None
+    if call.get("contact_id"):
+        if call.get("contact_type") == "lead":
+            lead = await db.leads.find_one({"id": call["contact_id"]}, {"_id": 0})
+            contact_details = lead
+        elif call.get("contact_type") == "student":
+            student = await db.students.find_one({"id": call["contact_id"]}, {"_id": 0})
+            contact_details = student
+    
+    return {
+        "call_id": call["id"],
+        "contact_id": call.get("contact_id"),
+        "contact_type": call.get("contact_type"),
+        "contact_name": call.get("contact_name"),
+        "contact_details": contact_details,
+        "phone_number": call.get("phone_number"),
+        "call_type": call.get("call_type"),
+        "call_direction": call.get("call_direction"),
+        "call_duration": call.get("call_duration", 0),
+        "call_date": call.get("call_date"),
+        "agent_extension": call.get("agent_extension"),
+        "recording_url": call.get("recording_file"),
+        "qc_status": call.get("qc_status", "pending"),
+        "qc_rating": call.get("qc_rating"),
+        "qc_notes": call.get("qc_notes"),
+        "qc_reviewed_by": call.get("qc_reviewed_by_name"),
+        "qc_reviewed_at": call.get("qc_reviewed_at"),
+        "logged_at": call.get("logged_at"),
+        "system": call.get("system")
+    }
+
 @api_router.get("/3cx/template")
 async def get_3cx_crm_template():
     """
