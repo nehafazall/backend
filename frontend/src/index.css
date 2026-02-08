@@ -261,13 +261,12 @@
 
 /* Logo styling for dark backgrounds - makes white background transparent */
 .logo-dark-mode {
-    filter: brightness(0) invert(1);
-    mix-blend-mode: screen;
+    filter: invert(1);
 }
 
 /* Logo styling for light mode in the app */
 .dark .logo-theme-aware {
-    filter: brightness(0) invert(1);
+    filter: invert(1);
 }
 
 .logo-theme-aware {
