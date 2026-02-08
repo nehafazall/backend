@@ -3,16 +3,31 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (Navigation & Bulk Import - December 2025)
+## Latest Features (Launcher Navigation - December 2025)
 
-### Collapsible Navigation Sections
-Restructured sidebar navigation into 6 collapsible sections:
-- **SALES**: Sales CRM, Sales Dashboard, Today's Follow-ups
-- **CUSTOMER SERVICE**: CS Dashboard, Customer Service
-- **ACADEMICS**: Mentor CRM, Mentor Dashboard
-- **OPERATIONS**: Dashboard, Leads Pool, Customer Master, Departments, Courses
-- **SECURITY**: Access Control, User Management
-- **FINANCE**: Finance, Commission Engine
+### Launcher-Style Home Screen
+After login, users see a centered icon launcher instead of sidebar:
+- **6 Section Icons**: Sales (blue), Customer Service (green), Academics (orange), Operations (purple), Security (red), Finance (cyan)
+- **Welcome Message**: "Welcome, {name}! Select a module to get started"
+- **No Sidebar** on home page - clean, focused interface
+
+### Focused Section Sidebar
+When clicking a section icon:
+- **Focused Sidebar** appears with only that section's navigation items
+- **Home Button** always present at top to return to launcher
+- **Section Header** shows icon + title (e.g., "Sales" with phone icon)
+- **Settings** link at bottom
+- **User Info** shows name + role badge
+
+### Section Navigation Items
+- **Sales**: Sales CRM, Sales Dashboard, Today's Follow-ups
+- **Customer Service**: CS Dashboard, Customer Service
+- **Academics**: Mentor CRM, Mentor Dashboard
+- **Operations**: Dashboard, Leads Pool, Customer Master, Departments, Courses
+- **Security**: Access Control, User Management
+- **Finance**: Finance, Commission Engine
+
+## Previous Features (Navigation & Bulk Import)
 
 ### Mentor Dashboard (NEW)
 Located at `/mentor/dashboard` with metrics:
@@ -214,5 +229,5 @@ Each template includes:
 - Courses: `/app/frontend/src/pages/CoursesPage.jsx`
 
 ## Test Reports
-- Latest: `/app/test_reports/iteration_5.json`
+- Latest: `/app/test_reports/iteration_6.json`
 - Backend Tests: `/app/backend/tests/test_new_features.py`
