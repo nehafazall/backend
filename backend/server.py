@@ -417,6 +417,76 @@ class GoogleSheetConfig(BaseModel):
     header_row: int = 1
     column_mapping: Dict[str, str]  # {lead_field: sheet_column}
 
+# ==================== AUDIT LOG MODELS ====================
+
+class AuditLogCreate(BaseModel):
+    action: str  # login, logout, create, update, delete, access_change, view, export
+    entity_type: str  # user, lead, student, payment, access_control, course, department, etc.
+    entity_id: Optional[str] = None
+    entity_name: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None  # Additional context
+    changes: Optional[Dict[str, Any]] = None  # Old and new values for updates
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+class AuditLogResponse(BaseModel):
+    id: str
+    timestamp: datetime
+    user_id: str
+    user_name: str
+    user_email: str
+    user_role: str
+    action: str
+    entity_type: str
+    entity_id: Optional[str] = None
+    entity_name: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    changes: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    
+    model_config = ConfigDict(extra="ignore")
+
+# Audit log helper function
+async def log_audit(
+    user: Dict,
+    action: str,
+    entity_type: str,
+    entity_id: Optional[str] = None,
+    entity_name: Optional[str] = None,
+    details: Optional[Dict] = None,
+    changes: Optional[Dict] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None
+):
+    """
+    Log an audit entry for tracking user actions
+    
+    Actions: login, logout, create, update, delete, access_change, view, export, bulk_import
+    Entity Types: user, lead, student, payment, access_control, course, department, settings, etc.
+    """
+    try:
+        audit_entry = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "user_id": user.get("id", "system"),
+            "user_name": user.get("full_name", "System"),
+            "user_email": user.get("email", "system@clt-academy.com"),
+            "user_role": user.get("role", "system"),
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "entity_name": entity_name,
+            "details": details,
+            "changes": changes,
+            "ip_address": ip_address,
+            "user_agent": user_agent
+        }
+        await db.audit_logs.insert_one(audit_entry)
+        logger.info(f"Audit: {user.get('full_name', 'System')} {action} {entity_type} {entity_id or ''}")
+    except Exception as e:
+        logger.error(f"Failed to log audit entry: {e}")
+
 # ==================== 3CX INTEGRATION MODELS ====================
 
 class ThreeCXContactResponse(BaseModel):
