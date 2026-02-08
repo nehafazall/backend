@@ -78,6 +78,13 @@ function AppRoutes() {
                 </PublicRoute>
             } />
             
+            {/* Welcome Animation - Shows after login */}
+            <Route path="/welcome" element={
+                <ProtectedRoute>
+                    <WelcomePage />
+                </ProtectedRoute>
+            } />
+            
             {/* Protected Routes with Layout */}
             <Route path="/" element={
                 <ProtectedRoute>
