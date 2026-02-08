@@ -389,23 +389,31 @@ const CustomerServicePage = () => {
                                         </div>
                                     </div>
                                     
-                                    {/* 3CX Call Recording - Placeholder for future integration */}
-                                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <PhoneCall className="h-4 w-4 text-muted-foreground" />
-                                            <Label className="text-sm text-muted-foreground">3CX Call Recording</Label>
-                                            <Badge variant="outline" className="text-xs ml-auto">Coming Soon</Badge>
+                                    {/* 3CX Call Center Integration */}
+                                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-muted-foreground/20">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <PhoneCall className="h-4 w-4 text-primary" />
+                                            <Label className="text-sm font-medium">3CX Call Center</Label>
+                                            <Badge variant="outline" className="text-xs ml-auto bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>
                                         </div>
-                                        <Input
-                                            value={selectedStudent.call_recording_url || ''}
-                                            placeholder="Call recording URL will appear here after 3CX integration"
-                                            disabled
-                                            className="bg-background/50 cursor-not-allowed"
-                                            data-testid="call-recording-url"
-                                        />
-                                        <p className="text-xs text-muted-foreground mt-2">
-                                            This field will automatically populate with call recordings once 3CX integration is configured.
-                                        </p>
+                                        
+                                        {/* Call Recording Link */}
+                                        {selectedStudent.call_recording_url && (
+                                            <div className="mb-3">
+                                                <Label className="text-xs text-muted-foreground">Latest Recording</Label>
+                                                <a 
+                                                    href={selectedStudent.call_recording_url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-2 text-sm text-primary hover:underline mt-1"
+                                                >
+                                                    🎵 Play Recording
+                                                </a>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Call History */}
+                                        <CallHistory contactId={selectedStudent.id} />
                                     </div>
                                 </CardContent>
                             </Card>
