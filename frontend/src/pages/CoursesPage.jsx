@@ -24,6 +24,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
+import ImportButton from '@/components/ImportButton';
 
 const CATEGORIES = [
     { id: 'basic', label: 'Basic' },
@@ -147,9 +148,12 @@ const CoursesPage = () => {
                     <p className="text-muted-foreground">Manage courses and pricing</p>
                 </div>
                 {canEdit && (
-                    <Button onClick={() => { resetForm(); setShowModal(true); }}>
-                        <Plus className="h-4 w-4 mr-2" />Add Course
-                    </Button>
+                    <div className="flex gap-2">
+                        <ImportButton type="courses" onSuccess={fetchCourses} />
+                        <Button onClick={() => { resetForm(); setShowModal(true); }}>
+                            <Plus className="h-4 w-4 mr-2" />Add Course
+                        </Button>
+                    </div>
                 )}
             </div>
 
