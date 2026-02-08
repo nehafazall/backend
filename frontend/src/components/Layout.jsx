@@ -25,6 +25,7 @@ import {
     LogOut,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Bell,
     Moon,
     Sun,
@@ -38,106 +39,147 @@ import {
     Shield,
     Inbox,
     UserCheck,
+    Briefcase,
+    Lock,
 } from 'lucide-react';
 
-const menuItems = [
+const navSections = [
     {
-        title: 'Dashboard',
-        icon: LayoutDashboard,
-        path: '/dashboard',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'],
-    },
-    {
-        title: "Today's Follow-ups",
-        icon: Bell,
-        path: '/followups',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master'],
-    },
-    {
-        title: 'Sales CRM',
+        id: 'sales',
+        title: 'SALES',
         icon: Phone,
-        path: '/sales',
         roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
+        items: [
+            { title: 'Sales CRM', icon: Phone, path: '/sales', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'] },
+            { title: 'Sales Dashboard', icon: TrendingUp, path: '/sales/dashboard', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'] },
+            { title: "Today's Follow-ups", icon: Bell, path: '/followups', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'] },
+        ],
     },
     {
-        title: 'My Sales Dashboard',
-        icon: TrendingUp,
-        path: '/sales/dashboard',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'],
-    },
-    {
-        title: 'Leads Pool',
-        icon: Inbox,
-        path: '/leads/pool',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'],
-    },
-    {
-        title: 'Customer Master',
-        icon: UserCheck,
-        path: '/customers',
-        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'],
-    },
-    {
-        title: 'Customer Service',
-        icon: Users,
-        path: '/cs',
-        roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
-    },
-    {
-        title: 'CS Dashboard',
+        id: 'customer_service',
+        title: 'CUSTOMER SERVICE',
         icon: Headphones,
-        path: '/cs/dashboard',
         roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
+        items: [
+            { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard', roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'] },
+            { title: 'Customer Service', icon: Users, path: '/cs', roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'] },
+        ],
     },
     {
-        title: 'Mentor CRM',
+        id: 'academics',
+        title: 'ACADEMICS',
         icon: GraduationCap,
-        path: '/mentor',
         roles: ['super_admin', 'admin', 'mentor', 'academic_master'],
+        items: [
+            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master'] },
+            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master'] },
+        ],
     },
     {
-        title: 'Finance',
+        id: 'operations',
+        title: 'OPERATIONS',
+        icon: Briefcase,
+        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations'],
+        items: [
+            { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'] },
+            { title: 'Leads Pool', icon: Inbox, path: '/leads/pool', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
+            { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
+            { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
+            { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
+        ],
+    },
+    {
+        id: 'security',
+        title: 'SECURITY',
+        icon: Lock,
+        roles: ['super_admin', 'admin', 'hr'],
+        items: [
+            { title: 'Access Control', icon: Shield, path: '/access-control', roles: ['super_admin'] },
+            { title: 'User Management', icon: UserCircle, path: '/users', roles: ['super_admin', 'admin', 'hr'] },
+        ],
+    },
+    {
+        id: 'finance',
+        title: 'FINANCE',
         icon: DollarSign,
-        path: '/finance',
         roles: ['super_admin', 'admin', 'finance'],
-    },
-    {
-        title: 'User Management',
-        icon: UserCircle,
-        path: '/users',
-        roles: ['super_admin', 'admin', 'hr'],
-    },
-    {
-        title: 'Departments',
-        icon: Building2,
-        path: '/departments',
-        roles: ['super_admin', 'admin', 'hr'],
-    },
-    {
-        title: 'Courses',
-        icon: BookOpen,
-        path: '/courses',
-        roles: ['super_admin', 'admin'],
-    },
-    {
-        title: 'Commission Engine',
-        icon: Calculator,
-        path: '/commissions',
-        roles: ['super_admin', 'admin', 'finance'],
-    },
-    {
-        title: 'Access Control',
-        icon: Shield,
-        path: '/access-control',
-        roles: ['super_admin'],
-    },
-    {
-        title: 'Settings',
-        icon: Settings,
-        path: '/settings',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'finance', 'hr', 'marketing', 'operations', 'quality_control'],
+        items: [
+            { title: 'Finance', icon: DollarSign, path: '/finance', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Commission Engine', icon: Calculator, path: '/commissions', roles: ['super_admin', 'admin', 'finance'] },
+        ],
     },
 ];
+
+function NavSection({ section, isCollapsed, userRole, currentPath, onNavigate }) {
+    const [isOpen, setIsOpen] = useState(true);
+    
+    const hasAccess = section.roles.includes(userRole);
+    if (!hasAccess) return null;
+    
+    const visibleItems = section.items.filter(item => item.roles.includes(userRole));
+    if (visibleItems.length === 0) return null;
+
+    const SectionIcon = section.icon;
+    const hasActiveItem = visibleItems.some(item => currentPath.startsWith(item.path));
+
+    if (isCollapsed) {
+        return (
+            <div className="mb-2">
+                {visibleItems.map((item) => {
+                    const isActive = currentPath.startsWith(item.path);
+                    const ItemIcon = item.icon;
+                    return (
+                        <button
+                            key={item.path}
+                            onClick={() => onNavigate(item.path)}
+                            className={`sidebar-item w-full justify-center ${isActive ? 'active' : ''}`}
+                            title={item.title}
+                        >
+                            <ItemIcon className="h-5 w-5" />
+                        </button>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    return (
+        <div className="mb-2">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between px-4 py-2 text-xs font-semibold tracking-wider transition-colors ${
+                    hasActiveItem ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+            >
+                <div className="flex items-center gap-2">
+                    <SectionIcon className="h-4 w-4" />
+                    <span>{section.title}</span>
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+            </button>
+            
+            {isOpen && (
+                <div className="mt-1 space-y-1">
+                    {visibleItems.map((item) => {
+                        const isActive = currentPath.startsWith(item.path);
+                        const ItemIcon = item.icon;
+                        return (
+                            <button
+                                key={item.path}
+                                onClick={() => onNavigate(item.path)}
+                                className={`sidebar-item w-full pl-10 ${isActive ? 'active' : ''}`}
+                                data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
+                            >
+                                <ItemIcon className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate text-sm">{item.title}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
 
 const Layout = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -150,7 +192,6 @@ const Layout = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Fetch notifications
     React.useEffect(() => {
         const fetchNotifications = async () => {
             try {
@@ -163,8 +204,7 @@ const Layout = () => {
         };
         
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Refresh every 30s
-        
+        const interval = setInterval(fetchNotifications, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -184,9 +224,10 @@ const Layout = () => {
         }
     };
 
-    const filteredMenuItems = menuItems.filter(item => 
-        item.roles.includes(user?.role)
-    );
+    const handleNavigate = (path) => {
+        navigate(path);
+        setMobileMenuOpen(false);
+    };
 
     const getRoleBadgeColor = (role) => {
         const colors = {
@@ -210,7 +251,6 @@ const Layout = () => {
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Mobile Menu Button */}
             <button
                 className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-800 text-white"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -219,13 +259,11 @@ const Layout = () => {
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
 
-            {/* Sidebar */}
             <aside 
                 className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} 
                     ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
                 data-testid="sidebar"
             >
-                {/* Logo */}
                 <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
                     {!sidebarCollapsed ? (
                         <img 
@@ -240,32 +278,32 @@ const Layout = () => {
                     )}
                 </div>
 
-                {/* Navigation */}
                 <ScrollArea className="flex-1 py-4">
-                    <nav className="space-y-1">
-                        {filteredMenuItems.map((item) => {
-                            const isActive = location.pathname.startsWith(item.path);
-                            return (
-                                <button
-                                    key={item.path}
-                                    onClick={() => {
-                                        navigate(item.path);
-                                        setMobileMenuOpen(false);
-                                    }}
-                                    className={`sidebar-item w-full ${isActive ? 'active' : ''}`}
-                                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
-                                >
-                                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                                    {!sidebarCollapsed && (
-                                        <span className="truncate">{item.title}</span>
-                                    )}
-                                </button>
-                            );
-                        })}
+                    <nav>
+                        {navSections.map((section) => (
+                            <NavSection
+                                key={section.id}
+                                section={section}
+                                isCollapsed={sidebarCollapsed}
+                                userRole={user?.role}
+                                currentPath={location.pathname}
+                                onNavigate={handleNavigate}
+                            />
+                        ))}
+                        
+                        <div className="border-t border-slate-800 mt-4 pt-4 px-2">
+                            <button
+                                onClick={() => handleNavigate('/settings')}
+                                className={`sidebar-item w-full ${location.pathname === '/settings' ? 'active' : ''}`}
+                                data-testid="nav-settings"
+                            >
+                                <Settings className="h-5 w-5 flex-shrink-0" />
+                                {!sidebarCollapsed && <span className="truncate">Settings</span>}
+                            </button>
+                        </div>
                     </nav>
                 </ScrollArea>
 
-                {/* Collapse Toggle */}
                 <button
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                     className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-slate-700 border border-slate-600 items-center justify-center text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
@@ -274,7 +312,6 @@ const Layout = () => {
                     {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </button>
 
-                {/* User Info */}
                 <div className="border-t border-slate-800 p-4">
                     {!sidebarCollapsed ? (
                         <div className="flex items-center gap-3">
@@ -296,31 +333,21 @@ const Layout = () => {
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
-                {/* Top Bar */}
                 <header className="h-16 bg-card border-b border-border px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40">
-                    <div className="lg:hidden w-8" /> {/* Spacer for mobile */}
+                    <div className="lg:hidden w-8" />
                     
                     <h1 className="text-lg font-semibold text-foreground hidden lg:block">
                         CLT Academy ERP
                     </h1>
 
                     <div className="flex items-center gap-2">
-                        {/* Environment Switcher */}
                         <EnvironmentSwitcher />
                         
-                        {/* Theme Toggle */}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={toggleTheme}
-                            data-testid="theme-toggle"
-                        >
+                        <Button variant="ghost" size="icon" onClick={toggleTheme} data-testid="theme-toggle">
                             {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                         </Button>
 
-                        {/* Notifications */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="relative" data-testid="notifications-btn">
@@ -336,10 +363,7 @@ const Layout = () => {
                                 <DropdownMenuLabel className="flex items-center justify-between">
                                     <span>Notifications</span>
                                     {unreadCount > 0 && (
-                                        <button 
-                                            onClick={handleMarkAllRead}
-                                            className="text-xs text-blue-500 hover:underline"
-                                        >
+                                        <button onClick={handleMarkAllRead} className="text-xs text-blue-500 hover:underline">
                                             Mark all read
                                         </button>
                                     )}
@@ -347,9 +371,7 @@ const Layout = () => {
                                 <DropdownMenuSeparator />
                                 <ScrollArea className="h-64">
                                     {notifications.length === 0 ? (
-                                        <div className="p-4 text-center text-muted-foreground text-sm">
-                                            No notifications
-                                        </div>
+                                        <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div>
                                     ) : (
                                         notifications.slice(0, 10).map((notif) => (
                                             <DropdownMenuItem 
@@ -366,7 +388,6 @@ const Layout = () => {
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        {/* User Menu */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" data-testid="user-menu-btn">
@@ -396,16 +417,14 @@ const Layout = () => {
                     </div>
                 </header>
 
-                {/* Page Content */}
                 <div className="p-4 lg:p-6">
                     <Outlet />
                 </div>
             </main>
 
-            {/* Mobile Overlay */}
             {mobileMenuOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                    className="lg:hidden fixed inset-0 bg-black/50 z-30"
                     onClick={() => setMobileMenuOpen(false)}
                 />
             )}
