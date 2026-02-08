@@ -44,6 +44,7 @@ import {
     User,
     Clock,
     Bell,
+    PhoneCall,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
