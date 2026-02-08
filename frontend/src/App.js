@@ -83,7 +83,8 @@ function AppRoutes() {
                     <Layout />
                 </ProtectedRoute>
             }>
-                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route index element={<Navigate to="/home" replace />} />
+                <Route path="home" element={<div />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 
                 {/* Today's Follow-ups */}
