@@ -7,7 +7,9 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 
 ### Redesigned Login Page
 - **Split Layout**: Logo on left, login form on right (desktop)
-- **CLT Logo**: Large logo with "CLT Academy" + "Enterprise Resource Planning" text
+- **CLT Logo**: Large inline SVG logo with transparent background
+  - Dark mode: White text, cyan accents
+  - Light mode: Black text, red accents
 - **Trading Chart Background**: SVG trading chart graphics at 15-20% opacity
 - **System Status**: "System Online" indicator with green pulse
 - **Login Form**: Glass-morphism card with email, password, eye toggle
@@ -15,17 +17,27 @@ Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Custo
 - **Mobile Responsive**: Logo moves to top on mobile devices
 
 ### Logo Animation After Login
-- **Animated Rings**: Expanding circles animation
-- **Logo Reveal**: Fade-in with glow effect
-- **Loading Bar**: Progress indicator
-- **Particle Effects**: Floating particles in background
-- **Duration**: ~2.4 seconds before redirecting to home
+- **Animated Rings**: Three expanding circular borders
+- **Logo Reveal**: Scale and fade-in animation
+- **Text Animation**: "CLT Academy" and "Loading your workspace..." with staggered delays
+- **Loading Bar**: Progress indicator fills over 800ms
+- **Floating Particles**: 15 animated particles in background
+- **Duration**: ~2.8 seconds before redirecting to home
 
 ### Enhanced Home Page
-- **CLT Logo Centered**: Large logo at top of page
+- **CLT Logo Centered**: Large SVG logo (h-40 to h-56 responsive)
+  - Transparent background, adapts to theme
 - **Trading Chart Background**: SVG graphics at 20% opacity
 - **Welcome Message**: "Welcome, {firstName}!" personalized greeting
 - **Module Icons**: 6 colored icons in grid layout
+
+### Theme-Aware CLT Logo Component
+New component: `/app/frontend/src/components/CLTLogo.jsx`
+- Inline SVG for full control
+- `isDark` prop controls color scheme
+- Dark mode: White (#ffffff) main, Cyan (#00ffff) accents
+- Light mode: Black (#000000) main, Red (#ff0000) accents
+- Transparent background always
 
 ## Previous Features (Launcher Navigation)
 
@@ -254,4 +266,4 @@ Each template includes:
 
 ## Test Reports
 - Latest: `/app/test_reports/iteration_7.json`
-- Backend Tests: `/app/backend/tests/test_new_features.py`
+- CLT Logo Component: `/app/frontend/src/components/CLTLogo.jsx`
