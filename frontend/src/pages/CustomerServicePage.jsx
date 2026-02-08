@@ -25,6 +25,14 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
+import ReminderModal from '@/components/ReminderModal';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
     Search,
     Phone,
@@ -34,6 +42,8 @@ import {
     CheckCircle,
     Clock,
     TrendingUp,
+    MoreVertical,
+    Bell,
 } from 'lucide-react';
 
 const CS_STAGES = [
@@ -46,14 +56,8 @@ const CS_STAGES = [
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
-const StudentCard = ({ student, onView }) => {
-    const formatDate = (dateStr) => {
-        if (!dateStr) return 'N/A';
-        return new Date(dateStr).toLocaleDateString('en-AE', {
-            day: 'numeric',
-            month: 'short',
-        });
-    };
+const StudentCard = ({ student, onView, onSetReminder }) => {
+    const hasReminder = student.reminder_date && !student.reminder_completed;
 
     return (
         <div
@@ -75,6 +79,23 @@ const StudentCard = ({ student, onView }) => {
                         )}
                     </div>
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(student); }}>
+                            View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSetReminder(student); }}>
+                            <Bell className="h-4 w-4 mr-2" />
+                            Set Reminder
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
             
             <div className="space-y-2 text-sm">
@@ -98,6 +119,12 @@ const StudentCard = ({ student, onView }) => {
                     {student.upgrade_eligible && (
                         <Badge className="bg-yellow-500 text-white text-xs">Upgrade Ready</Badge>
                     )}
+                    {hasReminder && (
+                        <Badge className="bg-amber-500 text-white text-xs">
+                            <Bell className="h-3 w-3 mr-1" />
+                            {student.reminder_time || 'Set'}
+                        </Badge>
+                    )}
                 </div>
                 <span className="text-xs text-muted-foreground">
                     {student.classes_attended} classes
@@ -107,7 +134,7 @@ const StudentCard = ({ student, onView }) => {
     );
 };
 
-const KanbanColumn = ({ stage, students, onView }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
     const stageStudents = students.filter(s => s.stage === stage.id);
     const StageIcon = stage.icon;
     
@@ -128,6 +155,7 @@ const KanbanColumn = ({ stage, students, onView }) => {
                             key={student.id}
                             student={student}
                             onView={onView}
+                            onSetReminder={onSetReminder}
                         />
                     ))}
                     {stageStudents.length === 0 && (
@@ -147,6 +175,8 @@ const CustomerServicePage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false);
+    const [reminderStudent, setReminderStudent] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [updateData, setUpdateData] = useState({
         stage: '',
@@ -186,6 +216,17 @@ const CustomerServicePage = () => {
             classes_attended: student.classes_attended || 0,
         });
         setShowDetailModal(true);
+    };
+
+    const handleSetReminder = (student) => {
+        setReminderStudent(student);
+        setShowReminderModal(true);
+    };
+
+    const handleReminderSuccess = () => {
+        setShowReminderModal(false);
+        setReminderStudent(null);
+        fetchStudents();
     };
 
     const handleUpdateStudent = async () => {
@@ -250,6 +291,7 @@ const CustomerServicePage = () => {
                             stage={stage}
                             students={students}
                             onView={handleViewStudent}
+                            onSetReminder={handleSetReminder}
                         />
                     ))}
                 </div>
@@ -404,6 +446,16 @@ const CustomerServicePage = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Reminder Modal */}
+            <ReminderModal
+                open={showReminderModal}
+                onClose={() => { setShowReminderModal(false); setReminderStudent(null); }}
+                entityType="student"
+                entityId={reminderStudent?.id}
+                entityName={reminderStudent?.full_name}
+                onSuccess={handleReminderSuccess}
+            />
         </div>
     );
 };
