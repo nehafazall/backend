@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/api';
 import { toast } from 'sonner';
@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff } from 'lucide-react';
+
+const CLT_LOGO_URL = "https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg";
 
 function LoginPage() {
     const [email, setEmail] = useState('');
@@ -28,6 +30,7 @@ function LoginPage() {
         
         try {
             await login(email, password);
+            // Show animation after successful login
             setShowAnimation(true);
         } catch (error) {
             const message = error.response?.data?.detail || 'Login failed. Please check your credentials.';
@@ -36,26 +39,20 @@ function LoginPage() {
         }
     }
 
-    function handleAnimationEnd() {
+    function handleAnimationComplete() {
         toast.success('Welcome to CLT Academy ERP');
         navigate('/home');
     }
 
+    // Show animation screen after successful login
     if (showAnimation) {
-        return <LogoAnimation onComplete={handleAnimationEnd} />;
+        return <LogoAnimation onComplete={handleAnimationComplete} />;
     }
 
     return (
         <div className="min-h-screen flex bg-slate-900 relative overflow-hidden">
-            {/* Trading Chart Background - Full page */}
+            {/* Trading Chart Background */}
             <div className="absolute inset-0">
-                <div 
-                    className="absolute inset-0 bg-cover bg-center opacity-15"
-                    style={{ 
-                        backgroundImage: `url('https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1920&q=80')`
-                    }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900/95 to-blue-900/30" />
                 <TradingChartSVG />
             </div>
 
@@ -63,9 +60,10 @@ function LoginPage() {
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
                 <div className="text-center">
                     <img 
-                        src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
+                        src={CLT_LOGO_URL}
                         alt="CLT Academy"
-                        className="h-32 w-auto mx-auto mb-8 drop-shadow-2xl"
+                        className="h-40 w-auto mx-auto mb-8 drop-shadow-2xl"
+                        style={{ filter: 'brightness(0) invert(1)' }}
                         data-testid="login-logo"
                     />
                     <h1 className="text-4xl font-bold text-white mb-4">CLT Academy</h1>
@@ -83,9 +81,10 @@ function LoginPage() {
                     {/* Mobile Logo */}
                     <div className="lg:hidden text-center mb-8">
                         <img 
-                            src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
+                            src={CLT_LOGO_URL}
                             alt="CLT Academy"
-                            className="h-16 w-auto mx-auto mb-4"
+                            className="h-20 w-auto mx-auto mb-4"
+                            style={{ filter: 'brightness(0) invert(1)' }}
                         />
                     </div>
 
@@ -171,14 +170,13 @@ function LoginPage() {
 
 function TradingChartSVG() {
     return (
-        <svg className="absolute inset-0 w-full h-full opacity-10" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
+        <svg className="absolute inset-0 w-full h-full opacity-15" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
             <defs>
                 <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
                     <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
                 </linearGradient>
             </defs>
-            {/* Grid lines */}
             <g stroke="#334155" strokeWidth="0.5" opacity="0.3">
                 <line x1="0" y1="100" x2="1000" y2="100" />
                 <line x1="0" y1="200" x2="1000" y2="200" />
@@ -190,26 +188,31 @@ function TradingChartSVG() {
                 <line x1="600" y1="0" x2="600" y2="600" />
                 <line x1="800" y1="0" x2="800" y2="600" />
             </g>
-            {/* Candlestick chart simulation */}
-            <g className="animate-pulse">
-                <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80" fill="none" stroke="#3b82f6" strokeWidth="2" />
-                <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80 L950,600 L50,600 Z" fill="url(#chartGradient)" />
-            </g>
-            {/* Second line */}
+            <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80" fill="none" stroke="#3b82f6" strokeWidth="2" />
+            <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80 L950,600 L50,600 Z" fill="url(#chartGradient)" />
             <path d="M50,400 L100,380 L150,420 L200,390 L250,350 L300,380 L350,320 L400,350 L450,280 L500,310 L550,260 L600,290 L650,240 L700,270 L750,220 L800,250 L850,200 L900,230 L950,180" fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.6" />
         </svg>
     );
 }
 
 function LogoAnimation({ onComplete }) {
-    const [phase, setPhase] = useState(1);
+    const [phase, setPhase] = useState(0);
 
-    React.useEffect(() => {
-        const timer1 = setTimeout(() => setPhase(2), 800);
-        const timer2 = setTimeout(() => setPhase(3), 1600);
-        const timer3 = setTimeout(() => onComplete(), 2400);
+    useEffect(() => {
+        // Phase 0: Initial (logo small, rings visible)
+        // Phase 1: Logo grows, rings expand
+        // Phase 2: Logo at full size, text appears
+        // Phase 3: Fade out and complete
+        
+        const timer0 = setTimeout(() => setPhase(1), 100);
+        const timer1 = setTimeout(() => setPhase(2), 1000);
+        const timer2 = setTimeout(() => setPhase(3), 2000);
+        const timer3 = setTimeout(() => {
+            if (onComplete) onComplete();
+        }, 2800);
         
         return () => {
+            clearTimeout(timer0);
             clearTimeout(timer1);
             clearTimeout(timer2);
             clearTimeout(timer3);
@@ -217,51 +220,110 @@ function LogoAnimation({ onComplete }) {
     }, [onComplete]);
 
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center relative overflow-hidden">
+        <div className="fixed inset-0 bg-slate-900 flex items-center justify-center z-[9999]" data-testid="logo-animation">
             {/* Trading chart background */}
             <div className="absolute inset-0 opacity-15">
                 <TradingChartSVG />
             </div>
             
             {/* Animated rings */}
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`absolute w-64 h-64 rounded-full border border-blue-500/30 transition-all duration-700 ${phase >= 2 ? 'scale-150 opacity-0' : 'scale-100 opacity-100'}`} />
-                <div className={`absolute w-48 h-48 rounded-full border border-blue-500/50 transition-all duration-500 delay-100 ${phase >= 2 ? 'scale-150 opacity-0' : 'scale-100 opacity-100'}`} />
-                <div className={`absolute w-32 h-32 rounded-full border border-blue-500/70 transition-all duration-300 delay-200 ${phase >= 2 ? 'scale-150 opacity-0' : 'scale-100 opacity-100'}`} />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div 
+                    className="absolute rounded-full border-2 border-blue-500/30 transition-all ease-out"
+                    style={{
+                        width: phase >= 1 ? '400px' : '200px',
+                        height: phase >= 1 ? '400px' : '200px',
+                        opacity: phase >= 3 ? 0 : phase >= 1 ? 0.3 : 0.5,
+                        transitionDuration: '800ms'
+                    }}
+                />
+                <div 
+                    className="absolute rounded-full border-2 border-blue-500/50 transition-all ease-out"
+                    style={{
+                        width: phase >= 1 ? '300px' : '150px',
+                        height: phase >= 1 ? '300px' : '150px',
+                        opacity: phase >= 3 ? 0 : phase >= 1 ? 0.4 : 0.6,
+                        transitionDuration: '600ms',
+                        transitionDelay: '100ms'
+                    }}
+                />
+                <div 
+                    className="absolute rounded-full border-2 border-blue-500/70 transition-all ease-out"
+                    style={{
+                        width: phase >= 1 ? '200px' : '100px',
+                        height: phase >= 1 ? '200px' : '100px',
+                        opacity: phase >= 3 ? 0 : phase >= 1 ? 0.5 : 0.7,
+                        transitionDuration: '400ms',
+                        transitionDelay: '200ms'
+                    }}
+                />
             </div>
 
-            {/* Logo */}
-            <div className={`relative z-10 text-center transition-all duration-700 ${phase === 1 ? 'scale-75 opacity-0' : phase === 2 ? 'scale-100 opacity-100' : 'scale-110 opacity-0'}`}>
+            {/* Logo and text */}
+            <div 
+                className="relative z-10 text-center transition-all ease-out"
+                style={{
+                    transform: phase === 0 ? 'scale(0.5)' : phase >= 3 ? 'scale(1.1)' : 'scale(1)',
+                    opacity: phase === 0 ? 0 : phase >= 3 ? 0 : 1,
+                    transitionDuration: phase >= 3 ? '500ms' : '700ms'
+                }}
+            >
                 <img 
-                    src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
+                    src={CLT_LOGO_URL}
                     alt="CLT Academy"
-                    className="h-24 w-auto mx-auto mb-6 drop-shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+                    className="h-32 w-auto mx-auto mb-6"
+                    style={{ 
+                        filter: 'brightness(0) invert(1) drop-shadow(0 0 30px rgba(59,130,246,0.5))'
+                    }}
                 />
-                <h1 className={`text-3xl font-bold text-white transition-all duration-500 delay-200 ${phase >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <h1 
+                    className="text-4xl font-bold text-white transition-all ease-out"
+                    style={{
+                        opacity: phase >= 2 ? 1 : 0,
+                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(10px)',
+                        transitionDuration: '500ms'
+                    }}
+                >
                     CLT Academy
                 </h1>
-                <p className={`text-slate-400 mt-2 transition-all duration-500 delay-300 ${phase >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <p 
+                    className="text-slate-400 mt-2 transition-all ease-out"
+                    style={{
+                        opacity: phase >= 2 ? 1 : 0,
+                        transform: phase >= 2 ? 'translateY(0)' : 'translateY(10px)',
+                        transitionDuration: '500ms',
+                        transitionDelay: '100ms'
+                    }}
+                >
                     Loading your workspace...
                 </p>
                 
                 {/* Loading bar */}
-                <div className={`mt-8 w-48 h-1 bg-slate-700 rounded-full overflow-hidden mx-auto transition-opacity duration-300 ${phase >= 2 ? 'opacity-100' : 'opacity-0'}`}>
-                    <div className={`h-full bg-blue-500 rounded-full transition-all duration-1000 ${phase >= 2 ? 'w-full' : 'w-0'}`} />
+                <div 
+                    className="mt-8 w-48 h-1 bg-slate-700 rounded-full overflow-hidden mx-auto transition-opacity"
+                    style={{ opacity: phase >= 2 ? 1 : 0 }}
+                >
+                    <div 
+                        className="h-full bg-blue-500 rounded-full transition-all ease-out"
+                        style={{
+                            width: phase >= 2 ? '100%' : '0%',
+                            transitionDuration: '800ms'
+                        }}
+                    />
                 </div>
             </div>
 
-            {/* Particle effects */}
-            <div className="absolute inset-0 pointer-events-none">
-                {[...Array(20)].map((_, i) => (
+            {/* Floating particles */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map((i) => (
                     <div
                         key={i}
-                        className="absolute w-1 h-1 bg-blue-500 rounded-full animate-float"
+                        className="absolute w-1 h-1 bg-blue-400 rounded-full animate-float"
                         style={{
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            animationDelay: `${Math.random() * 2}s`,
-                            animationDuration: `${3 + Math.random() * 2}s`,
-                            opacity: 0.3 + Math.random() * 0.3
+                            left: `${10 + (i * 6)}%`,
+                            top: `${15 + ((i * 17) % 70)}%`,
+                            animationDelay: `${i * 0.2}s`,
+                            opacity: 0.4
                         }}
                     />
                 ))}
