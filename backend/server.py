@@ -3941,133 +3941,125 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
 async def get_3cx_crm_template():
     """
     Returns the 3CX CRM Integration Template XML
-    Download this and upload to your 3CX server at:
-    https://clt-academy.3cx.ae:5001/#/office/integrations/crm
+    Download this and upload to your 3CX server
     """
-    # Get the backend URL - use request host or environment variable
-    # For production, this should be set to your actual deployed URL
+    # Get the backend URL
     backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://academy-erp.preview.emergentagent.com'))
     
-    # 3CX v18+ compatible XML template format
+    # 3CX v18/v20 compatible XML template - following exact schema from 3CX docs
     template = f'''<?xml version="1.0" encoding="utf-8"?>
 <Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <CrmName>CLT Academy ERP</CrmName>
-  <Version>1.0</Version>
-  <IconUrl>https://www.clt-academy.com/favicon.ico</IconUrl>
-  <Number>
-    <AreaCode>0</AreaCode>
-    <CountryCode>971</CountryCode>
-    <NoDigits>10</NoDigits>
-  </Number>
-  <Connection Url="{backend_url}" />
+  <Version>1</Version>
+  <Country>*</Country>
+  <SupportsEmojis>true</SupportsEmojis>
+  
+  <Number Prefix="AsIs" MaxLength="[MaxLength]" />
+  
+  <Connection MaxConcurrentRequests="2" />
+  
+  <Parameters>
+    <Parameter Name="ApiUrl" Type="String" Title="API URL:" Default="{backend_url}" />
+  </Parameters>
+  
   <Authentication Type="No" />
   
   <Scenarios>
-    <Scenario Id="LookupByPhoneNumber" Type="REST">
-      <Request Url="{backend_url}/api/3cx/contact-lookup?phone_number=[Number]" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="UrlEncoded" />
-      <Response Type="JSON">
-        <ContactUrl>[contact_url]</ContactUrl>
-        <FirstName>[first_name]</FirstName>
-        <LastName>[last_name]</LastName>
-        <Email>[email]</Email>
-        <PhoneMobile>[phone_mobile]</PhoneMobile>
-        <PhoneBusiness>[phone_business]</PhoneBusiness>
-        <CompanyName>[company_name]</CompanyName>
-        <EntityId>[contact_id]</EntityId>
-        <EntityType>[contact_type]</EntityType>
-      </Response>
+    <!-- Contact Lookup by Phone Number (empty Id = default lookup) -->
+    <Scenario Type="REST">
+      <Request Url="[ApiUrl]/api/3cx/contact-lookup?phone_number=[Number]" RequestType="Get" ResponseType="Json" />
       <Rules>
-        <Rule Type="Any">found=true</Rule>
+        <Rule Type="Any">found</Rule>
       </Rules>
+      <Variables>
+        <Variable Name="ContactID" Path="contact_id" />
+        <Variable Name="FirstName" Path="first_name" />
+        <Variable Name="LastName" Path="last_name" />
+        <Variable Name="Email" Path="email" />
+        <Variable Name="PhoneMobile" Path="phone_mobile" />
+        <Variable Name="PhoneBusiness" Path="phone_business" />
+        <Variable Name="CompanyName" Path="company_name" />
+        <Variable Name="ContactUrl" Path="contact_url" />
+        <Variable Name="EntityType" Path="contact_type" />
+      </Variables>
+      <Outputs>
+        <Output Type="ContactUrl" Value="[ContactUrl]" />
+        <Output Type="FirstName" Value="[FirstName]" />
+        <Output Type="LastName" Value="[LastName]" />
+        <Output Type="Email" Value="[Email]" />
+        <Output Type="PhoneMobile" Value="[PhoneMobile]" />
+        <Output Type="PhoneBusiness" Value="[PhoneBusiness]" />
+        <Output Type="CompanyName" Value="[CompanyName]" />
+        <Output Type="EntityId" Value="[ContactID]" />
+        <Output Type="EntityType" Value="[EntityType]" />
+      </Outputs>
     </Scenario>
 
-    <Scenario Id="LookupByEmail" Type="REST">
-      <Request Url="{backend_url}/api/3cx/contact-search?search_text=[Email]" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="UrlEncoded" />
-      <Response Type="JSON">
-        <ContactUrl>contacts[0].contact_url</ContactUrl>
-        <FirstName>contacts[0].first_name</FirstName>
-        <LastName>contacts[0].last_name</LastName>
-        <Email>contacts[0].email</Email>
-        <PhoneMobile>contacts[0].phone_mobile</PhoneMobile>
-        <CompanyName>contacts[0].company_name</CompanyName>
-        <EntityId>contacts[0].contact_id</EntityId>
-      </Response>
-      <Rules>
-        <Rule Type="Any">total&gt;0</Rule>
-      </Rules>
-    </Scenario>
-
+    <!-- Search Contacts -->
     <Scenario Id="SearchContacts" Type="REST">
-      <Request Url="{backend_url}/api/3cx/contact-search?search_text=[SearchText]&amp;limit=20" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="UrlEncoded" />
-      <Response Type="JSON">
-        <ContactList ListPath="contacts">
-          <ContactUrl>contact_url</ContactUrl>
-          <FirstName>first_name</FirstName>
-          <LastName>last_name</LastName>
-          <Email>email</Email>
-          <PhoneMobile>phone_mobile</PhoneMobile>
-          <CompanyName>company_name</CompanyName>
-          <EntityId>contact_id</EntityId>
-        </ContactList>
-      </Response>
+      <Request Url="[ApiUrl]/api/3cx/contact-search?search_text=[SearchText]&amp;limit=25" RequestType="Get" ResponseType="Json" />
       <Rules>
-        <Rule Type="Any">total&gt;0</Rule>
+        <Rule Type="Any">contacts</Rule>
       </Rules>
+      <Variables>
+        <Variable Name="ContactID" Path="contacts.contact_id" />
+        <Variable Name="FirstName" Path="contacts.first_name" />
+        <Variable Name="LastName" Path="contacts.last_name" />
+        <Variable Name="Email" Path="contacts.email" />
+        <Variable Name="PhoneMobile" Path="contacts.phone_mobile" />
+        <Variable Name="CompanyName" Path="contacts.company_name" />
+        <Variable Name="ContactUrl" Path="contacts.contact_url" />
+      </Variables>
+      <Outputs>
+        <Output Type="ContactUrl" Value="[ContactUrl]" />
+        <Output Type="FirstName" Value="[FirstName]" />
+        <Output Type="LastName" Value="[LastName]" />
+        <Output Type="Email" Value="[Email]" />
+        <Output Type="PhoneMobile" Value="[PhoneMobile]" />
+        <Output Type="CompanyName" Value="[CompanyName]" />
+        <Output Type="EntityId" Value="[ContactID]" />
+      </Outputs>
     </Scenario>
 
-    <Scenario Id="GetAllContacts" Type="REST">
-      <Request Url="{backend_url}/api/3cx/contact-search?search_text=&amp;limit=100" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="UrlEncoded" />
-      <Response Type="JSON">
-        <ContactList ListPath="contacts">
-          <ContactUrl>contact_url</ContactUrl>
-          <FirstName>first_name</FirstName>
-          <LastName>last_name</LastName>
-          <Email>email</Email>
-          <PhoneMobile>phone_mobile</PhoneMobile>
-          <CompanyName>company_name</CompanyName>
-          <EntityId>contact_id</EntityId>
-        </ContactList>
-      </Response>
-    </Scenario>
-
+    <!-- Report Call (Call Journaling) -->
     <Scenario Id="ReportCall" Type="REST">
-      <Request Url="{backend_url}/api/3cx/call-journal" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="Json" Method="POST">
-        <PostData>
-{{
-  "call_type": "[CallType]",
-  "phone_number": "[Number]",
-  "call_direction": "[CallDirection]",
-  "name": "[Name]",
-  "contact_id": "[EntityId]",
-  "call_duration": "[Duration]",
-  "timestamp": "[CallStartTimeUTC]",
-  "recording_file": "[RecordingUrl]",
-  "agent_extension": "[Agent]"
-}}
-        </PostData>
+      <Request Url="[ApiUrl]/api/3cx/call-journal" RequestType="Post" RequestContentType="application/json" ResponseType="Json">
+        <PostValues>
+          <Value Key="call_type" Passes="1">[CallType]</Value>
+          <Value Key="phone_number" Passes="1">[Number]</Value>
+          <Value Key="call_direction" Passes="1">[CallDirection]</Value>
+          <Value Key="name" Passes="1">[Name]</Value>
+          <Value Key="contact_id" Passes="1">[EntityId]</Value>
+          <Value Key="call_duration" Passes="1">[Duration]</Value>
+          <Value Key="timestamp" Passes="1">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
+          <Value Key="agent_extension" Passes="1">[Agent]</Value>
+          <Value Key="agent_name" Passes="1">[AgentFirstName] [AgentLastName]</Value>
+        </PostValues>
       </Request>
-      <Response Type="JSON" />
     </Scenario>
 
-    <Scenario Id="CreateContactRecord" Type="REST">
-      <Request Url="{backend_url}/api/3cx/contact-create" MessageType="QueryMessage" RequestType="QueryMessage" RequestEncoding="Json" Method="POST">
-        <PostData>
-{{
-  "phone_number": "[Number]",
-  "first_name": "[FirstName]",
-  "last_name": "[LastName]",
-  "email": "[Email]",
-  "company_name": "[CompanyName]"
-}}
-        </PostData>
+    <!-- Create Contact from Unknown Caller -->
+    <Scenario Id="CreateContactRecordFromClient" Type="REST">
+      <Request Url="[ApiUrl]/api/3cx/contact-create" RequestType="Post" RequestContentType="application/json" ResponseType="Json">
+        <PostValues>
+          <Value Key="phone_number" Passes="1">[Number]</Value>
+          <Value Key="first_name" Passes="1">[FirstName]</Value>
+          <Value Key="last_name" Passes="1">[LastName]</Value>
+          <Value Key="email" Passes="1">[Email]</Value>
+          <Value Key="company_name" Passes="1">[Company]</Value>
+        </PostValues>
       </Request>
-      <Response Type="JSON">
-        <ContactUrl>[contact_url]</ContactUrl>
-        <EntityId>[contact_id]</EntityId>
-      </Response>
       <Rules>
-        <Rule Type="Any">success=true</Rule>
+        <Rule Type="Any">success</Rule>
       </Rules>
+      <Variables>
+        <Variable Name="ContactID" Path="contact_id" />
+        <Variable Name="ContactUrl" Path="contact_url" />
+      </Variables>
+      <Outputs>
+        <Output Type="ContactUrl" Value="[ContactUrl]" />
+        <Output Type="EntityId" Value="[ContactID]" />
+      </Outputs>
     </Scenario>
   </Scenarios>
 </Crm>'''
@@ -4076,11 +4068,12 @@ async def get_3cx_crm_template():
         "template": template,
         "instructions": {
             "step1": "Download this XML file using the 'Download XML' button",
-            "step2": "Go to your 3CX Admin Console > Settings > CRM",
-            "step3": "Click 'Server Side' tab, then click 'Add' button",
-            "step4": "Select 'From File' and upload the downloaded XML file",
-            "step5": "The CRM should appear as 'CLT Academy ERP' in the list",
-            "step6": "Enable the integration and test with a sample call"
+            "step2": "Go to your 3CX Admin Console > Integrations > CRM",
+            "step3": "Click '+ Add Template' button",
+            "step4": "Upload the downloaded XML file",
+            "step5": "Select 'CLT Academy ERP' from the dropdown",
+            "step6": "Enable the integration and click Save",
+            "step7": "Click TEST button to verify connection"
         },
         "backend_url": backend_url,
         "endpoints": {
@@ -4089,8 +4082,7 @@ async def get_3cx_crm_template():
             "contact_create": f"{backend_url}/api/3cx/contact-create",
             "call_journal": f"{backend_url}/api/3cx/call-journal",
             "call_history": f"{backend_url}/api/3cx/call-history/{{contact_id}}",
-            "recent_calls": f"{backend_url}/api/3cx/recent-calls",
-            "click_to_call": f"{backend_url}/api/3cx/click-to_call"
+            "recent_calls": f"{backend_url}/api/3cx/recent-calls"
         }
     }
 
