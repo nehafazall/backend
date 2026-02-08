@@ -19,7 +19,7 @@ function CLTAnimation({ onComplete }) {
     }, [onComplete]);
 
     return (
-        <div className="fixed inset-0 bg-slate-900 flex items-center justify-center z-[9999] overflow-hidden">
+        <div className="fixed inset-0 bg-slate-900 flex items-center justify-center z-[9999] overflow-hidden" data-testid="clt-animation">
             {/* Background grid */}
             <div className="absolute inset-0 opacity-10">
                 <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
