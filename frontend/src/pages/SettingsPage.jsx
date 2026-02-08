@@ -50,11 +50,11 @@ const SettingsPage = () => {
     };
 
     const download3CXTemplate = () => {
-        if (!templateData?.xml_template) {
+        if (!templateData?.template) {
             toast.error('Please fetch the template first');
             return;
         }
-        const blob = new Blob([templateData.xml_template], { type: 'application/xml' });
+        const blob = new Blob([templateData.template], { type: 'application/xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
