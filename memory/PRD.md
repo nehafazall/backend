@@ -292,5 +292,8 @@ Each template includes:
 - Courses: `/app/frontend/src/pages/CoursesPage.jsx`
 
 ## Test Reports
-- Latest: `/app/test_reports/iteration_7.json`
+- Latest: `/app/test_reports/iteration_8.json`
+- Previous: `/app/test_reports/iteration_7.json`
 - CLT Logo Component: `/app/frontend/src/components/CLTLogo.jsx`
+- CLT Animation Component: `/app/frontend/src/components/CLTAnimation.jsx`
+- Welcome Page: `/app/frontend/src/pages/WelcomePage.jsx`
