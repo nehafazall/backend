@@ -46,30 +46,7 @@ Full click-to-call and call logging integration with 3CX phone system.
 - **XML Preview** with full template display
 
 ### Post-Login Animation (Completed - Professional Trading Theme)
-After successful login, users see a vibrant 11-second branded animation:
-- **Route**: `/welcome` - dedicated page for animation
-- **Visual Style**: Modern dark theme with cyan/magenta/green gradient orbs, grid pattern, floating particles
-- **Story Flow**:
-  1. **Student Phase (0-3s)**: Cute yellow character at laptop, thought bubble "📈?", books fly in (📕📗📙📘)
-  2. **Trading Phase (3-4.5s)**: Glassmorphism chart cards appear (BTC/USD +12.4%, ETH/USD -3.2%, Candlestick patterns)
-  3. **Lightbulb Moment (4.5-6s)**: Giant 💡 with rays, "Aha!" and "Got it!" bubbles, stars appear
-  4. **CLT Formation (6-7.5s)**: Neon gradient letters animate in (C=cyan, L=magenta, T=green) with glow effects
-  5. **ACADEMY Text (7.5-8.5s)**: Rainbow gradient text fades in below CLT
-  6. **Celebration (8.5-10s)**: Confetti emojis (🎉🎊💰📈🏆⭐🚀💎🔥✨), falling coins 🪙, "Ready to Trade!" button
-  7. **Rocket Launch (10-11s)**: 🚀 launches to top-right, fade out to home
-- **Interactive**: Mouse tracking affects gradient orb positions
-- **Loading Bar**: Gradient progress with contextual messages
-
-### 3CX Call Recording Placeholder (Completed)
-Added to all CRM detail modals for future integration:
-- **Location**: Sales CRM lead detail, CS student detail, Mentor CRM student detail
-- **UI Elements**:
-  - Phone icon with "3CX Call Recording" label
-  - "Coming Soon" badge
-  - Disabled input field with placeholder text
-  - Explanatory text about future integration
-- **Field**: `call_recording_url` (will be populated when 3CX integration is complete)
-- **Test ID**: `data-testid="call-recording-url"`
+After successful login, users see a 13-second professional branded animation featuring the official CLT Academy logo with trading chart elements.
 
 ## Previous Features (Login & Home Page Redesign)
 
