@@ -23,6 +23,7 @@ import CustomerMasterPage from "@/pages/CustomerMasterPage";
 import FollowupsPage from "@/pages/FollowupsPage";
 import MentorDashboardPage from "@/pages/MentorDashboardPage";
 import SettingsPage from "@/pages/SettingsPage";
+import WelcomePage from "@/pages/WelcomePage";
 import Layout from "@/components/Layout";
 
 // Protected Route Component
