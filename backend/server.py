@@ -4172,6 +4172,175 @@ async def get_call_details(call_id: str, user = Depends(get_current_user)):
         "system": call.get("system")
     }
 
+# ==================== AUDIT LOG ENDPOINTS ====================
+
+@api_router.get("/audit-logs")
+async def get_audit_logs(
+    user_id: Optional[str] = None,
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    user = Depends(get_current_user)
+):
+    """
+    Get audit logs with filters
+    Only super_admin and admin can view audit logs
+    """
+    if user.get("role") not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    
+    if user_id:
+        query["user_id"] = user_id
+    if action:
+        query["action"] = action
+    if entity_type:
+        query["entity_type"] = entity_type
+    if from_date:
+        query["timestamp"] = {"$gte": from_date}
+    if to_date:
+        if "timestamp" in query:
+            query["timestamp"]["$lte"] = to_date
+        else:
+            query["timestamp"] = {"$lte": to_date}
+    if search:
+        query["$or"] = [
+            {"user_name": {"$regex": search, "$options": "i"}},
+            {"user_email": {"$regex": search, "$options": "i"}},
+            {"entity_name": {"$regex": search, "$options": "i"}},
+            {"action": {"$regex": search, "$options": "i"}},
+            {"entity_type": {"$regex": search, "$options": "i"}}
+        ]
+    
+    total = await db.audit_logs.count_documents(query)
+    logs = await db.audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).skip(skip).limit(limit).to_list(length=limit)
+    
+    return {
+        "logs": logs,
+        "total": total,
+        "limit": limit,
+        "skip": skip
+    }
+
+@api_router.get("/audit-logs/summary")
+async def get_audit_summary(
+    days: int = 7,
+    user = Depends(get_current_user)
+):
+    """
+    Get audit log summary statistics
+    """
+    if user.get("role") not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    from_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    
+    # Get counts by action
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": from_date}}},
+        {"$group": {"_id": "$action", "count": {"$sum": 1}}}
+    ]
+    actions_result = await db.audit_logs.aggregate(pipeline).to_list(length=100)
+    actions_summary = {item["_id"]: item["count"] for item in actions_result}
+    
+    # Get counts by entity type
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": from_date}}},
+        {"$group": {"_id": "$entity_type", "count": {"$sum": 1}}}
+    ]
+    entities_result = await db.audit_logs.aggregate(pipeline).to_list(length=100)
+    entities_summary = {item["_id"]: item["count"] for item in entities_result}
+    
+    # Get most active users
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": from_date}}},
+        {"$group": {"_id": {"user_id": "$user_id", "user_name": "$user_name"}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    users_result = await db.audit_logs.aggregate(pipeline).to_list(length=10)
+    active_users = [{"user_id": item["_id"]["user_id"], "user_name": item["_id"]["user_name"], "actions": item["count"]} for item in users_result]
+    
+    # Get recent access control changes
+    access_logs = await db.audit_logs.find(
+        {"entity_type": "access_control", "timestamp": {"$gte": from_date}},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(20).to_list(length=20)
+    
+    # Get recent login activity
+    login_logs = await db.audit_logs.find(
+        {"action": {"$in": ["login", "logout", "login_failed"]}, "timestamp": {"$gte": from_date}},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(50).to_list(length=50)
+    
+    # Get total count
+    total_actions = await db.audit_logs.count_documents({"timestamp": {"$gte": from_date}})
+    
+    return {
+        "period_days": days,
+        "total_actions": total_actions,
+        "actions_by_type": actions_summary,
+        "actions_by_entity": entities_summary,
+        "most_active_users": active_users,
+        "recent_access_changes": access_logs,
+        "recent_login_activity": login_logs
+    }
+
+@api_router.get("/audit-logs/user/{target_user_id}")
+async def get_user_audit_trail(
+    target_user_id: str,
+    limit: int = 50,
+    user = Depends(get_current_user)
+):
+    """
+    Get all audit logs for a specific user
+    """
+    if user.get("role") not in ["super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    logs = await db.audit_logs.find(
+        {"user_id": target_user_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(length=limit)
+    
+    # Get user info
+    target_user = await db.users.find_one({"id": target_user_id}, {"_id": 0, "password_hash": 0})
+    
+    return {
+        "user": target_user,
+        "logs": logs,
+        "total": len(logs)
+    }
+
+@api_router.get("/audit-logs/entity/{entity_type}/{entity_id}")
+async def get_entity_audit_trail(
+    entity_type: str,
+    entity_id: str,
+    user = Depends(get_current_user)
+):
+    """
+    Get all audit logs for a specific entity (lead, student, user, etc.)
+    """
+    if user.get("role") not in ["super_admin", "admin", "sales_manager", "cs_head"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    logs = await db.audit_logs.find(
+        {"entity_type": entity_type, "entity_id": entity_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(length=100)
+    
+    return {
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "logs": logs,
+        "total": len(logs)
+    }
+
 @api_router.get("/3cx/template")
 async def get_3cx_crm_template():
     """
