@@ -38,7 +38,6 @@ import {
     Shield,
     Inbox,
     UserCheck,
-    Bell,
 } from 'lucide-react';
 
 const menuItems = [
