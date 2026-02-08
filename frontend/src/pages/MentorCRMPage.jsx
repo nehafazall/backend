@@ -361,6 +361,25 @@ const MentorCRMPage = () => {
                                             <span className="ml-2">{formatDate(selectedStudent.created_at)}</span>
                                         </div>
                                     </div>
+                                    
+                                    {/* 3CX Call Recording - Placeholder for future integration */}
+                                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                                            <Label className="text-sm text-muted-foreground">3CX Call Recording</Label>
+                                            <Badge variant="outline" className="text-xs ml-auto">Coming Soon</Badge>
+                                        </div>
+                                        <Input
+                                            value={selectedStudent.call_recording_url || ''}
+                                            placeholder="Call recording URL will appear here after 3CX integration"
+                                            disabled
+                                            className="bg-background/50 cursor-not-allowed"
+                                            data-testid="call-recording-url"
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            This field will automatically populate with call recordings once 3CX integration is configured.
+                                        </p>
+                                    </div>
                                 </CardContent>
                             </Card>
                             
