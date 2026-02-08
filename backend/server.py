@@ -3751,7 +3751,20 @@ async def threecx_contact_create(request: ThreeCXContactCreateRequest):
         "last_activity": now
     }
     
-    await db.leads.insert_one(new_lead)
+    try:
+        await db.leads.insert_one(new_lead)
+    except Exception as e:
+        # Handle race condition - another request may have created the lead
+        logger.warning(f"3CX: Duplicate lead creation attempt for {request.phone_number}: {e}")
+        existing_lead = await db.leads.find_one({"phone": {"$regex": normalized[-10:] + "$"}})
+        if existing_lead:
+            return {
+                "success": True,
+                "contact_id": existing_lead["id"],
+                "message": "Contact already exists",
+                "contact_url": f"/sales/{existing_lead['id']}"
+            }
+        raise HTTPException(status_code=500, detail="Failed to create contact")
     
     logger.info(f"3CX: Created new lead {lead_id} from inbound call {request.phone_number}")
     
