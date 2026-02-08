@@ -3,7 +3,38 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (Reminders & Follow-ups - December 2025)
+## Latest Features (Navigation & Bulk Import - December 2025)
+
+### Collapsible Navigation Sections
+Restructured sidebar navigation into 6 collapsible sections:
+- **SALES**: Sales CRM, Sales Dashboard, Today's Follow-ups
+- **CUSTOMER SERVICE**: CS Dashboard, Customer Service
+- **ACADEMICS**: Mentor CRM, Mentor Dashboard
+- **OPERATIONS**: Dashboard, Leads Pool, Customer Master, Departments, Courses
+- **SECURITY**: Access Control, User Management
+- **FINANCE**: Finance, Commission Engine
+
+### Mentor Dashboard (NEW)
+Located at `/mentor/dashboard` with metrics:
+- Total Students assigned
+- Students Connected vs Pending Connection
+- Upgrades Helped
+- Total Revenue brought in
+- Total Withdrawn / Current Net
+- Commission: Total / Received / Balance
+- Student Pipeline by stage
+- Recent Activities
+
+### Bulk Import for Courses & Users
+- **Courses Import**: Bulk upload courses via CSV
+  - Required: name*, code*, base_price*, category*
+  - Optional: description, is_active
+- **Users Import**: Bulk upload users with auto-derived permissions
+  - Required: email*, full_name*, role*, password*
+  - Optional: department, phone, region, team_leader_email
+  - Role-based access auto-derived from role field
+
+## Previous Features (Reminders & Follow-ups)
 
 ### Reminder System
 - **Set Reminder** option on lead/student cards in all CRM pages
@@ -62,24 +93,25 @@ Each template includes:
 - **Authentication**: JWT-based with role-based access control
 - **Database**: MongoDB
 
-## Frontend Pages (18 total)
+## Frontend Pages (19 total)
 1. Login Page
-2. Dashboard
+2. Dashboard (under OPERATIONS)
 3. Sales CRM (+ Import, + Set Reminder)
 4. My Sales Dashboard
-5. Leads Pool
-6. Customer Master (+ Import)
-7. Customer Service (+ Import, + Set Reminder)
-8. CS Dashboard
-9. Mentor CRM (+ Import, + Set Reminder)
-10. **Today's Follow-ups** (NEW - Kanban view)
-11. Finance
-12. User Management (+ Environment Access)
-13. Departments
-14. Courses
-15. Commission Engine
-16. Access Control
-17. Settings
+5. Today's Follow-ups
+6. Leads Pool
+7. Customer Master (+ Import)
+8. Customer Service (+ Import, + Set Reminder)
+9. CS Dashboard
+10. Mentor CRM (+ Import, + Set Reminder)
+11. **Mentor Dashboard** (NEW - metrics page)
+12. Finance
+13. Commission Engine
+14. User Management (+ Import, + Env Access)
+15. Departments
+16. Courses (+ Import)
+17. Access Control
+18. Settings
 
 ## Import Template Fields
 
@@ -104,6 +136,15 @@ Each template includes:
 **Behavior**: Assigned to specified mentor
 
 ## API Endpoints
+
+### Mentor Dashboard
+- `GET /api/mentor/dashboard` - Get mentor metrics (students, revenue, commission, upgrades, activities)
+
+### Bulk Import
+- `GET /api/import/templates/courses` - Get CSV template for courses
+- `GET /api/import/templates/users` - Get CSV template for users
+- `POST /api/import/courses` - Upload CSV to bulk import courses
+- `POST /api/import/users` - Upload CSV to bulk import users
 
 ### Reminders
 - `POST /api/leads/{lead_id}/reminder` - Set lead reminder
@@ -130,17 +171,19 @@ Each template includes:
 ## Prioritized Backlog
 
 ### P0 - Completed
+- [x] Navigation restructured into 6 collapsible sections
+- [x] Mentor Dashboard with all requested metrics
+- [x] Bulk Import for Courses with CSV template
+- [x] Bulk Import for Users with auto-derived permissions
 - [x] Set Reminder on CRM cards (Sales, CS, Mentor)
 - [x] Today's Follow-ups Kanban page
 - [x] Environment Access Control on User Management
 - [x] SLA Rules implementation
-- [x] Import/Export with templates
+- [x] Import/Export with templates for Leads, Customers, Students
 - [x] Leads Pool & Customer Master
 
 ### P1 - High Priority
 - [ ] 3CX Integration for call recordings (placeholder field exists)
-- [ ] Google Sheets Integration for lead import
-- [ ] Email notifications (SendGrid)
 - [ ] Code Portability Package (Docker, PostgreSQL migration)
 
 ### P2 - Medium Priority
@@ -161,12 +204,15 @@ Each template includes:
 ## Files Reference
 - Backend: `/app/backend/server.py`
 - Frontend Routes: `/app/frontend/src/App.js`
+- Layout/Navigation: `/app/frontend/src/components/Layout.jsx`
 - Import Component: `/app/frontend/src/components/ImportButton.jsx`
 - Environment Component: `/app/frontend/src/components/EnvironmentSwitcher.jsx`
 - Reminder Modal: `/app/frontend/src/components/ReminderModal.jsx`
 - Today's Follow-ups: `/app/frontend/src/pages/FollowupsPage.jsx`
+- Mentor Dashboard: `/app/frontend/src/pages/MentorDashboardPage.jsx`
 - User Management: `/app/frontend/src/pages/UsersPage.jsx`
+- Courses: `/app/frontend/src/pages/CoursesPage.jsx`
 
 ## Test Reports
-- Latest: `/app/test_reports/iteration_4.json`
-- Backend Tests: `/app/backend/tests/test_reminder_followups.py`
+- Latest: `/app/test_reports/iteration_5.json`
+- Backend Tests: `/app/backend/tests/test_new_features.py`
