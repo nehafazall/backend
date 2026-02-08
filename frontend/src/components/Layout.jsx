@@ -369,19 +369,9 @@ function Layout() {
                 </header>
 
                 {/* Page content */}
-                <div className="p-4 lg:p-6">
+                <div className={isHomePage ? '' : 'p-4 lg:p-6'}>
                     {isHomePage ? (
-                        <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center" data-testid="home-launcher">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
-                                <p className="text-muted-foreground">Select a module to get started</p>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
-                                {visibleSections.map(section => (
-                                    <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
-                                ))}
-                            </div>
-                        </div>
+                        <HomePageContent user={user} visibleSections={visibleSections} selectSection={selectSection} />
                     ) : (
                         <Outlet />
                     )}
@@ -390,6 +380,70 @@ function Layout() {
 
             {/* Mobile overlay */}
             {mobileMenuOpen && !isHomePage && <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setMobileMenuOpen(false)} />}
+        </div>
+    );
+}
+
+function TradingChartBackground() {
+    return (
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
+            <defs>
+                <linearGradient id="homeChartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            <g stroke="#334155" strokeWidth="0.5" opacity="0.15">
+                <line x1="0" y1="100" x2="1000" y2="100" />
+                <line x1="0" y1="200" x2="1000" y2="200" />
+                <line x1="0" y1="300" x2="1000" y2="300" />
+                <line x1="0" y1="400" x2="1000" y2="400" />
+                <line x1="0" y1="500" x2="1000" y2="500" />
+                <line x1="200" y1="0" x2="200" y2="600" />
+                <line x1="400" y1="0" x2="400" y2="600" />
+                <line x1="600" y1="0" x2="600" y2="600" />
+                <line x1="800" y1="0" x2="800" y2="600" />
+            </g>
+            <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80" fill="none" stroke="#3b82f6" strokeWidth="2" opacity="0.2" />
+            <path d="M50,350 L100,320 L150,280 L200,300 L250,250 L300,220 L350,260 L400,200 L450,180 L500,220 L550,150 L600,180 L650,140 L700,160 L750,120 L800,150 L850,100 L900,130 L950,80 L950,600 L50,600 Z" fill="url(#homeChartGradient)" />
+            <path d="M50,400 L100,380 L150,420 L200,390 L250,350 L300,380 L350,320 L400,350 L450,280 L500,310 L550,260 L600,290 L650,240 L700,270 L750,220 L800,250 L850,200 L900,230 L950,180" fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.15" />
+        </svg>
+    );
+}
+
+function HomePageContent({ user, visibleSections, selectSection }) {
+    return (
+        <div className="min-h-[calc(100vh-4rem)] relative overflow-hidden" data-testid="home-launcher">
+            {/* Trading chart background with 15-20% opacity */}
+            <div className="absolute inset-0 opacity-20">
+                <TradingChartBackground />
+            </div>
+            
+            {/* Content */}
+            <div className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
+                {/* CLT Logo in center */}
+                <div className="mb-12">
+                    <img 
+                        src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
+                        alt="CLT Academy"
+                        className="h-24 w-auto mx-auto drop-shadow-lg"
+                        data-testid="home-logo"
+                    />
+                </div>
+                
+                {/* Welcome message */}
+                <div className="text-center mb-12">
+                    <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
+                    <p className="text-muted-foreground">Select a module to get started</p>
+                </div>
+                
+                {/* Section icons grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
+                    {visibleSections.map(section => (
+                        <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
