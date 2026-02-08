@@ -48,6 +48,7 @@ import {
     Monitor,
     FlaskConical,
 } from 'lucide-react';
+import ImportButton from '@/components/ImportButton';
 
 const ROLES = [
     { id: 'super_admin', label: 'Super Admin', color: 'bg-purple-500' },
@@ -234,10 +235,13 @@ const UsersPage = () => {
                     <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
                     <p className="text-muted-foreground">Manage system users and roles</p>
                 </div>
-                <Button onClick={() => setShowCreateModal(true)} data-testid="create-user-btn">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
-                </Button>
+                <div className="flex gap-2">
+                    <ImportButton type="users" onSuccess={fetchUsers} />
+                    <Button onClick={() => setShowCreateModal(true)} data-testid="create-user-btn">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add User
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
