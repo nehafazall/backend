@@ -25,6 +25,7 @@ import MentorDashboardPage from "@/pages/MentorDashboardPage";
 import SettingsPage from "@/pages/SettingsPage";
 import WelcomePage from "@/pages/WelcomePage";
 import QCDashboardPage from "@/pages/QCDashboardPage";
+import AuditLogPage from "@/pages/AuditLogPage";
 import Layout from "@/components/Layout";
 
 // Protected Route Component
