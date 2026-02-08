@@ -24,6 +24,14 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
+import ReminderModal from '@/components/ReminderModal';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
     Search,
     Phone,
@@ -34,6 +42,8 @@ import {
     TrendingUp,
     CheckCircle,
     DollarSign,
+    MoreVertical,
+    Bell,
 } from 'lucide-react';
 
 const MENTOR_STAGES = [
@@ -44,7 +54,9 @@ const MENTOR_STAGES = [
     { id: 'closed', label: 'Closed (Deposit)', color: 'bg-emerald-500', icon: DollarSign },
 ];
 
-const StudentCard = ({ student, onView }) => {
+const StudentCard = ({ student, onView, onSetReminder }) => {
+    const hasReminder = student.reminder_date && !student.reminder_completed;
+
     return (
         <div
             className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer`}
@@ -63,6 +75,23 @@ const StudentCard = ({ student, onView }) => {
                         </p>
                     </div>
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(student); }}>
+                            View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSetReminder(student); }}>
+                            <Bell className="h-4 w-4 mr-2" />
+                            Set Reminder
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
             
             <div className="space-y-2 text-sm">
@@ -79,9 +108,17 @@ const StudentCard = ({ student, onView }) => {
             </div>
             
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                <span className="text-xs text-muted-foreground">
-                    {student.classes_attended || 0} classes
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                        {student.classes_attended || 0} classes
+                    </span>
+                    {hasReminder && (
+                        <Badge className="bg-amber-500 text-white text-xs">
+                            <Bell className="h-3 w-3 mr-1" />
+                            {student.reminder_type || student.reminder_time || 'Set'}
+                        </Badge>
+                    )}
+                </div>
                 {student.mentor_name && (
                     <Badge variant="outline" className="text-xs">
                         {student.mentor_name}
@@ -92,7 +129,7 @@ const StudentCard = ({ student, onView }) => {
     );
 };
 
-const KanbanColumn = ({ stage, students, onView }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
     const stageStudents = students.filter(s => s.mentor_stage === stage.id);
     const StageIcon = stage.icon;
     
@@ -113,6 +150,7 @@ const KanbanColumn = ({ stage, students, onView }) => {
                             key={student.id}
                             student={student}
                             onView={onView}
+                            onSetReminder={onSetReminder}
                         />
                     ))}
                     {stageStudents.length === 0 && (
@@ -132,6 +170,8 @@ const MentorCRMPage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false);
+    const [reminderStudent, setReminderStudent] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [updateData, setUpdateData] = useState({
         mentor_stage: '',
@@ -174,6 +214,17 @@ const MentorCRMPage = () => {
             notes: '',
         });
         setShowDetailModal(true);
+    };
+
+    const handleSetReminder = (student) => {
+        setReminderStudent(student);
+        setShowReminderModal(true);
+    };
+
+    const handleReminderSuccess = () => {
+        setShowReminderModal(false);
+        setReminderStudent(null);
+        fetchStudents();
     };
 
     const handleUpdateStudent = async () => {
@@ -236,6 +287,7 @@ const MentorCRMPage = () => {
                             stage={stage}
                             students={students}
                             onView={handleViewStudent}
+                            onSetReminder={handleSetReminder}
                         />
                     ))}
                 </div>
@@ -361,6 +413,16 @@ const MentorCRMPage = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Reminder Modal */}
+            <ReminderModal
+                open={showReminderModal}
+                onClose={() => { setShowReminderModal(false); setReminderStudent(null); }}
+                entityType="student"
+                entityId={reminderStudent?.id}
+                entityName={reminderStudent?.full_name}
+                onSuccess={handleReminderSuccess}
+            />
         </div>
     );
 };
