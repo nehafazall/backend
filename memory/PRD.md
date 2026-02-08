@@ -3,9 +3,49 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (Login Animation & 3CX Placeholder - December 2025)
+## Latest Features (3CX Phone Integration - December 2025)
 
-### Post-Login Animation (Completed - Modern EdTech Theme)
+### 3CX Phone System Integration (COMPLETED)
+Full click-to-call and call logging integration with 3CX phone system.
+
+#### Backend API Endpoints
+- `GET /api/3cx/template` - Returns CRM integration XML template for 3CX server configuration
+- `GET /api/3cx/contact-lookup?phone_number={phone}` - Lookup contact by phone number
+- `GET /api/3cx/contact-search?search_text={text}` - Search contacts by name/phone/email
+- `POST /api/3cx/contact-create` - Create lead from unknown inbound caller
+- `POST /api/3cx/call-journal` - Log call details when calls complete
+- `GET /api/3cx/call-history/{contact_id}` - Get call history for a contact
+- `GET /api/3cx/recent-calls` - Get recent calls across all contacts
+- `POST /api/3cx/click-to-call` - Log click-to-call events from CRM
+
+#### Frontend Components
+- **ClickToCall Component** (`/app/frontend/src/components/ClickToCall.jsx`)
+  - Click-to-call button with phone icon
+  - Tooltip showing phone number
+  - Copy phone number functionality
+  - Triggers `tel:` protocol for dialing
+  
+- **CallHistory Component** (`/app/frontend/src/components/ClickToCall.jsx`)
+  - Shows recent call history for a contact
+  - Displays call direction (inbound/outbound)
+  - Shows call duration and timestamp
+  - Link to call recordings when available
+
+#### CRM Pages Integration
+- **Sales CRM Page** - Click-to-call on lead cards and detail modal with 3CX Call Center section
+- **Customer Service Page** - Click-to-call on student cards and detail modal with 3CX Call Center section
+- **Mentor CRM Page** - Click-to-call on student cards and detail modal with 3CX Call Center section
+
+#### Settings Page - 3CX Configuration
+- Available to super_admin and admin users
+- **Setup Instructions** for 3CX server configuration
+- **Fetch Template** button to generate XML template
+- **Download XML** button to save template file
+- **Open 3CX Console** link to 3CX management interface
+- **API Endpoints** list with copy functionality
+- **XML Preview** with full template display
+
+### Post-Login Animation (Completed - Professional Trading Theme)
 After successful login, users see a vibrant 11-second branded animation:
 - **Route**: `/welcome` - dedicated page for animation
 - **Visual Style**: Modern dark theme with cyan/magenta/green gradient orbs, grid pattern, floating particles
