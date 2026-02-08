@@ -412,6 +412,9 @@ function TradingChartBackground() {
 }
 
 function HomePageContent({ user, visibleSections, selectSection }) {
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
+    
     return (
         <div className="min-h-[calc(100vh-4rem)] relative overflow-hidden" data-testid="home-launcher">
             {/* Trading chart background with 15-20% opacity */}
@@ -421,13 +424,35 @@ function HomePageContent({ user, visibleSections, selectSection }) {
             
             {/* Content */}
             <div className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
-                {/* CLT Logo in center */}
+                {/* CLT Logo in center - LARGE */}
                 <div className="mb-12">
                     <img 
                         src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
                         alt="CLT Academy"
-                        className="h-24 w-auto mx-auto drop-shadow-lg"
+                        className="h-40 md:h-48 lg:h-56 w-auto mx-auto"
+                        style={{ 
+                            filter: isDark ? 'brightness(0) invert(1)' : 'none'
+                        }}
                         data-testid="home-logo"
+                    />
+                </div>
+                
+                {/* Welcome message */}
+                <div className="text-center mb-12">
+                    <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
+                    <p className="text-muted-foreground">Select a module to get started</p>
+                </div>
+                
+                {/* Section icons grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
+                    {visibleSections.map(section => (
+                        <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
                     />
                 </div>
                 
