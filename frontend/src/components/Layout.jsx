@@ -40,6 +40,7 @@ import {
     Lock,
     Home,
 } from 'lucide-react';
+import CLTLogo from '@/components/CLTLogo';
 
 const SECTIONS = {
     sales: {
@@ -274,11 +275,7 @@ function Layout() {
             {!isHomePage && currentSection && (
                 <aside className={`sidebar expanded ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                     <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
-                        <img 
-                            src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" 
-                            alt="CLT Academy" 
-                            className="h-10 w-auto logo-dark-mode" 
-                        />
+                        <CLTLogo className="h-10 w-auto" isDark={true} />
                     </div>
 
                     <ScrollArea className="flex-1 py-4">
@@ -416,6 +413,9 @@ function TradingChartBackground() {
 }
 
 function HomePageContent({ user, visibleSections, selectSection }) {
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
+    
     return (
         <div className="min-h-[calc(100vh-4rem)] relative overflow-hidden" data-testid="home-launcher">
             {/* Trading chart background with 15-20% opacity */}
@@ -427,10 +427,9 @@ function HomePageContent({ user, visibleSections, selectSection }) {
             <div className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
                 {/* CLT Logo in center - LARGE */}
                 <div className="mb-12">
-                    <img 
-                        src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg"
-                        alt="CLT Academy"
-                        className="h-40 md:h-48 lg:h-56 w-auto mx-auto logo-theme-aware"
+                    <CLTLogo 
+                        className="h-40 md:h-48 lg:h-56 w-auto mx-auto"
+                        isDark={isDark}
                         data-testid="home-logo"
                     />
                 </div>
