@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
+import CLTAnimation from '@/components/CLTAnimation';
 
 function LoginPage() {
     const [email, setEmail] = useState('');
