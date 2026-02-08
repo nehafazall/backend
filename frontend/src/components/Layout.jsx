@@ -277,8 +277,7 @@ function Layout() {
                         <img 
                             src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" 
                             alt="CLT Academy" 
-                            className="h-10 w-auto" 
-                            style={{ filter: 'brightness(0) invert(1)' }}
+                            className="h-10 w-auto logo-dark-mode" 
                         />
                     </div>
 
