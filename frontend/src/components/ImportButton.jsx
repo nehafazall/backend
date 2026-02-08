@@ -24,6 +24,28 @@ const TYPE_CONFIG = {
     users: { title: 'Users', endpoint: '/import/users', useJson: false },
 };
 
+function FieldBadges({ fields, required }) {
+    if (!fields || fields.length === 0) return null;
+    const badges = [];
+    for (let i = 0; i < fields.length; i++) {
+        if (required) {
+            badges.push(<Badge key={fields[i]} className="bg-red-500 mr-1 mb-1">{fields[i]}*</Badge>);
+        } else {
+            badges.push(<Badge key={fields[i]} variant="outline" className="mr-1 mb-1">{fields[i]}</Badge>);
+        }
+    }
+    return <div className="flex flex-wrap">{badges}</div>;
+}
+
+function ErrorList({ errors }) {
+    if (!errors || errors.length === 0) return null;
+    const items = [];
+    for (let i = 0; i < errors.length; i++) {
+        items.push(<li key={i} className="text-muted-foreground">{errors[i]}</li>);
+    }
+    return <ul className="text-xs space-y-1">{items}</ul>;
+}
+
 function ImportButton({ type, onSuccess }) {
     const config = TYPE_CONFIG[type] || { title: type, endpoint: `/import/${type}`, useJson: true };
     const [open, setOpen] = useState(false);
@@ -32,7 +54,6 @@ function ImportButton({ type, onSuccess }) {
     const [data, setData] = useState(null);
     const [results, setResults] = useState(null);
     const [busy, setBusy] = useState(false);
-    const inputRef = useRef(null);
 
     async function loadTemplate() {
         setBusy(true);
@@ -48,50 +69,12 @@ function ImportButton({ type, onSuccess }) {
 
     function download() {
         if (!template) return;
-        let content = template.template;
+        const content = template.template;
         const blob = new Blob([content], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${type}_template.csv`;
+        a.download = type + '_template.csv';
         a.click();
-    }
-
-    function handleFileSelect(e) {
-        const f = e.target.files[0];
-        if (!f) return;
-        setFile(f);
-        
-        if (config.useJson) {
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const lines = evt.target.result.trim().split('\n');
-                    const headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, '').replace('*', ''));
-                    const rows = [];
-                    for (let i = 1; i < lines.length; i++) {
-                        const vals = parseCSVLine(lines[i]);
-                        const obj = {};
-                        for (let j = 0; j < headers.length; j++) {
-                            if (vals[j] && vals[j].trim()) obj[headers[j]] = vals[j].trim();
-                        }
-                        if (Object.keys(obj).length > 0) rows.push(obj);
-                    }
-                    setData(rows);
-                    toast.success(`${rows.length} rows parsed`);
-                } catch (err) {
-                    toast.error('Failed to parse CSV');
-                }
-            };
-            reader.readAsText(f);
-        } else {
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const lines = evt.target.result.trim().split('\n');
-                setData({ rowCount: lines.length - 1 });
-                toast.success(`${lines.length - 1} rows ready`);
-            };
-            reader.readAsText(f);
-        }
     }
 
     function parseCSVLine(line) {
@@ -103,14 +86,47 @@ function ImportButton({ type, onSuccess }) {
             if (char === '"') {
                 inQuotes = !inQuotes;
             } else if (char === ',' && !inQuotes) {
-                result.push(current.trim().replace(/^\"|\"$/g, ''));
+                result.push(current.trim().replace(/^"|"$/g, ''));
                 current = '';
             } else {
                 current += char;
             }
         }
-        result.push(current.trim().replace(/^\"|\"$/g, ''));
+        result.push(current.trim().replace(/^"|"$/g, ''));
         return result;
+    }
+
+    function handleFileSelect(e) {
+        const f = e.target.files[0];
+        if (!f) return;
+        setFile(f);
+        
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const lines = evt.target.result.trim().split('\n');
+                if (config.useJson) {
+                    const headers = lines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, '').replace('*', ''); });
+                    const rows = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const vals = parseCSVLine(lines[i]);
+                        const obj = {};
+                        for (let j = 0; j < headers.length; j++) {
+                            if (vals[j] && vals[j].trim()) obj[headers[j]] = vals[j].trim();
+                        }
+                        if (Object.keys(obj).length > 0) rows.push(obj);
+                    }
+                    setData(rows);
+                    toast.success(rows.length + ' rows parsed');
+                } else {
+                    setData({ rowCount: lines.length - 1 });
+                    toast.success((lines.length - 1) + ' rows ready');
+                }
+            } catch (err) {
+                toast.error('Failed to parse CSV');
+            }
+        };
+        reader.readAsText(f);
     }
 
     async function doImport() {
@@ -144,13 +160,8 @@ function ImportButton({ type, onSuccess }) {
         setTemplate(null);
     }
 
-    const RequiredBadges = template?.fields?.required?.map(f => (
-        <Badge key={f} className="bg-red-500 mr-1 mb-1">{f}*</Badge>
-    ));
-
-    const OptionalBadges = template?.fields?.optional?.map(f => (
-        <Badge key={f} variant="outline" className="mr-1 mb-1">{f}</Badge>
-    ));
+    const requiredFields = template?.fields?.required || [];
+    const optionalFields = template?.fields?.optional || [];
 
     return (
         <>
@@ -173,7 +184,7 @@ function ImportButton({ type, onSuccess }) {
                                         <CardTitle className="text-sm">Required Fields</CardTitle>
                                     </CardHeader>
                                     <CardContent className="py-2">
-                                        <div className="flex flex-wrap">{RequiredBadges}</div>
+                                        <FieldBadges fields={requiredFields} required={true} />
                                     </CardContent>
                                 </Card>
                                 
@@ -182,7 +193,7 @@ function ImportButton({ type, onSuccess }) {
                                         <CardTitle className="text-sm">Optional Fields</CardTitle>
                                     </CardHeader>
                                     <CardContent className="py-2">
-                                        <div className="flex flex-wrap">{OptionalBadges}</div>
+                                        <FieldBadges fields={optionalFields} required={false} />
                                     </CardContent>
                                 </Card>
 
@@ -204,14 +215,7 @@ function ImportButton({ type, onSuccess }) {
                                 </Button>
 
                                 <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                                    <input 
-                                        ref={inputRef} 
-                                        type="file" 
-                                        accept=".csv" 
-                                        onChange={handleFileSelect} 
-                                        className="hidden" 
-                                        id={`csv-file-${type}`}
-                                    />
+                                    <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" id={`csv-file-${type}`} />
                                     <label htmlFor={`csv-file-${type}`} className="cursor-pointer">
                                         <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                                         <p className="text-sm font-medium">Click to select CSV file</p>
@@ -272,11 +276,7 @@ function ImportButton({ type, onSuccess }) {
                                         </CardHeader>
                                         <CardContent className="py-2">
                                             <ScrollArea className="h-32">
-                                                <ul className="text-xs space-y-1">
-                                                    {results.errors.map((err, i) => (
-                                                        <li key={i} className="text-muted-foreground">{err}</li>
-                                                    ))}
-                                                </ul>
+                                                <ErrorList errors={results.errors} />
                                             </ScrollArea>
                                         </CardContent>
                                     </Card>
