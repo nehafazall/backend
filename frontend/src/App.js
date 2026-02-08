@@ -21,6 +21,7 @@ import CSDashboard from "@/pages/CSDashboard";
 import LeadsPoolPage from "@/pages/LeadsPoolPage";
 import CustomerMasterPage from "@/pages/CustomerMasterPage";
 import FollowupsPage from "@/pages/FollowupsPage";
+import MentorDashboardPage from "@/pages/MentorDashboardPage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
@@ -134,6 +135,11 @@ function AppRoutes() {
                 <Route path="mentor" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
                         <MentorCRMPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="mentor/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
+                        <MentorDashboardPage />
                     </ProtectedRoute>
                 } />
                 
