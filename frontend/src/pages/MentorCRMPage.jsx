@@ -327,6 +327,15 @@ const MentorCRMPage = () => {
                                                 <span className="flex items-center gap-1">
                                                     <Phone className="h-4 w-4" />
                                                     {selectedStudent.phone}
+                                                    <ClickToCall 
+                                                        phoneNumber={selectedStudent.phone} 
+                                                        contactId={selectedStudent.id} 
+                                                        contactName={selectedStudent.full_name}
+                                                        variant="outline"
+                                                        size="sm"
+                                                        showLabel={true}
+                                                        className="ml-2"
+                                                    />
                                                 </span>
                                                 {selectedStudent.email && (
                                                     <span className="flex items-center gap-1">
