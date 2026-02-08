@@ -3946,120 +3946,180 @@ async def get_3cx_crm_template():
     # Get the backend URL
     backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://academy-erp.preview.emergentagent.com'))
     
-    # 3CX v18/v20 compatible XML template - following exact schema from 3CX docs
+    # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
-<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <CrmName>CLT Academy ERP</CrmName>
-  <Version>1</Version>
-  <Country>*</Country>
-  <SupportsEmojis>true</SupportsEmojis>
-  
-  <Number Prefix="AsIs" MaxLength="[MaxLength]" />
-  
-  <Connection MaxConcurrentRequests="2" />
-  
+<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="AE" Name="CLT Academy ERP" Version="1" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
+  <Number Prefix="AsIs" MaxLength="12" />
+  <Connection MaxConcurrentRequests="4" />
   <Parameters>
-    <Parameter Name="ApiUrl" Type="String" Title="API URL:" Default="{backend_url}" />
+    <Parameter Name="URL" Type="String" Parent="General Configuration" Editor="String" Title="API URL:" Validation="" Default="{backend_url}/api/3cx/" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="CreateContactEnabled" Type="Boolean" Parent="" Editor="String" Title="Enable Contact Creation" Validation="" Default="True" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="CreateOnCallDirection" Type="List" Parent="CreateContactEnabled" Editor="String" Title="Create Contacts on Call Direction:" Validation="" Default="Inbound" ListValues="Inbound,Inbound/Outbound" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="CreateContactFirstName" Type="String" Parent="CreateContactEnabled" Editor="String" Title="New Contact First Name:" Validation="" Default="New" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="CreateContactLastName" Type="String" Parent="CreateContactEnabled" Editor="String" Title="New Contact Last Name:" Validation="" Default="Lead [Number]" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="ReportCallEnabled" Type="Boolean" Parent="" Editor="String" Title="Enable Call Journaling" Validation="" Default="True" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="Subject" Type="String" Parent="ReportCallEnabled" Editor="String" Title="Call Subject:" Validation="" Default="CLT Academy Call" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="InboundCallText" Type="String" Parent="ReportCallEnabled" Editor="String" Title="Answered Inbound Call:" Validation="" Default="[DateTime]: Answered incoming call from [Number] to [Agent] ([Duration])" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="MissedCallText" Type="String" Parent="ReportCallEnabled" Editor="String" Title="Missed Call:" Validation="" Default="[DateTime]: Missed call from [Number] to [Agent]" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="OutboundCallText" Type="String" Parent="ReportCallEnabled" Editor="String" Title="Answered Outbound Call:" Validation="" Default="[DateTime]: Answered outgoing call from [Agent] to [Number] ([Duration])" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
+    <Parameter Name="NotAnsweredOutboundCallText" Type="String" Parent="ReportCallEnabled" Editor="String" Title="Unanswered Outbound Call:" Validation="" Default="[DateTime]: Unanswered outgoing call from [Agent] to [Number]" ListValues="" RequestUrl="" RequestUrlParameters="" ResponseScenario="" />
   </Parameters>
-  
   <Authentication Type="No" />
-  
   <Scenarios>
-    <!-- Contact Lookup by Phone Number (empty Id = default lookup) -->
-    <Scenario Type="REST">
-      <Request Url="[ApiUrl]/api/3cx/contact-lookup?phone_number=[Number]" RequestType="Get" ResponseType="Json" />
+    <Scenario Id="" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="" Url="[URL]contact-lookup?phone_number=[Number]" MessagePasses="0" Message="" RequestContentType="" RequestEncoding="UrlEncoded" RequestType="Get" ResponseType="Json" />
       <Rules>
-        <Rule Type="Any">found</Rule>
+        <Rule Type="Any" Ethalon="">contact_id</Rule>
       </Rules>
       <Variables>
-        <Variable Name="ContactID" Path="contact_id" />
-        <Variable Name="FirstName" Path="first_name" />
-        <Variable Name="LastName" Path="last_name" />
-        <Variable Name="Email" Path="email" />
-        <Variable Name="PhoneMobile" Path="phone_mobile" />
-        <Variable Name="PhoneBusiness" Path="phone_business" />
-        <Variable Name="CompanyName" Path="company_name" />
-        <Variable Name="ContactUrl" Path="contact_url" />
-        <Variable Name="EntityType" Path="contact_type" />
+        <Variable Name="ContactID" LookupValue="" Path="contact_id"><Filter /></Variable>
+        <Variable Name="FirstName" LookupValue="" Path="first_name"><Filter /></Variable>
+        <Variable Name="LastName" LookupValue="" Path="last_name"><Filter /></Variable>
+        <Variable Name="CompanyName" LookupValue="" Path="company_name"><Filter /></Variable>
+        <Variable Name="Email" LookupValue="" Path="email"><Filter /></Variable>
+        <Variable Name="PhoneBusiness" LookupValue="" Path="phone_business"><Filter /></Variable>
+        <Variable Name="PhoneMobile" LookupValue="" Path="phone_mobile"><Filter /></Variable>
       </Variables>
-      <Outputs>
-        <Output Type="ContactUrl" Value="[ContactUrl]" />
-        <Output Type="FirstName" Value="[FirstName]" />
-        <Output Type="LastName" Value="[LastName]" />
-        <Output Type="Email" Value="[Email]" />
-        <Output Type="PhoneMobile" Value="[PhoneMobile]" />
-        <Output Type="PhoneBusiness" Value="[PhoneBusiness]" />
-        <Output Type="CompanyName" Value="[CompanyName]" />
-        <Output Type="EntityId" Value="[ContactID]" />
-        <Output Type="EntityType" Value="[EntityType]" />
+      <Outputs AllowEmpty="false">
+        <Output Type="ContactID" Passes="0" Value="[ContactID]" />
+        <Output Type="FirstName" Passes="0" Value="[FirstName]" />
+        <Output Type="LastName" Passes="0" Value="[LastName]" />
+        <Output Type="CompanyName" Passes="0" Value="[CompanyName]" />
+        <Output Type="Email" Passes="0" Value="[Email]" />
+        <Output Type="PhoneBusiness" Passes="0" Value="[PhoneBusiness]" />
+        <Output Type="PhoneMobile" Passes="0" Value="[PhoneMobile]" />
+        <Output Type="ContactUrl" Passes="0" Value="{backend_url}/sales/[ContactID]" />
+        <Output Type="EntityId" Passes="0" Value="[ContactID]" />
+        <Output Type="EntityType" Passes="0" Value="Leads" />
       </Outputs>
     </Scenario>
-
-    <!-- Search Contacts -->
-    <Scenario Id="SearchContacts" Type="REST">
-      <Request Url="[ApiUrl]/api/3cx/contact-search?search_text=[SearchText]&amp;limit=25" RequestType="Get" ResponseType="Json" />
+    <Scenario Id="LookupByEmail" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="" Url="[URL]contact-search?search_text=[Email]" MessagePasses="0" Message="" RequestContentType="" RequestEncoding="UrlEncoded" RequestType="Get" ResponseType="Json" />
       <Rules>
-        <Rule Type="Any">contacts</Rule>
+        <Rule Type="Any" Ethalon="">contacts.contact_id</Rule>
       </Rules>
       <Variables>
-        <Variable Name="ContactID" Path="contacts.contact_id" />
-        <Variable Name="FirstName" Path="contacts.first_name" />
-        <Variable Name="LastName" Path="contacts.last_name" />
-        <Variable Name="Email" Path="contacts.email" />
-        <Variable Name="PhoneMobile" Path="contacts.phone_mobile" />
-        <Variable Name="CompanyName" Path="contacts.company_name" />
-        <Variable Name="ContactUrl" Path="contacts.contact_url" />
+        <Variable Name="ContactID" LookupValue="" Path="contacts.contact_id"><Filter /></Variable>
+        <Variable Name="FirstName" LookupValue="" Path="contacts.first_name"><Filter /></Variable>
+        <Variable Name="LastName" LookupValue="" Path="contacts.last_name"><Filter /></Variable>
+        <Variable Name="CompanyName" LookupValue="" Path="contacts.company_name"><Filter /></Variable>
+        <Variable Name="Email" LookupValue="" Path="contacts.email"><Filter /></Variable>
+        <Variable Name="PhoneBusiness" LookupValue="" Path="contacts.phone_business"><Filter /></Variable>
+        <Variable Name="PhoneMobile" LookupValue="" Path="contacts.phone_mobile"><Filter /></Variable>
       </Variables>
-      <Outputs>
-        <Output Type="ContactUrl" Value="[ContactUrl]" />
-        <Output Type="FirstName" Value="[FirstName]" />
-        <Output Type="LastName" Value="[LastName]" />
-        <Output Type="Email" Value="[Email]" />
-        <Output Type="PhoneMobile" Value="[PhoneMobile]" />
-        <Output Type="CompanyName" Value="[CompanyName]" />
-        <Output Type="EntityId" Value="[ContactID]" />
+      <Outputs AllowEmpty="false">
+        <Output Type="ContactID" Passes="0" Value="[ContactID]" />
+        <Output Type="FirstName" Passes="0" Value="[FirstName]" />
+        <Output Type="LastName" Passes="0" Value="[LastName]" />
+        <Output Type="CompanyName" Passes="0" Value="[CompanyName]" />
+        <Output Type="Email" Passes="0" Value="[Email]" />
+        <Output Type="PhoneBusiness" Passes="0" Value="[PhoneBusiness]" />
+        <Output Type="PhoneMobile" Passes="0" Value="[PhoneMobile]" />
+        <Output Type="ContactUrl" Passes="0" Value="{backend_url}/sales/[ContactID]" />
+        <Output Type="EntityId" Passes="0" Value="[ContactID]" />
+        <Output Type="EntityType" Passes="0" Value="Leads" />
       </Outputs>
     </Scenario>
-
-    <!-- Report Call (Call Journaling) -->
-    <Scenario Id="ReportCall" Type="REST">
-      <Request Url="[ApiUrl]/api/3cx/call-journal" RequestType="Post" RequestContentType="application/json" ResponseType="Json">
-        <PostValues>
-          <Value Key="call_type" Passes="1">[CallType]</Value>
-          <Value Key="phone_number" Passes="1">[Number]</Value>
-          <Value Key="call_direction" Passes="1">[CallDirection]</Value>
-          <Value Key="name" Passes="1">[Name]</Value>
-          <Value Key="contact_id" Passes="1">[EntityId]</Value>
-          <Value Key="call_duration" Passes="1">[Duration]</Value>
-          <Value Key="timestamp" Passes="1">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
-          <Value Key="agent_extension" Passes="1">[Agent]</Value>
-          <Value Key="agent_name" Passes="1">[AgentFirstName] [AgentLastName]</Value>
-        </PostValues>
-      </Request>
-    </Scenario>
-
-    <!-- Create Contact from Unknown Caller -->
-    <Scenario Id="CreateContactRecordFromClient" Type="REST">
-      <Request Url="[ApiUrl]/api/3cx/contact-create" RequestType="Post" RequestContentType="application/json" ResponseType="Json">
-        <PostValues>
-          <Value Key="phone_number" Passes="1">[Number]</Value>
-          <Value Key="first_name" Passes="1">[FirstName]</Value>
-          <Value Key="last_name" Passes="1">[LastName]</Value>
-          <Value Key="email" Passes="1">[Email]</Value>
-          <Value Key="company_name" Passes="1">[Company]</Value>
+    <Scenario Id="CreateContactRecord" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="[CreateContactEnabled]!=True||[IIf([CreateOnCallDirection]==Inbound,[CallDirection]!=Inbound,False)]==True" Url="[URL]contact-create" MessagePasses="0" Message="" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="" If="" SkipIf="">
+          <Value Key="first_name" If="" SkipIf="" Passes="1" Type="String">[CreateContactFirstName]</Value>
+          <Value Key="last_name" If="" SkipIf="" Passes="1" Type="String">[CreateContactLastName]</Value>
+          <Value Key="phone_number" If="" SkipIf="" Passes="1" Type="String">[Number]</Value>
         </PostValues>
       </Request>
       <Rules>
-        <Rule Type="Any">success</Rule>
+        <Rule Type="Any" Ethalon="">contact_id</Rule>
       </Rules>
       <Variables>
-        <Variable Name="ContactID" Path="contact_id" />
-        <Variable Name="ContactUrl" Path="contact_url" />
+        <Variable Name="ContactID" LookupValue="" Path="contact_id"><Filter /></Variable>
+        <Variable Name="FirstName" LookupValue="" Path="first_name"><Filter /></Variable>
+        <Variable Name="LastName" LookupValue="" Path="last_name"><Filter /></Variable>
       </Variables>
-      <Outputs>
-        <Output Type="ContactUrl" Value="[ContactUrl]" />
-        <Output Type="EntityId" Value="[ContactID]" />
+      <Outputs AllowEmpty="false">
+        <Output Type="ContactID" Passes="0" Value="[ContactID]" />
+        <Output Type="FirstName" Passes="0" Value="[FirstName]" />
+        <Output Type="LastName" Passes="0" Value="[LastName]" />
+        <Output Type="ContactUrl" Passes="0" Value="{backend_url}/sales/[ContactID]" />
+        <Output Type="EntityId" Passes="0" Value="[ContactID]" />
+        <Output Type="EntityType" Passes="0" Value="Leads" />
       </Outputs>
+    </Scenario>
+    <Scenario Id="ReportCall" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="[IIf([ReportCallEnabled]!=True||[EntityId]==&quot;&quot;,True,[IIf([CallType]!=Inbound,True,False)])]" Url="[URL]call-journal" MessagePasses="0" Message="" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="" If="" SkipIf="">
+          <Value Key="call_type" If="" SkipIf="" Passes="1" Type="String">[CallType]</Value>
+          <Value Key="phone_number" If="" SkipIf="" Passes="1" Type="String">[Number]</Value>
+          <Value Key="call_direction" If="" SkipIf="" Passes="1" Type="String">[CallDirection]</Value>
+          <Value Key="name" If="" SkipIf="" Passes="1" Type="String">[Name]</Value>
+          <Value Key="contact_id" If="" SkipIf="" Passes="1" Type="String">[EntityId]</Value>
+          <Value Key="call_duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
+          <Value Key="timestamp" If="" SkipIf="" Passes="1" Type="String">[DateTime]</Value>
+          <Value Key="agent_extension" If="" SkipIf="" Passes="1" Type="String">[Agent]</Value>
+          <Value Key="agent_name" If="" SkipIf="" Passes="1" Type="String">[AgentFirstName] [AgentLastName]</Value>
+          <Value Key="subject" If="" SkipIf="" Passes="2" Type="String">[Subject]</Value>
+          <Value Key="description" If="" SkipIf="" Passes="2" Type="String">[InboundCallText]</Value>
+        </PostValues>
+      </Request>
+      <Variables />
+      <Outputs Next="ReportCallMissed" AllowEmpty="true" />
+    </Scenario>
+    <Scenario Id="ReportCallMissed" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="[IIf([ReportCallEnabled]!=True||[EntityId]==&quot;&quot;,True,[IIf([CallType]!=Missed,True,False)])]" Url="[URL]call-journal" MessagePasses="0" Message="" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="" If="" SkipIf="">
+          <Value Key="call_type" If="" SkipIf="" Passes="1" Type="String">[CallType]</Value>
+          <Value Key="phone_number" If="" SkipIf="" Passes="1" Type="String">[Number]</Value>
+          <Value Key="call_direction" If="" SkipIf="" Passes="1" Type="String">[CallDirection]</Value>
+          <Value Key="name" If="" SkipIf="" Passes="1" Type="String">[Name]</Value>
+          <Value Key="contact_id" If="" SkipIf="" Passes="1" Type="String">[EntityId]</Value>
+          <Value Key="call_duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
+          <Value Key="timestamp" If="" SkipIf="" Passes="1" Type="String">[DateTime]</Value>
+          <Value Key="agent_extension" If="" SkipIf="" Passes="1" Type="String">[Agent]</Value>
+          <Value Key="agent_name" If="" SkipIf="" Passes="1" Type="String">[AgentFirstName] [AgentLastName]</Value>
+          <Value Key="subject" If="" SkipIf="" Passes="2" Type="String">[Subject]</Value>
+          <Value Key="description" If="" SkipIf="" Passes="2" Type="String">[MissedCallText]</Value>
+        </PostValues>
+      </Request>
+      <Variables />
+      <Outputs Next="ReportCallOutbound" AllowEmpty="true" />
+    </Scenario>
+    <Scenario Id="ReportCallOutbound" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="[IIf([ReportCallEnabled]!=True||[EntityId]==&quot;&quot;,True,[IIf([CallType]!=Outbound,True,False)])]" Url="[URL]call-journal" MessagePasses="0" Message="" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="" If="" SkipIf="">
+          <Value Key="call_type" If="" SkipIf="" Passes="1" Type="String">[CallType]</Value>
+          <Value Key="phone_number" If="" SkipIf="" Passes="1" Type="String">[Number]</Value>
+          <Value Key="call_direction" If="" SkipIf="" Passes="1" Type="String">[CallDirection]</Value>
+          <Value Key="name" If="" SkipIf="" Passes="1" Type="String">[Name]</Value>
+          <Value Key="contact_id" If="" SkipIf="" Passes="1" Type="String">[EntityId]</Value>
+          <Value Key="call_duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
+          <Value Key="timestamp" If="" SkipIf="" Passes="1" Type="String">[DateTime]</Value>
+          <Value Key="agent_extension" If="" SkipIf="" Passes="1" Type="String">[Agent]</Value>
+          <Value Key="agent_name" If="" SkipIf="" Passes="1" Type="String">[AgentFirstName] [AgentLastName]</Value>
+          <Value Key="subject" If="" SkipIf="" Passes="2" Type="String">[Subject]</Value>
+          <Value Key="description" If="" SkipIf="" Passes="2" Type="String">[OutboundCallText]</Value>
+        </PostValues>
+      </Request>
+      <Variables />
+      <Outputs Next="ReportCallNotanswered" AllowEmpty="true" />
+    </Scenario>
+    <Scenario Id="ReportCallNotanswered" Type="REST" EntityId="" EntityOrder="">
+      <Request SkipIf="[IIf([ReportCallEnabled]!=True||[EntityId]==&quot;&quot;,True,[IIf([CallType]!=Notanswered,True,False)])]" Url="[URL]call-journal" MessagePasses="0" Message="" RequestContentType="application/json" RequestEncoding="Json" RequestType="Post" ResponseType="Json">
+        <PostValues Key="" If="" SkipIf="">
+          <Value Key="call_type" If="" SkipIf="" Passes="1" Type="String">[CallType]</Value>
+          <Value Key="phone_number" If="" SkipIf="" Passes="1" Type="String">[Number]</Value>
+          <Value Key="call_direction" If="" SkipIf="" Passes="1" Type="String">[CallDirection]</Value>
+          <Value Key="name" If="" SkipIf="" Passes="1" Type="String">[Name]</Value>
+          <Value Key="contact_id" If="" SkipIf="" Passes="1" Type="String">[EntityId]</Value>
+          <Value Key="call_duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
+          <Value Key="timestamp" If="" SkipIf="" Passes="1" Type="String">[DateTime]</Value>
+          <Value Key="agent_extension" If="" SkipIf="" Passes="1" Type="String">[Agent]</Value>
+          <Value Key="agent_name" If="" SkipIf="" Passes="1" Type="String">[AgentFirstName] [AgentLastName]</Value>
+          <Value Key="subject" If="" SkipIf="" Passes="2" Type="String">[Subject]</Value>
+          <Value Key="description" If="" SkipIf="" Passes="2" Type="String">[NotAnsweredOutboundCallText]</Value>
+        </PostValues>
+      </Request>
+      <Variables />
+      <Outputs AllowEmpty="false" />
     </Scenario>
   </Scenarios>
 </Crm>'''
@@ -4072,7 +4132,7 @@ async def get_3cx_crm_template():
             "step3": "Click '+ Add Template' button",
             "step4": "Upload the downloaded XML file",
             "step5": "Select 'CLT Academy ERP' from the dropdown",
-            "step6": "Enable the integration and click Save",
+            "step6": "The API URL should be pre-filled. Click Save",
             "step7": "Click TEST button to verify connection"
         },
         "backend_url": backend_url,
@@ -4080,9 +4140,7 @@ async def get_3cx_crm_template():
             "contact_lookup": f"{backend_url}/api/3cx/contact-lookup?phone_number={{phone}}",
             "contact_search": f"{backend_url}/api/3cx/contact-search?search_text={{text}}",
             "contact_create": f"{backend_url}/api/3cx/contact-create",
-            "call_journal": f"{backend_url}/api/3cx/call-journal",
-            "call_history": f"{backend_url}/api/3cx/call-history/{{contact_id}}",
-            "recent_calls": f"{backend_url}/api/3cx/recent-calls"
+            "call_journal": f"{backend_url}/api/3cx/call-journal"
         }
     }
 
