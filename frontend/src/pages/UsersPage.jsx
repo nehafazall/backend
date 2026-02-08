@@ -287,6 +287,7 @@ const UsersPage = () => {
                                     <TableHead>Role</TableHead>
                                     <TableHead>Department</TableHead>
                                     <TableHead>Region</TableHead>
+                                    <TableHead>Env Access</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Created</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
