@@ -49,9 +49,9 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return children;
 };
 
-// Public Route (redirect to home if authenticated)
+// Public Route (redirect to welcome if just logged in, or home if already authenticated)
 const PublicRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, justLoggedIn } = useAuth();
     
     if (loading) {
         return (
@@ -62,6 +62,11 @@ const PublicRoute = ({ children }) => {
     }
     
     if (isAuthenticated) {
+        // If user just logged in, redirect to welcome animation
+        if (justLoggedIn) {
+            return <Navigate to="/welcome" replace />;
+        }
+        // Otherwise, redirect to home
         return <Navigate to="/home" replace />;
     }
     
