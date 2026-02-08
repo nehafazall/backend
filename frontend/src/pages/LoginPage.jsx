@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff } from 'lucide-react';
-
-const CLT_LOGO_URL = "https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg";
+import CLTLogo from '@/components/CLTLogo';
 
 function LoginPage() {
     const [email, setEmail] = useState('');
@@ -59,14 +58,7 @@ function LoginPage() {
             {/* Left Side - Logo */}
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
                 <div className="text-center">
-                    <div className="h-40 w-auto mx-auto mb-8 flex items-center justify-center">
-                        <img 
-                            src={CLT_LOGO_URL}
-                            alt="CLT Academy"
-                            className="h-40 w-auto drop-shadow-2xl logo-dark-mode"
-                            data-testid="login-logo"
-                        />
-                    </div>
+                    <CLTLogo className="h-40 w-auto mx-auto mb-8" isDark={true} />
                     <h1 className="text-4xl font-bold text-white mb-4">CLT Academy</h1>
                     <p className="text-xl text-slate-400">Enterprise Resource Planning</p>
                     <div className="mt-8 flex items-center justify-center gap-2">
@@ -81,11 +73,7 @@ function LoginPage() {
                 <div className="w-full max-w-md">
                     {/* Mobile Logo */}
                     <div className="lg:hidden text-center mb-8">
-                        <img 
-                            src={CLT_LOGO_URL}
-                            alt="CLT Academy"
-                            className="h-20 w-auto mx-auto mb-4 logo-dark-mode"
-                        />
+                        <CLTLogo className="h-20 w-auto mx-auto mb-4" isDark={true} />
                     </div>
 
                     <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 shadow-2xl">
@@ -268,11 +256,7 @@ function LogoAnimation({ onComplete }) {
                     transitionDuration: phase >= 3 ? '500ms' : '700ms'
                 }}
             >
-                <img 
-                    src={CLT_LOGO_URL}
-                    alt="CLT Academy"
-                    className="h-32 w-auto mx-auto mb-6 logo-dark-mode"
-                />
+                <CLTLogo className="h-32 w-auto mx-auto mb-6" isDark={true} />
                 <h1 
                     className="text-4xl font-bold text-white transition-all ease-out"
                     style={{
