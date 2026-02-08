@@ -1502,6 +1502,9 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Capture old values for audit
+    old_values = {k: v for k, v in existing.items() if k in data and k not in ["_id", "password"]}
+    
     # Non-super_admin can only update certain fields
     if user.get("role") != "super_admin":
         allowed_fields = ["phone", "region"]
@@ -1531,16 +1534,39 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     await log_activity("user", user_id, "updated", user, update_data)
     
+    # Audit log for user update
+    await log_audit(
+        user,
+        "update",
+        "user",
+        entity_id=user_id,
+        entity_name=existing.get("full_name"),
+        changes={"old": old_values, "new": {k: v for k, v in data.items() if k not in ["password", "_id"]}}
+    )
+    
     updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
     return updated
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, user = Depends(require_roles(["super_admin"]))):
+    existing = await db.users.find_one({"id": user_id})
+    
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     
     await log_activity("user", user_id, "deleted", user)
+    
+    # Audit log for user deletion
+    await log_audit(
+        user,
+        "delete",
+        "user",
+        entity_id=user_id,
+        entity_name=existing.get("full_name") if existing else None,
+        details={"email": existing.get("email") if existing else None, "role": existing.get("role") if existing else None}
+    )
+    
     return {"message": "User deleted"}
 
 # ==================== LEADS (SALES CRM) ====================
