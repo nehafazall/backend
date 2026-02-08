@@ -1005,12 +1005,33 @@ async def bootstrap_departments():
 async def login(data: UserLogin):
     user = await db.users.find_one({"email": data.email})
     if not user or not verify_password(data.password, user.get("password", "")):
+        # Log failed login attempt
+        await log_audit(
+            {"id": "unknown", "full_name": "Unknown", "email": data.email, "role": "unknown"},
+            "login_failed",
+            "auth",
+            details={"email": data.email, "reason": "Invalid credentials"}
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if not user.get("is_active", True):
+        await log_audit(
+            {"id": user["id"], "full_name": user.get("full_name"), "email": user["email"], "role": user.get("role")},
+            "login_failed",
+            "auth",
+            details={"reason": "Account disabled"}
+        )
         raise HTTPException(status_code=401, detail="Account is disabled")
     
     token = create_token(user["id"], user["email"], user["role"])
+    
+    # Log successful login
+    await log_audit(
+        {"id": user["id"], "full_name": user.get("full_name"), "email": user["email"], "role": user.get("role")},
+        "login",
+        "auth",
+        details={"method": "email_password"}
+    )
     
     user_data = {k: v for k, v in user.items() if k != "password" and k != "_id"}
     
