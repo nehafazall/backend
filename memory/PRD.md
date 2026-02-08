@@ -257,9 +257,11 @@ Each template includes:
 - [x] SLA Rules implementation
 - [x] Import/Export with templates for Leads, Customers, Students
 - [x] Leads Pool & Customer Master
+- [x] **Post-Login Animation** (5-6 second branded CLT animation)
+- [x] **3CX Call Recording Placeholder** (in all CRM detail modals)
 
 ### P1 - High Priority
-- [ ] 3CX Integration for call recordings (placeholder field exists)
+- [ ] 3CX Integration (actual API integration - placeholder UI complete)
 - [ ] Code Portability Package (Docker, PostgreSQL migration)
 
 ### P2 - Medium Priority
