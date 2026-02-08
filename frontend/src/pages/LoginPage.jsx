@@ -46,7 +46,7 @@ function LoginPage() {
 
     // Show animation screen after successful login
     if (showAnimation) {
-        return <LogoAnimation onComplete={handleAnimationComplete} />;
+        return <CLTAnimation onComplete={handleAnimationComplete} />;
     }
 
     return (
