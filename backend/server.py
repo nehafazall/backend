@@ -3263,9 +3263,22 @@ async def update_user_environment_access(user_id: str, access: List[str], user =
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    old_access = target_user.get("environment_access", [])
+    
     await db.users.update_one(
         {"id": user_id},
         {"$set": {"environment_access": access, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Audit log for access control change
+    await log_audit(
+        user,
+        "access_change",
+        "access_control",
+        entity_id=user_id,
+        entity_name=target_user['full_name'],
+        changes={"old_access": old_access, "new_access": access},
+        details={"target_email": target_user.get("email"), "change_type": "environment_access"}
     )
     
     return {"message": f"Environment access updated for {target_user['full_name']}", "access": access}
