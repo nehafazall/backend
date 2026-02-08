@@ -3,6 +3,31 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
+## Latest Features (Reminders & Follow-ups - December 2025)
+
+### Reminder System
+- **Set Reminder** option on lead/student cards in all CRM pages
+- Works on: Sales CRM, Customer Service, Mentor CRM
+- Users can set date, time, and optional note
+- Reminders appear as badges on cards
+- Quick-select options: Tomorrow, In 3 days, In 1 week
+
+### Today's Follow-ups Page
+- **Kanban board** showing follow-ups grouped by time slots:
+  - Morning (Before 12 PM)
+  - Afternoon (12 PM - 5 PM)
+  - Evening (After 5 PM)
+  - Unscheduled
+- **Stats cards**: Total Today, Leads, Upgrades, Redeposits
+- **Quick actions**: Call button, Complete button
+- Accessible from sidebar navigation
+
+### Environment Access Control
+- **User-level access control** for Dev/Test environments
+- Super Admin can grant access via User Management page
+- "Env Access" column shows user's environment permissions
+- Badges: Dev (blue), Test (amber), "Prod only" (default)
+
 ## Latest Features (Environment & Import)
 
 ### Environment Toggle System
@@ -37,23 +62,24 @@ Each template includes:
 - **Authentication**: JWT-based with role-based access control
 - **Database**: MongoDB
 
-## Frontend Pages (17 total)
+## Frontend Pages (18 total)
 1. Login Page
 2. Dashboard
-3. Sales CRM (+ Import)
+3. Sales CRM (+ Import, + Set Reminder)
 4. My Sales Dashboard
 5. Leads Pool
 6. Customer Master (+ Import)
-7. Customer Service (+ Import)
+7. Customer Service (+ Import, + Set Reminder)
 8. CS Dashboard
-9. Mentor CRM (+ Import)
-10. Finance
-11. User Management
-12. Departments
-13. Courses
-14. Commission Engine
-15. Access Control
-16. Settings
+9. Mentor CRM (+ Import, + Set Reminder)
+10. **Today's Follow-ups** (NEW - Kanban view)
+11. Finance
+12. User Management (+ Environment Access)
+13. Departments
+14. Courses
+15. Commission Engine
+16. Access Control
+17. Settings
 
 ## Import Template Fields
 
@@ -79,6 +105,16 @@ Each template includes:
 
 ## API Endpoints
 
+### Reminders
+- `POST /api/leads/{lead_id}/reminder` - Set lead reminder
+- `POST /api/leads/{lead_id}/reminder/complete` - Complete lead reminder
+- `DELETE /api/leads/{lead_id}/reminder` - Delete lead reminder
+- `POST /api/students/{student_id}/reminder` - Set student reminder (upgrade/redeposit/general)
+- `POST /api/students/{student_id}/reminder/complete` - Complete student reminder
+- `DELETE /api/students/{student_id}/reminder` - Delete student reminder
+- `GET /api/followups/today` - Get today's follow-ups by time slots
+- `GET /api/followups/upcoming?days=7` - Get upcoming follow-ups
+
 ### Environment
 - `GET /api/environment/current` - Get current mode and user access
 - `PUT /api/environment/mode` - Change environment mode
@@ -93,10 +129,19 @@ Each template includes:
 
 ## Prioritized Backlog
 
+### P0 - Completed
+- [x] Set Reminder on CRM cards (Sales, CS, Mentor)
+- [x] Today's Follow-ups Kanban page
+- [x] Environment Access Control on User Management
+- [x] SLA Rules implementation
+- [x] Import/Export with templates
+- [x] Leads Pool & Customer Master
+
 ### P1 - High Priority
-- [ ] 3CX Integration for call recordings
+- [ ] 3CX Integration for call recordings (placeholder field exists)
 - [ ] Google Sheets Integration for lead import
 - [ ] Email notifications (SendGrid)
+- [ ] Code Portability Package (Docker, PostgreSQL migration)
 
 ### P2 - Medium Priority
 - [ ] Meta Ads webhook integration
@@ -118,3 +163,10 @@ Each template includes:
 - Frontend Routes: `/app/frontend/src/App.js`
 - Import Component: `/app/frontend/src/components/ImportButton.jsx`
 - Environment Component: `/app/frontend/src/components/EnvironmentSwitcher.jsx`
+- Reminder Modal: `/app/frontend/src/components/ReminderModal.jsx`
+- Today's Follow-ups: `/app/frontend/src/pages/FollowupsPage.jsx`
+- User Management: `/app/frontend/src/pages/UsersPage.jsx`
+
+## Test Reports
+- Latest: `/app/test_reports/iteration_4.json`
+- Backend Tests: `/app/backend/tests/test_reminder_followups.py`
