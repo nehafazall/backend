@@ -142,9 +142,21 @@ class Test3CXContactSearch:
 class Test3CXCallHistory:
     """Tests for 3CX Call History endpoint"""
     
-    def test_call_history_invalid_contact(self):
+    @pytest.fixture(scope="class")
+    def auth_token(self):
+        """Get authentication token"""
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
+        })
+        if response.status_code == 200:
+            return response.json().get("access_token")
+        pytest.skip("Authentication failed")
+    
+    def test_call_history_invalid_contact(self, auth_token):
         """Test call history with invalid contact ID"""
-        response = requests.get(f"{BASE_URL}/api/3cx/call-history/invalid-uuid-12345")
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        response = requests.get(f"{BASE_URL}/api/3cx/call-history/invalid-uuid-12345", headers=headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -152,15 +164,15 @@ class Test3CXCallHistory:
         assert isinstance(data["calls"], list)
         print("✓ Call history returns empty list for invalid contact")
     
-    def test_call_history_valid_format(self):
+    def test_call_history_valid_format(self, auth_token):
         """Test call history returns proper format"""
-        # Use a random UUID format
-        response = requests.get(f"{BASE_URL}/api/3cx/call-history/00000000-0000-0000-0000-000000000000")
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        response = requests.get(f"{BASE_URL}/api/3cx/call-history/00000000-0000-0000-0000-000000000000", headers=headers)
         assert response.status_code == 200
         
         data = response.json()
         assert "calls" in data
-        assert "contact_id" in data
+        assert "total" in data
         print("✓ Call history returns proper response format")
 
 
