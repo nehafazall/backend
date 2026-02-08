@@ -4090,17 +4090,7 @@ async def get_3cx_crm_template():
             "call_journal": f"{backend_url}/api/3cx/call-journal",
             "call_history": f"{backend_url}/api/3cx/call-history/{{contact_id}}",
             "recent_calls": f"{backend_url}/api/3cx/recent-calls",
-            "click_to_call": f"{backend_url}/api/3cx/click-to-call"
-        }
-    }
-        "endpoints": {
-            "contact_lookup": "/api/3cx/contact-lookup?phone_number={phone}",
-            "contact_search": "/api/3cx/contact-search?search_text={text}",
-            "contact_create": "/api/3cx/contact-create",
-            "call_journal": "/api/3cx/call-journal",
-            "call_history": "/api/3cx/call-history/{contact_id}",
-            "recent_calls": "/api/3cx/recent-calls",
-            "click_to_call": "/api/3cx/click-to-call"
+            "click_to_call": f"{backend_url}/api/3cx/click-to_call"
         }
     }
 
