@@ -74,6 +74,22 @@ function NavItem({ title, icon: Icon, path, isActive, onClick, collapsed }) {
     );
 }
 
+function NotificationList({ items }) {
+    if (!items || items.length === 0) return null;
+    const sliced = items.slice(0, 10);
+    const elements = [];
+    for (let i = 0; i < sliced.length; i++) {
+        const n = sliced[i];
+        elements.push(
+            <DropdownMenuItem key={n.id} className={`flex flex-col items-start p-3 ${!n.read ? 'bg-muted/50' : ''}`}>
+                <span className="font-medium text-sm">{n.title}</span>
+                <span className="text-xs text-muted-foreground mt-1">{n.message}</span>
+            </DropdownMenuItem>
+        );
+    }
+    return <>{elements}</>;
+}
+
 function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
