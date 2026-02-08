@@ -66,7 +66,7 @@ const REJECTION_REASONS = [
     { id: 'not_interested', label: 'Not Interested' },
 ];
 
-const LeadCard = ({ lead, onUpdate, onView }) => {
+const LeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
     const formatDate = (dateStr) => {
         if (!dateStr) return 'N/A';
         return new Date(dateStr).toLocaleDateString('en-AE', {
@@ -76,6 +76,8 @@ const LeadCard = ({ lead, onUpdate, onView }) => {
             minute: '2-digit',
         });
     };
+
+    const hasReminder = lead.reminder_date && !lead.reminder_completed;
 
     return (
         <div
@@ -106,11 +108,13 @@ const LeadCard = ({ lead, onUpdate, onView }) => {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            onView(lead);
-                        }}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(lead); }}>
                             View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSetReminder(lead); }}>
+                            <Bell className="h-4 w-4 mr-2" />
+                            Set Reminder
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -140,18 +144,26 @@ const LeadCard = ({ lead, onUpdate, onView }) => {
                     <Clock className="h-3 w-3" />
                     {formatDate(lead.created_at)}
                 </span>
-                {lead.sla_breach && (
-                    <Badge className="bg-red-500 text-white text-xs">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        SLA
-                    </Badge>
-                )}
+                <div className="flex items-center gap-1">
+                    {hasReminder && (
+                        <Badge className="bg-amber-500 text-white text-xs">
+                            <Bell className="h-3 w-3 mr-1" />
+                            {lead.reminder_time || 'Set'}
+                        </Badge>
+                    )}
+                    {lead.sla_breach && (
+                        <Badge className="bg-red-500 text-white text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            SLA
+                        </Badge>
+                    )}
+                </div>
             </div>
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, leads, onUpdate, onView }) => {
+const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
     const stageLeads = leads.filter(l => l.stage === stage.id);
     
     return (
@@ -172,6 +184,7 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView }) => {
                             lead={lead}
                             onUpdate={onUpdate}
                             onView={onView}
+                            onSetReminder={onSetReminder}
                         />
                     ))}
                     {stageLeads.length === 0 && (
@@ -192,6 +205,8 @@ const SalesCRMPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false);
+    const [reminderLead, setReminderLead] = useState(null);
     const [selectedLead, setSelectedLead] = useState(null);
     const [formData, setFormData] = useState({
         full_name: '',
@@ -298,6 +313,17 @@ const SalesCRMPage = () => {
         setShowDetailModal(true);
     };
 
+    const handleSetReminder = (lead) => {
+        setReminderLead(lead);
+        setShowReminderModal(true);
+    };
+
+    const handleReminderSuccess = () => {
+        setShowReminderModal(false);
+        setReminderLead(null);
+        fetchLeads();
+    };
+
     const formatDate = (dateStr) => {
         if (!dateStr) return 'N/A';
         return new Date(dateStr).toLocaleDateString('en-AE', {
@@ -354,6 +380,7 @@ const SalesCRMPage = () => {
                             leads={leads}
                             onUpdate={handleUpdateLead}
                             onView={handleViewLead}
+                            onSetReminder={handleSetReminder}
                         />
                     ))}
                 </div>
@@ -653,6 +680,16 @@ const SalesCRMPage = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Reminder Modal */}
+            <ReminderModal
+                open={showReminderModal}
+                onClose={() => { setShowReminderModal(false); setReminderLead(null); }}
+                entityType="lead"
+                entityId={reminderLead?.id}
+                entityName={reminderLead?.full_name}
+                onSuccess={handleReminderSuccess}
+            />
         </div>
     );
 };
