@@ -14,7 +14,6 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [showAnimation, setShowAnimation] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -30,23 +29,13 @@ function LoginPage() {
         
         try {
             await login(email, password);
-            // Show animation after successful login
-            setShowAnimation(true);
+            // Redirect to animation page instead of showing animation here
+            navigate('/welcome');
         } catch (error) {
             const message = error.response?.data?.detail || 'Login failed. Please check your credentials.';
             toast.error(message);
             setLoading(false);
         }
-    }
-
-    function handleAnimationComplete() {
-        toast.success('Welcome to CLT Academy ERP');
-        navigate('/home');
-    }
-
-    // Show animation screen after successful login
-    if (showAnimation) {
-        return <CLTAnimation onComplete={handleAnimationComplete} />;
     }
 
     return (
