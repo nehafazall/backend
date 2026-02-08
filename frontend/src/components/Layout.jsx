@@ -274,7 +274,12 @@ function Layout() {
             {!isHomePage && currentSection && (
                 <aside className={`sidebar expanded ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                     <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
-                        <img src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" alt="CLT Academy" className="h-10 w-auto" />
+                        <img 
+                            src="https://customer-assets.emergentagent.com/job_37b7a798-83f6-40f1-8986-24840490698e/artifacts/kld5ow33_2.svg" 
+                            alt="CLT Academy" 
+                            className="h-10 w-auto" 
+                            style={{ filter: 'brightness(0) invert(1)' }}
+                        />
                     </div>
 
                     <ScrollArea className="flex-1 py-4">
