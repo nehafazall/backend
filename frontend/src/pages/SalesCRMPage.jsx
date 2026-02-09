@@ -532,18 +532,39 @@ const SalesCRMPage = () => {
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
                 </div>
             ) : (
-                <div className="kanban-board">
-                    {LEAD_STAGES.map((stage) => (
-                        <KanbanColumn
-                            key={stage.id}
-                            stage={stage}
-                            leads={leads}
-                            onUpdate={handleUpdateLead}
-                            onView={handleViewLead}
-                            onSetReminder={handleSetReminder}
-                        />
-                    ))}
-                </div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={handleDragOver}
+                >
+                    <div className="kanban-board">
+                        {LEAD_STAGES.map((stage) => (
+                            <KanbanColumn
+                                key={stage.id}
+                                stage={stage}
+                                leads={leads}
+                                onUpdate={handleUpdateLead}
+                                onView={handleViewLead}
+                                onSetReminder={handleSetReminder}
+                            />
+                        ))}
+                    </div>
+                    <DragOverlay>
+                        {activeId ? (
+                            <div className="opacity-80">
+                                <LeadCard
+                                    lead={leads.find(l => l.id === activeId)}
+                                    onUpdate={() => {}}
+                                    onView={() => {}}
+                                    onSetReminder={() => {}}
+                                    isDragging={true}
+                                />
+                            </div>
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
             )}
 
             {/* Create Lead Modal */}
