@@ -513,10 +513,9 @@ const SalesCRMPage = () => {
             ) : (
                 <DndContext
                     sensors={sensors}
-                    collisionDetection={closestCorners}
+                    collisionDetection={closestCenter}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
-                    onDragOver={handleDragOver}
                 >
                     <div className="kanban-board">
                         {LEAD_STAGES.map((stage) => (
