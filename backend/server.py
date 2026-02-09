@@ -17,10 +17,30 @@ from enum import Enum
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# ==================== DATABASE CONFIGURATION ====================
+# Environment-based database selection
+# APP_ENV can be: development, testing, production
+
+def get_database_name():
+    """Get database name based on current environment"""
+    app_env = os.environ.get('APP_ENV', 'production').lower()
+    
+    if app_env == 'development':
+        return os.environ.get('DB_NAME_DEV', 'clt_synapse_dev')
+    elif app_env == 'testing':
+        return os.environ.get('DB_NAME_TEST', 'clt_synapse_test')
+    elif app_env == 'production':
+        return os.environ.get('DB_NAME_PROD', os.environ.get('DB_NAME', 'clt_synapse_prod'))
+    else:
+        # Fallback to legacy DB_NAME for backwards compatibility
+        return os.environ.get('DB_NAME', 'clt_academy_erp')
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+CURRENT_DB_NAME = get_database_name()
+db = client[CURRENT_DB_NAME]
+CURRENT_APP_ENV = os.environ.get('APP_ENV', 'production').lower()
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -33,7 +53,7 @@ JWT_EXPIRATION_HOURS = 24
 security = HTTPBearer()
 
 # Create the main app
-app = FastAPI(title="CLT Academy ERP", version="1.0.0")
+app = FastAPI(title="CLT Synapse ERP", version="1.0.0")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -41,6 +61,7 @@ api_router = APIRouter(prefix="/api")
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+logger.info(f"🔧 Environment: {CURRENT_APP_ENV} | Database: {CURRENT_DB_NAME}")
 
 # ==================== ENUMS & CONSTANTS ====================
 
