@@ -1886,7 +1886,9 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
             "New Lead Assigned",
             f"You have been assigned a new lead: {data.full_name}. Contact within 60 mins!",
             "info",
-            f"/sales/leads/{new_lead['id']}"
+            f"/sales/leads/{new_lead['id']}",
+            entity_type="lead",
+            entity_id=new_lead["id"]
         )
     
     return {k: v for k, v in new_lead.items() if k != "_id"}
