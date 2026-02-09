@@ -620,7 +620,31 @@ async def log_activity(entity_type: str, entity_id: str, action: str, user: Dict
     }
     await db.activity_logs.insert_one(activity)
 
-async def create_notification(user_id: str, title: str, message: str, notif_type: str = "info", link: str = None):
+async def create_notification(
+    user_id: str, 
+    title: str, 
+    message: str, 
+    notif_type: str = "info", 
+    link: str = None,
+    entity_type: str = None,
+    entity_id: str = None,
+    related_type: str = None,
+    related_id: str = None
+):
+    """
+    Create a notification for a user
+    
+    Args:
+        user_id: Target user's ID
+        title: Notification title
+        message: Notification message
+        notif_type: Type of notification (info, warning, error, success)
+        link: Optional direct link URL
+        entity_type: Type of entity (lead, student, followup, reminder)
+        entity_id: ID of the entity for click-through navigation
+        related_type: Secondary related entity type (for reminders)
+        related_id: Secondary related entity ID (for reminders)
+    """
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -628,6 +652,10 @@ async def create_notification(user_id: str, title: str, message: str, notif_type
         "message": message,
         "type": notif_type,
         "link": link,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "related_type": related_type,
+        "related_id": related_id,
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
