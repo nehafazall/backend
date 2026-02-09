@@ -33,6 +33,22 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import { COUNTRIES, LEAD_SOURCES, detectCountryFromPhone } from '@/lib/phoneCountry';
+import {
+    DndContext,
+    DragOverlay,
+    closestCorners,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
     Plus,
     Search,
@@ -46,6 +62,7 @@ import {
     Clock,
     Bell,
     PhoneCall,
+    GripVertical,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
