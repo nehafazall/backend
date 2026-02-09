@@ -10,7 +10,7 @@ function WelcomePage() {
     
     function handleAnimationComplete() {
         clearJustLoggedIn();
-        toast.success('Welcome to CLT Academy ERP');
+        toast.success('Welcome to CLT Synapse');
         navigate('/home');
     }
     
