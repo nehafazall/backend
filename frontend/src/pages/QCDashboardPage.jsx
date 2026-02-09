@@ -99,7 +99,12 @@ const QCDashboardPage = () => {
         if (!selectedCall) return;
         
         try {
-            await api.put(`/3cx/calls/${selectedCall.call_id}/qc`, qcForm);
+            // Set status to 'reviewed' when submitting (unless explicitly flagged)
+            const submitData = {
+                ...qcForm,
+                qc_status: qcForm.qc_status === 'flagged' ? 'flagged' : 'reviewed'
+            };
+            await api.put(`/3cx/calls/${selectedCall.call_id}/qc`, submitData);
             toast.success('QC review saved successfully');
             setShowReviewModal(false);
             fetchCalls();
