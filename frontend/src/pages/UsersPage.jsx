@@ -390,7 +390,7 @@ const UsersPage = () => {
 
             {/* Create User Modal */}
             <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-lg overflow-visible">
                     <DialogHeader>
                         <DialogTitle>Create New User</DialogTitle>
                         <DialogDescription>
@@ -445,7 +445,7 @@ const UsersPage = () => {
                                     <SelectTrigger data-testid="user-role-select">
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent position="popper" className="z-[9999]">
                                         {ROLES.map((role) => (
                                             <SelectItem key={role.id} value={role.id}>
                                                 {role.label}
@@ -463,7 +463,7 @@ const UsersPage = () => {
                                     <SelectTrigger data-testid="user-dept-select">
                                         <SelectValue placeholder="Select department" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent position="popper" className="z-[9999]">
                                         {DEPARTMENTS.map((dept) => (
                                             <SelectItem key={dept} value={dept}>
                                                 {dept}
@@ -494,7 +494,7 @@ const UsersPage = () => {
                                     <SelectTrigger data-testid="user-region-select">
                                         <SelectValue placeholder="Select region" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent position="popper" className="z-[9999]">
                                         {REGIONS.map((region) => (
                                             <SelectItem key={region} value={region}>
                                                 {region}
