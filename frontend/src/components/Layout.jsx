@@ -39,6 +39,7 @@ import {
     Briefcase,
     Lock,
     FileText,
+    Key,
     Home,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
