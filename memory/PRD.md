@@ -279,6 +279,15 @@ Each template includes:
 - [x] Leads Pool & Customer Master
 - [x] **Post-Login Animation** (5-6 second branded CLT animation)
 - [x] **3CX Call Recording Placeholder** (in all CRM detail modals)
+- [x] **Notification Enhancements** (December 2025)
+  - Different alert sounds for leads vs general notifications
+  - Settings toggle to enable/disable notification sounds
+  - Test sound buttons in Settings page
+  - Clickable notifications redirect to customer/lead pages
+- [x] **Database Separation** (December 2025)
+  - Same MongoDB server, different database names per environment
+  - APP_ENV variable controls: clt_synapse_dev, clt_synapse_test, clt_synapse_prod
+  - Backend logs current environment and database on startup
 
 ### P1 - High Priority
 - [ ] 3CX Integration (actual API integration - placeholder UI complete)
@@ -298,6 +307,11 @@ Each template includes:
 - **Super Admin:** aqib@clt-academy.com / A@qib1234
 - **All API routes prefixed with /api**
 - **MongoDB indexes on:** email, phone, stage, assigned_to
+- **Database Configuration:**
+  - Development: `clt_synapse_dev`
+  - Testing: `clt_synapse_test`
+  - Production: `clt_synapse_prod`
+  - Set via `APP_ENV` in `/app/backend/.env`
 
 ## Files Reference
 - Backend: `/app/backend/server.py`
@@ -310,10 +324,11 @@ Each template includes:
 - Mentor Dashboard: `/app/frontend/src/pages/MentorDashboardPage.jsx`
 - User Management: `/app/frontend/src/pages/UsersPage.jsx`
 - Courses: `/app/frontend/src/pages/CoursesPage.jsx`
+- Settings Page: `/app/frontend/src/pages/SettingsPage.jsx`
 
 ## Test Reports
-- Latest: `/app/test_reports/iteration_8.json`
-- Previous: `/app/test_reports/iteration_7.json`
+- Latest: `/app/test_reports/iteration_10.json`
+- Previous: `/app/test_reports/iteration_9.json`
 - CLT Logo Component: `/app/frontend/src/components/CLTLogo.jsx`
 - CLT Animation Component: `/app/frontend/src/components/CLTAnimation.jsx`
 - Welcome Page: `/app/frontend/src/pages/WelcomePage.jsx`
