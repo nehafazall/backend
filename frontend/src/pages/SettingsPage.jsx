@@ -332,7 +332,7 @@ const SettingsPage = () => {
             <Card>
                 <CardHeader>
                     <CardTitle>System Information</CardTitle>
-                    <CardDescription>CLT Academy ERP System</CardDescription>
+                    <CardDescription>CLT Synapse System</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-2 gap-4 text-sm">
