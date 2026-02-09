@@ -1,7 +1,8 @@
 import React from 'react';
 
-// CLT Logo as inline SVG - without the ACADEMY/SYNAPSE text
-// The text is handled separately in the UI
+// CLT Logo with SYNAPSE text below (replacing ACADEMY)
+// Original colors: Black text/shapes, Red accents, White background
+// Dark mode: White text/shapes, Red accents, Transparent background
 function CLTLogo({ className, isDark }) {
     const mainColor = isDark ? '#ffffff' : '#000000';
     const accentColor = '#ff0000';  // Red in both light and dark mode
@@ -9,7 +10,7 @@ function CLTLogo({ className, isDark }) {
     return (
         <svg 
             className={className}
-            viewBox="270 180 260 200"
+            viewBox="270 180 260 230"
             xmlns="http://www.w3.org/2000/svg"
         >
             {/* C Letter */}
@@ -22,7 +23,7 @@ function CLTLogo({ className, isDark }) {
                 d="M419.06 271.04h16.68v62.31h39.27v15.32h-55.95v-77.63z" 
                 fill={mainColor}
             />
-            {/* T Letter with red arrow */}
+            {/* T Letter */}
             <path 
                 d="M513.25 286.35h-25.34v-15.32h67.36v15.32h-25.34v62.31h-16.68v-62.31z" 
                 fill={mainColor}
@@ -36,6 +37,20 @@ function CLTLogo({ className, isDark }) {
                 d="M533.56 264.81h17.34v24.25h-17.34v-24.25z" 
                 fill={accentColor}
             />
+            
+            {/* SYNAPSE Text - centered below CLT */}
+            <text 
+                x="400" 
+                y="390" 
+                textAnchor="middle" 
+                fill={mainColor}
+                fontFamily="Arial, sans-serif"
+                fontWeight="bold"
+                fontSize="28"
+                letterSpacing="8"
+            >
+                SYNAPSE
+            </text>
         </svg>
     );
 }
