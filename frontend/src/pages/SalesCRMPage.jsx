@@ -269,6 +269,7 @@ const SalesCRMPage = () => {
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [reminderLead, setReminderLead] = useState(null);
     const [selectedLead, setSelectedLead] = useState(null);
+    const [activeId, setActiveId] = useState(null);
     const [formData, setFormData] = useState({
         full_name: '',
         phone: '',
@@ -286,9 +287,31 @@ const SalesCRMPage = () => {
         follow_up_date: '',
     });
 
+    // Drag and drop sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor)
+    );
+
     useEffect(() => {
         fetchLeads();
     }, []);
+
+    // Auto-detect country when phone number changes
+    const handlePhoneChange = (phone) => {
+        setFormData(prev => {
+            const detectedCountry = detectCountryFromPhone(phone);
+            return {
+                ...prev,
+                phone,
+                country: detectedCountry || prev.country,
+            };
+        });
+    };
 
     const fetchLeads = async () => {
         try {
@@ -307,6 +330,82 @@ const SalesCRMPage = () => {
         setSearchTerm(e.target.value);
         // Debounce search
         setTimeout(() => fetchLeads(), 500);
+    };
+
+    // Drag and drop handlers
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setActiveId(null);
+
+        if (!over) return;
+
+        const activeLeadId = active.id;
+        const activeLead = leads.find(l => l.id === activeLeadId);
+        
+        if (!activeLead) return;
+
+        // Find target column by checking over element's closest column
+        let targetStage = null;
+        
+        // Check if dropped over another lead
+        const overLead = leads.find(l => l.id === over.id);
+        if (overLead) {
+            targetStage = overLead.stage;
+        } else {
+            // Check if dropped over a column
+            const overElement = document.querySelector(`[data-stage="${over.id}"]`);
+            if (overElement) {
+                targetStage = over.id;
+            }
+        }
+
+        // If dropped in a different stage, update the lead
+        if (targetStage && targetStage !== activeLead.stage) {
+            try {
+                await leadApi.update(activeLeadId, { stage: targetStage });
+                toast.success(`Lead moved to ${LEAD_STAGES.find(s => s.id === targetStage)?.label}`);
+                fetchLeads();
+            } catch (error) {
+                toast.error('Failed to move lead');
+                console.error(error);
+            }
+        }
+    };
+
+    const handleDragOver = (event) => {
+        const { active, over } = event;
+        
+        if (!over) return;
+        
+        const activeLeadId = active.id;
+        const overLeadId = over.id;
+        
+        // Find the leads
+        const activeLead = leads.find(l => l.id === activeLeadId);
+        const overLead = leads.find(l => l.id === overLeadId);
+        
+        if (!activeLead) return;
+        
+        // If over is a stage ID (column), check if different
+        const isOverColumn = LEAD_STAGES.some(s => s.id === overLeadId);
+        if (isOverColumn && activeLead.stage !== overLeadId) {
+            // Optimistically move to new stage
+            setLeads(prev => prev.map(l => 
+                l.id === activeLeadId ? { ...l, stage: overLeadId } : l
+            ));
+            return;
+        }
+        
+        // If over a lead in a different stage
+        if (overLead && activeLead.stage !== overLead.stage) {
+            setLeads(prev => prev.map(l => 
+                l.id === activeLeadId ? { ...l, stage: overLead.stage } : l
+            ));
+        }
     };
 
     const handleCreateLead = async (e) => {
