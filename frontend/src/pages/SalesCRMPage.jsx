@@ -594,10 +594,16 @@ const SalesCRMPage = () => {
                                 <Input
                                     id="phone"
                                     value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    onChange={(e) => handlePhoneChange(e.target.value)}
                                     placeholder="+971 50 000 0000"
                                     data-testid="lead-phone-input"
                                 />
+                                {formData.country && formData.phone && (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <MapPin className="h-3 w-3" />
+                                        Auto-detected: {formData.country}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         
@@ -623,13 +629,12 @@ const SalesCRMPage = () => {
                                     <SelectTrigger data-testid="lead-country-select">
                                         <SelectValue placeholder="Select country" />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="UAE">UAE</SelectItem>
-                                        <SelectItem value="India">India</SelectItem>
-                                        <SelectItem value="Saudi Arabia">Saudi Arabia</SelectItem>
-                                        <SelectItem value="Qatar">Qatar</SelectItem>
-                                        <SelectItem value="Kuwait">Kuwait</SelectItem>
-                                        <SelectItem value="Other">Other</SelectItem>
+                                    <SelectContent className="max-h-60">
+                                        {COUNTRIES.map((country) => (
+                                            <SelectItem key={country} value={country}>
+                                                {country}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -643,33 +648,14 @@ const SalesCRMPage = () => {
                                         <SelectValue placeholder="Select source" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="meta_ads">Meta Ads</SelectItem>
-                                        <SelectItem value="google_ads">Google Ads</SelectItem>
-                                        <SelectItem value="website">Website</SelectItem>
-                                        <SelectItem value="referral">Referral</SelectItem>
-                                        <SelectItem value="manual">Manual Entry</SelectItem>
+                                        {LEAD_SOURCES.map((source) => (
+                                            <SelectItem key={source.id} value={source.id}>
+                                                {source.label}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                            <Label htmlFor="course_of_interest">Course of Interest</Label>
-                            <Select
-                                value={formData.course_of_interest}
-                                onValueChange={(value) => setFormData({ ...formData, course_of_interest: value })}
-                            >
-                                <SelectTrigger data-testid="lead-course-select">
-                                    <SelectValue placeholder="Select course" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="basic_trading">Basic Trading</SelectItem>
-                                    <SelectItem value="advanced_trading">Advanced Trading</SelectItem>
-                                    <SelectItem value="mentorship">Mentorship Program</SelectItem>
-                                    <SelectItem value="market_code">Market Code</SelectItem>
-                                    <SelectItem value="profit_matrix">Profit Matrix</SelectItem>
-                                </SelectContent>
-                            </Select>
                         </div>
                         
                         <div className="space-y-2">
