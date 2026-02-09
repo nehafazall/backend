@@ -1042,6 +1042,148 @@ async def get_me(user = Depends(get_current_user)):
     user_data = {k: v for k, v in user.items() if k != "password" and k != "_id"}
     return user_data
 
+# ==================== FORGOT PASSWORD ====================
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    """
+    Submit a password reset request. 
+    The request is stored and visible to super admins.
+    """
+    # Check if user exists
+    user = await db.users.find_one({"email": data.email})
+    if not user:
+        # Don't reveal if email exists or not for security
+        raise HTTPException(status_code=404, detail="If this email exists in our system, a reset request has been submitted.")
+    
+    # Create password reset request
+    reset_request = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_email": data.email,
+        "user_name": user.get("full_name", "Unknown"),
+        "user_role": user.get("role", "Unknown"),
+        "status": "pending",  # pending, approved, rejected
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+        "processed_at": None,
+        "processed_by": None,
+        "new_password": None,  # Will be set by admin when approving
+        "notes": None
+    }
+    
+    await db.password_reset_requests.insert_one(reset_request)
+    
+    # Log the audit
+    await log_audit(
+        {"id": user["id"], "full_name": user.get("full_name"), "email": data.email, "role": user.get("role")},
+        "password_reset_request",
+        "auth",
+        entity_id=reset_request["id"],
+        details={"email": data.email}
+    )
+    
+    logger.info(f"Password reset requested for {data.email}")
+    
+    return {"message": "Password reset request submitted. Please contact your administrator."}
+
+@api_router.get("/auth/password-reset-requests")
+async def get_password_reset_requests(
+    status: Optional[str] = None,
+    user = Depends(require_roles(["super_admin"]))
+):
+    """Get all password reset requests (Super Admin only)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    requests = await db.password_reset_requests.find(query, {"_id": 0}).sort("requested_at", -1).to_list(100)
+    return {"requests": requests, "total": len(requests)}
+
+class ProcessResetRequest(BaseModel):
+    action: str  # approve, reject
+    new_password: Optional[str] = None
+    notes: Optional[str] = None
+
+@api_router.put("/auth/password-reset-requests/{request_id}")
+async def process_password_reset(request_id: str, data: ProcessResetRequest, user = Depends(require_roles(["super_admin"]))):
+    """Process a password reset request (Super Admin only)"""
+    reset_request = await db.password_reset_requests.find_one({"id": request_id})
+    if not reset_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if reset_request["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Request already processed")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if data.action == "approve":
+        if not data.new_password:
+            raise HTTPException(status_code=400, detail="New password is required for approval")
+        
+        # Update user's password
+        target_user = await db.users.find_one({"id": reset_request["user_id"]})
+        if target_user:
+            hashed = hash_password(data.new_password)
+            await db.users.update_one(
+                {"id": reset_request["user_id"]},
+                {"$set": {"password": hashed, "updated_at": now}}
+            )
+        
+        # Update request
+        await db.password_reset_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "processed_at": now,
+                "processed_by": user["id"],
+                "processed_by_name": user.get("full_name"),
+                "new_password": data.new_password,  # Store for admin reference
+                "notes": data.notes
+            }}
+        )
+        
+        # Audit log
+        await log_audit(
+            user,
+            "password_reset_approved",
+            "auth",
+            entity_id=request_id,
+            entity_name=reset_request["user_email"],
+            details={"user_id": reset_request["user_id"], "approved_by": user.get("full_name")}
+        )
+        
+        return {"message": f"Password reset approved for {reset_request['user_email']}"}
+    
+    elif data.action == "reject":
+        await db.password_reset_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "rejected",
+                "processed_at": now,
+                "processed_by": user["id"],
+                "processed_by_name": user.get("full_name"),
+                "notes": data.notes
+            }}
+        )
+        
+        # Audit log
+        await log_audit(
+            user,
+            "password_reset_rejected",
+            "auth",
+            entity_id=request_id,
+            entity_name=reset_request["user_email"],
+            details={"user_id": reset_request["user_id"], "rejected_by": user.get("full_name")}
+        )
+        
+        return {"message": f"Password reset rejected for {reset_request['user_email']}"}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'approve' or 'reject'")
+
 # ==================== DEPARTMENT MANAGEMENT ====================
 
 @api_router.get("/departments", response_model=List[DepartmentResponse])
