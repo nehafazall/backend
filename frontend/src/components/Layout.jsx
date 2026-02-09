@@ -340,7 +340,7 @@ function Layout() {
                 <header className="h-16 bg-card border-b border-border px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40">
                     <div className="flex items-center gap-3">
                         {!isHomePage && <div className="lg:hidden w-8" />}
-                        <h1 className="text-lg font-semibold text-foreground">CLT Academy ERP</h1>
+                        <h1 className="text-lg font-semibold text-foreground">CLT Synapse</h1>
                     </div>
                     <div className="flex items-center gap-2">
                         <EnvironmentSwitcher />
