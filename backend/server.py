@@ -875,7 +875,9 @@ async def process_sla_checks():
                         f"SLA {new_status.upper()}: {lead['full_name']}",
                         f"Lead requires immediate attention. Status: {new_status}",
                         "warning" if new_status == "warning" else "error",
-                        f"/sales"
+                        f"/sales",
+                        entity_type="lead",
+                        entity_id=lead["id"]
                     )
                 
                 # Notify manager on breach or level 2 warning
@@ -890,7 +892,9 @@ async def process_sla_checks():
                             f"SLA BREACH: Lead {lead['full_name']}",
                             f"Lead has breached SLA. Assigned to: {lead.get('assigned_to_name', 'Unassigned')}",
                             "error",
-                            f"/sales"
+                            f"/sales",
+                            entity_type="lead",
+                            entity_id=lead["id"]
                         )
                 
                 # If reassigned to pool, log activity
@@ -928,7 +932,9 @@ async def process_sla_checks():
                         f"SLA BREACH: Activation call needed",
                         f"Student {student['full_name']} needs activation call immediately!",
                         "error",
-                        f"/cs"
+                        f"/cs",
+                        entity_type="student",
+                        entity_id=student["id"]
                     )
                 
                 # Notify CS head
@@ -942,7 +948,9 @@ async def process_sla_checks():
                         f"CS SLA BREACH: {student['full_name']}",
                         f"Activation call not made within 15 mins. Agent: {student.get('cs_agent_name', 'Unknown')}",
                         "error",
-                        f"/cs"
+                        f"/cs",
+                        entity_type="student",
+                        entity_id=student["id"]
                     )
     
     return {"leads_checked": len(leads), "students_checked": len(students)}
