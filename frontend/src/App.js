@@ -203,6 +203,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Role Management */}
+                <Route path="roles" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <RolesPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* QC Dashboard */}
                 <Route path="qc-dashboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'sales_manager']}>
