@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useTheme, notificationApi } from '@/lib/api';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,8 +42,32 @@ import {
     FileText,
     Key,
     Home,
+    Volume2,
+    VolumeX,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
+
+// Notification sound URLs (base64 encoded short alert tones)
+const NOTIFICATION_SOUNDS = {
+    // Standard notification sound - soft chime
+    notification: 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1cXWBhZ3F7hY2VnKGlo6GdlpCLhoOBf35+f4GDh4uQlZqeoKCfnZqXk5CLiIaDgYB/f4CBg4aJjZGVmZudn56cmpiVkY6LiIaDgYB/f4CBgoWIi4+SlZiampubnJuamJaUkY6LiYeEgoGAgICBgoSGiYuOkJKUlZaXl5eXlpWUkpCOjImHhYOCgYGBgYKDhYeJi42PkJGSk5OTk5OSkZCPjYuJh4WEgoKBgYGCg4SFh4iKi4yNjo6Ojo6NjYyLioiHhoWEg4KCgoKCg4OEhYaHiImKioqLi4uKiomJiIeGhYWEg4ODg4ODg4OEhIWFhoaGh4eHh4eHhoaFhYWEhISEhISEhISEhIWFhYWFhYWFhYWFhYWFhYSEhISEhISEhISEhISEhIWFhYWFhYWFhYWFhQ==',
+    // Lead alert sound - more urgent double beep
+    lead: 'data:audio/wav;base64,UklGRl9JAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTtJAAD//wIA/f8EAPz/BgD7/wgA+v8KAPn/DAD4/w4A9/8QAPX/EgD0/xQA8/8WAPD/GADv/xoA7f8cAOz/HgDq/yAA6P8iAOb/JADk/yYA4v8oAOD/KgDd/ywA2/8uANn/MADWyzIA1P80ANH/NgDO/zgAy/86AMj/PADG/z4Aw/9AAMD/QgC9/0QAuv9GALf/SAC0/0oAsP9MAK3/TgCq/1AAp/9SAKT/VACV/1YAlv9YAI3/WgCK/1wAgf9eAH7/YAB7/2IAeP9kAHP/ZgBw/2gAav9qAGX/bABi/24AX/9wAFn/cgBW/3QAU/92AFD/eABM/3oASP98AEX/fgBC/4AAPv+CADv/hAA3/4YAMP+IACz/igAp/4wAJv+OACL/kAAf/5IAHP+UABj/lgAV/5gAEv+aAA7/nAAL/54AB/+gAAT/ogAA/6QA/f6mAPn+qAD2/qoA8v6sAO/+rgDr/rAA6P6yAOT+tADh/rYA3f64ANr+ugDW/rwA0/6+AM/+wADM/sIAyP7EAMP+xgC//sgAu/7KALj+zAC0/s4AsP7QALL+kgCr/tQAp/7WAKr/2ACg/9oAnf/cAJn/3gCW/+AAs/+6AJD/5ACN/+YAif/oAIX/6gCA/+wAfP/uAHr/8ABw//IAaf/0AGf/9gBk//gAYP/6AF3//ABa/wABWf8CAVb/BAFUzwYBUv8IAVD/CgFM/wwBS/8OAUL/EAFA/xIBPv8UAT3/FgE7/xgBOP8aATf/HAE0/x4BM/8gATD/IgEv/yQBLv8mASz/KAEs/yoBLP8sASv/LgEr/zABLP8yAS3/NAEu/zYBLv84ATD/OgEw/zwBMf8+ATL/QAE0/0IBNf9EATX/RgE2/0gBN/9KATj/TAE4/04BOf9QATr/UgE6/1QBO/9WATz/WAE8/1oBPf9cAT7/XgE+/2ABQf9iAUH/ZAFEz2YBRf9oAUf/agFI/2wBSv9uAUv/cAFN/3IBUP90AVH/dgFT/3gBVf96AVj/fAFa/34BXf+AAWD/ggFi/4QBZf+GAWj/iAFq/4oBbv+MAW//jgFy/5ABdf+SAXP/lAF6/5YBff+YAX7/mgGA/5wBhP+eAYf/oAGK/6IBjP+kAZD/pgGS/6gBlf+qAZj/rAGa/64Bnf+wAZ//sgGj/7QBpv+2Aan/uAGr/7oBr/+8AbH/vgG0/8ABt//CAbv/xAG9/8YBwf/IAcP/ygHG/8wByP/OAcv/0AHO/9IB0f/UAdP/1gHV/9gB2P/aAdr/3AHd/94B4P/gAeL/4gHl/+QB6P/mAev/6AHt/+oB8P/sAfP/7gH1//AB+P/yAfr/9AH9//YB///4AQIA+gEFAPwBBwD+AQoAAAENAAIBEAAEARIABgEVAAgBFwAKARoADAEcAA4BHwAQASEAEgEkABQBJgAWASkAGAErABoBLgAbATAAHQEzAB8BNQAhATgAIwE6ACQBPQA='
+};
+
+// Helper to get notification type from notification data
+function getNotificationType(notification) {
+    if (!notification) return 'notification';
+    const title = (notification.title || '').toLowerCase();
+    const message = (notification.message || '').toLowerCase();
+    const entityType = notification.entity_type || '';
+    
+    // Check if it's a lead-related notification
+    if (entityType === 'lead' || title.includes('lead') || message.includes('lead') || message.includes('new lead')) {
+        return 'lead';
+    }
+    return 'notification';
+}
 
 const SECTIONS = {
     sales: {
