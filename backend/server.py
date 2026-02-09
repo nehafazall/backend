@@ -1768,33 +1768,6 @@ async def delete_user(user_id: str, user = Depends(require_roles(["super_admin"]
     
     return {"message": "User deleted"}
 
-# ==================== USER PREFERENCES ====================
-
-class UserPreferencesUpdate(BaseModel):
-    notification_sound_enabled: Optional[bool] = None
-
-@api_router.put("/users/preferences")
-async def update_user_preferences(data: UserPreferencesUpdate, user = Depends(get_current_user)):
-    """Update current user's preferences"""
-    update_data = {}
-    
-    if data.notification_sound_enabled is not None:
-        update_data["notification_sound_enabled"] = data.notification_sound_enabled
-    
-    if update_data:
-        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.users.update_one({"id": user["id"]}, {"$set": update_data})
-    
-    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
-    return updated
-
-@api_router.get("/users/preferences")
-async def get_user_preferences(user = Depends(get_current_user)):
-    """Get current user's preferences"""
-    return {
-        "notification_sound_enabled": user.get("notification_sound_enabled", True)
-    }
-
 # ==================== LEADS (SALES CRM) ====================
 
 @api_router.get("/leads", response_model=List[LeadResponse])
