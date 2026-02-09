@@ -387,38 +387,6 @@ const SalesCRMPage = () => {
         }
     };
 
-    const handleDragOver = (event) => {
-        const { active, over } = event;
-        
-        if (!over) return;
-        
-        const activeLeadId = active.id;
-        const overLeadId = over.id;
-        
-        // Find the leads
-        const activeLead = leads.find(l => l.id === activeLeadId);
-        const overLead = leads.find(l => l.id === overLeadId);
-        
-        if (!activeLead) return;
-        
-        // If over is a stage ID (column), check if different
-        const isOverColumn = LEAD_STAGES.some(s => s.id === overLeadId);
-        if (isOverColumn && activeLead.stage !== overLeadId) {
-            // Optimistically move to new stage
-            setLeads(prev => prev.map(l => 
-                l.id === activeLeadId ? { ...l, stage: overLeadId } : l
-            ));
-            return;
-        }
-        
-        // If over a lead in a different stage
-        if (overLead && activeLead.stage !== overLead.stage) {
-            setLeads(prev => prev.map(l => 
-                l.id === activeLeadId ? { ...l, stage: overLead.stage } : l
-            ));
-        }
-    };
-
     const handleCreateLead = async (e) => {
         e.preventDefault();
         
