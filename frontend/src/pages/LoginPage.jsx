@@ -72,9 +72,9 @@ function LoginPage() {
             </div>
 
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
-                <div className="text-center">
-                    <CLTLogo className="h-64 w-auto mx-auto mb-6" isDark={true} />
-                    <p className="text-xl text-slate-400">Every action, intelligently connected.</p>
+                <div className="text-center flex flex-col items-center justify-center">
+                    <CLTLogo className="h-48 w-auto" isDark={true} />
+                    <p className="text-xl text-slate-400 mt-6">Every action, intelligently connected.</p>
                     <div className="mt-8 flex items-center justify-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-sm text-slate-500">System Online</span>
