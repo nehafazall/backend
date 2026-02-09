@@ -3436,7 +3436,9 @@ async def get_current_environment(user = Depends(get_current_user)):
     return {
         "current_mode": current_mode,
         "user_access": user_access,
-        "available_modes": ENVIRONMENT_MODES
+        "available_modes": ENVIRONMENT_MODES,
+        "backend_env": CURRENT_APP_ENV,
+        "backend_database": CURRENT_DB_NAME
     }
 
 @api_router.put("/environment/mode")
