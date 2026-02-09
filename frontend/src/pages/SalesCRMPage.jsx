@@ -814,7 +814,7 @@ const SalesCRMPage = () => {
                                                 <SelectTrigger data-testid="update-stage-select">
                                                     <SelectValue placeholder="Select stage" />
                                                 </SelectTrigger>
-                                                <SelectContent>
+                                                <SelectContent position="popper" className="z-[9999]">
                                                     {LEAD_STAGES.map((stage) => (
                                                         <SelectItem key={stage.id} value={stage.id}>
                                                             {stage.label}
@@ -834,7 +834,7 @@ const SalesCRMPage = () => {
                                                     <SelectTrigger data-testid="rejection-reason-select">
                                                         <SelectValue placeholder="Select reason" />
                                                     </SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectContent position="popper" className="z-[9999]">
                                                         {REJECTION_REASONS.map((reason) => (
                                                             <SelectItem key={reason.id} value={reason.id}>
                                                                 {reason.label}
