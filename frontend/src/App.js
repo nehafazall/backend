@@ -216,6 +216,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Password Reset Requests */}
+                <Route path="password-resets" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <PasswordResetPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Settings */}
                 <Route path="settings" element={<SettingsPage />} />
             </Route>
