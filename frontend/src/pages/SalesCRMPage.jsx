@@ -359,18 +359,18 @@ const SalesCRMPage = () => {
         
         if (!activeLead) return;
 
-        // Find target column by checking over element's closest column
+        // Determine target stage
         let targetStage = null;
         
-        // Check if dropped over another lead
-        const overLead = leads.find(l => l.id === over.id);
-        if (overLead) {
-            targetStage = overLead.stage;
+        // Check if dropped over a column (stage id)
+        const isColumnDrop = LEAD_STAGES.some(s => s.id === over.id);
+        if (isColumnDrop) {
+            targetStage = over.id;
         } else {
-            // Check if dropped over a column
-            const overElement = document.querySelector(`[data-stage="${over.id}"]`);
-            if (overElement) {
-                targetStage = over.id;
+            // Dropped over another lead - get that lead's stage
+            const overLead = leads.find(l => l.id === over.id);
+            if (overLead) {
+                targetStage = overLead.stage;
             }
         }
 
