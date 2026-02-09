@@ -54,8 +54,8 @@ function CLTLogo({ className, isDark }) {
                 fill={mainColor}
                 fontFamily="Arial Black, Arial, sans-serif"
                 fontWeight="900"
-                fontSize="26"
-                letterSpacing="4"
+                fontSize="38"
+                letterSpacing="6"
             >
                 SYNAPSE
             </text>
