@@ -314,6 +314,18 @@ Each template includes:
   - Same MongoDB server, different database names per environment
   - APP_ENV variable controls: clt_synapse_dev, clt_synapse_test, clt_synapse_prod
   - Backend logs current environment and database on startup
+- [x] **Lead Form Enhancements** (December 2025)
+  - Phone country auto-detection (60+ countries)
+  - Lead source dropdown: Facebook, Instagram, Google Ads, Website, Referral, Walk-in, Cold Call, Other
+- [x] **Kanban Drag & Drop** (December 2025)
+  - Drag-and-drop in Sales CRM using @dnd-kit
+  - Visual feedback with drag handles and drop zones
+- [x] **User Management Dialog Z-Index Fix** (December 2025)
+  - Dropdowns now properly layered above dialog
+- [x] **Advanced Role Management** (December 2025)
+  - Create/edit custom roles with module permissions
+  - Data visibility settings (own/team/all)
+  - 10 system roles + unlimited custom roles
 
 ### P1 - High Priority
 - [ ] 3CX Integration (actual API integration - placeholder UI complete)
