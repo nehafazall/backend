@@ -356,7 +356,7 @@ function Layout() {
     // Handle notification click - redirect to relevant entity
     function handleNotificationClick(notification) {
         // Mark as read
-        notificationApi.markAsRead(notification.id).catch(() => {});
+        notificationApi.markRead(notification.id).catch(() => {});
         
         // Redirect based on entity type
         if (notification.entity_type && notification.entity_id) {
