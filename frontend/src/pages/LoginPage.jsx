@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/api';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Mail } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
 function LoginPage() {
@@ -12,6 +13,9 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [resetEmail, setResetEmail] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
     const { login } = useAuth();
 
     async function handleSubmit(e) {
@@ -26,7 +30,6 @@ function LoginPage() {
         
         try {
             await login(email, password);
-            // PublicRoute will automatically redirect to /welcome after login
         } catch (error) {
             const message = error.response?.data?.detail || 'Login failed. Please check your credentials.';
             toast.error(message);
@@ -34,19 +37,45 @@ function LoginPage() {
         }
     }
 
+    async function handleForgotPassword(e) {
+        e.preventDefault();
+        
+        if (!resetEmail) {
+            toast.error('Please enter your work email');
+            return;
+        }
+
+        if (!resetEmail.includes('@')) {
+            toast.error('Please enter a valid email address');
+            return;
+        }
+        
+        setResetLoading(true);
+        
+        try {
+            await api.post('/auth/forgot-password', { email: resetEmail });
+            toast.success('Password reset request submitted. Please contact your administrator.');
+            setShowForgotPassword(false);
+            setResetEmail('');
+        } catch (error) {
+            const message = error.response?.data?.detail || 'Failed to submit reset request';
+            toast.error(message);
+        } finally {
+            setResetLoading(false);
+        }
+    }
+
     return (
         <div className="min-h-screen flex bg-slate-900 relative overflow-hidden">
-            {/* Trading Chart Background */}
             <div className="absolute inset-0">
                 <TradingChartSVG />
             </div>
 
-            {/* Left Side - Logo */}
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
                 <div className="text-center">
-                    <CLTLogo className="h-40 w-auto mx-auto mb-8" isDark={true} />
-                    <h1 className="text-4xl font-bold text-white mb-4">CLT Academy</h1>
-                    <p className="text-xl text-slate-400">Enterprise Resource Planning</p>
+                    <CLTLogo className="h-56 w-auto mx-auto mb-8" isDark={true} />
+                    <h1 className="text-4xl font-bold text-white mb-4">CLT Synapse</h1>
+                    <p className="text-xl text-slate-400">Every action, intelligently connected.</p>
                     <div className="mt-8 flex items-center justify-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-sm text-slate-500">System Online</span>
@@ -54,87 +83,144 @@ function LoginPage() {
                 </div>
             </div>
 
-            {/* Right Side - Login Form */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10">
                 <div className="w-full max-w-md">
-                    {/* Mobile Logo */}
                     <div className="lg:hidden text-center mb-8">
-                        <CLTLogo className="h-20 w-auto mx-auto mb-4" isDark={true} />
+                        <CLTLogo className="h-28 w-auto mx-auto mb-4" isDark={true} />
                     </div>
 
                     <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 shadow-2xl">
-                        <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-white mb-2">Welcome Back</h2>
-                            <p className="text-slate-400">Sign in to your account</p>
-                        </div>
+                        {!showForgotPassword ? (
+                            <>
+                                <div className="mb-8">
+                                    <h2 className="text-2xl font-bold text-white mb-2">Welcome Back</h2>
+                                    <p className="text-slate-400">Sign in to your account</p>
+                                </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="email" className="text-slate-300">Email Address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="name@clt-academy.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="h-12 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
-                                    data-testid="login-email"
-                                    disabled={loading}
-                                />
-                            </div>
-                            
-                            <div className="space-y-2">
-                                <Label htmlFor="password" className="text-slate-300">Password</Label>
-                                <div className="relative">
-                                    <Input
-                                        id="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        placeholder="Enter your password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="h-12 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20 pr-12"
-                                        data-testid="login-password"
+                                <form onSubmit={handleSubmit} className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="email" className="text-slate-300">Email Address</Label>
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            placeholder="name@clt-academy.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="h-12 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
+                                            data-testid="login-email"
+                                            disabled={loading}
+                                        />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <Label htmlFor="password" className="text-slate-300">Password</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="password"
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Enter your password"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                className="h-12 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20 pr-12"
+                                                data-testid="login-password"
+                                                disabled={loading}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-base transition-all duration-200 shadow-lg shadow-blue-600/25"
                                         disabled={loading}
-                                    />
+                                        data-testid="login-submit"
+                                    >
+                                        {loading ? (
+                                            <div className="flex items-center gap-3">
+                                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                                                Signing in...
+                                            </div>
+                                        ) : (
+                                            'Sign In'
+                                        )}
+                                    </Button>
+                                </form>
+
+                                <div className="mt-6 text-center">
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                                        onClick={() => setShowForgotPassword(true)}
+                                        className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
                                     >
-                                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                        Forgot Password?
                                     </button>
                                 </div>
-                            </div>
-                            
-                            <Button
-                                type="submit"
-                                className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-base transition-all duration-200 shadow-lg shadow-blue-600/25"
-                                disabled={loading}
-                                data-testid="login-submit"
-                            >
-                                {loading ? (
-                                    <div className="flex items-center gap-3">
-                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                                        Signing in...
-                                    </div>
-                                ) : (
-                                    'Sign In'
-                                )}
-                            </Button>
-                        </form>
+                            </>
+                        ) : (
+                            <>
+                                <div className="mb-8">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowForgotPassword(false)}
+                                        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-4"
+                                    >
+                                        <ArrowLeft className="h-4 w-4" />
+                                        Back to login
+                                    </button>
+                                    <h2 className="text-2xl font-bold text-white mb-2">Reset Password</h2>
+                                    <p className="text-slate-400">Enter your work email to request a password reset</p>
+                                </div>
 
-                        {/* Demo Credentials */}
-                        <div className="mt-8 p-4 rounded-xl bg-slate-700/30 border border-slate-600/50">
-                            <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Demo Credentials</p>
-                            <div className="space-y-1">
-                                <p className="text-sm text-slate-300 font-mono">aqib@clt-academy.com</p>
-                                <p className="text-sm text-slate-300 font-mono">A@qib1234</p>
-                            </div>
-                        </div>
+                                <form onSubmit={handleForgotPassword} className="space-y-6">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="reset-email" className="text-slate-300">Work Email</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="reset-email"
+                                                type="email"
+                                                placeholder="name@clt-academy.com"
+                                                value={resetEmail}
+                                                onChange={(e) => setResetEmail(e.target.value)}
+                                                className="h-12 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-blue-500/20 pl-12"
+                                                data-testid="reset-email"
+                                                disabled={resetLoading}
+                                            />
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                        </div>
+                                    </div>
+                                    
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-base transition-all duration-200 shadow-lg shadow-blue-600/25"
+                                        disabled={resetLoading}
+                                        data-testid="reset-submit"
+                                    >
+                                        {resetLoading ? (
+                                            <div className="flex items-center gap-3">
+                                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                                                Submitting...
+                                            </div>
+                                        ) : (
+                                            'Request Password Reset'
+                                        )}
+                                    </Button>
+                                </form>
+
+                                <p className="mt-6 text-xs text-slate-500 text-center">
+                                    Your request will be reviewed by the administrator. You will be contacted with further instructions.
+                                </p>
+                            </>
+                        )}
                     </div>
 
                     <p className="text-center text-slate-500 text-sm mt-8">
-                        © 2024 CLT Academy. All rights reserved.
+                        © 2026 CLT Synapse. All rights reserved.
                     </p>
                 </div>
             </div>
