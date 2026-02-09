@@ -155,6 +155,29 @@ function Layout() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const prevUnreadCountRef = useRef(0);
+    const notificationSoundRef = useRef(null);
+    
+    // Get notification sound setting from localStorage
+    const [soundEnabled, setSoundEnabled] = useState(() => {
+        const saved = localStorage.getItem('notificationSoundEnabled');
+        return saved !== null ? JSON.parse(saved) : true;
+    });
+
+    // Initialize notification sound
+    useEffect(() => {
+        // Create audio element for notification sound
+        notificationSoundRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1cXWBhZ3F7hY2VnKGlo6GdlpCLhoOBf35+f4GDh4uQlZqeoKCfnZqXk5CLiIaDgYB/f4CBg4aJjZGVmZudn56cmpiVkY6LiIaDgYB/f4CBgoWIi4+SlZiampubnJuamJaUkY6LiYeEgoGAgICBgoSGiYuOkJKUlZaXl5eXlpWUkpCOjImHhYOCgYGBgYKDhYeJi42PkJGSk5OTk5OSkZCPjYuJh4WEgoKBgYGCg4SFh4iKi4yNjo6Ojo6NjYyLioiHhoWEg4KCgoKCg4OEhYaHiImKioqLi4uKiomJiIeGhYWEg4ODg4ODg4OEhIWFhoaGh4eHh4eHhoaFhYWEhISEhISEhISEhIWFhYWFhYWFhYWFhYWFhYSEhISEhISEhISEhISEhIWFhYWFhYWFhYWFhQ==');
+        notificationSoundRef.current.volume = 0.5;
+    }, []);
+
+    // Play sound when new notifications arrive
+    useEffect(() => {
+        if (soundEnabled && unreadCount > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
+            notificationSoundRef.current?.play().catch(() => {});
+        }
+        prevUnreadCountRef.current = unreadCount;
+    }, [unreadCount, soundEnabled]);
     
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
