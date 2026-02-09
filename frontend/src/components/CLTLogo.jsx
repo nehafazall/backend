@@ -2,10 +2,10 @@ import React from 'react';
 
 // CLT Logo as inline SVG for proper theme handling
 // Original colors: Black text/shapes, Red accents, White background
-// Dark mode: White text/shapes, Cyan (inverted red) accents, Transparent background
+// Dark mode: White text/shapes, Red accents (same as light mode), Transparent background
 function CLTLogo({ className, isDark }) {
     const mainColor = isDark ? '#ffffff' : '#000000';
-    const accentColor = isDark ? '#00ffff' : '#ff0000';
+    const accentColor = '#ff0000';  // Red in both light and dark mode
     
     return (
         <svg 
