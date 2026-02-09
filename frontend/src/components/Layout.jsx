@@ -181,7 +181,9 @@ function Layout() {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const prevUnreadCountRef = useRef(0);
+    const prevNotificationsRef = useRef([]);
     const notificationSoundRef = useRef(null);
+    const leadSoundRef = useRef(null);
     
     // Get notification sound setting from localStorage
     const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -189,20 +191,51 @@ function Layout() {
         return saved !== null ? JSON.parse(saved) : true;
     });
 
-    // Initialize notification sound
+    // Initialize notification sounds
     useEffect(() => {
-        // Create audio element for notification sound
-        notificationSoundRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1cXWBhZ3F7hY2VnKGlo6GdlpCLhoOBf35+f4GDh4uQlZqeoKCfnZqXk5CLiIaDgYB/f4CBg4aJjZGVmZudn56cmpiVkY6LiIaDgYB/f4CBgoWIi4+SlZiampubnJuamJaUkY6LiYeEgoGAgICBgoSGiYuOkJKUlZaXl5eXlpWUkpCOjImHhYOCgYGBgYKDhYeJi42PkJGSk5OTk5OSkZCPjYuJh4WEgoKBgYGCg4SFh4iKi4yNjo6Ojo6NjYyLioiHhoWEg4KCgoKCg4OEhYaHiImKioqLi4uKiomJiIeGhYWEg4ODg4ODg4OEhIWFhoaGh4eHh4eHhoaFhYWEhISEhISEhISEhIWFhYWFhYWFhYWFhYWFhYSEhISEhISEhISEhISEhIWFhYWFhYWFhYWFhQ==');
+        // Create audio elements for different notification types
+        notificationSoundRef.current = new Audio(NOTIFICATION_SOUNDS.notification);
         notificationSoundRef.current.volume = 0.5;
+        
+        leadSoundRef.current = new Audio(NOTIFICATION_SOUNDS.lead);
+        leadSoundRef.current.volume = 0.6;
     }, []);
 
-    // Play sound when new notifications arrive
-    useEffect(() => {
-        if (soundEnabled && unreadCount > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
-            notificationSoundRef.current?.play().catch(() => {});
+    // Sync sound settings with backend
+    const syncSoundSettings = useCallback(async (enabled) => {
+        try {
+            await api.put('/users/preferences', { notification_sound_enabled: enabled });
+        } catch (err) {
+            console.error('Failed to sync sound settings:', err);
         }
+    }, []);
+
+    // Play appropriate sound when new notifications arrive
+    useEffect(() => {
+        if (!soundEnabled) return;
+        if (unreadCount <= prevUnreadCountRef.current) {
+            prevUnreadCountRef.current = unreadCount;
+            return;
+        }
+        
+        // Find new notifications by comparing with previous
+        const prevIds = new Set(prevNotificationsRef.current.map(n => n.id));
+        const newNotifications = notifications.filter(n => !prevIds.has(n.id) && !n.read);
+        
+        if (newNotifications.length > 0) {
+            // Determine which sound to play based on notification type
+            const hasLeadNotification = newNotifications.some(n => getNotificationType(n) === 'lead');
+            
+            if (hasLeadNotification) {
+                leadSoundRef.current?.play().catch(() => {});
+            } else {
+                notificationSoundRef.current?.play().catch(() => {});
+            }
+        }
+        
         prevUnreadCountRef.current = unreadCount;
-    }, [unreadCount, soundEnabled]);
+        prevNotificationsRef.current = [...notifications];
+    }, [unreadCount, notifications, soundEnabled]);
     
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
