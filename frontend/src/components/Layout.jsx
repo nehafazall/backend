@@ -127,6 +127,7 @@ const SECTIONS = {
         roles: ['super_admin', 'admin', 'hr'],
         items: [
             { title: 'Access Control', icon: Shield, path: '/access-control', roles: ['super_admin'] },
+            { title: 'Role Management', icon: Users, path: '/roles', roles: ['super_admin'] },
             { title: 'Password Resets', icon: Key, path: '/password-resets', roles: ['super_admin'] },
             { title: 'Audit Log', icon: FileText, path: '/audit-log', roles: ['super_admin', 'admin'] },
             { title: 'User Management', icon: UserCircle, path: '/users' },
