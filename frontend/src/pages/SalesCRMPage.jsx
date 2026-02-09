@@ -37,11 +37,12 @@ import { COUNTRIES, LEAD_SOURCES, detectCountryFromPhone } from '@/lib/phoneCoun
 import {
     DndContext,
     DragOverlay,
-    closestCorners,
+    closestCenter,
     KeyboardSensor,
     PointerSensor,
     useSensor,
     useSensors,
+    useDroppable,
 } from '@dnd-kit/core';
 import {
     SortableContext,
