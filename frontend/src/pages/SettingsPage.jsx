@@ -193,6 +193,69 @@ const SettingsPage = () => {
                 </CardContent>
             </Card>
 
+            {/* Notification Settings Section */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-2">
+                        <Bell className="h-5 w-5" />
+                        <CardTitle>Notification Settings</CardTitle>
+                    </div>
+                    <CardDescription>Control notification sounds and alerts</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            {notificationSoundEnabled ? (
+                                <Volume2 className="h-5 w-5 text-green-500" />
+                            ) : (
+                                <VolumeX className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            <div>
+                                <Label>Notification Sounds</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Play sounds when new notifications arrive
+                                </p>
+                            </div>
+                        </div>
+                        <Switch
+                            checked={notificationSoundEnabled}
+                            onCheckedChange={handleNotificationSoundToggle}
+                            disabled={savingSound}
+                            data-testid="notification-sound-switch"
+                        />
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-3">
+                        <Label className="text-sm font-medium">Test Notification Sounds</Label>
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => playTestSound('notification')}
+                                data-testid="test-notification-sound"
+                            >
+                                <Bell className="h-4 w-4 mr-2" />
+                                General Alert
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => playTestSound('lead')}
+                                data-testid="test-lead-sound"
+                            >
+                                <Phone className="h-4 w-4 mr-2" />
+                                New Lead Alert
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Different sounds play for new leads vs. general notifications (e.g., SLA warnings, reminders)
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* Permissions Section */}
             <Card>
                 <CardHeader>
