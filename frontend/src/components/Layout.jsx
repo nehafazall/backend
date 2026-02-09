@@ -279,8 +279,8 @@ function Layout() {
             {/* Sidebar - only show when a section is selected */}
             {!isHomePage && currentSection && (
                 <aside className={`sidebar expanded ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-                    <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
-                        <CLTLogo className="h-10 w-auto" isDark={true} />
+                    <div className="h-24 flex items-center justify-center border-b border-slate-800 px-4">
+                        <CLTLogo className="h-24 w-auto" isDark={true} />
                     </div>
 
                     <ScrollArea className="flex-1 py-4">
