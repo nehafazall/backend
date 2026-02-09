@@ -283,11 +283,55 @@ function Layout() {
     for (let i = 0; i < notifSlice.length; i++) {
         const n = notifSlice[i];
         notificationItems.push(
-            <DropdownMenuItem key={n.id} className={`flex flex-col items-start p-3 ${!n.read ? 'bg-muted/50' : ''}`}>
+            <DropdownMenuItem 
+                key={n.id} 
+                className={`flex flex-col items-start p-3 cursor-pointer ${!n.read ? 'bg-muted/50' : ''}`}
+                onClick={() => handleNotificationClick(n)}
+            >
                 <span className="font-medium text-sm">{n.title}</span>
                 <span className="text-xs text-muted-foreground mt-1">{n.message}</span>
+                {n.entity_type && <span className="text-xs text-primary mt-1">Click to view →</span>}
             </DropdownMenuItem>
         );
+    }
+
+    // Handle notification click - redirect to relevant entity
+    function handleNotificationClick(notification) {
+        // Mark as read
+        notificationApi.markAsRead(notification.id).catch(() => {});
+        
+        // Redirect based on entity type
+        if (notification.entity_type && notification.entity_id) {
+            switch (notification.entity_type) {
+                case 'lead':
+                    navigate(`/sales?lead=${notification.entity_id}`);
+                    break;
+                case 'student':
+                    navigate(`/cs?student=${notification.entity_id}`);
+                    break;
+                case 'followup':
+                    navigate('/followups');
+                    break;
+                case 'reminder':
+                    if (notification.related_type === 'lead') {
+                        navigate(`/sales?lead=${notification.related_id}`);
+                    } else if (notification.related_type === 'student') {
+                        navigate(`/cs?student=${notification.related_id}`);
+                    }
+                    break;
+                default:
+                    // For SLA breach or deadline notifications
+                    if (notification.message?.toLowerCase().includes('lead')) {
+                        navigate('/sales');
+                    } else if (notification.message?.toLowerCase().includes('student')) {
+                        navigate('/cs');
+                    }
+            }
+        }
+        
+        // Update local state
+        setNotifications(prev => prev.map(n => n.id === notification.id ? {...n, read: true} : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
     }
 
     return (
