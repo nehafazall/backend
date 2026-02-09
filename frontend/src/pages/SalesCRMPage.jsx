@@ -226,8 +226,18 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
     const stageLeads = leads.filter(l => l.stage === stage.id);
     const leadIds = stageLeads.map(l => l.id);
     
+    // Make column a drop target
+    const { setNodeRef, isOver } = useDroppable({
+        id: stage.id,
+    });
+    
     return (
-        <div className="kanban-column" data-testid={`kanban-column-${stage.id}`} data-stage={stage.id}>
+        <div 
+            ref={setNodeRef}
+            className={`kanban-column ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`} 
+            data-testid={`kanban-column-${stage.id}`} 
+            data-stage={stage.id}
+        >
             <div className="kanban-column-header">
                 <div className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${stage.color}`} />
@@ -238,7 +248,7 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
             
             <ScrollArea className="flex-1">
                 <SortableContext items={leadIds} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3 min-h-[100px]">
+                    <div className="space-y-3 min-h-[100px] p-1">
                         {stageLeads.map((lead) => (
                             <SortableLeadCard
                                 key={lead.id}
@@ -249,7 +259,7 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
                             />
                         ))}
                         {stageLeads.length === 0 && (
-                            <div className="text-center text-muted-foreground py-8 text-sm border-2 border-dashed border-muted rounded-lg">
+                            <div className={`text-center text-muted-foreground py-8 text-sm border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
                                 Drop leads here
                             </div>
                         )}
