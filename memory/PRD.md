@@ -1,9 +1,35 @@
-# CLT Academy ERP - Product Requirements Document
+# CLT Synapse ERP - Product Requirements Document
 
 ## Original Problem Statement
-Build a custom, modular ERP system for CLT Academy that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
+Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (3CX Phone Integration - December 2025)
+## Latest Features (December 2025)
+
+### Lead Form Enhancements (COMPLETED)
+- **Phone Country Auto-Detection**: Automatically detects country from phone number prefix (60+ countries supported)
+  - +971 → UAE, +91 → India, +966 → Saudi Arabia, etc.
+  - Utility: `/app/frontend/src/lib/phoneCountry.js`
+- **Country Dropdown**: Pre-filled based on phone detection, 60+ countries available
+- **Lead Source Dropdown**: Facebook, Instagram, Google Ads, Website, Referral, Walk-in, Cold Call, Other
+- **Course of Interest**: Removed from form (marked as not important)
+
+### Kanban Drag & Drop (COMPLETED)
+- **Sales CRM**: Drag leads between stage columns (New Lead, No Answer, Call Back, Warm Lead, Hot Lead, In Progress, Rejected, Enrolled)
+- Uses @dnd-kit library for smooth drag-and-drop
+- Visual feedback with drag handles and drop zone indicators
+- Stage updates via API when dropped in different column
+
+### User Management Dialog Fix (COMPLETED)
+- Fixed z-index issue where dropdowns appeared below dialog
+- Role, Department, Region dropdowns now properly layered above dialog
+
+### Advanced Role Management (COMPLETED)
+- **Role Management Page**: `/roles` - Accessible to super_admin only
+- **Module Permissions**: Set access level (None/View/Edit/Full) per module
+- **Data Visibility**: Own Data Only / Team Data / All Data
+- **Custom Roles**: Create, edit, delete custom roles
+- **System Roles**: 10 default roles (cannot be deleted, but can be customized)
+- **Backend API**: `/api/roles` - GET, POST, PUT, DELETE
 
 ### 3CX Phone System Integration (COMPLETED)
 Full click-to-call and call logging integration with 3CX phone system.
