@@ -223,9 +223,10 @@ const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
 
 const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
     const stageLeads = leads.filter(l => l.stage === stage.id);
+    const leadIds = stageLeads.map(l => l.id);
     
     return (
-        <div className="kanban-column" data-testid={`kanban-column-${stage.id}`}>
+        <div className="kanban-column" data-testid={`kanban-column-${stage.id}`} data-stage={stage.id}>
             <div className="kanban-column-header">
                 <div className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${stage.color}`} />
@@ -235,22 +236,24 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
             </div>
             
             <ScrollArea className="flex-1">
-                <div className="space-y-3">
-                    {stageLeads.map((lead) => (
-                        <LeadCard
-                            key={lead.id}
-                            lead={lead}
-                            onUpdate={onUpdate}
-                            onView={onView}
-                            onSetReminder={onSetReminder}
-                        />
-                    ))}
-                    {stageLeads.length === 0 && (
-                        <div className="text-center text-muted-foreground py-8 text-sm">
-                            No leads in this stage
-                        </div>
-                    )}
-                </div>
+                <SortableContext items={leadIds} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3 min-h-[100px]">
+                        {stageLeads.map((lead) => (
+                            <SortableLeadCard
+                                key={lead.id}
+                                lead={lead}
+                                onUpdate={onUpdate}
+                                onView={onView}
+                                onSetReminder={onSetReminder}
+                            />
+                        ))}
+                        {stageLeads.length === 0 && (
+                            <div className="text-center text-muted-foreground py-8 text-sm border-2 border-dashed border-muted rounded-lg">
+                                Drop leads here
+                            </div>
+                        )}
+                    </div>
+                </SortableContext>
             </ScrollArea>
         </div>
     );
