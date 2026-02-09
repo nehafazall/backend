@@ -3453,11 +3453,174 @@ async def import_users(file: UploadFile, user = Depends(require_roles(["super_ad
 
 @api_router.get("/")
 async def root():
-    return {"message": "CLT Academy ERP API", "version": "2.0.0"}
+    return {"message": "CLT Synapse ERP API", "version": "2.0.0"}
 
 @api_router.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+# ==================== ROLE MANAGEMENT ====================
+
+class RoleCreate(BaseModel):
+    name: str
+    display_name: str
+    description: Optional[str] = None
+    color: Optional[str] = "bg-blue-500"
+    module_permissions: Optional[Dict] = {}
+    action_permissions: Optional[Dict] = {}
+    data_visibility: Optional[str] = "own"  # own, team, all
+    is_system_role: Optional[bool] = False
+
+class RoleUpdate(BaseModel):
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    module_permissions: Optional[Dict] = None
+    action_permissions: Optional[Dict] = None
+    data_visibility: Optional[str] = None
+
+# Default system roles
+DEFAULT_SYSTEM_ROLES = [
+    {"id": "super_admin", "name": "super_admin", "display_name": "Super Admin", "is_system_role": True, "color": "bg-purple-500", "data_visibility": "all"},
+    {"id": "admin", "name": "admin", "display_name": "Admin", "is_system_role": True, "color": "bg-blue-500", "data_visibility": "all"},
+    {"id": "sales_manager", "name": "sales_manager", "display_name": "Sales Manager", "is_system_role": True, "color": "bg-green-500", "data_visibility": "team"},
+    {"id": "team_leader", "name": "team_leader", "display_name": "Team Leader", "is_system_role": True, "color": "bg-cyan-500", "data_visibility": "team"},
+    {"id": "sales_executive", "name": "sales_executive", "display_name": "Sales Executive", "is_system_role": True, "color": "bg-yellow-500", "data_visibility": "own"},
+    {"id": "cs_head", "name": "cs_head", "display_name": "CS Head", "is_system_role": True, "color": "bg-pink-500", "data_visibility": "all"},
+    {"id": "cs_agent", "name": "cs_agent", "display_name": "CS Agent", "is_system_role": True, "color": "bg-indigo-500", "data_visibility": "own"},
+    {"id": "mentor", "name": "mentor", "display_name": "Mentor", "is_system_role": True, "color": "bg-orange-500", "data_visibility": "own"},
+    {"id": "finance", "name": "finance", "display_name": "Finance", "is_system_role": True, "color": "bg-emerald-500", "data_visibility": "all"},
+    {"id": "hr", "name": "hr", "display_name": "HR", "is_system_role": True, "color": "bg-rose-500", "data_visibility": "all"},
+]
+
+@api_router.get("/roles")
+async def get_roles(user = Depends(get_current_user)):
+    """Get all roles"""
+    roles = await db.roles.find({}, {"_id": 0}).to_list(100)
+    
+    # If no roles exist, return default system roles
+    if not roles:
+        return DEFAULT_SYSTEM_ROLES
+    
+    return roles
+
+@api_router.post("/roles")
+async def create_role(data: RoleCreate, user = Depends(require_roles(["super_admin"]))):
+    """Create a new custom role"""
+    # Check if role already exists
+    existing = await db.roles.find_one({"name": data.name})
+    if existing:
+        raise HTTPException(status_code=400, detail="Role with this name already exists")
+    
+    # Check if trying to use system role name
+    system_names = [r["name"] for r in DEFAULT_SYSTEM_ROLES]
+    if data.name in system_names:
+        raise HTTPException(status_code=400, detail="Cannot use system role names")
+    
+    new_role = {
+        "id": data.name,
+        "name": data.name,
+        "display_name": data.display_name,
+        "description": data.description,
+        "color": data.color,
+        "module_permissions": data.module_permissions,
+        "action_permissions": data.action_permissions,
+        "data_visibility": data.data_visibility,
+        "is_system_role": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+    }
+    
+    await db.roles.insert_one(new_role)
+    
+    # Also add to ROLES list for validation
+    global ROLES
+    if data.name not in ROLES:
+        ROLES.append(data.name)
+    
+    await log_audit(user, "create", "role", entity_id=data.name, entity_name=data.display_name)
+    
+    return {k: v for k, v in new_role.items() if k != "_id"}
+
+@api_router.put("/roles/{role_id}")
+async def update_role(role_id: str, data: RoleUpdate, user = Depends(require_roles(["super_admin"]))):
+    """Update a role's permissions"""
+    # Check if role exists
+    existing = await db.roles.find_one({"id": role_id})
+    
+    # If not in DB, check if it's a system role
+    if not existing:
+        system_role = next((r for r in DEFAULT_SYSTEM_ROLES if r["id"] == role_id), None)
+        if system_role:
+            # Create entry for system role with updated permissions
+            new_entry = {**system_role}
+            if data.display_name:
+                new_entry["display_name"] = data.display_name
+            if data.description:
+                new_entry["description"] = data.description
+            if data.color:
+                new_entry["color"] = data.color
+            if data.module_permissions:
+                new_entry["module_permissions"] = data.module_permissions
+            if data.action_permissions:
+                new_entry["action_permissions"] = data.action_permissions
+            if data.data_visibility:
+                new_entry["data_visibility"] = data.data_visibility
+            
+            new_entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+            new_entry["updated_by"] = user["id"]
+            
+            await db.roles.insert_one(new_entry)
+            await log_audit(user, "update", "role", entity_id=role_id, entity_name=new_entry.get("display_name"))
+            return {k: v for k, v in new_entry.items() if k != "_id"}
+        else:
+            raise HTTPException(status_code=404, detail="Role not found")
+    
+    # Update existing role
+    update_data = {}
+    if data.display_name:
+        update_data["display_name"] = data.display_name
+    if data.description is not None:
+        update_data["description"] = data.description
+    if data.color:
+        update_data["color"] = data.color
+    if data.module_permissions is not None:
+        update_data["module_permissions"] = data.module_permissions
+    if data.action_permissions is not None:
+        update_data["action_permissions"] = data.action_permissions
+    if data.data_visibility:
+        update_data["data_visibility"] = data.data_visibility
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_by"] = user["id"]
+    
+    await db.roles.update_one({"id": role_id}, {"$set": update_data})
+    
+    updated = await db.roles.find_one({"id": role_id}, {"_id": 0})
+    await log_audit(user, "update", "role", entity_id=role_id, entity_name=updated.get("display_name"))
+    
+    return updated
+
+@api_router.delete("/roles/{role_id}")
+async def delete_role(role_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Delete a custom role"""
+    # Check if it's a system role
+    system_names = [r["name"] for r in DEFAULT_SYSTEM_ROLES]
+    if role_id in system_names:
+        raise HTTPException(status_code=400, detail="Cannot delete system roles")
+    
+    # Check if any users have this role
+    users_with_role = await db.users.count_documents({"role": role_id})
+    if users_with_role > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete role: {users_with_role} users are assigned to this role")
+    
+    result = await db.roles.delete_one({"id": role_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    await log_audit(user, "delete", "role", entity_id=role_id)
+    
+    return {"message": "Role deleted successfully"}
 
 # ==================== ENVIRONMENT MANAGEMENT ====================
 
