@@ -85,7 +85,7 @@ const REJECTION_REASONS = [
     { id: 'not_interested', label: 'Not Interested' },
 ];
 
-const LeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
+const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
     const formatDate = (dateStr) => {
         if (!dateStr) return 'N/A';
         return new Date(dateStr).toLocaleDateString('en-AE', {
@@ -100,12 +100,15 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
 
     return (
         <div
-            className={`kanban-card stage-${lead.stage} animate-fade-in`}
-            onClick={() => onView(lead)}
+            className={`kanban-card stage-${lead.stage} animate-fade-in ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''}`}
+            onClick={() => !isDragging && onView(lead)}
             data-testid={`lead-card-${lead.id}`}
         >
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
+                    <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
+                        <GripVertical className="h-4 w-4" />
+                    </div>
                     <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
                         {lead.full_name?.charAt(0) || '?'}
                     </div>
@@ -185,6 +188,35 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
                     )}
                 </div>
             </div>
+        </div>
+    );
+};
+
+// Sortable wrapper for LeadCard
+const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: lead.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            <LeadCard
+                lead={lead}
+                onUpdate={onUpdate}
+                onView={onView}
+                onSetReminder={onSetReminder}
+                isDragging={isDragging}
+            />
         </div>
     );
 };
