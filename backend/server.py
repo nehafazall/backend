@@ -3495,14 +3495,27 @@ DEFAULT_SYSTEM_ROLES = [
 
 @api_router.get("/roles")
 async def get_roles(user = Depends(get_current_user)):
-    """Get all roles"""
-    roles = await db.roles.find({}, {"_id": 0}).to_list(100)
+    """Get all roles - merges system roles with custom roles from DB"""
+    custom_roles = await db.roles.find({}, {"_id": 0}).to_list(100)
     
-    # If no roles exist, return default system roles
-    if not roles:
-        return DEFAULT_SYSTEM_ROLES
+    # Start with system roles
+    result = []
+    custom_role_ids = {r["id"] for r in custom_roles}
     
-    return roles
+    # Add system roles (use DB version if exists, else default)
+    for sys_role in DEFAULT_SYSTEM_ROLES:
+        db_version = next((r for r in custom_roles if r["id"] == sys_role["id"]), None)
+        if db_version:
+            result.append(db_version)
+        else:
+            result.append(sys_role)
+    
+    # Add custom (non-system) roles
+    for role in custom_roles:
+        if role["id"] not in {r["id"] for r in DEFAULT_SYSTEM_ROLES}:
+            result.append(role)
+    
+    return result
 
 @api_router.post("/roles")
 async def create_role(data: RoleCreate, user = Depends(require_roles(["super_admin"]))):
