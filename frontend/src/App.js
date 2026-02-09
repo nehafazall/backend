@@ -27,6 +27,7 @@ import WelcomePage from "@/pages/WelcomePage";
 import QCDashboardPage from "@/pages/QCDashboardPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import PasswordResetPage from "@/pages/PasswordResetPage";
+import RolesPage from "@/pages/RolesPage";
 import Layout from "@/components/Layout";
 
 // Protected Route Component
