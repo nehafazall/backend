@@ -1,53 +1,61 @@
 import React from 'react';
 
-// CLT Logo with SYNAPSE text below (replacing ACADEMY)
+// CLT Logo as inline SVG for proper theme handling
 // Original colors: Black text/shapes, Red accents, White background
-// Dark mode: White text/shapes, Red accents, Transparent background
+// Dark mode: White text/shapes, Red accents (same as light mode), Transparent background
 function CLTLogo({ className, isDark }) {
     const mainColor = isDark ? '#ffffff' : '#000000';
     const accentColor = '#ff0000';  // Red in both light and dark mode
     
     return (
         <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 810 810" 
             className={className}
-            viewBox="270 180 260 230"
-            xmlns="http://www.w3.org/2000/svg"
+            style={{ background: 'transparent' }}
         >
             {/* C Letter */}
             <path 
-                d="M366.67 349.56c-5.51 0-10.57-.92-15.16-2.76s-8.56-4.47-11.89-7.9-5.93-7.55-7.79-12.38-2.79-10.26-2.79-16.3.93-11.47 2.79-16.3 4.47-8.96 7.79-12.38 7.3-6.05 11.89-7.9 9.65-2.76 15.16-2.76c3.32 0 6.42.3 9.31.92s5.51 1.46 7.87 2.53 4.47 2.38 6.35 3.91 3.53 3.22 4.94 5.05l-10.42 9.04c-2.21-2.76-4.86-4.86-7.94-6.28s-6.58-2.14-10.5-2.14c-3.32 0-6.35.61-9.08 1.84s-5.09 2.95-7.07 5.16-3.53 4.86-4.63 7.94-1.66 6.47-1.66 10.15.55 7.03 1.66 10.11 2.64 5.7 4.63 7.9 4.32 3.91 7.03 5.12 5.7 1.82 8.96 1.82c2.03 0 3.95-.2 5.77-.59s3.53-.97 5.12-1.72 3.07-1.68 4.43-2.79 2.6-2.38 3.72-3.79l10.8 8.66c-1.57 2.03-3.38 3.87-5.43 5.51s-4.36 3.05-6.92 4.24-5.39 2.11-8.47 2.76-6.39.97-9.94.97z" 
+                d="M365.8 322.06v-18.43c0-35.9-29.11-65.02-65.02-65.02s-65.02 29.11-65.02 65.02v104.77c0 35.91 29.11 65.02 65.02 65.02 17.95 0 34.21-7.28 45.98-19.05s19.05-28.03 19.05-45.98v-35L325.59 373.42v35.07c0 14.09-11.42 25.51-25.52 25.51-7.04 0-13.43-2.85-18.04-7.48s-7.48-10.99-7.48-18.04v-105.92c0-14.09 11.43-25.52 25.52-25.52 7.05 0 13.43 2.86 18.04 7.49s7.48 11 7.48 18.04v19.5h40.22z" 
                 fill={mainColor}
             />
-            {/* L Letter */}
+            {/* L Letter - Main vertical */}
             <path 
-                d="M419.06 271.04h16.68v62.31h39.27v15.32h-55.95v-77.63z" 
+                d="M380.3 243.73h40.79v184.48H380.3V243.73zm0 184.49h117.08v40.22H380.3v-40.22z" 
                 fill={mainColor}
             />
-            {/* T Letter */}
+            {/* L Letter - Red triangle accent */}
             <path 
-                d="M513.25 286.35h-25.34v-15.32h67.36v15.32h-25.34v62.31h-16.68v-62.31z" 
-                fill={mainColor}
-            />
-            {/* Red Arrow */}
-            <path 
-                d="M542.23 230.39l-22.98 35.97h45.95l-22.97-35.97z" 
+                d="M421.09 307.34L380.3 372.95V238.43h40.79v68.91z" 
                 fill={accentColor}
             />
+            {/* T Letter - Red diagonal */}
             <path 
-                d="M533.56 264.81h17.34v24.25h-17.34v-24.25z" 
+                d="M433.32 423.77l128.9-130.73v-21L518.68 272.05 433.32 423.77z" 
+                fill={accentColor}
+            />
+            {/* T Letter - Red top bar */}
+            <path 
+                d="M522.46 262.46l16.49 10.56H441.68v-33.63h154.27v76.74l-21.34-22.63v-34.87h-52.2l.05 3.4z" 
+                fill={accentColor}
+            />
+            {/* T Letter - Red vertical stem */}
+            <path 
+                d="M555.41 468.45h-36.73V348.04l36.73-37.37v157.78z" 
                 fill={accentColor}
             />
             
-            {/* SYNAPSE Text - centered below CLT */}
+            {/* SYNAPSE Text - using same font style as original ACADEMY */}
             <text 
-                x="400" 
-                y="390" 
+                x="405" 
+                y="520" 
                 textAnchor="middle" 
+                dominantBaseline="middle"
                 fill={mainColor}
-                fontFamily="Arial, sans-serif"
-                fontWeight="bold"
-                fontSize="28"
-                letterSpacing="8"
+                fontFamily="Arial Black, Arial, sans-serif"
+                fontWeight="900"
+                fontSize="26"
+                letterSpacing="4"
             >
                 SYNAPSE
             </text>
