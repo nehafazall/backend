@@ -73,8 +73,7 @@ function LoginPage() {
 
             <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative z-10">
                 <div className="text-center">
-                    <CLTLogo className="h-56 w-auto mx-auto mb-8" isDark={true} />
-                    <h1 className="text-4xl font-bold text-white mb-4">CLT Synapse</h1>
+                    <CLTLogo className="h-64 w-auto mx-auto mb-6" isDark={true} />
                     <p className="text-xl text-slate-400">Every action, intelligently connected.</p>
                     <div className="mt-8 flex items-center justify-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
