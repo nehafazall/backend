@@ -340,15 +340,22 @@ function Layout() {
     const notifSlice = notifications.slice(0, 10);
     for (let i = 0; i < notifSlice.length; i++) {
         const n = notifSlice[i];
+        const isLeadNotification = getNotificationType(n) === 'lead';
         notificationItems.push(
             <DropdownMenuItem 
                 key={n.id} 
                 className={`flex flex-col items-start p-3 cursor-pointer ${!n.read ? 'bg-muted/50' : ''}`}
                 onClick={() => handleNotificationClick(n)}
+                data-testid={`notification-item-${n.id}`}
             >
-                <span className="font-medium text-sm">{n.title}</span>
+                <div className="flex items-center gap-2 w-full">
+                    {isLeadNotification && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" title="New Lead" />
+                    )}
+                    <span className="font-medium text-sm flex-1">{n.title}</span>
+                </div>
                 <span className="text-xs text-muted-foreground mt-1">{n.message}</span>
-                {n.entity_type && <span className="text-xs text-primary mt-1">Click to view →</span>}
+                {(n.entity_type || n.entity_id) && <span className="text-xs text-primary mt-1">Click to view →</span>}
             </DropdownMenuItem>
         );
     }
