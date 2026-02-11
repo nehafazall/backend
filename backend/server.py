@@ -5043,6 +5043,1241 @@ async def get_3cx_crm_template():
         }
     }
 
+# ==================== DOUBLE ENTRY ACCOUNTING ENGINE ====================
+
+from accounting_engine import (
+    AccountCreate, AccountUpdate, AccountResponse,
+    JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse, JournalLineCreate,
+    SettlementBatchCreate, SettlementBatchSettle, SettlementBatchResponse,
+    ExpenseCreate, ExpenseResponse, TransferCreate, TransferResponse,
+    FinanceConfigUpdate, DEFAULT_ACCOUNTS, DEFAULT_FINANCE_CONFIG,
+    AccountType, AccountSubtype, JournalStatus, LockStatus, SettlementStatus, SettlementProvider,
+    get_inr_to_aed_rate, convert_to_aed, calculate_expected_settlement_date, is_settlement_overdue,
+    create_finance_audit_entry, SETTLEMENT_RULES
+)
+
+# ==================== CHART OF ACCOUNTS ====================
+
+@api_router.get("/accounting/accounts")
+async def get_accounts(
+    account_type: Optional[str] = None,
+    subtype: Optional[str] = None,
+    active_only: bool = True,
+    user = Depends(get_current_user)
+):
+    """Get all accounts in the chart of accounts"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if account_type:
+        query["account_type"] = account_type
+    if subtype:
+        query["subtype"] = subtype
+    if active_only:
+        query["active"] = True
+    
+    accounts = await db.accounts.find(query, {"_id": 0}).sort("code", 1).to_list(200)
+    return accounts
+
+@api_router.post("/accounting/accounts")
+async def create_account(data: AccountCreate, user = Depends(get_current_user)):
+    """Create a new account"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check for duplicate code
+    if data.code:
+        existing = await db.accounts.find_one({"code": data.code})
+        if existing:
+            raise HTTPException(status_code=400, detail="Account code already exists")
+    
+    account = {
+        "id": str(uuid.uuid4()),
+        "code": data.code,
+        "name": data.name,
+        "account_type": data.account_type.value,
+        "subtype": data.subtype.value,
+        "currency": data.currency,
+        "parent_account_id": data.parent_account_id,
+        "description": data.description,
+        "active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"]
+    }
+    
+    await db.accounts.insert_one(account)
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "account", account["id"], 
+        "create", None, {k: v for k, v in account.items() if k != "_id"}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return {k: v for k, v in account.items() if k != "_id"}
+
+@api_router.put("/accounting/accounts/{account_id}")
+async def update_account(account_id: str, data: AccountUpdate, user = Depends(get_current_user)):
+    """Update an account"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    existing = await db.accounts.find_one({"id": account_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    update_data = {}
+    if data.name is not None:
+        update_data["name"] = data.name
+    if data.code is not None:
+        update_data["code"] = data.code
+    if data.description is not None:
+        update_data["description"] = data.description
+    if data.active is not None:
+        update_data["active"] = data.active
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.accounts.update_one({"id": account_id}, {"$set": update_data})
+    
+    updated = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "account", account_id,
+        "update", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+@api_router.post("/accounting/accounts/seed")
+async def seed_accounts(user = Depends(get_current_user)):
+    """Seed the default chart of accounts"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can seed accounts")
+    
+    created = 0
+    for acc in DEFAULT_ACCOUNTS:
+        existing = await db.accounts.find_one({"code": acc["code"]})
+        if not existing:
+            account = {
+                "id": str(uuid.uuid4()),
+                **acc,
+                "active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": user["id"]
+            }
+            await db.accounts.insert_one(account)
+            created += 1
+    
+    # Seed default config
+    existing_config = await db.finance_config.find_one({"key": "settings"})
+    if not existing_config:
+        await db.finance_config.insert_one({
+            "key": "settings",
+            **DEFAULT_FINANCE_CONFIG,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {"message": f"Seeded {created} accounts", "total_default": len(DEFAULT_ACCOUNTS)}
+
+# ==================== JOURNAL ENTRIES ====================
+
+async def get_account_name(account_id: str) -> str:
+    """Helper to get account name"""
+    account = await db.accounts.find_one({"id": account_id}, {"name": 1})
+    return account.get("name", "Unknown") if account else "Unknown"
+
+async def get_exchange_rates():
+    """Get current exchange rates"""
+    api_key = os.environ.get("EXCHANGE_RATE_API_KEY", "")
+    usd_rate = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    inr_rate = await get_inr_to_aed_rate(api_key) if api_key else 0.044
+    return {"INR": inr_rate, "USD": usd_rate, "USDT": usd_rate}
+
+@api_router.get("/accounting/journal-entries")
+async def get_journal_entries(
+    status: Optional[str] = None,
+    source_module: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    user = Depends(get_current_user)
+):
+    """Get journal entries with filters"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if status:
+        query["status"] = status
+    if source_module:
+        query["source_module"] = source_module
+    if from_date:
+        query["entry_date"] = {"$gte": from_date}
+    if to_date:
+        if "entry_date" in query:
+            query["entry_date"]["$lte"] = to_date
+        else:
+            query["entry_date"] = {"$lte": to_date}
+    
+    entries = await db.journal_entries.find(query, {"_id": 0}).sort("entry_date", -1).skip(skip).limit(limit).to_list(limit)
+    
+    # Enrich with lines and account names
+    for entry in entries:
+        lines = await db.journal_lines.find({"journal_entry_id": entry["id"]}, {"_id": 0}).to_list(100)
+        for line in lines:
+            line["account_name"] = await get_account_name(line["account_id"])
+        entry["lines"] = lines
+        entry["total_debit"] = sum(l.get("debit_amount", 0) for l in lines)
+        entry["total_credit"] = sum(l.get("credit_amount", 0) for l in lines)
+        entry["is_balanced"] = abs(entry["total_debit"] - entry["total_credit"]) < 0.01
+    
+    total = await db.journal_entries.count_documents(query)
+    
+    return {"entries": entries, "total": total, "limit": limit, "skip": skip}
+
+@api_router.post("/accounting/journal-entries")
+async def create_journal_entry(data: JournalEntryCreate, user = Depends(get_current_user)):
+    """Create a new journal entry"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validate balance
+    total_debit = sum(line.debit_amount for line in data.lines)
+    total_credit = sum(line.credit_amount for line in data.lines)
+    
+    if abs(total_debit - total_credit) > 0.01:
+        raise HTTPException(status_code=400, detail=f"Journal entry is not balanced. Debit: {total_debit}, Credit: {total_credit}")
+    
+    # Get exchange rates
+    rates = await get_exchange_rates()
+    
+    entry_id = str(uuid.uuid4())
+    entry = {
+        "id": entry_id,
+        "entry_date": data.entry_date,
+        "description": data.description,
+        "source_module": data.source_module,
+        "source_id": data.source_id,
+        "status": JournalStatus.DRAFT.value,
+        "lock_status": LockStatus.OPEN.value,
+        "approved_by": None,
+        "approved_at": None,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "unlock_reason": None
+    }
+    
+    await db.journal_entries.insert_one(entry)
+    
+    # Create lines
+    for line in data.lines:
+        line_data = {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": entry_id,
+            "account_id": line.account_id,
+            "debit_amount": line.debit_amount,
+            "credit_amount": line.credit_amount,
+            "currency": line.currency,
+            "base_amount_aed": convert_to_aed(
+                line.debit_amount or line.credit_amount,
+                line.currency,
+                rates.get("INR", 0.044),
+                rates.get("USD", 3.674)
+            ),
+            "memo": line.memo
+        }
+        await db.journal_lines.insert_one(line_data)
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "create", None, {k: v for k, v in entry.items() if k != "_id"}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return {k: v for k, v in entry.items() if k != "_id"}
+
+@api_router.put("/accounting/journal-entries/{entry_id}")
+async def update_journal_entry(entry_id: str, data: JournalEntryUpdate, user = Depends(get_current_user)):
+    """Update a draft journal entry"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    existing = await db.journal_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    if existing.get("lock_status") == LockStatus.LOCKED.value:
+        raise HTTPException(status_code=400, detail="Cannot edit locked journal entry")
+    
+    if existing.get("status") == JournalStatus.APPROVED.value:
+        raise HTTPException(status_code=400, detail="Cannot edit approved journal entry")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    update_data = {}
+    if data.entry_date:
+        update_data["entry_date"] = data.entry_date
+    if data.description:
+        update_data["description"] = data.description
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.journal_entries.update_one({"id": entry_id}, {"$set": update_data})
+    
+    # Update lines if provided
+    if data.lines:
+        # Validate balance
+        total_debit = sum(line.debit_amount for line in data.lines)
+        total_credit = sum(line.credit_amount for line in data.lines)
+        
+        if abs(total_debit - total_credit) > 0.01:
+            raise HTTPException(status_code=400, detail="Journal entry is not balanced")
+        
+        # Delete old lines and create new ones
+        await db.journal_lines.delete_many({"journal_entry_id": entry_id})
+        
+        rates = await get_exchange_rates()
+        for line in data.lines:
+            line_data = {
+                "id": str(uuid.uuid4()),
+                "journal_entry_id": entry_id,
+                "account_id": line.account_id,
+                "debit_amount": line.debit_amount,
+                "credit_amount": line.credit_amount,
+                "currency": line.currency,
+                "base_amount_aed": convert_to_aed(
+                    line.debit_amount or line.credit_amount,
+                    line.currency,
+                    rates.get("INR", 0.044),
+                    rates.get("USD", 3.674)
+                ),
+                "memo": line.memo
+            }
+            await db.journal_lines.insert_one(line_data)
+    
+    updated = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "update", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+@api_router.post("/accounting/journal-entries/{entry_id}/submit")
+async def submit_journal_entry(entry_id: str, user = Depends(get_current_user)):
+    """Submit a journal entry for approval"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    existing = await db.journal_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    if existing.get("status") != JournalStatus.DRAFT.value:
+        raise HTTPException(status_code=400, detail="Only draft entries can be submitted")
+    
+    # Validate balance
+    lines = await db.journal_lines.find({"journal_entry_id": entry_id}).to_list(100)
+    total_debit = sum(l.get("debit_amount", 0) for l in lines)
+    total_credit = sum(l.get("credit_amount", 0) for l in lines)
+    
+    if abs(total_debit - total_credit) > 0.01:
+        raise HTTPException(status_code=400, detail="Cannot submit unbalanced journal entry")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    await db.journal_entries.update_one(
+        {"id": entry_id},
+        {"$set": {
+            "status": JournalStatus.SUBMITTED.value,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitted_by": user["id"]
+        }}
+    )
+    
+    updated = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "submit", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+@api_router.post("/accounting/journal-entries/{entry_id}/approve")
+async def approve_journal_entry(entry_id: str, user = Depends(get_current_user)):
+    """Approve a submitted journal entry"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    existing = await db.journal_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    if existing.get("status") != JournalStatus.SUBMITTED.value:
+        raise HTTPException(status_code=400, detail="Only submitted entries can be approved")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.journal_entries.update_one(
+        {"id": entry_id},
+        {"$set": {
+            "status": JournalStatus.APPROVED.value,
+            "lock_status": LockStatus.LOCKED.value,
+            "approved_at": now,
+            "approved_by": user["id"],
+            "approved_by_name": user.get("full_name")
+        }}
+    )
+    
+    updated = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "approve", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+@api_router.post("/accounting/journal-entries/{entry_id}/lock")
+async def lock_journal_entry(entry_id: str, user = Depends(get_current_user)):
+    """Lock a journal entry (super admin only)"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can lock entries")
+    
+    existing = await db.journal_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    await db.journal_entries.update_one(
+        {"id": entry_id},
+        {"$set": {"lock_status": LockStatus.LOCKED.value}}
+    )
+    
+    updated = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "lock", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+class UnlockRequest(BaseModel):
+    reason: str
+
+@api_router.post("/accounting/journal-entries/{entry_id}/unlock")
+async def unlock_journal_entry(entry_id: str, data: UnlockRequest, user = Depends(get_current_user)):
+    """Unlock a locked journal entry (super admin only)"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can unlock entries")
+    
+    existing = await db.journal_entries.find_one({"id": entry_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+    
+    if existing.get("lock_status") != LockStatus.LOCKED.value:
+        raise HTTPException(status_code=400, detail="Entry is not locked")
+    
+    before_state = {k: v for k, v in existing.items() if k != "_id"}
+    
+    await db.journal_entries.update_one(
+        {"id": entry_id},
+        {"$set": {
+            "lock_status": LockStatus.OPEN.value,
+            "unlock_reason": data.reason,
+            "unlocked_at": datetime.now(timezone.utc).isoformat(),
+            "unlocked_by": user["id"]
+        }}
+    )
+    
+    updated = await db.journal_entries.find_one({"id": entry_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "journal_entry", entry_id,
+        "unlock", before_state, {"unlock_reason": data.reason, **updated}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+# ==================== SETTLEMENT BATCHES ====================
+
+@api_router.get("/accounting/settlements")
+async def get_settlement_batches(
+    provider: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    user = Depends(get_current_user)
+):
+    """Get settlement batches"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if provider:
+        query["provider"] = provider
+    if status:
+        query["status"] = status
+    
+    batches = await db.settlement_batches.find(query, {"_id": 0}).sort("expected_settlement_date", -1).limit(limit).to_list(limit)
+    
+    # Get config for grace period
+    config = await db.finance_config.find_one({"key": "settings"})
+    grace_days = config.get("grace_period_days", 2) if config else 2
+    
+    # Enrich with account names and overdue status
+    for batch in batches:
+        account = await db.accounts.find_one({"id": batch.get("bank_account_id")})
+        batch["bank_account_name"] = account.get("name", "Unknown") if account else "Unknown"
+        
+        if batch.get("status") == "Pending" and batch.get("expected_settlement_date"):
+            expected = datetime.fromisoformat(batch["expected_settlement_date"].replace("Z", "+00:00"))
+            batch["is_overdue"] = is_settlement_overdue(expected, grace_days)
+        else:
+            batch["is_overdue"] = False
+    
+    return batches
+
+@api_router.get("/accounting/settlements/pending-receivables")
+async def get_pending_receivables(
+    provider: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get pending receivable entries for settlement batch creation"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Find journal entries with receivable debits that are not yet settled
+    query = {
+        "source_module": "Sales",
+        "status": JournalStatus.APPROVED.value,
+        "settlement_status": {"$ne": SettlementStatus.SETTLED.value}
+    }
+    
+    if provider:
+        query["provider"] = provider
+    
+    entries = await db.journal_entries.find(query, {"_id": 0}).sort("entry_date", -1).to_list(500)
+    
+    # Enrich with amounts
+    for entry in entries:
+        lines = await db.journal_lines.find({"journal_entry_id": entry["id"]}, {"_id": 0}).to_list(10)
+        entry["lines"] = lines
+        # Find the receivable debit amount
+        receivable_amount = 0
+        for line in lines:
+            account = await db.accounts.find_one({"id": line["account_id"]})
+            if account and account.get("subtype") == "Receivable":
+                receivable_amount += line.get("debit_amount", 0)
+        entry["receivable_amount"] = receivable_amount
+    
+    return entries
+
+@api_router.post("/accounting/settlements")
+async def create_settlement_batch(data: SettlementBatchCreate, user = Depends(get_current_user)):
+    """Create a new settlement batch"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Calculate gross amount from selected entries
+    gross_amount = 0
+    for entry_id in data.entry_ids:
+        lines = await db.journal_lines.find({"journal_entry_id": entry_id}).to_list(10)
+        for line in lines:
+            account = await db.accounts.find_one({"id": line["account_id"]})
+            if account and account.get("subtype") == "Receivable":
+                gross_amount += line.get("debit_amount", 0)
+    
+    batch_id = str(uuid.uuid4())
+    batch = {
+        "id": batch_id,
+        "provider": data.provider.value,
+        "period_start": data.period_start,
+        "period_end": data.period_end,
+        "gross_amount": gross_amount,
+        "net_received": None,
+        "fees_withheld": None,
+        "bank_account_id": data.bank_account_id,
+        "expected_settlement_date": data.expected_settlement_date,
+        "actual_received_date": None,
+        "status": JournalStatus.DRAFT.value,
+        "lock_status": LockStatus.OPEN.value,
+        "approved_by": None,
+        "approved_at": None,
+        "proof_link": None,
+        "entry_ids": data.entry_ids,
+        "notes": data.notes,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.settlement_batches.insert_one(batch)
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "settlement_batch", batch_id,
+        "create", None, {k: v for k, v in batch.items() if k != "_id"}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return {k: v for k, v in batch.items() if k != "_id"}
+
+@api_router.post("/accounting/settlements/{batch_id}/settle")
+async def settle_batch(batch_id: str, data: SettlementBatchSettle, user = Depends(get_current_user)):
+    """Record settlement receipt and create settlement journal entry"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    batch = await db.settlement_batches.find_one({"id": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Settlement batch not found")
+    
+    if batch.get("status") == SettlementStatus.SETTLED.value:
+        raise HTTPException(status_code=400, detail="Batch already settled")
+    
+    before_state = {k: v for k, v in batch.items() if k != "_id"}
+    
+    # Calculate fees
+    fees_withheld = batch["gross_amount"] - data.net_received
+    
+    # Get provider receivable account
+    provider_map = {
+        "Tabby": "Tabby Receivable",
+        "Tamara": "Tamara Receivable",
+        "Network": "Network Receivable"
+    }
+    receivable_account = await db.accounts.find_one({"name": provider_map.get(batch["provider"])})
+    bank_account = await db.accounts.find_one({"id": batch["bank_account_id"]})
+    fees_account = await db.accounts.find_one({"name": "Payment Provider Fees"})
+    
+    if not receivable_account or not bank_account or not fees_account:
+        raise HTTPException(status_code=400, detail="Required accounts not found. Please seed accounts first.")
+    
+    rates = await get_exchange_rates()
+    
+    # Create settlement journal entry
+    settlement_entry_id = str(uuid.uuid4())
+    settlement_entry = {
+        "id": settlement_entry_id,
+        "entry_date": data.actual_received_date,
+        "description": f"{batch['provider']} Settlement - {batch['period_start']} to {batch['period_end']}",
+        "source_module": "Settlement",
+        "source_id": batch_id,
+        "status": JournalStatus.DRAFT.value,
+        "lock_status": LockStatus.OPEN.value,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.journal_entries.insert_one(settlement_entry)
+    
+    # Create journal lines:
+    # Debit: Bank (net_received)
+    # Debit: Payment Provider Fees (fees_withheld)
+    # Credit: Provider Receivable (gross_amount)
+    
+    lines = [
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": settlement_entry_id,
+            "account_id": bank_account["id"],
+            "debit_amount": data.net_received,
+            "credit_amount": 0,
+            "currency": "AED",
+            "base_amount_aed": data.net_received,
+            "memo": f"Net received from {batch['provider']}"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": settlement_entry_id,
+            "account_id": fees_account["id"],
+            "debit_amount": fees_withheld,
+            "credit_amount": 0,
+            "currency": "AED",
+            "base_amount_aed": fees_withheld,
+            "memo": f"{batch['provider']} processing fees"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": settlement_entry_id,
+            "account_id": receivable_account["id"],
+            "debit_amount": 0,
+            "credit_amount": batch["gross_amount"],
+            "currency": "AED",
+            "base_amount_aed": batch["gross_amount"],
+            "memo": f"Clear {batch['provider']} receivable"
+        }
+    ]
+    
+    for line in lines:
+        await db.journal_lines.insert_one(line)
+    
+    # Update batch
+    await db.settlement_batches.update_one(
+        {"id": batch_id},
+        {"$set": {
+            "net_received": data.net_received,
+            "fees_withheld": fees_withheld,
+            "actual_received_date": data.actual_received_date,
+            "proof_link": data.proof_link,
+            "status": SettlementStatus.SETTLED.value,
+            "settlement_journal_id": settlement_entry_id,
+            "settled_at": datetime.now(timezone.utc).isoformat(),
+            "settled_by": user["id"]
+        }}
+    )
+    
+    # Mark original sale journal entries as settled
+    for entry_id in batch["entry_ids"]:
+        await db.journal_entries.update_one(
+            {"id": entry_id},
+            {"$set": {"settlement_status": SettlementStatus.SETTLED.value}}
+        )
+    
+    updated = await db.settlement_batches.find_one({"id": batch_id}, {"_id": 0})
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "settlement_batch", batch_id,
+        "settle", before_state, updated
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return updated
+
+# ==================== EXPENSES ====================
+
+@api_router.get("/accounting/expenses")
+async def get_expenses(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 100,
+    user = Depends(get_current_user)
+):
+    """Get expenses"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if from_date:
+        query["date"] = {"$gte": from_date}
+    if to_date:
+        if "date" in query:
+            query["date"]["$lte"] = to_date
+        else:
+            query["date"] = {"$lte": to_date}
+    
+    expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).limit(limit).to_list(limit)
+    
+    # Enrich with account names
+    for expense in expenses:
+        exp_account = await db.accounts.find_one({"id": expense.get("expense_account_id")})
+        paid_account = await db.accounts.find_one({"id": expense.get("paid_from_account_id")})
+        expense["expense_account_name"] = exp_account.get("name", "Unknown") if exp_account else "Unknown"
+        expense["paid_from_account_name"] = paid_account.get("name", "Unknown") if paid_account else "Unknown"
+    
+    return expenses
+
+@api_router.post("/accounting/expenses")
+async def create_expense(data: ExpenseCreate, user = Depends(get_current_user)):
+    """Create an expense entry with journal posting"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    expense_account = await db.accounts.find_one({"id": data.expense_account_id})
+    paid_from_account = await db.accounts.find_one({"id": data.paid_from_account_id})
+    
+    if not expense_account or not paid_from_account:
+        raise HTTPException(status_code=400, detail="Invalid account IDs")
+    
+    rates = await get_exchange_rates()
+    base_amount = convert_to_aed(data.amount, data.currency, rates.get("INR", 0.044), rates.get("USD", 3.674))
+    
+    expense_id = str(uuid.uuid4())
+    
+    # Create journal entry
+    journal_id = str(uuid.uuid4())
+    journal_entry = {
+        "id": journal_id,
+        "entry_date": data.date,
+        "description": f"Expense - {data.vendor} - {expense_account['name']}",
+        "source_module": "Expense",
+        "source_id": expense_id,
+        "status": JournalStatus.DRAFT.value,
+        "lock_status": LockStatus.OPEN.value,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.journal_entries.insert_one(journal_entry)
+    
+    # Create journal lines: Debit Expense, Credit Bank/Cash
+    lines = [
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": journal_id,
+            "account_id": data.expense_account_id,
+            "debit_amount": data.amount,
+            "credit_amount": 0,
+            "currency": data.currency,
+            "base_amount_aed": base_amount,
+            "memo": data.notes
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": journal_id,
+            "account_id": data.paid_from_account_id,
+            "debit_amount": 0,
+            "credit_amount": data.amount,
+            "currency": data.currency,
+            "base_amount_aed": base_amount,
+            "memo": f"Payment to {data.vendor}"
+        }
+    ]
+    
+    for line in lines:
+        await db.journal_lines.insert_one(line)
+    
+    # Create expense record
+    expense = {
+        "id": expense_id,
+        "date": data.date,
+        "vendor": data.vendor,
+        "expense_account_id": data.expense_account_id,
+        "amount": data.amount,
+        "currency": data.currency,
+        "base_amount_aed": base_amount,
+        "paid_from_account_id": data.paid_from_account_id,
+        "proof_link": data.proof_link,
+        "notes": data.notes,
+        "journal_entry_id": journal_id,
+        "status": JournalStatus.DRAFT.value,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.expenses.insert_one(expense)
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "expense", expense_id,
+        "create", None, {k: v for k, v in expense.items() if k != "_id"}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return {k: v for k, v in expense.items() if k != "_id"}
+
+# ==================== TRANSFERS ====================
+
+@api_router.get("/accounting/transfers")
+async def get_transfers(limit: int = 50, user = Depends(get_current_user)):
+    """Get inter-account transfers"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    transfers = await db.transfers.find({}, {"_id": 0}).sort("date", -1).limit(limit).to_list(limit)
+    
+    # Enrich with account names
+    for transfer in transfers:
+        src = await db.accounts.find_one({"id": transfer.get("source_account_id")})
+        dst = await db.accounts.find_one({"id": transfer.get("destination_account_id")})
+        transfer["source_account_name"] = src.get("name", "Unknown") if src else "Unknown"
+        transfer["destination_account_name"] = dst.get("name", "Unknown") if dst else "Unknown"
+    
+    return transfers
+
+@api_router.post("/accounting/transfers")
+async def create_transfer(data: TransferCreate, user = Depends(get_current_user)):
+    """Create an inter-account transfer"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    source = await db.accounts.find_one({"id": data.source_account_id})
+    destination = await db.accounts.find_one({"id": data.destination_account_id})
+    
+    if not source or not destination:
+        raise HTTPException(status_code=400, detail="Invalid account IDs")
+    
+    rates = await get_exchange_rates()
+    base_amount = convert_to_aed(data.amount, data.currency, rates.get("INR", 0.044), rates.get("USD", 3.674))
+    
+    transfer_id = str(uuid.uuid4())
+    
+    # Create journal entry
+    journal_id = str(uuid.uuid4())
+    journal_entry = {
+        "id": journal_id,
+        "entry_date": data.date,
+        "description": f"Transfer: {source['name']} → {destination['name']}",
+        "source_module": "Transfer",
+        "source_id": transfer_id,
+        "status": JournalStatus.DRAFT.value,
+        "lock_status": LockStatus.OPEN.value,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.journal_entries.insert_one(journal_entry)
+    
+    # Create journal lines: Debit destination, Credit source
+    lines = [
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": journal_id,
+            "account_id": data.destination_account_id,
+            "debit_amount": data.amount,
+            "credit_amount": 0,
+            "currency": data.currency,
+            "base_amount_aed": base_amount,
+            "memo": f"Transfer from {source['name']}"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "journal_entry_id": journal_id,
+            "account_id": data.source_account_id,
+            "debit_amount": 0,
+            "credit_amount": data.amount,
+            "currency": data.currency,
+            "base_amount_aed": base_amount,
+            "memo": f"Transfer to {destination['name']}"
+        }
+    ]
+    
+    for line in lines:
+        await db.journal_lines.insert_one(line)
+    
+    # Create transfer record
+    transfer = {
+        "id": transfer_id,
+        "date": data.date,
+        "source_account_id": data.source_account_id,
+        "destination_account_id": data.destination_account_id,
+        "amount": data.amount,
+        "currency": data.currency,
+        "base_amount_aed": base_amount,
+        "notes": data.notes,
+        "journal_entry_id": journal_id,
+        "status": JournalStatus.DRAFT.value,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.transfers.insert_one(transfer)
+    
+    # Audit log
+    audit = create_finance_audit_entry(
+        user["id"], user.get("full_name"), "transfer", transfer_id,
+        "create", None, {k: v for k, v in transfer.items() if k != "_id"}
+    )
+    await db.finance_audit_logs.insert_one(audit)
+    
+    return {k: v for k, v in transfer.items() if k != "_id"}
+
+# ==================== CFO DASHBOARD ====================
+
+@api_router.get("/accounting/dashboard")
+async def get_cfo_dashboard(user = Depends(get_current_user)):
+    """Get CFO dashboard data with live balances, KPIs, and alerts"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    
+    # Get config
+    config = await db.finance_config.find_one({"key": "settings"})
+    grace_days = config.get("grace_period_days", 2) if config else 2
+    large_fee_threshold = config.get("large_fee_threshold", 1000) if config else 1000
+    
+    # 1. LIVE ACCOUNT BALANCES
+    # Calculate balance as Sum(Debits - Credits) per Asset account
+    accounts = await db.accounts.find({"account_type": "Asset", "active": True}, {"_id": 0}).to_list(50)
+    
+    account_balances = []
+    for account in accounts:
+        # Get all approved journal lines for this account
+        lines = await db.journal_lines.find({"account_id": account["id"]}).to_list(10000)
+        
+        total_debit = sum(l.get("debit_amount", 0) for l in lines)
+        total_credit = sum(l.get("credit_amount", 0) for l in lines)
+        balance = total_debit - total_credit
+        
+        account_balances.append({
+            "id": account["id"],
+            "name": account["name"],
+            "code": account.get("code"),
+            "subtype": account.get("subtype"),
+            "currency": account.get("currency", "AED"),
+            "balance": balance,
+            "balance_aed": balance  # Already in AED for most accounts
+        })
+    
+    # Separate balances by type
+    bank_balances = [a for a in account_balances if a["subtype"] in ["Bank", "Wallet", "Cash"]]
+    receivable_balances = [a for a in account_balances if a["subtype"] == "Receivable"]
+    
+    # 2. KPIs
+    # Today's metrics
+    today_entries = await db.journal_entries.find({
+        "entry_date": {"$gte": today_start},
+        "source_module": "Sales",
+        "status": JournalStatus.APPROVED.value
+    }).to_list(1000)
+    
+    today_revenue = 0
+    for entry in today_entries:
+        lines = await db.journal_lines.find({"journal_entry_id": entry["id"]}).to_list(10)
+        for line in lines:
+            account = await db.accounts.find_one({"id": line["account_id"]})
+            if account and account.get("account_type") == "Income":
+                today_revenue += line.get("credit_amount", 0)
+    
+    # MTD metrics
+    mtd_entries = await db.journal_entries.find({
+        "entry_date": {"$gte": month_start},
+        "status": JournalStatus.APPROVED.value
+    }).to_list(10000)
+    
+    mtd_revenue = 0
+    mtd_fees = 0
+    mtd_net_received = 0
+    
+    for entry in mtd_entries:
+        lines = await db.journal_lines.find({"journal_entry_id": entry["id"]}).to_list(10)
+        for line in lines:
+            account = await db.accounts.find_one({"id": line["account_id"]})
+            if account:
+                if account.get("account_type") == "Income":
+                    mtd_revenue += line.get("credit_amount", 0)
+                if account.get("name") == "Payment Provider Fees":
+                    mtd_fees += line.get("debit_amount", 0)
+    
+    # Get MTD settlements
+    mtd_settlements = await db.settlement_batches.find({
+        "actual_received_date": {"$gte": month_start},
+        "status": SettlementStatus.SETTLED.value
+    }).to_list(1000)
+    
+    mtd_net_received = sum(s.get("net_received", 0) for s in mtd_settlements)
+    
+    # Total pending receivables
+    pending_receivables = sum(a["balance"] for a in receivable_balances)
+    
+    # Total cash position
+    total_cash = sum(a["balance"] for a in bank_balances)
+    
+    # 3. SETTLEMENT PANEL
+    # Pending settlements by provider
+    pending_batches = await db.settlement_batches.find({
+        "status": {"$ne": SettlementStatus.SETTLED.value}
+    }, {"_id": 0}).to_list(100)
+    
+    pending_by_provider = {}
+    for batch in pending_batches:
+        provider = batch.get("provider", "Unknown")
+        if provider not in pending_by_provider:
+            pending_by_provider[provider] = {"count": 0, "gross_amount": 0, "overdue": 0}
+        pending_by_provider[provider]["count"] += 1
+        pending_by_provider[provider]["gross_amount"] += batch.get("gross_amount", 0)
+        
+        if batch.get("expected_settlement_date"):
+            expected = datetime.fromisoformat(batch["expected_settlement_date"].replace("Z", "+00:00"))
+            if is_settlement_overdue(expected, grace_days):
+                pending_by_provider[provider]["overdue"] += 1
+    
+    # Overdue settlements
+    overdue_settlements = []
+    for batch in pending_batches:
+        if batch.get("expected_settlement_date"):
+            expected = datetime.fromisoformat(batch["expected_settlement_date"].replace("Z", "+00:00"))
+            if is_settlement_overdue(expected, grace_days):
+                batch["days_overdue"] = (now - expected).days - grace_days
+                overdue_settlements.append(batch)
+    
+    # Next 7 days forecast
+    seven_days_later = (now + timedelta(days=7)).isoformat()
+    upcoming_settlements = await db.settlement_batches.find({
+        "expected_settlement_date": {"$gte": now.isoformat(), "$lte": seven_days_later},
+        "status": {"$ne": SettlementStatus.SETTLED.value}
+    }, {"_id": 0}).to_list(100)
+    
+    forecast_amount = sum(s.get("gross_amount", 0) for s in upcoming_settlements)
+    
+    # 4. ALERTS
+    alerts = []
+    
+    # Overdue settlements
+    for settlement in overdue_settlements:
+        alerts.append({
+            "type": "overdue_settlement",
+            "severity": "high",
+            "message": f"{settlement.get('provider')} settlement overdue by {settlement.get('days_overdue', 0)} days",
+            "entity_id": settlement.get("id"),
+            "amount": settlement.get("gross_amount", 0)
+        })
+    
+    # Large fees (from recent settlements)
+    recent_settlements = await db.settlement_batches.find({
+        "status": SettlementStatus.SETTLED.value,
+        "fees_withheld": {"$gt": large_fee_threshold}
+    }, {"_id": 0}).sort("settled_at", -1).limit(10).to_list(10)
+    
+    for settlement in recent_settlements:
+        alerts.append({
+            "type": "large_fees",
+            "severity": "medium",
+            "message": f"Large fees on {settlement.get('provider')} settlement: AED {settlement.get('fees_withheld', 0):,.2f}",
+            "entity_id": settlement.get("id"),
+            "amount": settlement.get("fees_withheld", 0)
+        })
+    
+    # Draft entries older than 7 days
+    seven_days_ago = (now - timedelta(days=7)).isoformat()
+    old_drafts = await db.journal_entries.find({
+        "status": JournalStatus.DRAFT.value,
+        "created_at": {"$lt": seven_days_ago}
+    }, {"_id": 0}).to_list(50)
+    
+    for draft in old_drafts:
+        alerts.append({
+            "type": "old_draft",
+            "severity": "low",
+            "message": f"Draft journal entry pending for over 7 days: {draft.get('description', 'Unknown')}",
+            "entity_id": draft.get("id")
+        })
+    
+    return {
+        "generated_at": now.isoformat(),
+        "account_balances": {
+            "banks_and_wallets": bank_balances,
+            "receivables": receivable_balances,
+            "total_cash_position": total_cash,
+            "total_pending_receivables": pending_receivables
+        },
+        "kpis": {
+            "today": {
+                "revenue": today_revenue,
+                "date": today_start
+            },
+            "mtd": {
+                "gross_revenue": mtd_revenue,
+                "provider_fees": mtd_fees,
+                "net_received": mtd_net_received,
+                "month_start": month_start
+            }
+        },
+        "settlements": {
+            "pending_by_provider": pending_by_provider,
+            "overdue_count": len(overdue_settlements),
+            "overdue_settlements": overdue_settlements[:5],  # Top 5
+            "next_7_days_forecast": forecast_amount,
+            "upcoming_count": len(upcoming_settlements)
+        },
+        "alerts": alerts,
+        "config": {
+            "grace_period_days": grace_days,
+            "large_fee_threshold": large_fee_threshold
+        }
+    }
+
+# ==================== FINANCE CONFIG ====================
+
+@api_router.get("/accounting/config")
+async def get_finance_config(user = Depends(get_current_user)):
+    """Get finance configuration"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    config = await db.finance_config.find_one({"key": "settings"}, {"_id": 0})
+    if not config:
+        return DEFAULT_FINANCE_CONFIG
+    return config
+
+@api_router.put("/accounting/config")
+async def update_finance_config(data: FinanceConfigUpdate, user = Depends(get_current_user)):
+    """Update finance configuration"""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can update config")
+    
+    existing = await db.finance_config.find_one({"key": "settings"})
+    
+    update_data = {}
+    if data.tabby_settlement_day is not None:
+        update_data["tabby_settlement_day"] = data.tabby_settlement_day
+    if data.tamara_settlement_days is not None:
+        update_data["tamara_settlement_days"] = data.tamara_settlement_days
+    if data.network_settlement_days is not None:
+        update_data["network_settlement_days"] = data.network_settlement_days
+    if data.grace_period_days is not None:
+        update_data["grace_period_days"] = data.grace_period_days
+    if data.large_fee_threshold is not None:
+        update_data["large_fee_threshold"] = data.large_fee_threshold
+    if data.overdue_alert_days is not None:
+        update_data["overdue_alert_days"] = data.overdue_alert_days
+    if data.reconciliation_variance_threshold is not None:
+        update_data["reconciliation_variance_threshold"] = data.reconciliation_variance_threshold
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    if existing:
+        await db.finance_config.update_one({"key": "settings"}, {"$set": update_data})
+    else:
+        await db.finance_config.insert_one({"key": "settings", **DEFAULT_FINANCE_CONFIG, **update_data})
+    
+    return await db.finance_config.find_one({"key": "settings"}, {"_id": 0})
+
+# ==================== FINANCE AUDIT LOG ====================
+
+@api_router.get("/accounting/audit-logs")
+async def get_finance_audit_logs(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    user = Depends(get_current_user)
+):
+    """Get finance audit logs"""
+    if user.get("role") not in ["super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if entity_type:
+        query["entity_type"] = entity_type
+    if entity_id:
+        query["entity_id"] = entity_id
+    if action:
+        query["action"] = action
+    
+    logs = await db.finance_audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    return logs
+
 # Include the router in the main app
 app.include_router(api_router)
 
