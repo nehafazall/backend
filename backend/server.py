@@ -6318,7 +6318,24 @@ async def startup_event():
     await db.call_logs.create_index([("contact_id", 1), ("call_date", -1)])
     await db.call_logs.create_index("phone_number")
     
-    logger.info("CLT Academy ERP v2.0 started successfully")
+    # Accounting module indexes
+    await db.accounts.create_index("code", unique=True, sparse=True)
+    await db.accounts.create_index("account_type")
+    await db.accounts.create_index("subtype")
+    await db.journal_entries.create_index("entry_date")
+    await db.journal_entries.create_index("status")
+    await db.journal_entries.create_index("source_module")
+    await db.journal_lines.create_index("journal_entry_id")
+    await db.journal_lines.create_index("account_id")
+    await db.settlement_batches.create_index("provider")
+    await db.settlement_batches.create_index("status")
+    await db.settlement_batches.create_index("expected_settlement_date")
+    await db.expenses.create_index("date")
+    await db.transfers.create_index("date")
+    await db.finance_audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.finance_audit_logs.create_index("timestamp")
+    
+    logger.info("CLT Synapse ERP v2.0 started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
