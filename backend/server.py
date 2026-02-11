@@ -1994,6 +1994,20 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
             
             # Create/update customer master record
             await create_or_update_customer(existing, student_data)
+            
+            # Create automatic journal entry for the sale (accounting integration)
+            payment_method = update_data.get("payment_method") or existing.get("payment_method", "bank_transfer")
+            try:
+                await create_sales_journal_entry(
+                    sale_amount=sale_amount,
+                    payment_method=payment_method,
+                    customer_name=existing["full_name"],
+                    lead_id=lead_id,
+                    user_id=current_user["id"],
+                    user_name=current_user["full_name"]
+                )
+            except Exception as e:
+                print(f"Warning: Failed to create sales journal entry: {e}")
     
     update_data["updated_at"] = now.isoformat()
     update_data["last_activity"] = now.isoformat()
