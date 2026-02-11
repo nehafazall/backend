@@ -164,7 +164,7 @@ function AppRoutes() {
                 {/* Finance */}
                 <Route path="finance" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
-                        <FinancePage />
+                        <FinanceDashboardPage />
                     </ProtectedRoute>
                 } />
                 
