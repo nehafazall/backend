@@ -29,10 +29,10 @@ const FinanceDashboardPage = () => {
     const [journalForm, setJournalForm] = useState({
         entry_date: new Date().toISOString().split('T')[0],
         description: '',
-        lines: [
-            { account_id: '', debit_amount: 0, credit_amount: 0, memo: '' },
-            { account_id: '', debit_amount: 0, credit_amount: 0, memo: '' }
-        ]
+        debit_account_id: '',
+        credit_account_id: '',
+        debit: '',
+        credit: ''
     });
     
     const [expenseForm, setExpenseForm] = useState({
