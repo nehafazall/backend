@@ -10,17 +10,32 @@ import { Separator } from '@/components/ui/separator';
 import { Plus } from 'lucide-react';
 import { formatCurrency } from './utils';
 
-// Journal Line Row Component
+// Render account options outside JSX
+const renderAccountOptions = (accounts) => {
+    const items = [];
+    for (let i = 0; i < accounts.length; i++) {
+        const acc = accounts[i];
+        items.push(<SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>);
+    }
+    return items;
+};
+
+const renderSimpleOptions = (accounts) => {
+    const items = [];
+    for (let i = 0; i < accounts.length; i++) {
+        const acc = accounts[i];
+        items.push(<SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>);
+    }
+    return items;
+};
+
+// Journal Line Row
 const JournalLineRow = ({ line, index, accounts, onUpdate }) => (
     <tr>
         <td className="p-2">
             <Select value={line.account_id} onValueChange={(v) => onUpdate(index, 'account_id', v)}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent className="z-[9999]">
-                    {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>
-                    ))}
-                </SelectContent>
+                <SelectContent className="z-[9999]">{renderAccountOptions(accounts)}</SelectContent>
             </Select>
         </td>
         <td className="p-2">
@@ -35,7 +50,15 @@ const JournalLineRow = ({ line, index, accounts, onUpdate }) => (
     </tr>
 );
 
-// Journal Entry Modal
+// Render journal lines outside JSX
+const renderJournalLines = (lines, accounts, updateLine) => {
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+        rows.push(<JournalLineRow key={i} line={lines[i]} index={i} accounts={accounts} onUpdate={updateLine} />);
+    }
+    return rows;
+};
+
 export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSubmit, addLine, updateLine }) => {
     const totals = {
         debit: form.lines.reduce((sum, l) => sum + (parseFloat(l.debit_amount) || 0), 0),
@@ -79,9 +102,7 @@ export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSu
                                 </tr>
                             </thead>
                             <tbody>
-                                {form.lines.map((line, index) => (
-                                    <JournalLineRow key={index} line={line} index={index} accounts={accounts} onUpdate={updateLine} />
-                                ))}
+                                {renderJournalLines(form.lines, accounts, updateLine)}
                                 <tr className="font-bold border-t">
                                     <td className="p-2">Total</td>
                                     <td className="text-right p-2">{formatCurrency(totals.debit)}</td>
@@ -103,7 +124,6 @@ export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSu
     );
 };
 
-// Expense Modal
 export const ExpenseModal = ({ open, onOpenChange, form, setForm, expenseAccounts, bankAccounts, onSubmit }) => (
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -131,18 +151,14 @@ export const ExpenseModal = ({ open, onOpenChange, form, setForm, expenseAccount
                         <Label>Expense Category</Label>
                         <Select value={form.expense_account_id} onValueChange={(v) => setForm({ ...form, expense_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">
-                                {expenseAccounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
-                            </SelectContent>
+                            <SelectContent className="z-[9999]">{renderSimpleOptions(expenseAccounts)}</SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <Label>Paid From</Label>
                         <Select value={form.paid_from_account_id} onValueChange={(v) => setForm({ ...form, paid_from_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">
-                                {bankAccounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
-                            </SelectContent>
+                            <SelectContent className="z-[9999]">{renderSimpleOptions(bankAccounts)}</SelectContent>
                         </Select>
                     </div>
                 </div>
@@ -159,7 +175,6 @@ export const ExpenseModal = ({ open, onOpenChange, form, setForm, expenseAccount
     </Dialog>
 );
 
-// Transfer Modal
 export const TransferModal = ({ open, onOpenChange, form, setForm, assetAccounts, onSubmit }) => (
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -183,18 +198,14 @@ export const TransferModal = ({ open, onOpenChange, form, setForm, assetAccounts
                         <Label>From Account</Label>
                         <Select value={form.source_account_id} onValueChange={(v) => setForm({ ...form, source_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">
-                                {assetAccounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
-                            </SelectContent>
+                            <SelectContent className="z-[9999]">{renderSimpleOptions(assetAccounts)}</SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <Label>To Account</Label>
                         <Select value={form.destination_account_id} onValueChange={(v) => setForm({ ...form, destination_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">
-                                {assetAccounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
-                            </SelectContent>
+                            <SelectContent className="z-[9999]">{renderSimpleOptions(assetAccounts)}</SelectContent>
                         </Select>
                     </div>
                 </div>
