@@ -172,12 +172,29 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
-                {/* Finance */}
+                {/* Finance - Entity Selection */}
                 <Route path="finance" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
-                        <FinanceDashboardPage />
+                        <FinanceEntitySelector />
                     </ProtectedRoute>
                 } />
+                
+                {/* Finance - Entity Layout with Sub-routes */}
+                <Route path="finance/:entity" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<Navigate to="dashboard" replace />} />
+                    <Route path="dashboard" element={<FinanceDashboard />} />
+                    <Route path="journal" element={<JournalPage />} />
+                    <Route path="settlements" element={<SettlementsPage />} />
+                    <Route path="expenses" element={<ExpensesPage />} />
+                    <Route path="transfers" element={<TransfersPage />} />
+                    <Route path="accounts" element={<AccountsPage />} />
+                    <Route path="commission-engine" element={<FinanceCommissionEnginePage />} />
+                    <Route path="commission-settlements" element={<CommissionSettlementsPage />} />
+                </Route>
                 
                 {/* User Management */}
                 <Route path="users" element={
