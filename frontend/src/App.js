@@ -11,7 +11,6 @@ import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import CustomerServicePage from "@/pages/CustomerServicePage";
 import MentorCRMPage from "@/pages/MentorCRMPage";
-import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
 import UsersPage from "@/pages/UsersPage";
 import DepartmentsPage from "@/pages/DepartmentsPage";
 import CoursesPage from "@/pages/CoursesPage";
@@ -28,6 +27,18 @@ import QCDashboardPage from "@/pages/QCDashboardPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import PasswordResetPage from "@/pages/PasswordResetPage";
 import RolesPage from "@/pages/RolesPage";
+
+// Finance Module
+import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
+import FinanceLayout from "@/pages/FinanceLayout";
+import FinanceDashboard from "@/pages/finance/FinanceDashboard";
+import JournalPage from "@/pages/finance/JournalPage";
+import SettlementsPage from "@/pages/finance/SettlementsPage";
+import ExpensesPage from "@/pages/finance/ExpensesPage";
+import TransfersPage from "@/pages/finance/TransfersPage";
+import AccountsPage from "@/pages/finance/AccountsPage";
+import FinanceCommissionEnginePage from "@/pages/finance/CommissionEnginePage";
+import CommissionSettlementsPage from "@/pages/finance/CommissionSettlementsPage";
 import Layout from "@/components/Layout";
 
 // Protected Route Component
