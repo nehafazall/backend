@@ -5,6 +5,13 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Features (February 2026)
 
+### Finance Module Restructure (COMPLETED - Feb 11)
+- **Entity Selection**: Two entities - CLT Academy (Active) and MILES (Under Development)
+- **Left Sidebar Navigation**: Organized into Overview, Accounting, and Commissions sections
+- **Add/Edit Accounts**: Full CRUD functionality for Chart of Accounts
+- **Commission Engine**: Sales commission tracking with auto-calculation
+- **Commission Settlements**: Pay out agent commissions with history
+
 ### Finance & Accounting Module - Phase 1 (COMPLETED)
 A comprehensive CFO-grade double-entry accounting system with the following features:
 
