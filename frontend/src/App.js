@@ -11,7 +11,7 @@ import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import CustomerServicePage from "@/pages/CustomerServicePage";
 import MentorCRMPage from "@/pages/MentorCRMPage";
-import FinancePage from "@/pages/FinancePage";
+import FinanceDashboardPage from "@/pages/FinanceDashboardPage";
 import UsersPage from "@/pages/UsersPage";
 import DepartmentsPage from "@/pages/DepartmentsPage";
 import CoursesPage from "@/pages/CoursesPage";
