@@ -10,68 +10,18 @@ import { Separator } from '@/components/ui/separator';
 import { Plus } from 'lucide-react';
 import { formatCurrency } from './utils';
 
-// Render account options outside JSX
-const renderAccountOptions = (accounts) => {
-    const items = [];
-    for (let i = 0; i < accounts.length; i++) {
-        const acc = accounts[i];
-        items.push(<SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>);
-    }
-    return items;
-};
-
-const renderSimpleOptions = (accounts) => {
-    const items = [];
-    for (let i = 0; i < accounts.length; i++) {
-        const acc = accounts[i];
-        items.push(<SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>);
-    }
-    return items;
-};
-
-// Journal Line Row
-const JournalLineRow = ({ line, index, accounts, onUpdate }) => (
-    <tr>
-        <td className="p-2">
-            <Select value={line.account_id} onValueChange={(v) => onUpdate(index, 'account_id', v)}>
-                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent className="z-[9999]">{renderAccountOptions(accounts)}</SelectContent>
-            </Select>
-        </td>
-        <td className="p-2">
-            <Input type="number" step="0.01" value={line.debit_amount || ''} onChange={(e) => onUpdate(index, 'debit_amount', e.target.value)} className="text-right" />
-        </td>
-        <td className="p-2">
-            <Input type="number" step="0.01" value={line.credit_amount || ''} onChange={(e) => onUpdate(index, 'credit_amount', e.target.value)} className="text-right" />
-        </td>
-        <td className="p-2">
-            <Input value={line.memo || ''} onChange={(e) => onUpdate(index, 'memo', e.target.value)} placeholder="Optional" />
-        </td>
-    </tr>
-);
-
-// Render journal lines outside JSX
-const renderJournalLines = (lines, accounts, updateLine) => {
-    const rows = [];
-    for (let i = 0; i < lines.length; i++) {
-        rows.push(<JournalLineRow key={i} line={lines[i]} index={i} accounts={accounts} onUpdate={updateLine} />);
-    }
-    return rows;
-};
-
-export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSubmit, addLine, updateLine }) => {
-    const totals = {
-        debit: form.lines.reduce((sum, l) => sum + (parseFloat(l.debit_amount) || 0), 0),
-        credit: form.lines.reduce((sum, l) => sum + (parseFloat(l.credit_amount) || 0), 0)
-    };
-    const isBalanced = Math.abs(totals.debit - totals.credit) < 0.01;
+// Simple journal entry - no dynamic lines for now
+export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSubmit }) => {
+    const debitVal = parseFloat(form.debit) || 0;
+    const creditVal = parseFloat(form.credit) || 0;
+    const isBalanced = Math.abs(debitVal - creditVal) < 0.01 && debitVal > 0;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
                     <DialogTitle>Create Journal Entry</DialogTitle>
-                    <DialogDescription>Double-entry accounting journal</DialogDescription>
+                    <DialogDescription>Simple double-entry journal</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={onSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -85,34 +35,38 @@ export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSu
                         </div>
                     </div>
                     <Separator />
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <Label>Journal Lines</Label>
-                            <Button type="button" variant="outline" size="sm" onClick={addLine}>
-                                <Plus className="h-3 w-3 mr-1" />Add Line
-                            </Button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Debit Account</Label>
+                            <Select value={form.debit_account_id} onValueChange={(v) => setForm({ ...form, debit_account_id: v })}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent className="z-[9999]">
+                                    <AccountOptions accounts={accounts} />
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b">
-                                    <th className="text-left p-2">Account</th>
-                                    <th className="text-right p-2">Debit</th>
-                                    <th className="text-right p-2">Credit</th>
-                                    <th className="text-left p-2">Memo</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {renderJournalLines(form.lines, accounts, updateLine)}
-                                <tr className="font-bold border-t">
-                                    <td className="p-2">Total</td>
-                                    <td className="text-right p-2">{formatCurrency(totals.debit)}</td>
-                                    <td className="text-right p-2">{formatCurrency(totals.credit)}</td>
-                                    <td className="p-2">
-                                        {isBalanced ? <Badge className="bg-green-500">Balanced</Badge> : <Badge variant="destructive">Unbalanced</Badge>}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div className="space-y-2">
+                            <Label>Debit Amount</Label>
+                            <Input type="number" step="0.01" value={form.debit} onChange={(e) => setForm({ ...form, debit: e.target.value, credit: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Credit Account</Label>
+                            <Select value={form.credit_account_id} onValueChange={(v) => setForm({ ...form, credit_account_id: v })}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent className="z-[9999]">
+                                    <AccountOptions accounts={accounts} />
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Credit Amount</Label>
+                            <Input type="number" step="0.01" value={form.credit} onChange={(e) => setForm({ ...form, credit: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span>Balance: {isBalanced ? <Badge className="bg-green-500">OK</Badge> : <Badge variant="destructive">Unbalanced</Badge>}</span>
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -122,6 +76,17 @@ export const JournalModal = ({ open, onOpenChange, form, setForm, accounts, onSu
             </DialogContent>
         </Dialog>
     );
+};
+
+// Separate component for account options to avoid map in parent JSX
+const AccountOptions = ({ accounts }) => {
+    if (!accounts || accounts.length === 0) return null;
+    return accounts.map(acc => <SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>);
+};
+
+const SimpleOptions = ({ accounts }) => {
+    if (!accounts || accounts.length === 0) return null;
+    return accounts.map(acc => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>);
 };
 
 export const ExpenseModal = ({ open, onOpenChange, form, setForm, expenseAccounts, bankAccounts, onSubmit }) => (
@@ -151,14 +116,18 @@ export const ExpenseModal = ({ open, onOpenChange, form, setForm, expenseAccount
                         <Label>Expense Category</Label>
                         <Select value={form.expense_account_id} onValueChange={(v) => setForm({ ...form, expense_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">{renderSimpleOptions(expenseAccounts)}</SelectContent>
+                            <SelectContent className="z-[9999]">
+                                <SimpleOptions accounts={expenseAccounts} />
+                            </SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <Label>Paid From</Label>
                         <Select value={form.paid_from_account_id} onValueChange={(v) => setForm({ ...form, paid_from_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">{renderSimpleOptions(bankAccounts)}</SelectContent>
+                            <SelectContent className="z-[9999]">
+                                <SimpleOptions accounts={bankAccounts} />
+                            </SelectContent>
                         </Select>
                     </div>
                 </div>
@@ -198,14 +167,18 @@ export const TransferModal = ({ open, onOpenChange, form, setForm, assetAccounts
                         <Label>From Account</Label>
                         <Select value={form.source_account_id} onValueChange={(v) => setForm({ ...form, source_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">{renderSimpleOptions(assetAccounts)}</SelectContent>
+                            <SelectContent className="z-[9999]">
+                                <SimpleOptions accounts={assetAccounts} />
+                            </SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <Label>To Account</Label>
                         <Select value={form.destination_account_id} onValueChange={(v) => setForm({ ...form, destination_account_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
-                            <SelectContent className="z-[9999]">{renderSimpleOptions(assetAccounts)}</SelectContent>
+                            <SelectContent className="z-[9999]">
+                                <SimpleOptions accounts={assetAccounts} />
+                            </SelectContent>
                         </Select>
                     </div>
                 </div>
