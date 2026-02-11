@@ -3,17 +3,13 @@ import { useAuth } from '@/lib/api';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-    TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Plus, RefreshCw,
-    FileText, Building2, CreditCard, Wallet, ArrowRightLeft, Receipt, PieChart, BarChart3, Calendar
+    Plus, RefreshCw, FileText, Building2, CreditCard, ArrowRightLeft, Receipt, PieChart
 } from 'lucide-react';
-import { BalanceCard, KPICard, AlertCard } from '@/components/finance/FinanceCards';
+import { DashboardContent } from '@/components/finance/DashboardContent';
 import { JournalTab, SettlementsTab, ExpensesTab, TransfersTab, AccountsTab } from '@/components/finance/FinanceTabs';
 import { JournalModal, ExpenseModal, TransferModal } from '@/components/finance/FinanceModals';
-import { formatCurrency } from '@/components/finance/utils';
 
 const FinanceDashboardPage = () => {
     const { user } = useAuth();
@@ -74,7 +70,7 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/dashboard');
             setDashboardData(response.data);
         } catch (error) {
-            console.error('Error fetching dashboard:', error);
+            console.error('Error:', error);
         } finally {
             setLoading(false);
         }
@@ -85,7 +81,7 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/accounts');
             setAccounts(response.data);
         } catch (error) {
-            console.error('Error fetching accounts:', error);
+            console.error('Error:', error);
         }
     };
 
@@ -94,7 +90,7 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/journal-entries?limit=50');
             setJournalEntries(response.data.entries || []);
         } catch (error) {
-            console.error('Error fetching journal entries:', error);
+            console.error('Error:', error);
         }
     };
 
@@ -103,7 +99,7 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/settlements');
             setSettlements(response.data || []);
         } catch (error) {
-            console.error('Error fetching settlements:', error);
+            console.error('Error:', error);
         }
     };
 
@@ -112,7 +108,7 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/expenses');
             setExpenses(response.data || []);
         } catch (error) {
-            console.error('Error fetching expenses:', error);
+            console.error('Error:', error);
         }
     };
 
@@ -121,18 +117,18 @@ const FinanceDashboardPage = () => {
             const response = await api.get('/accounting/transfers');
             setTransfers(response.data || []);
         } catch (error) {
-            console.error('Error fetching transfers:', error);
+            console.error('Error:', error);
         }
     };
 
     const seedAccounts = async () => {
         try {
             await api.post('/accounting/accounts/seed');
-            toast.success('Accounts seeded successfully');
+            toast.success('Accounts seeded');
             fetchAccounts();
             fetchDashboardData();
         } catch (error) {
-            toast.error('Failed to seed accounts');
+            toast.error('Failed');
         }
     };
 
@@ -146,7 +142,7 @@ const FinanceDashboardPage = () => {
         const totalCredit = journalForm.lines.reduce((sum, l) => sum + (parseFloat(l.credit_amount) || 0), 0);
         
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
-            toast.error(`Entry not balanced`);
+            toast.error('Entry not balanced');
             return;
         }
 
@@ -155,7 +151,7 @@ const FinanceDashboardPage = () => {
                 ...journalForm,
                 lines: journalForm.lines.filter(l => l.account_id && (l.debit_amount > 0 || l.credit_amount > 0))
             });
-            toast.success('Journal entry created');
+            toast.success('Created');
             setShowJournalModal(false);
             fetchJournalEntries();
             fetchDashboardData();
@@ -180,7 +176,7 @@ const FinanceDashboardPage = () => {
         e.preventDefault();
         try {
             await api.post('/accounting/expenses', { ...expenseForm, amount: parseFloat(expenseForm.amount) });
-            toast.success('Expense recorded');
+            toast.success('Recorded');
             setShowExpenseModal(false);
             fetchExpenses();
             fetchDashboardData();
@@ -194,7 +190,7 @@ const FinanceDashboardPage = () => {
         e.preventDefault();
         try {
             await api.post('/accounting/transfers', { ...transferForm, amount: parseFloat(transferForm.amount) });
-            toast.success('Transfer recorded');
+            toast.success('Recorded');
             setShowTransferModal(false);
             fetchTransfers();
             fetchDashboardData();
@@ -206,13 +202,8 @@ const FinanceDashboardPage = () => {
 
     const handleJournalAction = async (entryId, action) => {
         try {
-            if (action === 'submit') {
-                await api.post(`/accounting/journal-entries/${entryId}/submit`);
-                toast.success('Entry submitted');
-            } else if (action === 'approve') {
-                await api.post(`/accounting/journal-entries/${entryId}/approve`);
-                toast.success('Entry approved');
-            }
+            await api.post(`/accounting/journal-entries/${entryId}/${action}`);
+            toast.success(action === 'submit' ? 'Submitted' : 'Approved');
             fetchJournalEntries();
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Failed');
@@ -245,97 +236,20 @@ const FinanceDashboardPage = () => {
 
     return (
         <div className="space-y-6" data-testid="finance-dashboard">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Finance Dashboard</h1>
-                    <p className="text-muted-foreground">Double-Entry Accounting & CFO Dashboard</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchDashboardData} data-testid="refresh-btn">
-                        <RefreshCw className="h-4 w-4 mr-2" />Refresh
-                    </Button>
-                    {accounts.length === 0 && (
-                        <Button onClick={seedAccounts} data-testid="seed-btn">
-                            <Plus className="h-4 w-4 mr-2" />Seed Accounts
-                        </Button>
-                    )}
-                </div>
-            </div>
+            <PageHeader accounts={accounts} onRefresh={fetchDashboardData} onSeedAccounts={seedAccounts} />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
-                    <TabsTrigger value="dashboard" data-testid="tab-dashboard"><PieChart className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Dashboard</span></TabsTrigger>
-                    <TabsTrigger value="journal" data-testid="tab-journal"><FileText className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Journal</span></TabsTrigger>
-                    <TabsTrigger value="settlements" data-testid="tab-settlements"><CreditCard className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Settlements</span></TabsTrigger>
-                    <TabsTrigger value="expenses" data-testid="tab-expenses"><Receipt className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Expenses</span></TabsTrigger>
-                    <TabsTrigger value="transfers" data-testid="tab-transfers"><ArrowRightLeft className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Transfers</span></TabsTrigger>
-                    <TabsTrigger value="accounts" data-testid="tab-accounts"><Building2 className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Accounts</span></TabsTrigger>
+                    <TabsTrigger value="dashboard"><PieChart className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Dashboard</span></TabsTrigger>
+                    <TabsTrigger value="journal"><FileText className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Journal</span></TabsTrigger>
+                    <TabsTrigger value="settlements"><CreditCard className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Settlements</span></TabsTrigger>
+                    <TabsTrigger value="expenses"><Receipt className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Expenses</span></TabsTrigger>
+                    <TabsTrigger value="transfers"><ArrowRightLeft className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Transfers</span></TabsTrigger>
+                    <TabsTrigger value="accounts"><Building2 className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Accounts</span></TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="dashboard" className="space-y-6 mt-6">
-                    {dashboardData && (
-                        <>
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                <KPICard title="Total Cash Position" value={formatCurrency(dashboardData.account_balances?.total_cash_position || 0)} icon={Wallet} color="green" />
-                                <KPICard title="Pending Receivables" value={formatCurrency(dashboardData.account_balances?.total_pending_receivables || 0)} icon={CreditCard} color="amber" />
-                                <KPICard title="Today's Revenue" value={formatCurrency(dashboardData.kpis?.today?.revenue || 0)} icon={TrendingUp} color="blue" />
-                                <KPICard title="MTD Revenue" value={formatCurrency(dashboardData.kpis?.mtd?.gross_revenue || 0)} icon={BarChart3} color="purple" />
-                                <KPICard title="MTD Provider Fees" value={formatCurrency(dashboardData.kpis?.mtd?.provider_fees || 0)} icon={TrendingDown} color="red" />
-                                <KPICard title="7-Day Forecast" value={formatCurrency(dashboardData.settlements?.next_7_days_forecast || 0)} subtitle={`${dashboardData.settlements?.upcoming_count || 0} settlements`} icon={Calendar} color="blue" />
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                <Card className="lg:col-span-2">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" />Where Money Lies</CardTitle>
-                                        <CardDescription>Live account balances</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {dashboardData.account_balances?.banks_and_wallets?.map((account) => (
-                                                <BalanceCard key={account.id} account={account} />
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5" />Alerts</CardTitle>
-                                        <CardDescription>{dashboardData.alerts?.length || 0} active alerts</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <ScrollArea className="h-[300px]">
-                                            <div className="space-y-3">
-                                                {dashboardData.alerts?.length > 0 ? (
-                                                    dashboardData.alerts.map((alert, i) => <AlertCard key={i} alert={alert} />)
-                                                ) : (
-                                                    <div className="text-center text-muted-foreground py-8">
-                                                        <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                                                        No active alerts
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </ScrollArea>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5" />Provider Receivables</CardTitle>
-                                    <CardDescription>Pending settlements from payment providers</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {dashboardData.account_balances?.receivables?.map((account) => (
-                                            <BalanceCard key={account.id} account={account} />
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </>
-                    )}
+                <TabsContent value="dashboard" className="mt-6">
+                    <DashboardContent data={dashboardData} />
                 </TabsContent>
 
                 <TabsContent value="journal" className="mt-6">
@@ -391,5 +305,24 @@ const FinanceDashboardPage = () => {
         </div>
     );
 };
+
+const PageHeader = ({ accounts, onRefresh, onSeedAccounts }) => (
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">Finance Dashboard</h1>
+            <p className="text-muted-foreground">Double-Entry Accounting & CFO Dashboard</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+                <RefreshCw className="h-4 w-4 mr-2" />Refresh
+            </Button>
+            {accounts.length === 0 && (
+                <Button onClick={onSeedAccounts}>
+                    <Plus className="h-4 w-4 mr-2" />Seed Accounts
+                </Button>
+            )}
+        </div>
+    </div>
+);
 
 export default FinanceDashboardPage;
