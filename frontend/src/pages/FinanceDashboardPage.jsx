@@ -213,7 +213,6 @@ const FinanceDashboardPage = () => {
             toast.error(error.response?.data?.detail || 'Failed');
         }
     };
-    };
 
     if (loading && !dashboardData) {
         return (
