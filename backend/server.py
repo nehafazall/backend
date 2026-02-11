@@ -1511,6 +1511,66 @@ async def get_commission_summary(user_id: Optional[str] = None, user = Depends(g
         "by_month": [{"month": r["_id"], "total": r["total"], "count": r["count"]} for r in by_month_result]
     }
 
+# ==================== COMMISSION SETTLEMENTS ====================
+
+@api_router.get("/commission-settlements")
+async def get_commission_settlements(user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Get all commission settlements"""
+    settlements = await db.commission_settlements.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return settlements
+
+@api_router.post("/commission-settlements")
+async def create_commission_settlement(
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Create a commission settlement batch to mark commissions as paid"""
+    commission_ids = data.get("commission_ids", [])
+    payment_reference = data.get("payment_reference", "")
+    
+    if not commission_ids:
+        raise HTTPException(status_code=400, detail="No commissions selected")
+    
+    # Get selected commissions
+    commissions = await db.commissions.find(
+        {"id": {"$in": commission_ids}, "status": "pending"},
+        {"_id": 0}
+    ).to_list(len(commission_ids))
+    
+    if not commissions:
+        raise HTTPException(status_code=400, detail="No pending commissions found")
+    
+    total_amount = sum(c.get("commission_amount", 0) for c in commissions)
+    now = datetime.now(timezone.utc)
+    
+    # Create settlement record
+    settlement = {
+        "id": str(uuid.uuid4()),
+        "commission_ids": [c["id"] for c in commissions],
+        "commission_count": len(commissions),
+        "total_amount": total_amount,
+        "payment_reference": payment_reference,
+        "status": "paid",
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now.isoformat()
+    }
+    
+    await db.commission_settlements.insert_one(settlement)
+    
+    # Update commission statuses to paid
+    await db.commissions.update_many(
+        {"id": {"$in": commission_ids}},
+        {"$set": {"status": "paid", "paid_at": now.isoformat(), "settlement_id": settlement["id"]}}
+    )
+    
+    await log_activity("commission_settlement", settlement["id"], "created", user, {
+        "commission_count": len(commissions),
+        "total_amount": total_amount
+    })
+    
+    return settlement
+
 # ==================== APPROVAL REQUESTS ====================
 
 @api_router.get("/approval-requests")
