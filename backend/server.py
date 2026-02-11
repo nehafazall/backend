@@ -5056,6 +5056,118 @@ from accounting_engine import (
     create_finance_audit_entry, SETTLEMENT_RULES
 )
 
+# ==================== SALES TO ACCOUNTING INTEGRATION ====================
+
+async def create_sales_journal_entry(
+    sale_amount: float,
+    payment_method: str,
+    customer_name: str,
+    lead_id: str,
+    user_id: str,
+    user_name: str
+):
+    """
+    Automatically create a double-entry journal entry when a sale is completed.
+    
+    For BNPL (Tabby/Tamara): DR Receivable, CR Revenue
+    For Bank/Card/Cash: DR Bank, CR Revenue
+    """
+    now = datetime.now(timezone.utc)
+    entry_id = str(uuid.uuid4())
+    
+    # Determine which account to debit based on payment method
+    payment_method_lower = payment_method.lower() if payment_method else ""
+    
+    # Map payment method to receivable account
+    receivable_map = {
+        "tabby": "1101",      # Tabby Receivable
+        "tamara": "1102",     # Tamara Receivable
+        "stripe": "1103",     # Network Receivable (for card payments)
+        "unipay": "1103",     # Network Receivable
+        "bank_transfer": "1001",  # ADCB Bank (direct to bank)
+        "cash": "1006",       # Cash
+        "usdt": "1005",       # USDT Wallet
+    }
+    
+    debit_account_code = receivable_map.get(payment_method_lower, "1103")  # Default to Network
+    
+    # Get debit account
+    debit_account = await db.accounts.find_one({"code": debit_account_code})
+    if not debit_account:
+        print(f"Warning: Account {debit_account_code} not found for sales journal")
+        return None
+    
+    # Get revenue account (Course Revenue)
+    revenue_account = await db.accounts.find_one({"code": "4001"})
+    if not revenue_account:
+        print("Warning: Revenue account 4001 not found")
+        return None
+    
+    # Determine source for settlement tracking
+    provider_map = {
+        "tabby": "Tabby",
+        "tamara": "Tamara", 
+        "stripe": "Network",
+        "unipay": "Network",
+    }
+    provider = provider_map.get(payment_method_lower)
+    
+    # Create journal entry
+    journal_entry = {
+        "id": entry_id,
+        "entry_date": now.isoformat(),
+        "description": f"Sale: {customer_name} - {payment_method}",
+        "source_module": "Sales",
+        "source_id": lead_id,
+        "status": JournalStatus.APPROVED.value,  # Auto-approve sales entries
+        "lock_status": LockStatus.OPEN.value,
+        "approved_by": "System",
+        "approved_at": now.isoformat(),
+        "created_by": user_id,
+        "created_by_name": user_name,
+        "created_at": now.isoformat(),
+        "settlement_status": "Pending" if provider else None,
+        "settlement_provider": provider
+    }
+    
+    await db.journal_entries.insert_one(journal_entry)
+    
+    # Create debit line (Asset increase)
+    debit_line = {
+        "id": str(uuid.uuid4()),
+        "journal_entry_id": entry_id,
+        "account_id": debit_account["id"],
+        "debit_amount": sale_amount,
+        "credit_amount": 0,
+        "currency": "AED",
+        "base_amount_aed": sale_amount,
+        "memo": f"Sale to {customer_name}"
+    }
+    await db.journal_lines.insert_one(debit_line)
+    
+    # Create credit line (Revenue increase)
+    credit_line = {
+        "id": str(uuid.uuid4()),
+        "journal_entry_id": entry_id,
+        "account_id": revenue_account["id"],
+        "debit_amount": 0,
+        "credit_amount": sale_amount,
+        "currency": "AED",
+        "base_amount_aed": sale_amount,
+        "memo": f"Course revenue - {customer_name}"
+    }
+    await db.journal_lines.insert_one(credit_line)
+    
+    # Create audit log
+    audit_entry = create_finance_audit_entry(
+        user_id, user_name, "journal_entry", entry_id,
+        "create_sales", None, {"sale_amount": sale_amount, "customer": customer_name}
+    )
+    await db.finance_audit_log.insert_one(audit_entry)
+    
+    print(f"Created sales journal entry {entry_id} for {customer_name}: AED {sale_amount}")
+    return entry_id
+
 # ==================== CHART OF ACCOUNTS ====================
 
 @api_router.get("/accounting/accounts")
