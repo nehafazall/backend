@@ -1434,6 +1434,7 @@ async def get_commissions(
     user_id: Optional[str] = None,
     month: Optional[str] = None,
     status: Optional[str] = None,
+    limit: int = 100,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -1449,15 +1450,23 @@ async def get_commissions(
     if status:
         query["status"] = status
     
-    commissions = await db.commissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    commissions = await db.commissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
     
-    # Add user and course names
+    # Add user and course names, and normalize field names
     for comm in commissions:
         comm_user = await db.users.find_one({"id": comm.get("user_id")})
         comm["user_name"] = comm_user.get("full_name") if comm_user else None
         
         course = await db.courses.find_one({"id": comm.get("course_id")})
         comm["course_name"] = course.get("name") if course else None
+        
+        # Normalize amount field (some records have commission_amount, ensure amount exists)
+        if "amount" not in comm and "commission_amount" in comm:
+            comm["amount"] = comm["commission_amount"]
+        
+        # Normalize sale_type
+        if "sale_type" not in comm and "commission_type" in comm:
+            comm["sale_type"] = comm["commission_type"]
     
     return commissions
 
