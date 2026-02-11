@@ -213,21 +213,6 @@ const FinanceDashboardPage = () => {
             toast.error(error.response?.data?.detail || 'Failed');
         }
     };
-
-    const addJournalLine = () => {
-        setJournalForm(prev => ({
-            ...prev,
-            lines: [...prev.lines, { account_id: '', debit_amount: 0, credit_amount: 0, memo: '' }]
-        }));
-    };
-
-    const updateJournalLine = (index, field, value) => {
-        setJournalForm(prev => ({
-            ...prev,
-            lines: prev.lines.map((line, i) => 
-                i === index ? { ...line, [field]: field.includes('amount') ? parseFloat(value) || 0 : value } : line
-            )
-        }));
     };
 
     if (loading && !dashboardData) {
