@@ -284,8 +284,6 @@ const FinanceDashboardPage = () => {
                 setForm={setJournalForm}
                 accounts={accounts}
                 onSubmit={handleCreateJournal}
-                addLine={addJournalLine}
-                updateLine={updateJournalLine}
             />
 
             <ExpenseModal
