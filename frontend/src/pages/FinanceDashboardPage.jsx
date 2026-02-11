@@ -138,18 +138,22 @@ const FinanceDashboardPage = () => {
 
     const handleCreateJournal = async (e) => {
         e.preventDefault();
-        const totalDebit = journalForm.lines.reduce((sum, l) => sum + (parseFloat(l.debit_amount) || 0), 0);
-        const totalCredit = journalForm.lines.reduce((sum, l) => sum + (parseFloat(l.credit_amount) || 0), 0);
+        const debitVal = parseFloat(journalForm.debit) || 0;
+        const creditVal = parseFloat(journalForm.credit) || 0;
         
-        if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        if (Math.abs(debitVal - creditVal) > 0.01 || debitVal <= 0) {
             toast.error('Entry not balanced');
             return;
         }
 
         try {
             await api.post('/accounting/journal-entries', {
-                ...journalForm,
-                lines: journalForm.lines.filter(l => l.account_id && (l.debit_amount > 0 || l.credit_amount > 0))
+                entry_date: journalForm.entry_date,
+                description: journalForm.description,
+                lines: [
+                    { account_id: journalForm.debit_account_id, debit_amount: debitVal, credit_amount: 0, memo: '' },
+                    { account_id: journalForm.credit_account_id, debit_amount: 0, credit_amount: creditVal, memo: '' }
+                ]
             });
             toast.success('Created');
             setShowJournalModal(false);
@@ -165,10 +169,10 @@ const FinanceDashboardPage = () => {
         setJournalForm({
             entry_date: new Date().toISOString().split('T')[0],
             description: '',
-            lines: [
-                { account_id: '', debit_amount: 0, credit_amount: 0, memo: '' },
-                { account_id: '', debit_amount: 0, credit_amount: 0, memo: '' }
-            ]
+            debit_account_id: '',
+            credit_account_id: '',
+            debit: '',
+            credit: ''
         });
     };
 
