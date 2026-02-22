@@ -118,6 +118,8 @@ const SECTIONS = {
             { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
+            { title: 'HR Dashboard', icon: Users, path: '/hr/dashboard', roles: ['super_admin', 'admin', 'hr'] },
+            { title: 'Employee Master', icon: UserCircle, path: '/hr/employees', roles: ['super_admin', 'admin', 'hr'] },
         ],
     },
     security: {
