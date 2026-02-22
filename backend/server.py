@@ -1890,6 +1890,40 @@ def get_default_permissions(role: str) -> Dict[str, str]:
         permissions["reports"] = "view"
         permissions["commission_engine"] = "view"
         permissions["settings"] = "view"
+    # New Finance-specific roles
+    elif role == "finance_manager":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "full"
+        permissions["reports"] = "full"
+        permissions["commission_engine"] = "full"
+        permissions["settings"] = "view"
+    elif role == "finance_admin":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "full"
+        permissions["reports"] = "edit"
+        permissions["commission_engine"] = "edit"
+        permissions["settings"] = "view"
+    elif role == "finance_treasurer":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "edit"
+        permissions["reports"] = "view"
+        permissions["settings"] = "view"
+    elif role == "finance_verifier":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "edit"
+        permissions["reports"] = "view"
+        permissions["settings"] = "view"
+    elif role == "financier":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "edit"
+        permissions["reports"] = "view"
+        permissions["settings"] = "view"
+    elif role == "accounts":
+        permissions["dashboard"] = "view"
+        permissions["finance"] = "full"
+        permissions["reports"] = "view"
+        permissions["commission_engine"] = "view"
+        permissions["settings"] = "view"
     elif role == "hr":
         permissions["dashboard"] = "view"
         permissions["user_management"] = "edit"
