@@ -1933,6 +1933,10 @@ def get_default_permissions(role: str) -> Dict[str, str]:
     
     return permissions
 
+def get_default_entity_access(role: str) -> List[str]:
+    """Get default entity access (CLT/MILES) based on role"""
+    return FINANCE_ROLE_ACCESS.get(role, ["clt", "miles"])
+
 # ==================== USER PREFERENCES ====================
 # Note: These routes MUST be placed BEFORE /users/{user_id} to avoid route collision
 
