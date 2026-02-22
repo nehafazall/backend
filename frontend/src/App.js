@@ -238,6 +238,11 @@ function AppRoutes() {
                         <AttendancePage />
                     </ProtectedRoute>
                 } />
+                <Route path="hr/biocloud" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <BioCloudSyncPage />
+                    </ProtectedRoute>
+                } />
                 <Route path="hr/payroll" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr', 'finance']}>
                         <PayrollPage />
