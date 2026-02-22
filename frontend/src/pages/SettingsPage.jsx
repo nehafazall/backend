@@ -221,16 +221,31 @@ const SettingsPage = () => {
             {/* Profile Section */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center gap-2">
-                        <User className="h-5 w-5" />
-                        <CardTitle>Profile</CardTitle>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <User className="h-5 w-5" />
+                            <CardTitle>Profile</CardTitle>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={handleOpenEditProfile} data-testid="edit-profile-btn">
+                            <Pencil className="h-4 w-4 mr-2" />Edit Profile
+                        </Button>
                     </div>
                     <CardDescription>Your account information</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex items-center gap-4">
-                        <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center text-white text-3xl font-bold">
-                            {user?.full_name?.charAt(0) || 'U'}
+                        <div className="relative">
+                            {user?.profile_photo_url ? (
+                                <img 
+                                    src={user.profile_photo_url} 
+                                    alt={user.full_name}
+                                    className="w-20 h-20 rounded-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center text-white text-3xl font-bold">
+                                    {user?.full_name?.charAt(0) || 'U'}
+                                </div>
+                            )}
                         </div>
                         <div>
                             <h3 className="text-xl font-semibold">{user?.full_name}</h3>
@@ -240,6 +255,10 @@ const SettingsPage = () => {
                             </Badge>
                         </div>
                     </div>
+                    
+                    {user?.bio && (
+                        <p className="text-sm text-muted-foreground italic">{user.bio}</p>
+                    )}
                     
                     <Separator />
                     
@@ -253,7 +272,7 @@ const SettingsPage = () => {
                             <span className="ml-2">{user?.region || 'Not assigned'}</span>
                         </div>
                         <div>
-                            <span className="text-muted-foreground">Phone:</span>
+                            <span className="text-muted-foreground">Primary Phone:</span>
                             <span className="ml-2">{user?.phone || 'Not provided'}</span>
                         </div>
                         <div>
@@ -261,6 +280,17 @@ const SettingsPage = () => {
                             <Badge className="ml-2 bg-emerald-500 text-white">Active</Badge>
                         </div>
                     </div>
+                    
+                    {user?.additional_phones && user.additional_phones.length > 0 && (
+                        <div className="mt-2">
+                            <span className="text-sm text-muted-foreground">Additional Numbers:</span>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {user.additional_phones.map((phone, idx) => (
+                                    <Badge key={idx} variant="outline">{phone}</Badge>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
