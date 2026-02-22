@@ -1908,6 +1908,8 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     # Capture old values for audit
     old_values = {k: v for k, v in existing.items() if k in data and k not in ["_id", "password"]}
     
+    now = datetime.now(timezone.utc).isoformat()
+    
     # Non-super_admin can only update certain fields
     if user.get("role") != "super_admin":
         allowed_fields = ["phone", "region"]
@@ -1924,7 +1926,7 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
                 "requested_by_name": user["full_name"],
                 "changes": data,
                 "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": now
             }
             await db.approval_requests.insert_one(approval)
             return {"message": "Change request submitted for approval"}
@@ -1932,10 +1934,59 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
     if "password" in update_data:
         update_data["password"] = hash_password(update_data["password"])
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = now
     
     await db.users.update_one({"id": user_id}, {"$set": update_data})
     await log_activity("user", user_id, "updated", user, update_data)
+    
+    # BIDIRECTIONAL SYNC: Sync changes with linked employee record
+    employee_id = existing.get("employee_id")
+    if employee_id:
+        employee_update = {}
+        
+        # Sync is_active status -> employment_status
+        if "is_active" in data:
+            if data["is_active"] == False:
+                employee_update["employment_status"] = "terminated"
+                employee_update["termination_date"] = now[:10]
+            else:
+                employee_update["employment_status"] = "active"
+                employee_update["termination_date"] = None
+        
+        # Sync department
+        if "department" in data:
+            employee_update["department"] = data["department"]
+        
+        # Sync role
+        if "role" in data:
+            employee_update["role"] = data["role"]
+        
+        # Sync full_name
+        if "full_name" in data:
+            employee_update["full_name"] = data["full_name"]
+        
+        # Sync phone
+        if "phone" in data:
+            employee_update["mobile_number"] = data["phone"]
+        
+        if employee_update:
+            employee_update["updated_at"] = now
+            await db.hr_employees.update_one(
+                {"id": employee_id},
+                {"$set": employee_update}
+            )
+            
+            # Audit log for employee sync
+            await db.hr_audit_logs.insert_one({
+                "id": str(uuid.uuid4()),
+                "entity_type": "employee",
+                "entity_id": employee_id,
+                "action": "sync_from_user",
+                "user_id": user["id"],
+                "user_name": user["full_name"],
+                "timestamp": now,
+                "changes": employee_update
+            })
     
     # Audit log for user update
     await log_audit(
@@ -1957,6 +2008,32 @@ async def delete_user(user_id: str, user = Depends(require_roles(["super_admin"]
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # BIDIRECTIONAL SYNC: Mark linked employee as terminated when user is deleted
+    employee_id = existing.get("employee_id") if existing else None
+    if employee_id:
+        await db.hr_employees.update_one(
+            {"id": employee_id},
+            {"$set": {
+                "employment_status": "terminated",
+                "termination_date": now[:10],
+                "updated_at": now
+            }}
+        )
+        
+        # Audit log for employee termination
+        await db.hr_audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "employee",
+            "entity_id": employee_id,
+            "action": "terminated_from_user_deletion",
+            "user_id": user["id"],
+            "user_name": user["full_name"],
+            "timestamp": now,
+            "changes": {"employment_status": "terminated", "reason": "user_account_deleted"}
+        })
     
     await log_activity("user", user_id, "deleted", user)
     
