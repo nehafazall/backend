@@ -408,17 +408,34 @@ const CustomerServicePage = () => {
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
                 </div>
             ) : (
-                <div className="kanban-board">
-                    {CS_STAGES.map((stage) => (
-                        <KanbanColumn
-                            key={stage.id}
-                            stage={stage}
-                            students={students}
-                            onView={handleViewStudent}
-                            onSetReminder={handleSetReminder}
-                        />
-                    ))}
-                </div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                >
+                    <div className="kanban-board">
+                        {CS_STAGES.map((stage) => (
+                            <KanbanColumn
+                                key={stage.id}
+                                stage={stage}
+                                students={students}
+                                onView={handleViewStudent}
+                                onSetReminder={handleSetReminder}
+                            />
+                        ))}
+                    </div>
+                    <DragOverlay>
+                        {activeId ? (
+                            <StudentCard
+                                student={students.find(s => s.id === activeId)}
+                                onView={() => {}}
+                                onSetReminder={() => {}}
+                                isDragging={true}
+                            />
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
             )}
 
             {/* Student Detail Modal */}
