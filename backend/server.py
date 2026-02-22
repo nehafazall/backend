@@ -7403,7 +7403,7 @@ async def get_employee(employee_id: str, user = Depends(require_roles(["super_ad
 
 @api_router.post("/hr/employees", response_model=EmployeeResponse)
 async def create_employee(data: EmployeeCreate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
-    """Create a new employee record"""
+    """Create a new employee record with automatic user account creation"""
     # Check for duplicate employee_id
     existing = await db.hr_employees.find_one({"employee_id": data.employee_id})
     if existing:
@@ -7454,6 +7454,494 @@ async def create_employee(data: EmployeeCreate, user = Depends(require_roles(["s
     
     employee.pop("_id", None)
     return employee
+
+# ==================== HR-USER SYNC SYSTEM ====================
+
+class EmployeeWithUserCreate(BaseModel):
+    """Create employee with automatic user account"""
+    # Employee fields
+    employee_id: str
+    full_name: str
+    gender: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    nationality: Optional[str] = None
+    personal_email: Optional[str] = None
+    company_email: str  # Required for user creation
+    mobile_number: Optional[str] = None
+    department: str
+    designation: str
+    reporting_manager_id: Optional[str] = None
+    employment_type: str = "full_time"
+    work_location: str = "Dubai"
+    joining_date: str
+    probation_days: int = 90
+    employment_status: str = "active"
+    # User account fields
+    role: str  # User role for access control
+    team_id: Optional[str] = None  # Team assignment
+    create_user_account: bool = True  # Whether to create user account
+    initial_password: Optional[str] = None  # If None, auto-generate
+    # Salary and other optional fields
+    salary_structure: Optional[Dict] = None
+    bank_details: Optional[Dict] = None
+    visa_details: Optional[Dict] = None
+
+@api_router.post("/hr/employees/with-user")
+async def create_employee_with_user(
+    data: EmployeeWithUserCreate,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Create employee record and automatically create/link user account"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check for duplicate employee_id
+    existing = await db.hr_employees.find_one({"employee_id": data.employee_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Employee ID {data.employee_id} already exists")
+    
+    # Check for duplicate email in both employees and users
+    existing_email = await db.hr_employees.find_one({"company_email": data.company_email})
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Company email already exists in employee records")
+    
+    existing_user = await db.users.find_one({"email": data.company_email})
+    
+    employee_uuid = str(uuid.uuid4())
+    user_uuid = None
+    
+    # Handle user account creation/linking
+    if data.create_user_account:
+        if existing_user:
+            # Link existing user to employee
+            user_uuid = existing_user["id"]
+            # Update user's department if different
+            await db.users.update_one(
+                {"id": user_uuid},
+                {"$set": {
+                    "department": data.department,
+                    "role": data.role,
+                    "full_name": data.full_name,
+                    "updated_at": now
+                }}
+            )
+        else:
+            # Create new user account
+            user_uuid = str(uuid.uuid4())
+            
+            # Generate password if not provided
+            if data.initial_password:
+                password = data.initial_password
+            else:
+                # Auto-generate password: First name + @123
+                first_name = data.full_name.split()[0]
+                password = f"{first_name}@123"
+            
+            # Get default permissions for role
+            permissions = get_default_permissions(data.role)
+            
+            new_user = {
+                "id": user_uuid,
+                "email": data.company_email,
+                "password": hash_password(password),
+                "full_name": data.full_name,
+                "role": data.role,
+                "department": data.department,
+                "status": "active",
+                "permissions": permissions,
+                "employee_id": employee_uuid,  # Link to employee
+                "created_at": now,
+                "updated_at": now,
+                "created_via": "employee_master"
+            }
+            
+            await db.users.insert_one(new_user)
+            
+            # Add to team if specified
+            if data.team_id:
+                team = await db.teams.find_one({"id": data.team_id})
+                if team:
+                    await db.teams.update_one(
+                        {"id": data.team_id},
+                        {"$addToSet": {"members": {
+                            "user_id": user_uuid,
+                            "name": data.full_name,
+                            "role": data.role,
+                            "added_at": now
+                        }}}
+                    )
+    
+    # Create employee record
+    employee = {
+        "id": employee_uuid,
+        "employee_id": data.employee_id,
+        "full_name": data.full_name,
+        "gender": data.gender,
+        "date_of_birth": data.date_of_birth,
+        "nationality": data.nationality,
+        "personal_email": data.personal_email,
+        "company_email": data.company_email,
+        "mobile_number": data.mobile_number,
+        "department": data.department,
+        "designation": data.designation,
+        "reporting_manager_id": data.reporting_manager_id,
+        "employment_type": data.employment_type,
+        "work_location": data.work_location,
+        "joining_date": data.joining_date,
+        "probation_days": data.probation_days,
+        "employment_status": data.employment_status,
+        "notice_period_days": 30,
+        "annual_leave_balance": 30.0,
+        "sick_leave_balance": 15.0,
+        "user_id": user_uuid,  # Link to user account
+        "role": data.role,
+        "team_id": data.team_id,
+        "salary_structure": data.salary_structure or {},
+        "bank_details": data.bank_details or {},
+        "visa_details": data.visa_details or {},
+        "documents": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"]
+    }
+    
+    await db.hr_employees.insert_one(employee)
+    
+    # Update user record with employee_id if user was linked
+    if user_uuid and existing_user:
+        await db.users.update_one(
+            {"id": user_uuid},
+            {"$set": {"employee_id": employee_uuid}}
+        )
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee_uuid,
+        "action": "create_with_user",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {
+            "employee_created": True,
+            "user_created": user_uuid is not None and not existing_user,
+            "user_linked": user_uuid is not None and existing_user is not None
+        }
+    })
+    
+    employee.pop("_id", None)
+    return {
+        "employee": employee,
+        "user_created": user_uuid is not None and not existing_user,
+        "user_linked": user_uuid is not None,
+        "user_id": user_uuid,
+        "message": f"Employee created successfully" + (
+            f". User account created with email {data.company_email}" if user_uuid and not existing_user
+            else f". Linked to existing user account" if user_uuid and existing_user
+            else ""
+        )
+    }
+
+@api_router.put("/hr/employees/{employee_id}/status")
+async def update_employee_status(
+    employee_id: str,
+    new_status: str,
+    termination_date: Optional[str] = None,
+    resignation_date: Optional[str] = None,
+    last_working_date: Optional[str] = None,
+    exit_notes: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee status with automatic user account sync"""
+    valid_statuses = ["active", "probation", "resigned", "terminated", "on_notice", "absconding", "long_leave"]
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+    
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    old_status = employee.get("employment_status")
+    
+    update_data = {
+        "employment_status": new_status,
+        "updated_at": now
+    }
+    
+    if termination_date:
+        update_data["termination_date"] = termination_date
+    if resignation_date:
+        update_data["resignation_date"] = resignation_date
+    if last_working_date:
+        update_data["last_working_date"] = last_working_date
+    if exit_notes:
+        update_data["exit_notes"] = exit_notes
+    
+    await db.hr_employees.update_one({"id": employee["id"]}, {"$set": update_data})
+    
+    # Sync user account status
+    user_status_synced = False
+    if employee.get("user_id"):
+        user_account = await db.users.find_one({"id": employee["user_id"]})
+        if user_account:
+            # Deactivate user if employee is resigned/terminated/absconding
+            if new_status in ["resigned", "terminated", "absconding"]:
+                await db.users.update_one(
+                    {"id": employee["user_id"]},
+                    {"$set": {"status": "inactive", "deactivated_at": now, "deactivation_reason": f"Employee status: {new_status}"}}
+                )
+                user_status_synced = True
+            # Reactivate if status changed back to active
+            elif new_status in ["active", "probation"] and user_account.get("status") == "inactive":
+                await db.users.update_one(
+                    {"id": employee["user_id"]},
+                    {"$set": {"status": "active", "reactivated_at": now}}
+                )
+                user_status_synced = True
+    
+    # Also check by email if user_id is not set
+    if not employee.get("user_id") and employee.get("company_email"):
+        user_account = await db.users.find_one({"email": employee["company_email"]})
+        if user_account:
+            if new_status in ["resigned", "terminated", "absconding"]:
+                await db.users.update_one(
+                    {"email": employee["company_email"]},
+                    {"$set": {"status": "inactive", "deactivated_at": now, "deactivation_reason": f"Employee status: {new_status}"}}
+                )
+                user_status_synced = True
+            elif new_status in ["active", "probation"]:
+                await db.users.update_one(
+                    {"email": employee["company_email"]},
+                    {"$set": {"status": "active", "reactivated_at": now}}
+                )
+                user_status_synced = True
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee["id"],
+        "action": "status_change",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {
+            "old_status": old_status,
+            "new_status": new_status,
+            "user_status_synced": user_status_synced
+        }
+    })
+    
+    return {
+        "message": f"Employee status updated to {new_status}",
+        "employee_id": employee["employee_id"],
+        "user_status_synced": user_status_synced
+    }
+
+@api_router.get("/hr/employees/sync-options")
+async def get_employee_sync_options(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get all available options for employee creation (departments, roles, teams, managers)"""
+    # Get departments
+    departments = await db.departments.find({}, {"_id": 0, "id": 1, "name": 1, "head_id": 1, "head_name": 1}).to_list(100)
+    
+    # Get roles (predefined)
+    roles = [
+        {"value": "super_admin", "label": "Super Admin", "description": "Full system access"},
+        {"value": "admin", "label": "Admin", "description": "Administrative access"},
+        {"value": "sales_manager", "label": "Sales Manager", "description": "Sales team management"},
+        {"value": "team_leader", "label": "Team Leader", "description": "Team lead access"},
+        {"value": "sales_executive", "label": "Sales Executive", "description": "Sales access"},
+        {"value": "cs_head", "label": "CS Head", "description": "Customer service management"},
+        {"value": "cs_agent", "label": "CS Agent", "description": "Customer service access"},
+        {"value": "mentor", "label": "Mentor", "description": "Academic mentoring"},
+        {"value": "academic_master", "label": "Academic Master", "description": "Academic management"},
+        {"value": "finance", "label": "Finance", "description": "Finance access"},
+        {"value": "hr", "label": "HR", "description": "Human resources access"},
+        {"value": "marketing", "label": "Marketing", "description": "Marketing access"},
+        {"value": "operations", "label": "Operations", "description": "Operations access"},
+        {"value": "quality_control", "label": "Quality Control", "description": "QC access"},
+    ]
+    
+    # Get teams
+    teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1, "department": 1, "leader_id": 1, "leader_name": 1}).to_list(100)
+    
+    # Get active employees as potential managers
+    managers = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "department": 1, "designation": 1}
+    ).sort("full_name", 1).to_list(500)
+    
+    # Get work locations
+    locations = ["Dubai", "Abu Dhabi", "Sharjah", "Remote", "Hybrid"]
+    
+    # Get employment types
+    employment_types = [
+        {"value": "full_time", "label": "Full Time"},
+        {"value": "part_time", "label": "Part Time"},
+        {"value": "contract", "label": "Contract"},
+        {"value": "intern", "label": "Intern"},
+        {"value": "consultant", "label": "Consultant"},
+    ]
+    
+    return {
+        "departments": departments,
+        "roles": roles,
+        "teams": teams,
+        "managers": managers,
+        "locations": locations,
+        "employment_types": employment_types
+    }
+
+@api_router.post("/hr/sync-user-to-employee")
+async def sync_user_to_employee(
+    user_id: str,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Create employee record from existing user account"""
+    target_user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if employee already exists for this user
+    existing_employee = await db.hr_employees.find_one({
+        "$or": [
+            {"user_id": user_id},
+            {"company_email": target_user.get("email")}
+        ]
+    })
+    if existing_employee:
+        raise HTTPException(status_code=400, detail="Employee record already exists for this user")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    employee_uuid = str(uuid.uuid4())
+    
+    # Generate employee ID
+    last_emp = await db.hr_employees.find_one(sort=[("employee_id", -1)])
+    if last_emp and last_emp.get("employee_id", "").startswith("CLT-"):
+        try:
+            last_num = int(last_emp["employee_id"].split("-")[-1])
+            emp_id = f"CLT-{str(last_num + 1).zfill(3)}"
+        except:
+            emp_id = "CLT-001"
+    else:
+        emp_id = "CLT-001"
+    
+    employee = {
+        "id": employee_uuid,
+        "employee_id": emp_id,
+        "full_name": target_user.get("full_name", ""),
+        "company_email": target_user.get("email", ""),
+        "department": target_user.get("department", "Operations"),
+        "designation": target_user.get("role", "").replace("_", " ").title(),
+        "role": target_user.get("role", ""),
+        "employment_type": "full_time",
+        "work_location": "Dubai",
+        "joining_date": target_user.get("created_at", now)[:10],
+        "probation_days": 90,
+        "notice_period_days": 30,
+        "employment_status": "active" if target_user.get("status") == "active" else "inactive",
+        "annual_leave_balance": 30.0,
+        "sick_leave_balance": 15.0,
+        "user_id": user_id,
+        "documents": [],
+        "salary_structure": {},
+        "bank_details": {},
+        "visa_details": {},
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_via": "user_sync"
+    }
+    
+    await db.hr_employees.insert_one(employee)
+    
+    # Update user with employee_id
+    await db.users.update_one({"id": user_id}, {"$set": {"employee_id": employee_uuid}})
+    
+    employee.pop("_id", None)
+    return {
+        "message": "Employee record created from user account",
+        "employee": employee
+    }
+
+@api_router.get("/hr/unlinked-users")
+async def get_unlinked_users(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get users who don't have an employee record linked"""
+    # Get all user IDs that are linked to employees
+    employees = await db.hr_employees.find(
+        {"user_id": {"$ne": None}},
+        {"user_id": 1, "company_email": 1}
+    ).to_list(1000)
+    
+    linked_user_ids = {e["user_id"] for e in employees if e.get("user_id")}
+    linked_emails = {e["company_email"] for e in employees if e.get("company_email")}
+    
+    # Get users not in linked lists
+    users = await db.users.find(
+        {"id": {"$nin": list(linked_user_ids)}, "email": {"$nin": list(linked_emails)}},
+        {"_id": 0, "password": 0}
+    ).to_list(500)
+    
+    return users
+
+@api_router.get("/hr/unlinked-employees")
+async def get_unlinked_employees(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get employees who don't have a user account linked"""
+    employees = await db.hr_employees.find(
+        {"$or": [{"user_id": None}, {"user_id": {"$exists": False}}]},
+        {"_id": 0}
+    ).to_list(500)
+    
+    return employees
+
+@api_router.post("/hr/link-employee-user")
+async def link_employee_to_user(
+    employee_id: str,
+    user_id: str,
+    sync_data: bool = True,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Link an existing employee to an existing user account"""
+    employee = await db.hr_employees.find_one({"$or": [{"id": employee_id}, {"employee_id": employee_id}]})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Link employee to user
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {"user_id": user_id, "updated_at": now}}
+    )
+    
+    # Link user to employee
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"employee_id": employee["id"], "updated_at": now}}
+    )
+    
+    # Sync data if requested
+    if sync_data:
+        # Sync department, role from employee to user
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "department": employee.get("department"),
+                "full_name": employee.get("full_name"),
+                "role": employee.get("role") or target_user.get("role")
+            }}
+        )
+    
+    return {"message": "Employee and user linked successfully"}
 
 @api_router.put("/hr/employees/{employee_id}", response_model=EmployeeResponse)
 async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
