@@ -508,6 +508,31 @@ async def log_audit(
     except Exception as e:
         logger.error(f"Failed to log audit entry: {e}")
 
+# ==================== TEAMS MODELS ====================
+
+class TeamCreate(BaseModel):
+    name: str
+    department: str = "sales"  # sales, customer_service, etc.
+    description: Optional[str] = None
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    leader_id: Optional[str] = None
+    description: Optional[str] = None
+    active: Optional[bool] = None
+
+class TeamResponse(BaseModel):
+    id: str
+    name: str
+    department: str
+    leader_id: Optional[str] = None
+    leader_name: Optional[str] = None
+    description: Optional[str] = None
+    member_count: int = 0
+    active: bool = True
+    created_at: str
+    updated_at: str
+
 # ==================== 3CX INTEGRATION MODELS ====================
 
 class ThreeCXContactResponse(BaseModel):
