@@ -301,9 +301,8 @@ const UsersPage = () => {
                                     <TableHead>Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
+                                    <TableHead>Team</TableHead>
                                     <TableHead>Department</TableHead>
-                                    <TableHead>Region</TableHead>
-                                    <TableHead>Env Access</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Created</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -312,7 +311,7 @@ const UsersPage = () => {
                             <TableBody>
                                 {filteredUsers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                                             No users found
                                         </TableCell>
                                     </TableRow>
