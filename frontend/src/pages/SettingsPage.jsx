@@ -14,10 +14,23 @@ import { toast } from 'sonner';
 import { Moon, Sun, User, Shield, Bell, Palette, Phone, Download, Copy, ExternalLink, CheckCircle, Volume2, VolumeX, Pencil, Plus, X, Camera, Save } from 'lucide-react';
 
 const SettingsPage = () => {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const [loading3CX, setLoading3CX] = useState(false);
     const [templateData, setTemplateData] = useState(null);
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const fileInputRef = useRef(null);
+    
+    const [profileForm, setProfileForm] = useState({
+        full_name: '',
+        phone: '',
+        additional_phones: [],
+        bio: '',
+        profile_photo_url: ''
+    });
+    
+    const [newPhone, setNewPhone] = useState('');
     
     // Notification sound settings
     const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(() => {
@@ -25,6 +38,94 @@ const SettingsPage = () => {
         return saved !== null ? JSON.parse(saved) : true;
     });
     const [savingSound, setSavingSound] = useState(false);
+    
+    useEffect(() => {
+        if (user) {
+            setProfileForm({
+                full_name: user.full_name || '',
+                phone: user.phone || '',
+                additional_phones: user.additional_phones || [],
+                bio: user.bio || '',
+                profile_photo_url: user.profile_photo_url || ''
+            });
+        }
+    }, [user]);
+    
+    const handleOpenEditProfile = () => {
+        setProfileForm({
+            full_name: user?.full_name || '',
+            phone: user?.phone || '',
+            additional_phones: user?.additional_phones || [],
+            bio: user?.bio || '',
+            profile_photo_url: user?.profile_photo_url || ''
+        });
+        setShowEditProfile(true);
+    };
+    
+    const handleAddPhone = () => {
+        if (!newPhone.trim()) return;
+        if (profileForm.additional_phones.includes(newPhone.trim())) {
+            toast.error('Phone number already added');
+            return;
+        }
+        setProfileForm(prev => ({
+            ...prev,
+            additional_phones: [...prev.additional_phones, newPhone.trim()]
+        }));
+        setNewPhone('');
+    };
+    
+    const handleRemovePhone = (phone) => {
+        setProfileForm(prev => ({
+            ...prev,
+            additional_phones: prev.additional_phones.filter(p => p !== phone)
+        }));
+    };
+    
+    const handlePhotoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        // Validate
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            toast.error('Invalid file type. Use JPEG, PNG, GIF or WebP');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            toast.error('File too large. Maximum 2MB');
+            return;
+        }
+        
+        // Convert to base64 for preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setProfileForm(prev => ({
+                ...prev,
+                profile_photo_url: e.target.result
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+    
+    const handleSaveProfile = async () => {
+        try {
+            setSaving(true);
+            await api.put('/users/me/profile', {
+                full_name: profileForm.full_name,
+                phone: profileForm.phone,
+                additional_phones: profileForm.additional_phones,
+                bio: profileForm.bio,
+                profile_photo_url: profileForm.profile_photo_url
+            });
+            toast.success('Profile updated successfully');
+            setShowEditProfile(false);
+            if (refreshUser) refreshUser();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to update profile');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // Handle notification sound toggle
     const handleNotificationSoundToggle = async (enabled) => {
