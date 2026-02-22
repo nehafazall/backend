@@ -14,6 +14,14 @@ import jwt
 import bcrypt
 from enum import Enum
 
+# Import BioCloud sync module
+from biocloud_sync import (
+    BioCloudClient,
+    sync_biocloud_employees,
+    get_biocloud_employees_for_mapping,
+    save_employee_mapping
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
