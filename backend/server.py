@@ -8715,6 +8715,190 @@ async def get_attendance(
     records = await db.hr_attendance.find(query, {"_id": 0}).sort([("date", -1), ("employee_code", 1)]).to_list(1000)
     return records
 
+# ==================== BIOCLOUD INTEGRATION ====================
+
+@api_router.get("/hr/biocloud/employees")
+async def get_biocloud_employees(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Fetch employees from BioCloud for mapping"""
+    result = await get_biocloud_employees_for_mapping(db)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to fetch BioCloud employees"))
+    return result
+
+@api_router.post("/hr/biocloud/auto-sync")
+async def auto_sync_biocloud_employees(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Auto-sync employees from BioCloud to CLT Synapse by name matching"""
+    result = await sync_biocloud_employees(db)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to sync employees"))
+    return result
+
+@api_router.post("/hr/biocloud/mapping")
+async def save_biocloud_mapping(
+    mappings: List[Dict],
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Save manual employee mappings between BioCloud and CLT Synapse"""
+    result = await save_employee_mapping(db, mappings)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to save mappings"))
+    return result
+
+@api_router.post("/hr/biocloud/fetch-attendance")
+async def fetch_biocloud_attendance(
+    date: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Fetch attendance from BioCloud and sync to CLT Synapse
+    Uses web scraping since direct API not available
+    """
+    from playwright.async_api import async_playwright
+    
+    target_date = date or datetime.now().strftime("%Y-%m-%d")
+    
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            
+            # Login to BioCloud
+            await page.goto(f"{os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')}")
+            await page.wait_for_timeout(3000)
+            
+            await page.fill('input[placeholder="Enter Username"]', os.environ.get('BIOCLOUD_USERNAME', 'Admin'))
+            await page.fill('input[placeholder="Enter Password"]', os.environ.get('BIOCLOUD_PASSWORD', '1'))
+            await page.click('button:has-text("Login")')
+            await page.wait_for_timeout(5000)
+            
+            # Navigate to Attendance > First & Last
+            await page.click('text=Attendance')
+            await page.wait_for_timeout(2000)
+            await page.click('text=First & Last')
+            await page.wait_for_timeout(3000)
+            
+            # Set date range
+            date_inputs = await page.locator('input[type="text"]').all()
+            if len(date_inputs) >= 2:
+                await date_inputs[0].fill(target_date)
+                await date_inputs[1].fill(target_date)
+                await page.click('text=Search')
+                await page.wait_for_timeout(3000)
+            
+            # Parse the table data
+            rows = await page.locator('table tbody tr').all()
+            attendance_data = []
+            
+            for row in rows:
+                cells = await row.locator('td').all()
+                if len(cells) >= 5:
+                    attendance_data.append({
+                        "emp_code": await cells[0].inner_text(),
+                        "name": await cells[1].inner_text(),
+                        "department": await cells[2].inner_text(),
+                        "first_in": await cells[3].inner_text() if len(cells) > 3 else None,
+                        "last_out": await cells[4].inner_text() if len(cells) > 4 else None,
+                    })
+            
+            await browser.close()
+            
+            # Process and save attendance data
+            synced = 0
+            for att in attendance_data:
+                emp_code = att["emp_code"].strip()
+                
+                # Find mapped employee
+                employee = await db.hr_employees.find_one(
+                    {"biocloud_emp_code": emp_code},
+                    {"_id": 0}
+                )
+                
+                if employee:
+                    now = datetime.now(timezone.utc).isoformat()
+                    
+                    # Check if attendance already exists
+                    existing = await db.hr_attendance.find_one({
+                        "employee_id": employee["id"],
+                        "date": target_date
+                    })
+                    
+                    attendance_record = {
+                        "employee_id": employee["id"],
+                        "employee_code": employee["employee_id"],
+                        "employee_name": employee["full_name"],
+                        "department": employee.get("department"),
+                        "date": target_date,
+                        "biometric_in": att["first_in"],
+                        "biometric_out": att["last_out"],
+                        "source": "biocloud_sync",
+                        "synced_at": now
+                    }
+                    
+                    # Calculate late/early
+                    if att["first_in"] and att["first_in"] > "09:00":
+                        try:
+                            in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
+                            start_time = datetime.strptime("09:00", "%H:%M")
+                            attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                        except:
+                            pass
+                    
+                    if att["last_out"] and att["last_out"] < "18:00":
+                        try:
+                            out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
+                            end_time = datetime.strptime("18:00", "%H:%M")
+                            attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                        except:
+                            pass
+                    
+                    if existing:
+                        await db.hr_attendance.update_one(
+                            {"id": existing["id"]},
+                            {"$set": attendance_record}
+                        )
+                    else:
+                        attendance_record["id"] = str(uuid.uuid4())
+                        attendance_record["created_at"] = now
+                        await db.hr_attendance.insert_one(attendance_record)
+                    
+                    synced += 1
+            
+            return {
+                "success": True,
+                "date": target_date,
+                "fetched": len(attendance_data),
+                "synced": synced,
+                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse"
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch attendance: {str(e)}")
+
+@api_router.get("/hr/biocloud/status")
+async def get_biocloud_status(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Check BioCloud connection status and mapped employees"""
+    try:
+        client = BioCloudClient()
+        connected = await client.authenticate()
+        await client.close()
+        
+        # Get mapping stats
+        total_employees = await db.hr_employees.count_documents({})
+        mapped_employees = await db.hr_employees.count_documents({"biocloud_emp_code": {"$exists": True, "$ne": None}})
+        
+        return {
+            "connected": connected,
+            "biocloud_url": os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085'),
+            "total_clt_employees": total_employees,
+            "mapped_employees": mapped_employees,
+            "unmapped_employees": total_employees - mapped_employees
+        }
+    except Exception as e:
+        return {
+            "connected": False,
+            "error": str(e)
+        }
+
 # ==================== HR MODULE - ATTENDANCE REGULARIZATION ====================
 
 @api_router.post("/hr/regularization-requests")
