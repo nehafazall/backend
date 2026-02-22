@@ -309,6 +309,50 @@ const CustomerServicePage = () => {
         fetchStudents();
     };
 
+    // Drag and drop handlers
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setActiveId(null);
+
+        if (!over) return;
+
+        const activeStudentId = active.id;
+        const activeStudent = students.find(s => s.id === activeStudentId);
+        
+        if (!activeStudent) return;
+
+        // Determine target stage
+        let targetStage = null;
+        
+        // Check if dropped over a column (stage id)
+        const isColumnDrop = CS_STAGES.some(s => s.id === over.id);
+        if (isColumnDrop) {
+            targetStage = over.id;
+        } else {
+            // Dropped over another student - get that student's stage
+            const overStudent = students.find(s => s.id === over.id);
+            if (overStudent) {
+                targetStage = overStudent.stage;
+            }
+        }
+
+        // If dropped in a different stage, update the student
+        if (targetStage && targetStage !== activeStudent.stage) {
+            try {
+                await studentApi.update(activeStudentId, { stage: targetStage });
+                toast.success(`Student moved to ${CS_STAGES.find(s => s.id === targetStage)?.label}`);
+                fetchStudents();
+            } catch (error) {
+                toast.error('Failed to move student');
+                console.error(error);
+            }
+        }
+    };
+
     const handleUpdateStudent = async () => {
         if (!selectedStudent) return;
         
