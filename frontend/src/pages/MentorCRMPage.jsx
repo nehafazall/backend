@@ -188,10 +188,20 @@ const SortableStudentCard = ({ student, onView, onSetReminder }) => {
 
 const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
     const stageStudents = students.filter(s => s.mentor_stage === stage.id);
+    const studentIds = stageStudents.map(s => s.id);
     const StageIcon = stage.icon;
     
+    // Make column a drop target
+    const { setNodeRef, isOver } = useDroppable({
+        id: stage.id,
+    });
+    
     return (
-        <div className="kanban-column" data-testid={`mentor-column-${stage.id}`}>
+        <div 
+            ref={setNodeRef}
+            className={`kanban-column ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`} 
+            data-testid={`mentor-column-${stage.id}`}
+        >
             <div className="kanban-column-header">
                 <div className="flex items-center gap-2">
                     <StageIcon className={`h-4 w-4 ${stage.color.replace('bg-', 'text-')}`} />
@@ -201,21 +211,23 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
             </div>
             
             <ScrollArea className="flex-1">
-                <div className="space-y-3">
-                    {stageStudents.map((student) => (
-                        <StudentCard
-                            key={student.id}
-                            student={student}
-                            onView={onView}
-                            onSetReminder={onSetReminder}
-                        />
-                    ))}
-                    {stageStudents.length === 0 && (
-                        <div className="text-center text-muted-foreground py-8 text-sm">
-                            No students
-                        </div>
-                    )}
-                </div>
+                <SortableContext items={studentIds} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3 min-h-[100px] p-1">
+                        {stageStudents.map((student) => (
+                            <SortableStudentCard
+                                key={student.id}
+                                student={student}
+                                onView={onView}
+                                onSetReminder={onSetReminder}
+                            />
+                        ))}
+                        {stageStudents.length === 0 && (
+                            <div className={`text-center text-muted-foreground py-8 text-sm border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
+                                Drop students here
+                            </div>
+                        )}
+                    </div>
+                </SortableContext>
             </ScrollArea>
         </div>
     );
