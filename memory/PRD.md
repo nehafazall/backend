@@ -5,6 +5,41 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 22, 2026 - BioCloud Biometric Integration
+
+#### NEW: ZK BioCloud Attendance System Integration (COMPLETED)
+
+**What's Working:**
+- ✅ Connected to BioCloud at https://56.biocloud.me:8085
+- ✅ Fetching 106 employees from BioCloud
+- ✅ Employee mapping interface (manual + auto-sync by name)
+- ✅ Attendance sync endpoint ready
+
+**BioCloud Sync Page (`/hr/biocloud`):**
+- Status cards: Connection status, BioCloud employees, mapped/unmapped count
+- Employee Mapping tab: View all BioCloud employees, map to CLT Synapse employees
+- Attendance Sync tab: Fetch daily attendance (first-in/last-out)
+
+**API Endpoints:**
+- `GET /api/hr/biocloud/status` - Check BioCloud connection
+- `GET /api/hr/biocloud/employees` - Fetch employees for mapping
+- `POST /api/hr/biocloud/auto-sync` - Auto-sync by name matching
+- `POST /api/hr/biocloud/mapping` - Save manual mappings
+- `POST /api/hr/biocloud/fetch-attendance` - Fetch attendance via web scraping
+
+**Technical Notes:**
+- BioCloud uses JWT auth via `/jwt-api-token-auth/`
+- Personnel API available at `/personnel/api/employees/`
+- Transaction API returns 404 (not enabled on license)
+- Attendance data fetched via web scraping from `/Attendance/Transaction` page
+
+**Configuration (backend/.env):**
+```
+BIOCLOUD_URL="https://56.biocloud.me:8085"
+BIOCLOUD_USERNAME="Admin"
+BIOCLOUD_PASSWORD="1"
+```
+
 ### Session Feb 22, 2026 - CS → Mentor CRM Data Flow
 
 #### NEW: Customer Service to Mentor CRM Pipeline (COMPLETED)
