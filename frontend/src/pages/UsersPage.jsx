@@ -542,6 +542,50 @@ const UsersPage = () => {
                             </div>
                         )}
 
+                        {/* Employee Record Sync */}
+                        <div className="space-y-3 p-4 border rounded-lg bg-emerald-500/10 border-emerald-500/30">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-sm font-medium">Create Employee Record</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Auto-generate employee record in HR module
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={formData.create_employee_record}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, create_employee_record: checked })}
+                                    data-testid="create-employee-toggle"
+                                />
+                            </div>
+                            
+                            {formData.create_employee_record && (
+                                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-emerald-500/30">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="designation" className="text-xs">Designation</Label>
+                                        <Input
+                                            id="designation"
+                                            value={formData.designation}
+                                            onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                                            placeholder="e.g. Sales Executive"
+                                            className="h-8 text-sm"
+                                            data-testid="user-designation-input"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="joining_date" className="text-xs">Joining Date</Label>
+                                        <Input
+                                            id="joining_date"
+                                            type="date"
+                                            value={formData.joining_date}
+                                            onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
+                                            className="h-8 text-sm"
+                                            data-testid="user-joining-date-input"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {currentUser?.role === 'super_admin' && (
                             <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
                                 <Label className="text-sm font-medium">Environment Access</Label>
