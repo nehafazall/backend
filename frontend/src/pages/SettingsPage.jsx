@@ -587,6 +587,121 @@ const SettingsPage = () => {
                     </div>
                 </CardContent>
             </Card>
+            
+            {/* Edit Profile Dialog */}
+            <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit Profile</DialogTitle>
+                        <DialogDescription>Update your profile information</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {/* Profile Photo */}
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="relative">
+                                {profileForm.profile_photo_url ? (
+                                    <img 
+                                        src={profileForm.profile_photo_url} 
+                                        alt="Profile"
+                                        className="w-24 h-24 rounded-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white text-4xl font-bold">
+                                        {profileForm.full_name?.charAt(0) || 'U'}
+                                    </div>
+                                )}
+                                <Button 
+                                    variant="outline" 
+                                    size="icon" 
+                                    className="absolute bottom-0 right-0 rounded-full h-8 w-8"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <Camera className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <input 
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                className="hidden"
+                                onChange={handlePhotoUpload}
+                            />
+                            <p className="text-xs text-muted-foreground">Click camera to upload photo (max 2MB)</p>
+                        </div>
+                        
+                        {/* Full Name */}
+                        <div className="space-y-2">
+                            <Label>Full Name</Label>
+                            <Input 
+                                value={profileForm.full_name}
+                                onChange={(e) => setProfileForm(prev => ({ ...prev, full_name: e.target.value }))}
+                                placeholder="Your full name"
+                            />
+                        </div>
+                        
+                        {/* Primary Phone */}
+                        <div className="space-y-2">
+                            <Label>Primary Phone</Label>
+                            <Input 
+                                value={profileForm.phone}
+                                onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                                placeholder="+971 XX XXX XXXX"
+                            />
+                        </div>
+                        
+                        {/* Additional Phones */}
+                        <div className="space-y-2">
+                            <Label>Additional Phone Numbers</Label>
+                            <div className="flex gap-2">
+                                <Input 
+                                    value={newPhone}
+                                    onChange={(e) => setNewPhone(e.target.value)}
+                                    placeholder="Add another number"
+                                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPhone())}
+                                />
+                                <Button type="button" variant="outline" onClick={handleAddPhone}>
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            {profileForm.additional_phones.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {profileForm.additional_phones.map((phone, idx) => (
+                                        <Badge key={idx} variant="secondary" className="gap-1 pr-1">
+                                            {phone}
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-4 w-4 ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+                                                onClick={() => handleRemovePhone(phone)}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </Button>
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Bio */}
+                        <div className="space-y-2">
+                            <Label>Bio (Optional)</Label>
+                            <Textarea 
+                                value={profileForm.bio}
+                                onChange={(e) => setProfileForm(prev => ({ ...prev, bio: e.target.value }))}
+                                placeholder="A short bio about yourself"
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowEditProfile(false)}>Cancel</Button>
+                        <Button onClick={handleSaveProfile} disabled={saving}>
+                            <Save className="h-4 w-4 mr-2" />
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
