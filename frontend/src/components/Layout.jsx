@@ -44,6 +44,9 @@ import {
     Home,
     Volume2,
     VolumeX,
+    Clock,
+    Calendar,
+    BarChart3,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
