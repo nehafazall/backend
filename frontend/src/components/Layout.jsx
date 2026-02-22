@@ -105,6 +105,23 @@ const SECTIONS = {
             { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard' },
         ],
     },
+    hr: {
+        id: 'hr',
+        title: 'Human Resources',
+        icon: Users,
+        color: 'bg-rose-500',
+        roles: ['super_admin', 'admin', 'hr'],
+        items: [
+            { title: 'HR Dashboard', icon: LayoutDashboard, path: '/hr/dashboard' },
+            { title: 'Employee Master', icon: UserCircle, path: '/hr/employees' },
+            { title: 'Leave Management', icon: Calendar, path: '/hr/leave' },
+            { title: 'Attendance', icon: Clock, path: '/hr/attendance' },
+            { title: 'Payroll', icon: DollarSign, path: '/hr/payroll' },
+            { title: 'Performance', icon: TrendingUp, path: '/hr/performance' },
+            { title: 'Assets', icon: Briefcase, path: '/hr/assets' },
+            { title: 'HR Analytics', icon: BarChart3, path: '/hr/analytics' },
+        ],
+    },
     operations: {
         id: 'operations',
         title: 'Operations',
@@ -118,8 +135,6 @@ const SECTIONS = {
             { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
-            { title: 'HR Dashboard', icon: Users, path: '/hr/dashboard', roles: ['super_admin', 'admin', 'hr'] },
-            { title: 'Employee Master', icon: UserCircle, path: '/hr/employees', roles: ['super_admin', 'admin', 'hr'] },
         ],
     },
     security: {
