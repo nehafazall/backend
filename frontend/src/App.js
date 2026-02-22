@@ -227,6 +227,36 @@ function AppRoutes() {
                         <EmployeeMasterPage />
                     </ProtectedRoute>
                 } />
+                <Route path="hr/leave" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <LeavePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/attendance" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <AttendancePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/payroll" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr', 'finance']}>
+                        <PayrollPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/performance" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <PerformancePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/assets" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr', 'operations']}>
+                        <AssetsPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/analytics" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <AnalyticsPage />
+                    </ProtectedRoute>
+                } />
                 
                 {/* User Management */}
                 <Route path="users" element={
