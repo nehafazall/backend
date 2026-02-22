@@ -1946,7 +1946,7 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
         
         # Sync is_active status -> employment_status
         if "is_active" in data:
-            if data["is_active"] == False:
+            if not data["is_active"]:
                 employee_update["employment_status"] = "terminated"
                 employee_update["termination_date"] = now[:10]
             else:
