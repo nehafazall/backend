@@ -92,6 +92,18 @@ export const AuthProvider = ({ children }) => {
     const clearJustLoggedIn = () => {
         setJustLoggedIn(false);
     };
+    
+    const refreshUser = async () => {
+        try {
+            const response = await api.get('/auth/me');
+            setUser(response.data);
+            localStorage.setItem('clt_user', JSON.stringify(response.data));
+            return response.data;
+        } catch (error) {
+            console.error('Failed to refresh user:', error);
+            return null;
+        }
+    };
 
     const value = {
         user,
@@ -101,6 +113,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!user,
         justLoggedIn,
         clearJustLoggedIn,
+        refreshUser,
     };
 
     return (
