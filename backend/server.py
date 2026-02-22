@@ -7536,27 +7536,6 @@ async def delete_employee(employee_id: str, user = Depends(require_roles(["super
     
     return {"message": "Employee marked as terminated", "employee_id": employee["employee_id"]}
 
-@api_router.get("/hr/employees/next-id")
-async def get_next_employee_id(prefix: str = "CLT", user = Depends(require_roles(["super_admin", "admin", "hr"]))):
-    """Get the next available employee ID"""
-    # Find the highest existing ID with this prefix
-    employees = await db.hr_employees.find(
-        {"employee_id": {"$regex": f"^{prefix}-"}},
-        {"employee_id": 1, "_id": 0}
-    ).sort("employee_id", -1).limit(1).to_list(1)
-    
-    if employees:
-        last_id = employees[0]["employee_id"]
-        try:
-            last_num = int(last_id.split("-")[-1])
-            next_num = last_num + 1
-        except:
-            next_num = 1
-    else:
-        next_num = 1
-    
-    return {"next_employee_id": f"{prefix}-{str(next_num).zfill(3)}"}
-
 # ==================== HR MODULE - DOCUMENT MANAGEMENT ====================
 
 @api_router.post("/hr/employees/{employee_id}/documents")
