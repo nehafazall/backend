@@ -79,6 +79,7 @@ const REGIONS = ['UAE', 'India', 'International'];
 const UsersPage = () => {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
+    const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -93,13 +94,24 @@ const UsersPage = () => {
         department: '',
         phone: '',
         region: '',
+        team_id: '',
         is_active: true,
         environment_access: [],
     });
 
     useEffect(() => {
         fetchUsers();
+        fetchTeams();
     }, [roleFilter]);
+
+    const fetchTeams = async () => {
+        try {
+            const response = await api.get('/teams');
+            setTeams(response.data);
+        } catch (error) {
+            console.error('Failed to fetch teams', error);
+        }
+    };
 
     const fetchUsers = async () => {
         try {
