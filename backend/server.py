@@ -1775,6 +1775,8 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
             "employment_status": "active",
             "mobile_number": data.phone,
             "user_id": user_uuid,
+            "probation_days": 90,
+            "notice_period_days": 30,
             "annual_leave_balance": 30.0,
             "sick_leave_balance": 15.0,
             "documents": [],
