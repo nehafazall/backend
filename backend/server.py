@@ -1946,6 +1946,8 @@ async def create_team(
     
     await log_activity("team", team_data["id"], "created", user, {"name": team.name})
     
+    # Return without _id
+    team_data.pop("_id", None)
     return team_data
 
 @api_router.get("/teams/{team_id}")
