@@ -69,6 +69,7 @@ const FinanceLayout = () => {
                                 <NavItem path="expenses" label="Expenses" icon={Receipt} entity={entity} />
                                 <NavItem path="transfers" label="Transfers" icon={ArrowRightLeft} entity={entity} />
                                 <NavItem path="accounts" label="Chart of Accounts" icon={Building2} entity={entity} />
+                                <NavItem path="reconciliation" label="Bank Reconciliation" icon={FileSpreadsheet} entity={entity} />
                             </div>
                         </div>
 
