@@ -7478,6 +7478,8 @@ class EmployeeResponse(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period_days: int
     employment_status: str
+    termination_date: Optional[str] = None  # Date when employee was terminated
+    role: Optional[str] = None  # Linked user role for sync
     employee_category: Optional[str] = None
     grade: Optional[str] = None
     visa_details: Optional[Dict] = None
