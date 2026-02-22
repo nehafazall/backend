@@ -8446,6 +8446,21 @@ async def startup_event():
     await db.finance_audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
     await db.finance_audit_logs.create_index("timestamp")
     
+    # HR Module indexes
+    await db.hr_employees.create_index("employee_id", unique=True)
+    await db.hr_employees.create_index("company_email", unique=True, sparse=True)
+    await db.hr_employees.create_index("department")
+    await db.hr_employees.create_index("employment_status")
+    await db.hr_employees.create_index("user_id", sparse=True)
+    await db.hr_attendance.create_index([("employee_id", 1), ("date", 1)], unique=True)
+    await db.hr_attendance.create_index("date")
+    await db.hr_leave_requests.create_index("employee_id")
+    await db.hr_leave_requests.create_index("status")
+    await db.hr_regularization_requests.create_index("employee_id")
+    await db.hr_regularization_requests.create_index("status")
+    await db.hr_audit_logs.create_index([("entity_type", 1), ("entity_id", 1)])
+    await db.hr_audit_logs.create_index("timestamp")
+    
     logger.info("CLT Synapse ERP v2.0 started successfully")
 
 @app.on_event("shutdown")
