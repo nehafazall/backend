@@ -13,17 +13,14 @@ import {
 } from 'lucide-react';
 import EmployeeModal from './EmployeeModal';
 
-const DEPARTMENTS = [
-    'Sales', 'Finance', 'Customer Service', 'Mentors/Academics',
-    'Operations', 'Marketing', 'HR', 'Quality Control'
-];
-
 const STATUS_COLORS = {
     active: 'bg-green-500',
     probation: 'bg-amber-500',
     suspended: 'bg-red-500',
     resigned: 'bg-slate-500',
-    terminated: 'bg-red-700'
+    terminated: 'bg-red-700',
+    on_notice: 'bg-orange-500',
+    long_leave: 'bg-purple-500'
 };
 
 const EmployeeMasterPage = () => {
@@ -35,10 +32,21 @@ const EmployeeMasterPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [stats, setStats] = useState({ total: 0, active: 0, probation: 0 });
+    const [departments, setDepartments] = useState([]);
 
     useEffect(() => {
         fetchEmployees();
+        fetchDepartments();
     }, [filterDept, filterStatus]);
+
+    const fetchDepartments = async () => {
+        try {
+            const res = await api.get('/hr/employees/sync-options');
+            setDepartments(res.data.departments || []);
+        } catch (error) {
+            console.error('Error fetching departments:', error);
+        }
+    };
 
     const fetchEmployees = async () => {
         try {
