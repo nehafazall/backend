@@ -7489,6 +7489,7 @@ class EmployeeResponse(BaseModel):
     sick_leave_balance: float
     documents: List[Dict] = []
     user_id: Optional[str] = None
+    created_via: Optional[str] = None  # Source: user_management, employee_master
     created_at: str
     updated_at: str
 
