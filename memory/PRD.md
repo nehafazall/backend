@@ -216,9 +216,10 @@ User Management                    Employee Master
 ## Test Reports
 - `/app/test_reports/iteration_15.json` - P0/P1 features (100% pass)
 - `/app/test_reports/iteration_16.json` - Bidirectional sync (100% pass)
+- `/app/test_reports/iteration_17.json` - Z-Index bug fix verification (100% pass - 6/6 tests)
 
 ## Future/Backlog Tasks
-- Biometric API integration for attendance
+- Direct ZKTeco biometric device API integration (if network access available)
 - Meta Ads and Google Ads webhook integration
 - WhatsApp/SMS notifications
 - Self-hosting package (Docker, PostgreSQL migration)
