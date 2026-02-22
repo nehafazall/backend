@@ -27,6 +27,7 @@ import QCDashboardPage from "@/pages/QCDashboardPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import PasswordResetPage from "@/pages/PasswordResetPage";
 import RolesPage from "@/pages/RolesPage";
+import TeamsPage from "@/pages/TeamsPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
