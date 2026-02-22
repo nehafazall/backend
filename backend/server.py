@@ -157,6 +157,7 @@ class UserBase(BaseModel):
     monthly_target: float = 0
     commission_rate_override: Optional[float] = None
     environment_access: Optional[List[str]] = None  # ["development", "testing", "production"]
+    entity_access: Optional[List[str]] = None  # ["clt", "miles"] - for finance roles
 
 class UserCreate(UserBase):
     password: str
