@@ -5,6 +5,26 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 22, 2026 - CS → Mentor CRM Data Flow
+
+#### NEW: Customer Service to Mentor CRM Pipeline (COMPLETED)
+
+**Flow:**
+1. New students start in Customer Service CRM under "New Student" stage
+2. CS agent works with the student (calls, onboarding, etc.)
+3. When CS moves student to "Activated" stage:
+   - A mentor is auto-assigned via round-robin
+   - Student gets `mentor_stage: new_student` initialized
+   - Notification sent to assigned mentor
+4. Student now appears in Mentor CRM for the assigned mentor
+
+**Key Rule:** Only activated students appear in Mentor CRM. Unactivated students stay exclusively in Customer Service.
+
+**Technical Changes:**
+- Backend: Added `activated_only` filter to `GET /api/students`
+- Backend: Auto-sets `mentor_stage: new_student` when CS activates student
+- Frontend: MentorCRMPage now fetches with `activated_only=true`
+
 ### Session Feb 22, 2026 - Bidirectional User <-> Employee Sync
 
 #### NEW: Full Bidirectional Sync Between User Management & Employee Master (COMPLETED)
