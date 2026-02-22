@@ -2991,6 +2991,7 @@ async def get_students(
     cs_agent_id: Optional[str] = None,
     mentor_id: Optional[str] = None,
     search: Optional[str] = None,
+    activated_only: Optional[bool] = None,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -3008,6 +3009,12 @@ async def get_students(
         query["cs_agent_id"] = cs_agent_id
     if mentor_id:
         query["mentor_id"] = mentor_id
+    
+    # Filter for activated students only (for Mentor CRM)
+    # Students must have passed through CS activation to appear in Mentor pipeline
+    if activated_only:
+        query["stage"] = {"$ne": "new_student"}
+    
     if search:
         query["$or"] = [
             {"full_name": {"$regex": search, "$options": "i"}},
