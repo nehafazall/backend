@@ -9,49 +9,68 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from 'sonner';
 import { Camera, Save, Plus, X } from 'lucide-react';
 
+function PhoneBadge({ phone, onRemove }) {
+    return (
+        <Badge variant="secondary" className="gap-1 pr-1">
+            {phone}
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-4 w-4 ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+                onClick={onRemove}
+            >
+                <X className="h-3 w-3" />
+            </Button>
+        </Badge>
+    );
+}
+
+function PhoneList({ phones, onRemove }) {
+    if (!phones || phones.length === 0) return null;
+    
+    const items = [];
+    for (let i = 0; i < phones.length; i++) {
+        items.push(
+            <PhoneBadge key={i} phone={phones[i]} onRemove={() => onRemove(phones[i])} />
+        );
+    }
+    
+    return <div className="flex flex-wrap gap-2 mt-2">{items}</div>;
+}
+
 const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
     const fileInputRef = useRef(null);
     const [saving, setSaving] = useState(false);
     const [newPhone, setNewPhone] = useState('');
     
-    const [form, setForm] = useState({
-        full_name: '',
-        phone: '',
-        additional_phones: [],
-        bio: '',
-        profile_photo_url: ''
-    });
+    const [fullName, setFullName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [additionalPhones, setAdditionalPhones] = useState([]);
+    const [bio, setBio] = useState('');
+    const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
     
     useEffect(() => {
         if (user && open) {
-            setForm({
-                full_name: user.full_name || '',
-                phone: user.phone || '',
-                additional_phones: user.additional_phones || [],
-                bio: user.bio || '',
-                profile_photo_url: user.profile_photo_url || ''
-            });
+            setFullName(user.full_name || '');
+            setPhone(user.phone || '');
+            setAdditionalPhones(user.additional_phones || []);
+            setBio(user.bio || '');
+            setProfilePhotoUrl(user.profile_photo_url || '');
         }
     }, [user, open]);
     
     const handleAddPhone = () => {
         if (!newPhone.trim()) return;
-        if (form.additional_phones.includes(newPhone.trim())) {
+        if (additionalPhones.includes(newPhone.trim())) {
             toast.error('Phone number already added');
             return;
         }
-        setForm(prev => ({
-            ...prev,
-            additional_phones: [...prev.additional_phones, newPhone.trim()]
-        }));
+        setAdditionalPhones([...additionalPhones, newPhone.trim()]);
         setNewPhone('');
     };
     
-    const handleRemovePhone = (phone) => {
-        setForm(prev => ({
-            ...prev,
-            additional_phones: prev.additional_phones.filter(p => p !== phone)
-        }));
+    const handleRemovePhone = (phoneToRemove) => {
+        setAdditionalPhones(additionalPhones.filter(p => p !== phoneToRemove));
     };
     
     const handlePhotoUpload = async (e) => {
@@ -68,8 +87,8 @@ const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
         }
         
         const reader = new FileReader();
-        reader.onload = (e) => {
-            setForm(prev => ({ ...prev, profile_photo_url: e.target.result }));
+        reader.onload = (evt) => {
+            setProfilePhotoUrl(evt.target.result);
         };
         reader.readAsDataURL(file);
     };
@@ -78,11 +97,11 @@ const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
         try {
             setSaving(true);
             await api.put('/users/me/profile', {
-                full_name: form.full_name,
-                phone: form.phone,
-                additional_phones: form.additional_phones,
-                bio: form.bio,
-                profile_photo_url: form.profile_photo_url
+                full_name: fullName,
+                phone: phone,
+                additional_phones: additionalPhones,
+                bio: bio,
+                profile_photo_url: profilePhotoUrl
             });
             toast.success('Profile updated successfully');
             onOpenChange(false);
@@ -104,11 +123,11 @@ const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
                 <div className="space-y-4">
                     <div className="flex flex-col items-center gap-3">
                         <div className="relative">
-                            {form.profile_photo_url ? (
-                                <img src={form.profile_photo_url} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
+                            {profilePhotoUrl ? (
+                                <img src={profilePhotoUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
                             ) : (
                                 <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white text-4xl font-bold">
-                                    {form.full_name?.charAt(0) || 'U'}
+                                    {fullName?.charAt(0) || 'U'}
                                 </div>
                             )}
                             <Button variant="outline" size="icon" className="absolute bottom-0 right-0 rounded-full h-8 w-8" onClick={() => fileInputRef.current?.click()}>
@@ -121,12 +140,12 @@ const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
                     
                     <div className="space-y-2">
                         <Label>Full Name</Label>
-                        <Input value={form.full_name} onChange={(e) => setForm(prev => ({ ...prev, full_name: e.target.value }))} placeholder="Your full name" />
+                        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
                     </div>
                     
                     <div className="space-y-2">
                         <Label>Primary Phone</Label>
-                        <Input value={form.phone} onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="+971 XX XXX XXXX" />
+                        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+971 XX XXX XXXX" />
                     </div>
                     
                     <div className="space-y-2">
@@ -135,23 +154,12 @@ const EditProfileDialog = ({ open, onOpenChange, user, onSuccess }) => {
                             <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Add another number" />
                             <Button type="button" variant="outline" onClick={handleAddPhone}><Plus className="h-4 w-4" /></Button>
                         </div>
-                        {form.additional_phones.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {form.additional_phones.map((phone, idx) => (
-                                    <Badge key={idx} variant="secondary" className="gap-1 pr-1">
-                                        {phone}
-                                        <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full" onClick={() => handleRemovePhone(phone)}>
-                                            <X className="h-3 w-3" />
-                                        </Button>
-                                    </Badge>
-                                ))}
-                            </div>
-                        )}
+                        <PhoneList phones={additionalPhones} onRemove={handleRemovePhone} />
                     </div>
                     
                     <div className="space-y-2">
                         <Label>Bio (Optional)</Label>
-                        <Textarea value={form.bio} onChange={(e) => setForm(prev => ({ ...prev, bio: e.target.value }))} placeholder="A short bio about yourself" rows={3} />
+                        <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="A short bio about yourself" rows={3} />
                     </div>
                 </div>
                 <DialogFooter>
