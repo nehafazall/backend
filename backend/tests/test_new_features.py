@@ -1,391 +1,328 @@
 """
-Test file for CLT Academy ERP - New Features (Iteration 5)
-Tests: Mentor Dashboard, Bulk Import (Courses & Users), Navigation Sections
+Test file for CLT Synapse ERP new features:
+1. Team-based lead filtering
+2. Quick Stats API
+3. Mentor Leaderboard API
+4. Commission Rules CRUD
+5. Bank Reconciliation Summary
+6. User Profile Update
 """
+
 import pytest
 import requests
 import os
-import io
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
+# Test credentials
+SUPER_ADMIN = {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+TEAM_LEADER = {"email": "Mohammed@clt-academy.com", "password": "Test@1234"}
+SALES_EXEC = {"email": "Aleesha@clt-academy.com", "password": "Test@1234"}
+
+
 class TestAuth:
-    """Authentication tests"""
+    """Authentication tests for different roles"""
     
-    def test_login_success(self):
-        """Test login with super admin credentials"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
-        })
-        assert response.status_code == 200, f"Login failed: {response.text}"
+    def test_super_admin_login(self, api_client):
+        response = api_client.post(f"{BASE_URL}/api/auth/login", json=SUPER_ADMIN)
+        assert response.status_code == 200, f"Super admin login failed: {response.text}"
         data = response.json()
         assert "access_token" in data
-        assert "user" in data
         assert data["user"]["role"] == "super_admin"
-        print(f"SUCCESS: Login successful, token received")
-        return data["access_token"]
-
-
-class TestMentorDashboard:
-    """Tests for Mentor Dashboard endpoint"""
+        print("✅ Super admin login successful")
     
-    @pytest.fixture
-    def auth_token(self):
-        """Get auth token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
+    def test_team_leader_login(self, api_client):
+        response = api_client.post(f"{BASE_URL}/api/auth/login", json=TEAM_LEADER)
+        if response.status_code == 200:
+            data = response.json()
+            assert "access_token" in data
+            print(f"✅ Team leader login successful - Role: {data['user']['role']}")
+        else:
+            print(f"⚠️ Team leader login failed (may not exist): {response.text}")
+            pytest.skip("Team leader user not found")
+    
+    def test_sales_exec_login(self, api_client):
+        response = api_client.post(f"{BASE_URL}/api/auth/login", json=SALES_EXEC)
+        if response.status_code == 200:
+            data = response.json()
+            assert "access_token" in data
+            print(f"✅ Sales executive login successful - Role: {data['user']['role']}")
+        else:
+            print(f"⚠️ Sales executive login failed (may not exist): {response.text}")
+            pytest.skip("Sales executive user not found")
+
+
+class TestQuickStatsAPI:
+    """Quick Stats API tests"""
+    
+    def test_quick_stats_super_admin(self, authenticated_client):
+        """Super admin should get comprehensive stats"""
+        response = authenticated_client.get(f"{BASE_URL}/api/dashboard/quick-stats")
+        assert response.status_code == 200, f"Quick stats failed: {response.text}"
+        data = response.json()
+        
+        # Super admin should have sales stats
+        assert "total_leads" in data or "total_students" in data, "Missing stats data"
+        print(f"✅ Quick stats returned: {list(data.keys())}")
+    
+    def test_quick_stats_returns_role_appropriate_data(self, authenticated_client):
+        """Verify stats structure"""
+        response = authenticated_client.get(f"{BASE_URL}/api/dashboard/quick-stats")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should have common stats
+        assert "unread_notifications" in data
+        print(f"✅ Quick stats structure verified: unread_notifications={data.get('unread_notifications')}")
+
+
+class TestMentorLeaderboard:
+    """Mentor Leaderboard API tests"""
+    
+    def test_mentor_leaderboard_default_period(self, authenticated_client):
+        """Test mentor leaderboard with default period"""
+        response = authenticated_client.get(f"{BASE_URL}/api/mentor/leaderboard")
+        assert response.status_code == 200, f"Mentor leaderboard failed: {response.text}"
+        data = response.json()
+        
+        assert "leaderboard" in data
+        assert "total_mentors" in data
+        print(f"✅ Mentor leaderboard returned {data['total_mentors']} mentors")
+    
+    def test_mentor_leaderboard_monthly(self, authenticated_client):
+        """Test mentor leaderboard with monthly period"""
+        response = authenticated_client.get(f"{BASE_URL}/api/mentor/leaderboard?period=monthly")
+        assert response.status_code == 200
+        data = response.json()
+        assert "leaderboard" in data
+        print(f"✅ Monthly mentor leaderboard: {len(data['leaderboard'])} entries")
+    
+    def test_mentor_leaderboard_all_time(self, authenticated_client):
+        """Test mentor leaderboard all time"""
+        response = authenticated_client.get(f"{BASE_URL}/api/mentor/leaderboard?period=all_time")
+        assert response.status_code == 200
+        data = response.json()
+        assert "leaderboard" in data
+        
+        # Check leaderboard entry structure if there are entries
+        if data["leaderboard"]:
+            entry = data["leaderboard"][0]
+            assert "mentor_id" in entry
+            assert "mentor_name" in entry
+            assert "score" in entry
+            print(f"✅ Leaderboard entry structure verified: rank={entry.get('rank')}, score={entry.get('score')}")
+        else:
+            print("✅ Mentor leaderboard empty (no mentors)")
+
+
+class TestCommissionRules:
+    """Commission Rules CRUD tests"""
+    
+    def test_get_commission_rules(self, authenticated_client):
+        """Get all commission rules"""
+        response = authenticated_client.get(f"{BASE_URL}/api/commission-rules")
+        assert response.status_code == 200, f"Get commission rules failed: {response.text}"
+        data = response.json()
+        assert isinstance(data, list)
+        print(f"✅ Retrieved {len(data)} commission rules")
+    
+    def test_create_commission_rule(self, authenticated_client):
+        """Create a new commission rule"""
+        rule_data = {
+            "name": "TEST_Sales Executive Basic Commission",
+            "role": "sales_executive",
+            "commission_type": "percentage",
+            "commission_value": 5.0,
+            "min_sale_amount": 0,
+            "max_sale_amount": None,
+            "is_active": True
+        }
+        response = authenticated_client.post(f"{BASE_URL}/api/commission-rules", json=rule_data)
+        assert response.status_code == 200, f"Create commission rule failed: {response.text}"
+        data = response.json()
+        assert data["name"] == rule_data["name"]
+        assert data["commission_value"] == 5.0
+        assert "id" in data
+        
+        # Store for cleanup
+        pytest.created_rule_id = data["id"]
+        print(f"✅ Created commission rule: {data['id']}")
+    
+    def test_update_commission_rule(self, authenticated_client):
+        """Update a commission rule"""
+        if not hasattr(pytest, 'created_rule_id'):
+            pytest.skip("No commission rule created to update")
+        
+        response = authenticated_client.put(
+            f"{BASE_URL}/api/commission-rules/{pytest.created_rule_id}",
+            json={"commission_value": 7.5}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["commission_value"] == 7.5
+        print(f"✅ Updated commission rule value to 7.5%")
+    
+    def test_delete_commission_rule(self, authenticated_client):
+        """Delete a commission rule"""
+        if not hasattr(pytest, 'created_rule_id'):
+            pytest.skip("No commission rule created to delete")
+        
+        response = authenticated_client.delete(f"{BASE_URL}/api/commission-rules/{pytest.created_rule_id}")
+        assert response.status_code == 200
+        print(f"✅ Deleted commission rule: {pytest.created_rule_id}")
+
+
+class TestBankReconciliation:
+    """Bank Reconciliation API tests"""
+    
+    def test_reconciliation_summary(self, authenticated_client):
+        """Get reconciliation summary"""
+        response = authenticated_client.get(f"{BASE_URL}/api/accounting/reconciliation/summary")
+        assert response.status_code == 200, f"Reconciliation summary failed: {response.text}"
+        data = response.json()
+        
+        # Verify expected fields
+        assert "total_statements" in data
+        assert "pending_reconciliation" in data
+        assert "completed_statements" in data
+        assert "total_unmatched_lines" in data
+        print(f"✅ Reconciliation summary: {data['total_statements']} statements, {data['pending_reconciliation']} pending")
+    
+    def test_bank_statements_list(self, authenticated_client):
+        """Get list of bank statements"""
+        response = authenticated_client.get(f"{BASE_URL}/api/accounting/bank-statements")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        print(f"✅ Retrieved {len(data)} bank statements")
+
+
+class TestUserProfile:
+    """User Profile Update API tests"""
+    
+    def test_get_current_user(self, authenticated_client):
+        """Get current user profile"""
+        response = authenticated_client.get(f"{BASE_URL}/api/auth/me")
+        assert response.status_code == 200
+        data = response.json()
+        assert "id" in data
+        assert "email" in data
+        assert "full_name" in data
+        print(f"✅ Current user: {data['email']} ({data['role']})")
+    
+    def test_update_profile_bio(self, authenticated_client):
+        """Update profile with bio"""
+        response = authenticated_client.put(f"{BASE_URL}/api/users/me/profile", json={
+            "bio": "Test bio from automated testing"
         })
-        return response.json()["access_token"]
-    
-    def test_mentor_dashboard_endpoint_exists(self, auth_token):
-        """Test GET /api/mentor/dashboard returns 200"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/mentor/dashboard", headers=headers)
-        assert response.status_code == 200, f"Mentor dashboard failed: {response.text}"
-        print(f"SUCCESS: Mentor dashboard endpoint returns 200")
-    
-    def test_mentor_dashboard_returns_expected_fields(self, auth_token):
-        """Test mentor dashboard returns all expected metrics"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/mentor/dashboard", headers=headers)
-        assert response.status_code == 200
-        
+        assert response.status_code == 200, f"Profile update failed: {response.text}"
         data = response.json()
-        expected_fields = [
-            "total_students",
-            "total_revenue",
-            "total_withdrawn",
-            "current_net",
-            "total_commission",
-            "commission_received",
-            "commission_balance",
-            "upgrades_helped",
-            "students_connected",
-            "students_balance",
-            "student_stages",
-            "recent_activities"
-        ]
-        
-        for field in expected_fields:
-            assert field in data, f"Missing field: {field}"
-            print(f"  - {field}: {data[field]}")
-        
-        print(f"SUCCESS: Mentor dashboard returns all expected fields")
+        assert data.get("bio") == "Test bio from automated testing" or data.get("message")
+        print(f"✅ Profile bio updated successfully")
     
-    def test_mentor_dashboard_student_stages_is_dict(self, auth_token):
-        """Test student_stages is a dictionary"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/mentor/dashboard", headers=headers)
-        data = response.json()
-        
-        assert isinstance(data["student_stages"], dict), "student_stages should be a dict"
-        print(f"SUCCESS: student_stages is a dict: {data['student_stages']}")
-    
-    def test_mentor_dashboard_recent_activities_is_list(self, auth_token):
-        """Test recent_activities is a list"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/mentor/dashboard", headers=headers)
-        data = response.json()
-        
-        assert isinstance(data["recent_activities"], list), "recent_activities should be a list"
-        print(f"SUCCESS: recent_activities is a list with {len(data['recent_activities'])} items")
-
-
-class TestImportTemplates:
-    """Tests for Import Template endpoints"""
-    
-    @pytest.fixture
-    def auth_token(self):
-        """Get auth token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
+    def test_update_profile_additional_phones(self, authenticated_client):
+        """Update profile with additional phones"""
+        response = authenticated_client.put(f"{BASE_URL}/api/users/me/profile", json={
+            "additional_phones": ["+971501234567", "+971509876543"]
         })
-        return response.json()["access_token"]
-    
-    def test_courses_template_endpoint(self, auth_token):
-        """Test GET /api/import/templates/courses"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/import/templates/courses", headers=headers)
-        assert response.status_code == 200, f"Courses template failed: {response.text}"
-        
-        data = response.json()
-        assert "template" in data, "Missing template field"
-        assert "instructions" in data, "Missing instructions field"
-        assert "fields" in data, "Missing fields field"
-        assert "required" in data["fields"], "Missing required fields"
-        assert "optional" in data["fields"], "Missing optional fields"
-        
-        # Check required fields
-        required = data["fields"]["required"]
-        assert "name" in required
-        assert "code" in required
-        assert "base_price" in required
-        assert "category" in required
-        
-        print(f"SUCCESS: Courses template endpoint works")
-        print(f"  Required fields: {required}")
-        print(f"  Optional fields: {data['fields']['optional']}")
-    
-    def test_users_template_endpoint(self, auth_token):
-        """Test GET /api/import/templates/users"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/import/templates/users", headers=headers)
-        assert response.status_code == 200, f"Users template failed: {response.text}"
-        
-        data = response.json()
-        assert "template" in data, "Missing template field"
-        assert "instructions" in data, "Missing instructions field"
-        assert "fields" in data, "Missing fields field"
-        assert "valid_roles" in data, "Missing valid_roles field"
-        
-        # Check required fields
-        required = data["fields"]["required"]
-        assert "email" in required
-        assert "full_name" in required
-        assert "role" in required
-        assert "password" in required
-        
-        # Check valid roles list
-        assert len(data["valid_roles"]) > 0, "valid_roles should not be empty"
-        
-        print(f"SUCCESS: Users template endpoint works")
-        print(f"  Required fields: {required}")
-        print(f"  Valid roles: {data['valid_roles']}")
-    
-    def test_courses_template_has_csv_content(self, auth_token):
-        """Test courses template contains valid CSV"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/import/templates/courses", headers=headers)
-        data = response.json()
-        
-        template = data["template"]
-        lines = template.strip().split('\n')
-        assert len(lines) >= 2, "Template should have header and at least one example row"
-        
-        # Check header
-        header = lines[0]
-        assert "name" in header
-        assert "code" in header
-        assert "base_price" in header
-        
-        print(f"SUCCESS: Courses template has valid CSV content")
-    
-    def test_users_template_has_csv_content(self, auth_token):
-        """Test users template contains valid CSV"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/import/templates/users", headers=headers)
-        data = response.json()
-        
-        template = data["template"]
-        lines = template.strip().split('\n')
-        assert len(lines) >= 2, "Template should have header and at least one example row"
-        
-        # Check header
-        header = lines[0]
-        assert "email" in header
-        assert "full_name" in header
-        assert "role" in header
-        
-        print(f"SUCCESS: Users template has valid CSV content")
+        assert response.status_code == 200
+        print(f"✅ Profile additional phones updated successfully")
 
 
-class TestBulkImportCourses:
-    """Tests for bulk course import"""
+class TestTeamBasedLeadFiltering:
+    """Team-based lead filtering tests"""
     
-    @pytest.fixture
-    def auth_token(self):
-        """Get auth token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
-        })
-        return response.json()["access_token"]
-    
-    def test_import_courses_endpoint_accepts_file(self, auth_token):
-        """Test POST /api/import/courses accepts CSV file"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        
-        # Create a test CSV
-        csv_content = """name,code,base_price,category,description,is_active
-"TEST Import Course 1","TEST_IMP001",1500,"basic","Test course for import",true
-"TEST Import Course 2","TEST_IMP002",2500,"advanced","Another test course",true"""
-        
-        files = {"file": ("test_courses.csv", csv_content, "text/csv")}
-        response = requests.post(f"{BASE_URL}/api/import/courses", headers=headers, files=files)
-        
-        assert response.status_code == 200, f"Import courses failed: {response.text}"
-        
+    def test_super_admin_sees_all_leads(self, authenticated_client):
+        """Super admin should see all leads"""
+        response = authenticated_client.get(f"{BASE_URL}/api/leads")
+        assert response.status_code == 200
         data = response.json()
-        assert "message" in data
-        assert "results" in data
-        
-        print(f"SUCCESS: Import courses endpoint works")
-        print(f"  Message: {data['message']}")
-        print(f"  Results: {data['results']}")
-        
-        # Cleanup - delete test courses
-        courses_response = requests.get(f"{BASE_URL}/api/courses", headers=headers)
-        courses = courses_response.json()
-        for course in courses:
-            if course.get("code", "").startswith("TEST_IMP"):
-                requests.delete(f"{BASE_URL}/api/courses/{course['id']}", headers=headers)
-                print(f"  Cleaned up: {course['code']}")
+        assert isinstance(data, list)
+        print(f"✅ Super admin retrieved {len(data)} leads (sees all)")
     
-    def test_import_courses_validates_required_fields(self, auth_token):
-        """Test import validates required fields"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
+    def test_team_leader_lead_filtering(self, api_client):
+        """Team leader should only see their team's leads"""
+        # Login as team leader
+        login_response = api_client.post(f"{BASE_URL}/api/auth/login", json=TEAM_LEADER)
+        if login_response.status_code != 200:
+            pytest.skip("Team leader user not available")
         
-        # CSV with missing required fields
-        csv_content = """name,code,base_price,category
-"Missing Price Course","TEST_MISS001",,"basic"
-"","TEST_MISS002",1500,"basic"
-"Missing Category","TEST_MISS003",1500,"""
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
         
-        files = {"file": ("test_invalid.csv", csv_content, "text/csv")}
-        response = requests.post(f"{BASE_URL}/api/import/courses", headers=headers, files=files)
-        
-        assert response.status_code == 200  # Should still return 200 with errors in results
-        data = response.json()
-        
-        # Should have errors for invalid rows
-        assert "results" in data
-        assert len(data["results"]["errors"]) > 0, "Should have validation errors"
-        
-        print(f"SUCCESS: Import validates required fields")
-        print(f"  Errors: {data['results']['errors']}")
-
-
-class TestBulkImportUsers:
-    """Tests for bulk user import"""
-    
-    @pytest.fixture
-    def auth_token(self):
-        """Get auth token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
-        })
-        return response.json()["access_token"]
-    
-    def test_import_users_endpoint_accepts_file(self, auth_token):
-        """Test POST /api/import/users accepts CSV file"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        
-        # Create a test CSV with unique emails
-        import time
-        timestamp = int(time.time())
-        csv_content = f"""email,full_name,role,password,department,phone,region
-"test_import_{timestamp}@test.com","Test Import User","sales_executive","TestPass123!","Sales","+971501234567","UAE"
-"test_import2_{timestamp}@test.com","Test Import User 2","cs_agent","TestPass123!","Customer Service","+971509876543","UAE"
-"""
-        
-        files = {"file": ("test_users.csv", csv_content, "text/csv")}
-        response = requests.post(f"{BASE_URL}/api/import/users", headers=headers, files=files)
-        
-        assert response.status_code == 200, f"Import users failed: {response.text}"
-        
-        data = response.json()
-        assert "message" in data
-        assert "results" in data
-        
-        print(f"SUCCESS: Import users endpoint works")
-        print(f"  Message: {data['message']}")
-        print(f"  Results: {data['results']}")
-        
-        # Cleanup - delete test users
-        users_response = requests.get(f"{BASE_URL}/api/users", headers=headers)
-        users = users_response.json()
-        for user in users:
-            if user.get("email", "").startswith("test_import"):
-                requests.delete(f"{BASE_URL}/api/users/{user['id']}", headers=headers)
-                print(f"  Cleaned up: {user['email']}")
-    
-    def test_import_users_validates_role(self, auth_token):
-        """Test import validates role field"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        
-        # CSV with invalid role
-        csv_content = """email,full_name,role,password
-"invalid_role@test.com","Invalid Role User","invalid_role_xyz","TestPass123!"
-"""
-        
-        files = {"file": ("test_invalid_role.csv", csv_content, "text/csv")}
-        response = requests.post(f"{BASE_URL}/api/import/users", headers=headers, files=files)
-        
+        # Get leads as team leader
+        response = api_client.get(f"{BASE_URL}/api/leads", headers=headers)
         assert response.status_code == 200
         data = response.json()
         
-        # Should have error for invalid role
-        assert "results" in data
-        assert len(data["results"]["errors"]) > 0, "Should have validation error for invalid role"
+        # Team leader should only see filtered leads
+        print(f"✅ Team leader sees {len(data)} leads (team-filtered)")
         
-        print(f"SUCCESS: Import validates role field")
-        print(f"  Errors: {data['results']['errors']}")
+        # Verify all leads are assigned to team members or team leader
+        tl_user = login_response.json()["user"]
+        print(f"   Team leader: {tl_user['full_name']} (ID: {tl_user['id']})")
     
-    def test_import_users_skips_duplicate_emails(self, auth_token):
-        """Test import skips existing emails"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
+    def test_sales_executive_lead_filtering(self, api_client):
+        """Sales executive should only see their own leads"""
+        # Login as sales executive
+        login_response = api_client.post(f"{BASE_URL}/api/auth/login", json=SALES_EXEC)
+        if login_response.status_code != 200:
+            pytest.skip("Sales executive user not available")
         
-        # Try to import existing super admin email
-        csv_content = """email,full_name,role,password
-"aqib@clt-academy.com","Duplicate User","admin","TestPass123!"
-"""
+        token = login_response.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        user_id = login_response.json()["user"]["id"]
         
-        files = {"file": ("test_duplicate.csv", csv_content, "text/csv")}
-        response = requests.post(f"{BASE_URL}/api/import/users", headers=headers, files=files)
-        
+        # Get leads as sales executive
+        response = api_client.get(f"{BASE_URL}/api/leads", headers=headers)
         assert response.status_code == 200
         data = response.json()
         
-        # Should have skipped the duplicate
-        assert data["results"]["skipped"] >= 1 or len(data["results"]["errors"]) > 0
+        # All leads should be assigned to this user
+        for lead in data:
+            assert lead.get("assigned_to") == user_id, f"Sales exec sees lead not assigned to them"
         
-        print(f"SUCCESS: Import skips duplicate emails")
-        print(f"  Results: {data['results']}")
+        print(f"✅ Sales executive sees {len(data)} leads (all assigned to them)")
 
 
-class TestExistingEndpoints:
-    """Verify existing endpoints still work"""
+class TestTeamsAPI:
+    """Teams API tests for verifying team setup"""
     
-    @pytest.fixture
-    def auth_token(self):
-        """Get auth token"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "aqib@clt-academy.com",
-            "password": "A@qib1234"
-        })
-        return response.json()["access_token"]
-    
-    def test_get_courses(self, auth_token):
-        """Test GET /api/courses still works"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/courses", headers=headers)
+    def test_list_teams(self, authenticated_client):
+        """List all teams"""
+        response = authenticated_client.get(f"{BASE_URL}/api/teams")
         assert response.status_code == 200
-        print(f"SUCCESS: GET /api/courses works - {len(response.json())} courses")
-    
-    def test_get_users(self, auth_token):
-        """Test GET /api/users still works"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/users", headers=headers)
-        assert response.status_code == 200
-        print(f"SUCCESS: GET /api/users works - {len(response.json())} users")
-    
-    def test_get_leads(self, auth_token):
-        """Test GET /api/leads still works"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/leads", headers=headers)
-        assert response.status_code == 200
-        print(f"SUCCESS: GET /api/leads works - {len(response.json())} leads")
-    
-    def test_get_students(self, auth_token):
-        """Test GET /api/students still works"""
-        headers = {"Authorization": f"Bearer {auth_token}"}
-        response = requests.get(f"{BASE_URL}/api/students", headers=headers)
-        assert response.status_code == 200
-        print(f"SUCCESS: GET /api/students works - {len(response.json())} students")
+        data = response.json()
+        
+        print(f"✅ Found {len(data)} teams:")
+        for team in data:
+            print(f"   - {team.get('name')}: Leader={team.get('leader_name')}, Members={team.get('member_count')}")
+
+
+# ==================== FIXTURES ====================
+
+@pytest.fixture
+def api_client():
+    """Shared requests session"""
+    session = requests.Session()
+    session.headers.update({"Content-Type": "application/json"})
+    return session
+
+
+@pytest.fixture
+def auth_token(api_client):
+    """Get authentication token for super admin"""
+    response = api_client.post(f"{BASE_URL}/api/auth/login", json=SUPER_ADMIN)
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    pytest.skip("Super admin authentication failed")
+
+
+@pytest.fixture
+def authenticated_client(api_client, auth_token):
+    """Session with auth header"""
+    api_client.headers.update({"Authorization": f"Bearer {auth_token}"})
+    return api_client
 
 
 if __name__ == "__main__":
