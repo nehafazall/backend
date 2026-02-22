@@ -3,589 +3,169 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
-## Latest Features (February 2026)
+## Latest Updates (February 2026)
 
-### HR Module - Phase 1 (COMPLETED - Feb 22, 2026)
+### Session Feb 22, 2026 - P0 & P1 Completion
 
-#### 1. Employee Master Database (COMPLETED)
-- **Location**: Operations > Employee Master
-- **Complete Employee Schema** with all fields:
-  - Basic: ID, Name, Gender, DOB, Nationality, Emails, Phone, Emergency Contact, Marital Status
-  - Employment: Department, Designation, Manager, Type, Location, Join Date, Probation, Status, Category, Grade
-  - Visa/Legal: Visa Type, Expiry Dates (Visa, Emirates ID, Passport, Labor Card), Company Sponsor
-  - Payroll: Basic + Allowances, Commission Settings, Payroll Group
-  - Bank: Bank Name, IBAN, WPS ID, SWIFT Code
-  - Documents: Versioned uploads with audit logging
+#### 1. Kanban Drag-and-Drop for Customer Service & Mentor CRM (COMPLETED)
+- **Customer Service Page** (`/cs`): Added drag-and-drop using @dnd-kit library
+  - 7 Kanban columns: New Student, Activated, Satisfactory Call, Pitched Upgrade, In Progress, Interested, Not Interested
+  - Drag handles visible, drop zones highlighted on hover
+  - Stage updates via `studentApi.update()` when dropped
+- **Mentor CRM Page** (`/mentor`): Same drag-and-drop implementation
+  - 5 Kanban columns: New Student, Discussion Started, Pitched Redeposit, Interested, Closed (Deposit)
+  - Uses `mentor_stage` field for stage tracking
+- **Implementation**: Uses DndContext, DragOverlay, SortableContext, useSortable, useDroppable, CSS.Transform
+
+#### 2. HR Module Phase 1 - Employee Master & User Sync (COMPLETED)
+- **Employee Master** (`/hr/employees`): Full CRUD with auto-generated Employee ID
+- **Add Employee Modal**: All form fields working (Employee ID, Full Name, Company Email, Department, Designation, System Role, Team, Joining Date, Status)
+- **User Account Sync**: Toggle to create user account automatically
+- **HR Sync Options API** (`/api/hr/employees/sync-options`): Returns departments (8), roles (14), teams (3), managers, locations (5), employment_types (5)
+
+#### 3. HR Module Phase 2 & 3 - Full Implementation (COMPLETED)
+- **Leave Management** (`/hr/leave`): Leave requests, multi-level approval workflow, leave balance tracking
+- **Attendance** (`/hr/attendance`): Daily attendance tracking, late detection, regularization requests
+- **Payroll** (`/hr/payroll`): Payroll batches, run payroll, HR/Finance approval workflow, mark paid
+- **Performance Management** (`/hr/performance`): KPIs, KPI scores, performance reviews
+- **Asset Management** (`/hr/assets`): Asset CRUD, assignment, return, requests, dashboard
+- **HR Analytics** (`/hr/analytics`): Overview, attendance, leave, payroll analytics
+
+### Previous Features (February 2026)
+
+#### HR Module - Phase 1 (COMPLETED - Feb 22, 2026)
+- **Complete Employee Schema** with all fields: Basic, Employment, Visa/Legal, Payroll, Bank, Documents
 - **Auto-generated Employee ID**: CLT-001, CLT-002, etc.
-- **APIs**: Full CRUD at `/api/hr/employees`
-- **Sample Data Format**: Available at `/api/hr/sample-data`
-- **Bulk Import**: `/api/hr/employees/bulk-import`
+- **HR Dashboard** with workforce insights, attendance, pending approvals, document expiry alerts
+- **Document Expiry Alert System**: 30/60/90 day alerts for Visa, Emirates ID, Passport, Labor Card
+- **Basic Leave Management**: Annual, Sick, Emergency, Unpaid, Maternity types with multi-level approval
+- **Basic Attendance**: Biometric API endpoint, late/early detection
+- **Attendance Regularization**: Request types with CEO final approval
+- **HR Audit Logging**: Immutable logs for all HR actions
 
-#### 2. HR Dashboard - Real-Time Metrics (COMPLETED)
-- **Location**: Operations > HR Dashboard
-- **Workforce Insights**:
-  - Total Employees, Active, Probation, Company Visa count
-  - Gender Ratio (Male/Female)
-  - Department-wise Headcount with progress bars
-- **Attendance Insights**:
-  - Present/Absent/Late/On Leave today
-  - Attendance Rate percentage
-- **Pending Approvals**:
-  - Leave Requests pending
-  - Regularization Requests pending
-- **Document Expiry Alerts**:
-  - Critical (30 days), Warning (60 days), Info (90 days)
-  - Total employees needing attention
-- **Upcoming Confirmations**: Probation ending in 30 days
-- **Leave Balance Summary**: Total annual & sick leave across org
+#### Quick Stats Widget on Home Launcher (COMPLETED)
+- Role-appropriate stats for Sales, CS, Mentor, Finance
+- Auto-refresh every 5 minutes
 
-#### 3. Document Expiry Alert System (COMPLETED)
-- **Auto-detection** of expiring documents within 90 days
-- **Alert Levels**: Critical (30), Warning (60), Info (90)
-- **Documents Monitored**: Visa, Emirates ID, Passport, Labor Card
-- **API**: `/api/hr/expiry-alerts`
+#### Commission Engine with Rules Configuration (COMPLETED)
+- Commission Rules CRUD: Role, Commission Type (% or Fixed), Value, Course Filter, Sale Range
+- Auto-calculation of commissions
 
-#### 4. Basic Leave Management (COMPLETED)
-- **Leave Types**: Annual, Sick, Emergency, Unpaid, Maternity
-- **Multi-Level Approval Workflow**: TL → SM → HR → CEO
-- **Direct to CEO** for HR/Finance/Admin roles
-- **Leave Balance Tracking**: Auto-deduction on approval
-- **APIs**: `/api/hr/leave-requests`
+#### Bank Statement Import & Reconciliation Engine (COMPLETED)
+- Import CSV bank statements
+- Auto-reconcile with payments and journal entries
+- Manual matching for unmatched items
 
-#### 5. Basic Attendance (COMPLETED)
-- **Biometric API Endpoint**: `/api/hr/attendance/biometric-sync`
-- **Late/Early Detection**: Based on 9AM-6PM shift
-- **CRM Login Comparison**: Field ready for sync
-- **APIs**: `/api/hr/attendance`
-
-#### 6. Attendance Regularization (COMPLETED)
-- **Request Types**: Late Punch, Missed Punch, WFH, Manual Adjustment
-- **CEO Final Approval**: Required for all regularizations
-- **Audit Trail**: Old vs new values logged
-- **APIs**: `/api/hr/regularization-requests`
-
-#### 7. HR Audit Logging (COMPLETED)
-- **Immutable Logs** for all HR actions
-- **Tracked**: Who, What, When, Old Value, New Value
-- **API**: `/api/hr/audit-logs`
-
-### HR Module - Phase 2 (UPCOMING)
-- Leave Management Enhancement (SLA enforcement)
-- Payroll Engine with WPS compliance
-- Commission integration from Sales module
-
-### HR Module - Phase 3 (FUTURE)
-- Performance KPIs (Company/Department/Individual)
-- Asset Workflow Integration
-- Full Report Suite
-
-### New Features Implemented (Feb 22, 2026)
-
-#### 1. Quick Stats Widget on Home Launcher (COMPLETED)
-- **Location**: Home page above module icons
-- **Role-Appropriate Stats**: Shows different stats based on user role
-  - Sales: Total Leads, New Today, Hot Leads, Enrolled MTD
-  - CS: Total Students, Pending Activation
-  - Mentor: My Students, Upgrade Opportunities
-  - Finance: MTD Revenue, Pending Payments
-- **Auto-Refresh**: Updates every 5 minutes
-- **API**: `/api/dashboard/quick-stats`
-- **Component**: `/app/frontend/src/components/QuickStatsWidget.jsx`
-
-#### 2. Commission Engine with Rules Configuration (COMPLETED)
-- **Location**: Finance > CLT > Commission Engine
-- **Tabs**: Commissions (auto-calculated) and Commission Rules
-- **Commission Rules CRUD**:
-  - Create rules by: Role, Commission Type (% or Fixed), Value, Course Filter, Sale Range
-  - Enable/disable rules with toggle
-  - Edit and delete rules
-- **API**: `/api/commission-rules` - Full CRUD
-- **Page**: `/app/frontend/src/pages/finance/CommissionEnginePage.jsx`
-
-#### 3. Bank Statement Import & Reconciliation Engine (COMPLETED)
-- **Location**: Finance > CLT > Bank Reconciliation
-- **Features**:
-  - Import CSV bank statements
-  - Auto-reconcile with payments and journal entries
-  - Manual matching for unmatched items
-  - Progress tracking per statement
-- **Summary Cards**: Total Statements, Pending Reconciliation, Completed, Unmatched Items
-- **API Endpoints**:
-  - `POST /api/accounting/bank-statements/upload` - Upload CSV
-  - `GET /api/accounting/bank-statements` - List statements
-  - `POST /api/accounting/bank-statements/{id}/auto-reconcile` - Auto-match
-  - `PUT /api/accounting/bank-statements/{id}/lines/{line_id}/match` - Manual match
-  - `GET /api/accounting/reconciliation/summary` - Summary stats
-- **Page**: `/app/frontend/src/pages/finance/ReconciliationPage.jsx`
-
-#### 4. Mentor Leaderboard (COMPLETED)
-- **Location**: Academics > Leaderboard
-- **Podium Display**: Top 3 mentors with 1st/2nd/3rd place styling
-- **Full Rankings Table**: Rank, Mentor, Students, Active, Upgrades, Commission, Rating, Score
-- **Period Filter**: This Month, This Quarter, This Year, All Time
-- **Scoring Formula**: (Upgrades × 100) + (Commission / 100) + (Satisfaction × 20)
-- **API**: `/api/mentor/leaderboard?period={monthly|quarterly|yearly|all_time}`
-- **Page**: `/app/frontend/src/pages/MentorLeaderboard.jsx`
-
-#### 5. Editable Profile in Settings (COMPLETED)
-- **Location**: Settings > Profile > Edit Profile button
-- **Editable Fields**:
-  - Profile Photo (upload with preview, max 2MB)
-  - Full Name
-  - Primary Phone
-  - Additional Phone Numbers (add/remove multiple)
-  - Bio
-- **Display**: Profile shows bio and additional numbers
-- **API**: `PUT /api/users/me/profile`
-- **Components**: 
-  - `/app/frontend/src/components/EditProfileDialog.jsx`
-  - `/app/frontend/src/pages/SettingsPage.jsx`
+#### Mentor Leaderboard (COMPLETED)
+- Podium display for top 3 mentors
+- Full rankings table with period filter
 
 ### Sales Team Management (COMPLETED - Feb 22, 2026)
-- **Team Structure**: Create teams with leader and members
-- **Team-Based Data Access**:
-  - Super Admin: Sees all leads
-  - Team Leader: Sees own leads + team members' leads
-  - Sales Executive: Sees only own leads
-- **Team Assignment**: Assign team to users in User Management
-- **APIs**: `/api/teams` - Full CRUD, `/api/teams/{id}/members`
-- **Page**: `/app/frontend/src/pages/TeamsPage.jsx`
+- Team structure with leader and members
+- Team-based data access control
+- Team assignment in User Management
 
-### Finance Module Restructure (COMPLETED - Feb 11)
-- **Entity Selection**: Two entities - CLT Academy (Active) and MILES (Under Development)
-- **Left Sidebar Navigation**: Organized into Overview, Accounting, and Commissions sections
-- **Add/Edit Accounts**: Full CRUD functionality for Chart of Accounts
-- **Commission Engine**: Sales commission tracking with auto-calculation
-- **Commission Settlements**: Pay out agent commissions with history
+### Finance Module (COMPLETED)
+- Entity Selection: CLT Academy and MILES
+- CFO Dashboard with KPI cards
+- Chart of Accounts (22 pre-seeded accounts)
+- Double-Entry Journal System
+- Sales Integration (automatic journal entries)
+- Expense Module, Transfer Module, Settlement Module
 
-### Finance & Accounting Module - Phase 1 (COMPLETED)
-A comprehensive CFO-grade double-entry accounting system with the following features:
+## Completed Work Summary
 
-#### CFO Dashboard (`/finance`)
-- **KPI Cards**: Total Cash Position, Pending Receivables, Today's Revenue, MTD Revenue, MTD Provider Fees, 7-Day Forecast
-- **"Where Money Lies"**: Live account balances for all bank accounts, wallets, cash
-- **Provider Receivables**: Tabby, Tamara, Network (card) receivables panel
-- **Alerts Panel**: Shows overdue settlements, low balance warnings
+### P0 Features (ALL COMPLETED)
+- [x] Employee Modal crash fix - Modal opens without crash
+- [x] HR/User Sync - Employee creation auto-creates user account
+- [x] HR sync-options API - Returns all required dropdown data
 
-#### Chart of Accounts
-- 22 pre-seeded accounts following standard accounting structure:
-  - **Assets (1xxx)**: Banks (ADCB, ADIB, Mashreq, Indian Bank), USDT Wallet, Cash, Receivables (Tabby, Tamara, Network)
-  - **Equity (3xxx)**: Owner Equity
-  - **Income (4xxx)**: Course Revenue, Renewal Revenue  
-  - **Expenses (5xxx)**: Salaries, Marketing, Bank Fees, etc.
-
-#### Double-Entry Journal System
-- Create manual journal entries with balanced debit/credit validation
-- Journal workflow: **Draft → Submitted → Approved → LOCKED**
-- Source tracking: Manual, Sales, Settlement, Expense, Transfer
-- Finance audit logging for all operations
-
-#### Sales Integration (AUTOMATIC)
-- When a lead is enrolled, the system automatically creates a journal entry:
-  - For BNPL (Tabby/Tamara): DR Receivable, CR Revenue
-  - For Bank/Card/Cash: DR Bank, CR Revenue
-- No manual entry needed for sales
-
-#### Expense Module
-- Record expenses with vendor, category, amount
-- Automatic journal posting (DR Expense, CR Bank/Cash)
-- Status tracking: Draft → Approved
-
-#### Transfer Module
-- Inter-account transfers (Bank to Bank, Bank to Cash, etc.)
-- Automatic journal posting (DR Target, CR Source)
-- Status tracking: Draft → Approved
-
-#### Settlement Module (Ready for Phase 2)
-- Settlement batches for Tabby, Tamara, Network
-- Provider-specific fee rules configured
-- Expected settlement date calculation
-
-#### API Endpoints (`/api/accounting/`)
-- `GET/POST /accounts` - Chart of Accounts CRUD
-- `POST /accounts/seed` - Seed default accounts
-- `GET/POST /journal-entries` - Journal entry CRUD
-- `POST /journal-entries/{id}/submit` - Submit for approval
-- `POST /journal-entries/{id}/approve` - Approve and lock
-- `GET/POST /expenses` - Expense recording
-- `GET/POST /transfers` - Account transfers
-- `GET /settlements` - Settlement batches
-- `GET /dashboard` - CFO dashboard data
-- `GET /config` - Finance configuration
-- `GET /audit-logs` - Finance audit trail
-
-#### Technical Details
-- Backend: `/app/backend/accounting_engine.py` + `server.py`
-- Frontend: `/app/frontend/src/pages/FinanceDashboardPage.jsx`
-- Components: `/app/frontend/src/components/finance/` (Cards, Tabs, Modals, DashboardContent)
-- Database collections: `accounts`, `journal_entries`, `journal_lines`, `expenses`, `transfers`, `settlements`, `finance_audit_log`, `finance_config`
-
----
-
-## Previous Features (December 2025)
-
-### Lead Form Enhancements (COMPLETED)
-- **Phone Country Auto-Detection**: Automatically detects country from phone number prefix (60+ countries supported)
-  - +971 → UAE, +91 → India, +966 → Saudi Arabia, etc.
-  - Utility: `/app/frontend/src/lib/phoneCountry.js`
-- **Country Dropdown**: Pre-filled based on phone detection, 60+ countries available
-- **Lead Source Dropdown**: Facebook, Instagram, Google Ads, Website, Referral, Walk-in, Cold Call, Other
-- **Course of Interest**: Removed from form (marked as not important)
-
-### Kanban Drag & Drop (COMPLETED)
-- **Sales CRM**: Drag leads between stage columns (New Lead, No Answer, Call Back, Warm Lead, Hot Lead, In Progress, Rejected, Enrolled)
-- Uses @dnd-kit library for smooth drag-and-drop
-- Visual feedback with drag handles and drop zone indicators
-- Stage updates via API when dropped in different column
-
-### User Management Dialog Fix (COMPLETED)
-- Fixed z-index issue where dropdowns appeared below dialog
-- Role, Department, Region dropdowns now properly layered above dialog
-
-### Advanced Role Management (COMPLETED)
-- **Role Management Page**: `/roles` - Accessible to super_admin only
-- **Module Permissions**: Set access level (None/View/Edit/Full) per module
-- **Data Visibility**: Own Data Only / Team Data / All Data
-- **Custom Roles**: Create, edit, delete custom roles
-- **System Roles**: 10 default roles (cannot be deleted, but can be customized)
-- **Backend API**: `/api/roles` - GET, POST, PUT, DELETE
-
-### 3CX Phone System Integration (COMPLETED)
-Full click-to-call and call logging integration with 3CX phone system.
-
-#### Backend API Endpoints
-- `GET /api/3cx/template` - Returns CRM integration XML template for 3CX server configuration
-- `GET /api/3cx/contact-lookup?phone_number={phone}` - Lookup contact by phone number
-- `GET /api/3cx/contact-search?search_text={text}` - Search contacts by name/phone/email
-- `POST /api/3cx/contact-create` - Create lead from unknown inbound caller
-- `POST /api/3cx/call-journal` - Log call details when calls complete
-- `GET /api/3cx/call-history/{contact_id}` - Get call history for a contact
-- `GET /api/3cx/recent-calls` - Get recent calls across all contacts
-- `POST /api/3cx/click-to-call` - Log click-to-call events from CRM
-
-#### Frontend Components
-- **ClickToCall Component** (`/app/frontend/src/components/ClickToCall.jsx`)
-  - Click-to-call button with phone icon
-  - Tooltip showing phone number
-  - Copy phone number functionality
-  - Triggers `tel:` protocol for dialing
-  
-- **CallHistory Component** (`/app/frontend/src/components/ClickToCall.jsx`)
-  - Shows recent call history for a contact
-  - Displays call direction (inbound/outbound)
-  - Shows call duration and timestamp
-  - Link to call recordings when available
-
-#### CRM Pages Integration
-- **Sales CRM Page** - Click-to-call on lead cards and detail modal with 3CX Call Center section
-- **Customer Service Page** - Click-to-call on student cards and detail modal with 3CX Call Center section
-- **Mentor CRM Page** - Click-to-call on student cards and detail modal with 3CX Call Center section
-
-#### Settings Page - 3CX Configuration
-- Available to super_admin and admin users
-- **Setup Instructions** for 3CX server configuration
-- **Fetch Template** button to generate XML template
-- **Download XML** button to save template file
-- **Open 3CX Console** link to 3CX management interface
-- **API Endpoints** list with copy functionality
-- **XML Preview** with full template display
-
-### Post-Login Animation (Completed - Professional Trading Theme)
-After successful login, users see a 13-second professional branded animation featuring the official CLT Academy logo with trading chart elements.
-
-## Previous Features (Login & Home Page Redesign)
-
-### Redesigned Login Page
-- **Split Layout**: Logo on left, login form on right (desktop)
-- **CLT Logo**: Large inline SVG logo with transparent background
-  - Dark mode: White text, cyan accents
-  - Light mode: Black text, red accents
-- **Trading Chart Background**: SVG trading chart graphics at 15-20% opacity
-- **System Status**: "System Online" indicator with green pulse
-- **Login Form**: Glass-morphism card with email, password, eye toggle
-- **Demo Credentials**: Displayed at bottom for easy access
-- **Mobile Responsive**: Logo moves to top on mobile devices
-
-### Logo Animation After Login
-- **Animated Rings**: Three expanding circular borders
-- **Logo Reveal**: Scale and fade-in animation
-- **Text Animation**: "CLT Academy" and "Loading your workspace..." with staggered delays
-- **Loading Bar**: Progress indicator fills over 800ms
-- **Floating Particles**: 15 animated particles in background
-- **Duration**: ~2.8 seconds before redirecting to home
-
-### Enhanced Home Page
-- **CLT Logo Centered**: Large SVG logo (h-40 to h-56 responsive)
-  - Transparent background, adapts to theme
-- **Trading Chart Background**: SVG graphics at 20% opacity
-- **Welcome Message**: "Welcome, {firstName}!" personalized greeting
-- **Module Icons**: 6 colored icons in grid layout
-
-### Theme-Aware CLT Logo Component
-New component: `/app/frontend/src/components/CLTLogo.jsx`
-- Inline SVG for full control
-- `isDark` prop controls color scheme
-- Dark mode: White (#ffffff) main, Cyan (#00ffff) accents
-- Light mode: Black (#000000) main, Red (#ff0000) accents
-- Transparent background always
-
-## Previous Features (Launcher Navigation)
-
-### Launcher-Style Home Screen
-After login, users see a centered icon launcher instead of sidebar:
-- **6 Section Icons**: Sales (blue), Customer Service (green), Academics (orange), Operations (purple), Security (red), Finance (cyan)
-- **Welcome Message**: "Welcome, {name}! Select a module to get started"
-- **No Sidebar** on home page - clean, focused interface
-
-### Focused Section Sidebar
-When clicking a section icon:
-- **Focused Sidebar** appears with only that section's navigation items
-- **Home Button** always present at top to return to launcher
-- **Section Header** shows icon + title (e.g., "Sales" with phone icon)
-- **Settings** link at bottom
-- **User Info** shows name + role badge
-
-### Section Navigation Items
-- **Sales**: Sales CRM, Sales Dashboard, Today's Follow-ups
-- **Customer Service**: CS Dashboard, Customer Service
-- **Academics**: Mentor CRM, Mentor Dashboard
-- **Operations**: Dashboard, Leads Pool, Customer Master, Departments, Courses
-- **Security**: Access Control, User Management
-- **Finance**: Finance, Commission Engine
-
-## Previous Features (Navigation & Bulk Import)
-
-### Mentor Dashboard (NEW)
-Located at `/mentor/dashboard` with metrics:
-- Total Students assigned
-- Students Connected vs Pending Connection
-- Upgrades Helped
-- Total Revenue brought in
-- Total Withdrawn / Current Net
-- Commission: Total / Received / Balance
-- Student Pipeline by stage
-- Recent Activities
-
-### Bulk Import for Courses & Users
-- **Courses Import**: Bulk upload courses via CSV
-  - Required: name*, code*, base_price*, category*
-  - Optional: description, is_active
-- **Users Import**: Bulk upload users with auto-derived permissions
-  - Required: email*, full_name*, role*, password*
-  - Optional: department, phone, region, team_leader_email
-  - Role-based access auto-derived from role field
-
-## Previous Features (Reminders & Follow-ups)
-
-### Reminder System
-- **Set Reminder** option on lead/student cards in all CRM pages
-- Works on: Sales CRM, Customer Service, Mentor CRM
-- Users can set date, time, and optional note
-- Reminders appear as badges on cards
-- Quick-select options: Tomorrow, In 3 days, In 1 week
-
-### Today's Follow-ups Page
-- **Kanban board** showing follow-ups grouped by time slots:
-  - Morning (Before 12 PM)
-  - Afternoon (12 PM - 5 PM)
-  - Evening (After 5 PM)
-  - Unscheduled
-- **Stats cards**: Total Today, Leads, Upgrades, Redeposits
-- **Quick actions**: Call button, Complete button
-- Accessible from sidebar navigation
-
-### Environment Access Control
-- **User-level access control** for Dev/Test environments
-- Super Admin can grant access via User Management page
-- "Env Access" column shows user's environment permissions
-- Badges: Dev (blue), Test (amber), "Prod only" (default)
-
-## Latest Features (Environment & Import)
-
-### Environment Toggle System
-- **Modes**: Development, Testing, Production
-- **Access Control**: Super Admin can grant environment access to specific users via User Management
-- **Workflow**: Develop → Test → Go Live
-- **Location**: Header bar shows current environment mode
-
-### Bulk Import Functionality
-Import available at 4 locations:
-1. **Sales CRM** - Import Leads (round-robin assignment)
-2. **Customer Master** - Import Existing Customers (NO round-robin, tracks closer)
-3. **Customer Service** - Import Students (assign CS agent + mentor)
-4. **Mentor CRM** - Import Students (assign mentor)
-
-### CSV Templates (Downloadable)
-Each template includes:
-- Required fields (marked with *)
-- Optional fields
-- Example row
-- Instructions
-- Validation rules
-
-## SLA Rules (Implemented)
-1. **New Lead Contact**: 60 minutes → Notify exec + manager
-2. **Inactive Lead Escalation**: 7 days → 72h → 72h → Auto-reassign to pool
-3. **CS Activation**: 15 minutes → Notify CS leader
+### P1 Features (ALL COMPLETED)
+- [x] Kanban Drag-and-Drop for Customer Service
+- [x] Kanban Drag-and-Drop for Mentor CRM
+- [x] HR Leave Management with backend APIs
+- [x] HR Attendance with backend APIs
+- [x] HR Payroll Engine with backend APIs
+- [x] HR Performance Management with backend APIs
+- [x] HR Asset Management with backend APIs
+- [x] HR Analytics with backend APIs
+- [x] Commission Engine backend logic (already implemented)
+- [x] Bank Statement Reconciliation (already implemented)
 
 ## Architecture Overview
-- **Backend**: FastAPI (Python) with MongoDB
-- **Frontend**: React with Shadcn UI components
-- **Authentication**: JWT-based with role-based access control
-- **Database**: MongoDB
 
-## Frontend Pages (19 total)
-1. Login Page
-2. Dashboard (under OPERATIONS)
-3. Sales CRM (+ Import, + Set Reminder)
-4. My Sales Dashboard
-5. Today's Follow-ups
-6. Leads Pool
-7. Customer Master (+ Import)
-8. Customer Service (+ Import, + Set Reminder)
-9. CS Dashboard
-10. Mentor CRM (+ Import, + Set Reminder)
-11. **Mentor Dashboard** (NEW - metrics page)
-12. Finance
-13. Commission Engine
-14. User Management (+ Import, + Env Access)
-15. Departments
-16. Courses (+ Import)
-17. Access Control
-18. Settings
+### Frontend Structure
+```
+/app/frontend/src/
+├── pages/
+│   ├── hr/
+│   │   ├── EmployeeMasterPage.jsx
+│   │   ├── EmployeeModal.jsx
+│   │   ├── LeavePage.jsx
+│   │   ├── AttendancePage.jsx
+│   │   ├── PayrollPage.jsx
+│   │   ├── PerformancePage.jsx
+│   │   ├── AssetsPage.jsx
+│   │   ├── AnalyticsPage.jsx
+│   │   └── HRDashboard.jsx
+│   ├── CustomerServicePage.jsx (with @dnd-kit)
+│   ├── MentorCRMPage.jsx (with @dnd-kit)
+│   └── SalesCRMPage.jsx (with @dnd-kit)
+```
 
-## Import Template Fields
+### Backend Structure
+```
+/app/backend/
+├── server.py
+│   ├── HR Endpoints (lines 7331-10100+)
+│   │   ├── /api/hr/employees (CRUD)
+│   │   ├── /api/hr/employees/sync-options
+│   │   ├── /api/hr/leave-requests
+│   │   ├── /api/hr/attendance
+│   │   ├── /api/hr/payroll
+│   │   ├── /api/hr/kpis, /api/hr/kpi-scores
+│   │   ├── /api/hr/performance-reviews
+│   │   ├── /api/hr/assets
+│   │   └── /api/hr/analytics/*
+│   └── Finance Endpoints
+│       ├── /api/accounting/*
+│       └── /api/commission-*
+```
 
-### Leads Import
-**Required**: full_name, phone
-**Optional**: email, country, city, lead_source, course_of_interest, campaign_name, notes
-**Behavior**: Auto-assigned via round-robin
+### Key Dependencies
+- **@dnd-kit**: Drag-and-drop for Kanban boards
+- **FastAPI**: Backend framework
+- **MongoDB**: Database
+- **React + Shadcn/UI**: Frontend
 
-### Customers Import
-**Required**: full_name, phone, package_bought, payment_amount, payment_method, payment_date, closed_by
-**Optional**: email, country, cs_agent_email, mentor_email, notes
-**Behavior**: NO round-robin, tracks who closed the deal
+## API Endpoints Reference
 
-### Students CS Import
-**Required**: full_name, phone, package_bought, cs_agent_email
-**Optional**: email, country, mentor_email, batch_plan, preferred_language, trading_level, class_timings, notes
-**Behavior**: Assigned to specified CS agent
+### HR Module
+- `GET/POST /api/hr/employees` - Employee CRUD
+- `GET /api/hr/employees/sync-options` - Sync dropdown data
+- `GET/POST /api/hr/leave-requests` - Leave management
+- `GET /api/hr/attendance` - Attendance records
+- `POST /api/hr/payroll/run` - Run payroll
+- `GET/POST /api/hr/kpis` - KPI management
+- `GET/POST /api/hr/assets` - Asset management
+- `GET /api/hr/analytics/*` - Analytics endpoints
 
-### Students Mentor Import
-**Required**: full_name, phone, package_bought, mentor_email
-**Optional**: email, country, cs_agent_email, mentor_stage, learning_goals, notes
-**Behavior**: Assigned to specified mentor
+### CRM Module
+- `GET/PUT /api/students` - Student CRUD with stage/mentor_stage
 
-## API Endpoints
+## Test Credentials
+- **Super Admin**: aqib@clt-academy.com / @Aqib1234
 
-### Mentor Dashboard
-- `GET /api/mentor/dashboard` - Get mentor metrics (students, revenue, commission, upgrades, activities)
-
-### Bulk Import
-- `GET /api/import/templates/courses` - Get CSV template for courses
-- `GET /api/import/templates/users` - Get CSV template for users
-- `POST /api/import/courses` - Upload CSV to bulk import courses
-- `POST /api/import/users` - Upload CSV to bulk import users
-
-### Reminders
-- `POST /api/leads/{lead_id}/reminder` - Set lead reminder
-- `POST /api/leads/{lead_id}/reminder/complete` - Complete lead reminder
-- `DELETE /api/leads/{lead_id}/reminder` - Delete lead reminder
-- `POST /api/students/{student_id}/reminder` - Set student reminder (upgrade/redeposit/general)
-- `POST /api/students/{student_id}/reminder/complete` - Complete student reminder
-- `DELETE /api/students/{student_id}/reminder` - Delete student reminder
-- `GET /api/followups/today` - Get today's follow-ups by time slots
-- `GET /api/followups/upcoming?days=7` - Get upcoming follow-ups
-
-### Environment
-- `GET /api/environment/current` - Get current mode and user access
-- `PUT /api/environment/mode` - Change environment mode
-- `PUT /api/users/{id}/environment-access` - Update user's environment access
-
-### Import
-- `GET /api/import/templates/{type}` - Get template (leads, customers, students_cs, students_mentor)
-- `POST /api/import/leads` - Import leads
-- `POST /api/import/customers` - Import customers
-- `POST /api/import/students/cs` - Import for CS
-- `POST /api/import/students/mentor` - Import for mentors
-
-## Prioritized Backlog
-
-### P0 - Completed
-- [x] Navigation restructured into 6 collapsible sections
-- [x] Mentor Dashboard with all requested metrics
-- [x] Bulk Import for Courses with CSV template
-- [x] Bulk Import for Users with auto-derived permissions
-- [x] Set Reminder on CRM cards (Sales, CS, Mentor)
-- [x] Today's Follow-ups Kanban page
-- [x] Environment Access Control on User Management
-- [x] SLA Rules implementation
-- [x] Import/Export with templates for Leads, Customers, Students
-- [x] Leads Pool & Customer Master
-- [x] **Post-Login Animation** (5-6 second branded CLT animation)
-- [x] **3CX Call Recording Placeholder** (in all CRM detail modals)
-- [x] **Notification Enhancements** (December 2025)
-  - Different alert sounds for leads vs general notifications
-  - Settings toggle to enable/disable notification sounds
-  - Test sound buttons in Settings page
-  - Clickable notifications redirect to customer/lead pages
-- [x] **Database Separation** (December 2025)
-  - Same MongoDB server, different database names per environment
-  - APP_ENV variable controls: clt_synapse_dev, clt_synapse_test, clt_synapse_prod
-  - Backend logs current environment and database on startup
-- [x] **Lead Form Enhancements** (December 2025)
-  - Phone country auto-detection (60+ countries)
-  - Lead source dropdown: Facebook, Instagram, Google Ads, Website, Referral, Walk-in, Cold Call, Other
-- [x] **Kanban Drag & Drop** (December 2025)
-  - Drag-and-drop in Sales CRM using @dnd-kit
-  - Visual feedback with drag handles and drop zones
-- [x] **User Management Dialog Z-Index Fix** (December 2025)
-  - Dropdowns now properly layered above dialog
-- [x] **Advanced Role Management** (December 2025)
-  - Create/edit custom roles with module permissions
-  - Data visibility settings (own/team/all)
-  - 10 system roles + unlimited custom roles
-
-### P1 - High Priority
-- [ ] 3CX Integration (actual API integration - placeholder UI complete)
-- [ ] Code Portability Package (Docker, PostgreSQL migration)
-
-### P2 - Medium Priority
-- [ ] Meta Ads webhook integration
-- [ ] Google Ads webhook integration
-- [ ] WhatsApp/SMS notifications
-
-### P3 - Nice to Have
-- [ ] Mobile app
-- [ ] AI-powered lead scoring
-- [ ] HR & Payroll Module
-
-## Technical Notes
-- **Super Admin:** aqib@clt-academy.com / A@qib1234
-- **All API routes prefixed with /api**
-- **MongoDB indexes on:** email, phone, stage, assigned_to
-- **Database Configuration:**
-  - Development: `clt_synapse_dev`
-  - Testing: `clt_synapse_test`
-  - Production: `clt_synapse_prod`
-  - Set via `APP_ENV` in `/app/backend/.env`
+## Future/Backlog Tasks
+- Biometric API integration for attendance
+- Meta Ads and Google Ads webhook integration
+- WhatsApp/SMS notifications
+- Self-hosting package (Docker, PostgreSQL migration)
+- Mobile app
+- AI-powered lead scoring
 
 ## Files Reference
+- Frontend CRM Pages: `/app/frontend/src/pages/CustomerServicePage.jsx`, `MentorCRMPage.jsx`
+- HR Pages: `/app/frontend/src/pages/hr/`
 - Backend: `/app/backend/server.py`
-- Frontend Routes: `/app/frontend/src/App.js`
-- Layout/Navigation: `/app/frontend/src/components/Layout.jsx`
-- Import Component: `/app/frontend/src/components/ImportButton.jsx`
-- Environment Component: `/app/frontend/src/components/EnvironmentSwitcher.jsx`
-- Reminder Modal: `/app/frontend/src/components/ReminderModal.jsx`
-- Today's Follow-ups: `/app/frontend/src/pages/FollowupsPage.jsx`
-- Mentor Dashboard: `/app/frontend/src/pages/MentorDashboardPage.jsx`
-- User Management: `/app/frontend/src/pages/UsersPage.jsx`
-- Courses: `/app/frontend/src/pages/CoursesPage.jsx`
-- Settings Page: `/app/frontend/src/pages/SettingsPage.jsx`
-
-## Test Reports
-- Latest: `/app/test_reports/iteration_10.json`
-- Previous: `/app/test_reports/iteration_9.json`
-- CLT Logo Component: `/app/frontend/src/components/CLTLogo.jsx`
-- CLT Animation Component: `/app/frontend/src/components/CLTAnimation.jsx`
-- Welcome Page: `/app/frontend/src/pages/WelcomePage.jsx`
+- Test Reports: `/app/test_reports/iteration_15.json`
