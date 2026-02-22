@@ -265,7 +265,10 @@ const MentorCRMPage = () => {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const params = { search: searchTerm || undefined };
+            const params = { 
+                search: searchTerm || undefined,
+                activated_only: true  // Only show students who have been activated by CS
+            };
             // For mentors, filter by mentor_id
             if (user?.role === 'mentor') {
                 params.mentor_id = user.id;
