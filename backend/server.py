@@ -1753,6 +1753,7 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
     
     # Set default permissions based on role
     default_permissions = get_default_permissions(data.role)
+    default_entity_access = get_default_entity_access(data.role)
     
     user_uuid = str(uuid.uuid4())
     employee_uuid = None
@@ -1762,6 +1763,7 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
         **data.model_dump(exclude={"create_employee_record", "designation", "joining_date", "employment_type", "work_location"}),
         "password": hash_password(data.password),
         "permissions": data.permissions or default_permissions,
+        "entity_access": data.entity_access or default_entity_access,
         "created_at": now,
         "updated_at": now
     }
