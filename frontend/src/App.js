@@ -46,6 +46,12 @@ import ReconciliationPage from "@/pages/finance/ReconciliationPage";
 // HR Module
 import HRDashboard from "@/pages/hr/HRDashboard";
 import EmployeeMasterPage from "@/pages/hr/EmployeeMasterPage";
+import LeavePage from "@/pages/hr/LeavePage";
+import AttendancePage from "@/pages/hr/AttendancePage";
+import PayrollPage from "@/pages/hr/PayrollPage";
+import PerformancePage from "@/pages/hr/PerformancePage";
+import AssetsPage from "@/pages/hr/AssetsPage";
+import AnalyticsPage from "@/pages/hr/AnalyticsPage";
 
 import Layout from "@/components/Layout";
 
