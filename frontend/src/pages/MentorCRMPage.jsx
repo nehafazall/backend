@@ -242,10 +242,21 @@ const MentorCRMPage = () => {
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [reminderStudent, setReminderStudent] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
+    const [activeId, setActiveId] = useState(null);
     const [updateData, setUpdateData] = useState({
         mentor_stage: '',
         notes: '',
     });
+
+    // Drag and drop sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor)
+    );
 
     useEffect(() => {
         fetchStudents();
