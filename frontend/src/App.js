@@ -42,6 +42,11 @@ import AccountsPage from "@/pages/finance/AccountsPage";
 import FinanceCommissionEnginePage from "@/pages/finance/CommissionEnginePage";
 import CommissionSettlementsPage from "@/pages/finance/CommissionSettlementsPage";
 import ReconciliationPage from "@/pages/finance/ReconciliationPage";
+
+// HR Module
+import HRDashboard from "@/pages/hr/HRDashboard";
+import EmployeeMasterPage from "@/pages/hr/EmployeeMasterPage";
+
 import Layout from "@/components/Layout";
 
 // Protected Route Component
