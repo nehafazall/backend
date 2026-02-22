@@ -210,6 +210,18 @@ function AppRoutes() {
                     <Route path="reconciliation" element={<ReconciliationPage />} />
                 </Route>
                 
+                {/* HR Module */}
+                <Route path="hr/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <HRDashboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/employees" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <EmployeeMasterPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* User Management */}
                 <Route path="users" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
