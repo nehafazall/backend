@@ -128,6 +128,7 @@ const SECTIONS = {
         items: [
             { title: 'Access Control', icon: Shield, path: '/access-control', roles: ['super_admin'] },
             { title: 'Role Management', icon: Users, path: '/roles', roles: ['super_admin'] },
+            { title: 'Teams Management', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'sales_manager'] },
             { title: 'Password Resets', icon: Key, path: '/password-resets', roles: ['super_admin'] },
             { title: 'Audit Log', icon: FileText, path: '/audit-log', roles: ['super_admin', 'admin'] },
             { title: 'User Management', icon: UserCircle, path: '/users' },
