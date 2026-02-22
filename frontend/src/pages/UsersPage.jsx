@@ -141,7 +141,9 @@ const UsersPage = () => {
         
         try {
             await userApi.create(formData);
-            toast.success('User created successfully');
+            toast.success(formData.create_employee_record 
+                ? 'User created with employee record' 
+                : 'User created successfully');
             setShowCreateModal(false);
             setFormData({
                 email: '',
@@ -153,6 +155,9 @@ const UsersPage = () => {
                 region: '',
                 is_active: true,
                 environment_access: [],
+                create_employee_record: true,
+                designation: '',
+                joining_date: new Date().toISOString().split('T')[0],
             });
             fetchUsers();
         } catch (error) {
