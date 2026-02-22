@@ -233,8 +233,8 @@ const EmployeeMasterPage = () => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Departments</SelectItem>
-                                {DEPARTMENTS.map(d => (
-                                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                                {departments.map(d => (
+                                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -247,8 +247,9 @@ const EmployeeMasterPage = () => {
                                 <SelectItem value="all">All Status</SelectItem>
                                 <SelectItem value="active">Active</SelectItem>
                                 <SelectItem value="probation">Probation</SelectItem>
-                                <SelectItem value="suspended">Suspended</SelectItem>
+                                <SelectItem value="on_notice">On Notice</SelectItem>
                                 <SelectItem value="resigned">Resigned</SelectItem>
+                                <SelectItem value="terminated">Terminated</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button variant="outline" onClick={handleSearch}>
