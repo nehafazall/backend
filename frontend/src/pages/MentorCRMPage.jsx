@@ -34,6 +34,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import {
+    DndContext,
+    DragOverlay,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    useDroppable,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
     Search,
     Phone,
     Mail,
@@ -46,6 +62,7 @@ import {
     MoreVertical,
     Bell,
     PhoneCall,
+    GripVertical,
 } from 'lucide-react';
 
 const MENTOR_STAGES = [
