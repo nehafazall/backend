@@ -87,12 +87,18 @@ const EmployeeMasterPage = () => {
         setShowModal(true);
     };
 
-    const handleSaveEmployee = async (data) => {
+    const handleSaveEmployee = async (data, mode = 'standard') => {
         try {
-            if (data.id) {
+            if (mode === 'create-with-user') {
+                // Create employee with automatic user account
+                const res = await api.post('/hr/employees/with-user', data);
+                toast.success(res.data.message);
+            } else if (data.id) {
+                // Update existing employee
                 await api.put(`/hr/employees/${data.id}`, data);
                 toast.success('Employee updated successfully');
             } else {
+                // Create new employee without user account
                 await api.post('/hr/employees', data);
                 toast.success('Employee created successfully');
             }
