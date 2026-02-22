@@ -517,6 +517,29 @@ const UsersPage = () => {
                             </div>
                         </div>
 
+                        {/* Team Selection */}
+                        {['sales_executive', 'team_leader', 'sales_manager'].includes(formData.role) && teams.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>Team</Label>
+                                <Select
+                                    value={formData.team_id || undefined}
+                                    onValueChange={(value) => setFormData({ ...formData, team_id: value })}
+                                >
+                                    <SelectTrigger data-testid="user-team-select">
+                                        <SelectValue placeholder="Select team" />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[9999]">
+                                        <SelectItem value="">No Team</SelectItem>
+                                        {teams.map((team) => (
+                                            <SelectItem key={team.id} value={team.id}>
+                                                {team.name} ({team.department})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
                         {currentUser?.role === 'super_admin' && (
                             <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
                                 <Label className="text-sm font-medium">Environment Access</Label>
