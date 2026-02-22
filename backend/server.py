@@ -145,6 +145,7 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: str
+    employee_id: Optional[str] = None  # Link to HR employee record
     created_at: datetime
     updated_at: datetime
     
