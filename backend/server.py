@@ -2096,18 +2096,37 @@ async def remove_team_member(
 async def get_leads(
     stage: Optional[str] = None,
     assigned_to: Optional[str] = None,
+    team_id: Optional[str] = None,
     search: Optional[str] = None,
     user = Depends(get_current_user)
 ):
     query = {}
     
     # Role-based filtering
-    if user["role"] == "sales_executive":
+    role = user["role"]
+    
+    if role == "sales_executive":
+        # Sales executives only see their own leads
         query["assigned_to"] = user["id"]
-    elif user["role"] == "team_leader":
-        team = await db.users.find({"team_leader_id": user["id"]}).to_list(100)
-        team_ids = [t["id"] for t in team] + [user["id"]]
+    elif role == "team_leader":
+        # Team leaders see their team's leads + their own
+        # Get members of their team
+        team_members = await db.users.find({
+            "$or": [
+                {"team_leader_id": user["id"]},
+                {"team_id": user.get("team_id")}
+            ]
+        }).to_list(100)
+        team_ids = [t["id"] for t in team_members] + [user["id"]]
         query["assigned_to"] = {"$in": team_ids}
+    elif role == "sales_manager":
+        # Sales managers can filter by team or see all
+        if team_id:
+            team_members = await db.users.find({"team_id": team_id}).to_list(100)
+            team_ids = [t["id"] for t in team_members]
+            if team_ids:
+                query["assigned_to"] = {"$in": team_ids}
+    # super_admin and admin see all leads
     
     if stage:
         query["stage"] = stage
