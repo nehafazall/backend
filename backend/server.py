@@ -7282,6 +7282,1113 @@ async def get_quick_stats(user = Depends(get_current_user)):
     
     return stats
 
+# ==================== HR MODULE - EMPLOYEE MASTER ====================
+
+from hr_module import (
+    Gender, MaritalStatus, EmploymentType, EmploymentStatus, EmployeeCategory,
+    VisaType, CommissionPlanType, LeaveType, LeaveStatus, RegularizationType,
+    PayrollStatus, EmployeeCreate, EmployeeUpdate, LeaveRequest, LeaveApproval,
+    RegularizationRequest, PayrollCreate, EXPIRY_ALERT_DAYS, HR_SLA_CONFIG,
+    SAMPLE_EMPLOYEE_DATA, calculate_days_until_expiry, calculate_leave_days,
+    calculate_gross_salary, generate_wps_record, WPS_BANK_CODES
+)
+
+class EmployeeResponse(BaseModel):
+    id: str
+    employee_id: str
+    full_name: str
+    gender: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    nationality: Optional[str] = None
+    personal_email: Optional[str] = None
+    company_email: Optional[str] = None
+    mobile_number: Optional[str] = None
+    emergency_contact: Optional[Dict] = None
+    marital_status: Optional[str] = None
+    department: str
+    designation: str
+    reporting_manager_id: Optional[str] = None
+    reporting_manager_name: Optional[str] = None
+    employment_type: str
+    work_location: str
+    joining_date: str
+    probation_days: int
+    confirmation_date: Optional[str] = None
+    notice_period_days: int
+    employment_status: str
+    employee_category: Optional[str] = None
+    grade: Optional[str] = None
+    visa_details: Optional[Dict] = None
+    salary_structure: Optional[Dict] = None
+    bank_details: Optional[Dict] = None
+    annual_leave_balance: float
+    sick_leave_balance: float
+    documents: List[Dict] = []
+    user_id: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+@api_router.get("/hr/employees", response_model=List[EmployeeResponse])
+async def get_employees(
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    location: Optional[str] = None,
+    search: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get all employees with optional filters"""
+    query = {}
+    
+    if department:
+        query["department"] = department
+    if status:
+        query["employment_status"] = status
+    if location:
+        query["work_location"] = location
+    if search:
+        query["$or"] = [
+            {"full_name": {"$regex": search, "$options": "i"}},
+            {"employee_id": {"$regex": search, "$options": "i"}},
+            {"company_email": {"$regex": search, "$options": "i"}},
+            {"mobile_number": {"$regex": search, "$options": "i"}}
+        ]
+    
+    employees = await db.hr_employees.find(query, {"_id": 0}).sort("employee_id", 1).to_list(500)
+    
+    # Enrich with reporting manager names
+    for emp in employees:
+        if emp.get("reporting_manager_id"):
+            manager = await db.hr_employees.find_one({"id": emp["reporting_manager_id"]}, {"_id": 0, "full_name": 1})
+            emp["reporting_manager_name"] = manager["full_name"] if manager else None
+    
+    return employees
+
+@api_router.get("/hr/employees/{employee_id}", response_model=EmployeeResponse)
+async def get_employee(employee_id: str, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get a single employee by ID"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Get reporting manager name
+    if employee.get("reporting_manager_id"):
+        manager = await db.hr_employees.find_one({"id": employee["reporting_manager_id"]}, {"_id": 0, "full_name": 1})
+        employee["reporting_manager_name"] = manager["full_name"] if manager else None
+    
+    return employee
+
+@api_router.post("/hr/employees", response_model=EmployeeResponse)
+async def create_employee(data: EmployeeCreate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Create a new employee record"""
+    # Check for duplicate employee_id
+    existing = await db.hr_employees.find_one({"employee_id": data.employee_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Employee ID {data.employee_id} already exists")
+    
+    # Check for duplicate company email
+    if data.company_email:
+        existing_email = await db.hr_employees.find_one({"company_email": data.company_email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Company email already exists")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    employee_uuid = str(uuid.uuid4())
+    
+    employee = {
+        "id": employee_uuid,
+        **data.model_dump(),
+        "documents": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"]
+    }
+    
+    # Convert nested Pydantic models to dict
+    if data.emergency_contact:
+        employee["emergency_contact"] = data.emergency_contact.model_dump() if hasattr(data.emergency_contact, 'model_dump') else data.emergency_contact
+    if data.visa_details:
+        employee["visa_details"] = data.visa_details.model_dump() if hasattr(data.visa_details, 'model_dump') else data.visa_details
+    if data.salary_structure:
+        employee["salary_structure"] = data.salary_structure.model_dump() if hasattr(data.salary_structure, 'model_dump') else data.salary_structure
+    if data.bank_details:
+        employee["bank_details"] = data.bank_details.model_dump() if hasattr(data.bank_details, 'model_dump') else data.bank_details
+    
+    await db.hr_employees.insert_one(employee)
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee_uuid,
+        "action": "create",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"new": data.model_dump()}
+    })
+    
+    employee.pop("_id", None)
+    return employee
+
+@api_router.put("/hr/employees/{employee_id}", response_model=EmployeeResponse)
+async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Update an employee record"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    # Convert nested models
+    if "emergency_contact" in update_data and update_data["emergency_contact"]:
+        update_data["emergency_contact"] = update_data["emergency_contact"] if isinstance(update_data["emergency_contact"], dict) else update_data["emergency_contact"].model_dump()
+    if "visa_details" in update_data and update_data["visa_details"]:
+        update_data["visa_details"] = update_data["visa_details"] if isinstance(update_data["visa_details"], dict) else update_data["visa_details"].model_dump()
+    if "salary_structure" in update_data and update_data["salary_structure"]:
+        update_data["salary_structure"] = update_data["salary_structure"] if isinstance(update_data["salary_structure"], dict) else update_data["salary_structure"].model_dump()
+    if "bank_details" in update_data and update_data["bank_details"]:
+        update_data["bank_details"] = update_data["bank_details"] if isinstance(update_data["bank_details"], dict) else update_data["bank_details"].model_dump()
+    
+    update_data["updated_at"] = now
+    
+    # Store old values for audit
+    old_values = {k: employee.get(k) for k in update_data.keys() if k != "updated_at"}
+    
+    await db.hr_employees.update_one({"id": employee["id"]}, {"$set": update_data})
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee["id"],
+        "action": "update",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"old": old_values, "new": update_data}
+    })
+    
+    updated = await db.hr_employees.find_one({"id": employee["id"]}, {"_id": 0})
+    return updated
+
+@api_router.delete("/hr/employees/{employee_id}")
+async def delete_employee(employee_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Delete an employee (soft delete - marks as terminated)"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "employment_status": "terminated",
+            "termination_date": now,
+            "updated_at": now
+        }}
+    )
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee["id"],
+        "action": "delete",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"old_status": employee.get("employment_status"), "new_status": "terminated"}
+    })
+    
+    return {"message": "Employee marked as terminated", "employee_id": employee["employee_id"]}
+
+@api_router.get("/hr/employees/next-id")
+async def get_next_employee_id(prefix: str = "CLT", user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get the next available employee ID"""
+    # Find the highest existing ID with this prefix
+    employees = await db.hr_employees.find(
+        {"employee_id": {"$regex": f"^{prefix}-"}},
+        {"employee_id": 1, "_id": 0}
+    ).sort("employee_id", -1).limit(1).to_list(1)
+    
+    if employees:
+        last_id = employees[0]["employee_id"]
+        try:
+            last_num = int(last_id.split("-")[-1])
+            next_num = last_num + 1
+        except:
+            next_num = 1
+    else:
+        next_num = 1
+    
+    return {"next_employee_id": f"{prefix}-{str(next_num).zfill(3)}"}
+
+# ==================== HR MODULE - DOCUMENT MANAGEMENT ====================
+
+@api_router.post("/hr/employees/{employee_id}/documents")
+async def upload_employee_document(
+    employee_id: str,
+    document_type: str,
+    file: UploadFile,
+    notes: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Upload a document for an employee"""
+    import base64
+    
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Validate file type
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PDF, JPEG, PNG, WebP")
+    
+    # Read file
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB")
+    
+    # Store as base64
+    b64 = base64.b64encode(contents).decode('utf-8')
+    file_url = f"data:{file.content_type};base64,{b64}"
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check for existing document of same type to determine version
+    existing_docs = [d for d in employee.get("documents", []) if d.get("document_type") == document_type]
+    version = len(existing_docs) + 1
+    
+    doc = {
+        "id": str(uuid.uuid4()),
+        "document_type": document_type,
+        "file_name": file.filename,
+        "file_url": file_url,
+        "file_size": len(contents),
+        "version": version,
+        "uploaded_by": user["id"],
+        "uploaded_by_name": user["full_name"],
+        "uploaded_at": now,
+        "notes": notes
+    }
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$push": {"documents": doc}, "$set": {"updated_at": now}}
+    )
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee_document",
+        "entity_id": employee["id"],
+        "action": "upload",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"document_type": document_type, "file_name": file.filename, "version": version}
+    })
+    
+    return {"message": "Document uploaded successfully", "document_id": doc["id"], "version": version}
+
+# ==================== HR MODULE - DOCUMENT EXPIRY ALERTS ====================
+
+@api_router.get("/hr/expiry-alerts")
+async def get_document_expiry_alerts(
+    days_threshold: int = 90,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get all employees with documents expiring within threshold days"""
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    alerts = []
+    today = datetime.now(timezone.utc).date()
+    
+    for emp in employees:
+        emp_alerts = []
+        visa = emp.get("visa_details", {}) or {}
+        
+        # Check visa expiry
+        if visa.get("visa_expiry"):
+            days = calculate_days_until_expiry(visa["visa_expiry"])
+            if 0 <= days <= days_threshold:
+                emp_alerts.append({
+                    "document_type": "Visa",
+                    "expiry_date": visa["visa_expiry"],
+                    "days_remaining": days,
+                    "urgency": "critical" if days <= 30 else "warning" if days <= 60 else "info"
+                })
+        
+        # Check Emirates ID expiry
+        if visa.get("emirates_id_expiry"):
+            days = calculate_days_until_expiry(visa["emirates_id_expiry"])
+            if 0 <= days <= days_threshold:
+                emp_alerts.append({
+                    "document_type": "Emirates ID",
+                    "expiry_date": visa["emirates_id_expiry"],
+                    "days_remaining": days,
+                    "urgency": "critical" if days <= 30 else "warning" if days <= 60 else "info"
+                })
+        
+        # Check Passport expiry
+        if visa.get("passport_expiry"):
+            days = calculate_days_until_expiry(visa["passport_expiry"])
+            if 0 <= days <= days_threshold:
+                emp_alerts.append({
+                    "document_type": "Passport",
+                    "expiry_date": visa["passport_expiry"],
+                    "days_remaining": days,
+                    "urgency": "critical" if days <= 30 else "warning" if days <= 60 else "info"
+                })
+        
+        # Check Labor Card expiry
+        if visa.get("labor_card_expiry"):
+            days = calculate_days_until_expiry(visa["labor_card_expiry"])
+            if 0 <= days <= days_threshold:
+                emp_alerts.append({
+                    "document_type": "Labor Card",
+                    "expiry_date": visa["labor_card_expiry"],
+                    "days_remaining": days,
+                    "urgency": "critical" if days <= 30 else "warning" if days <= 60 else "info"
+                })
+        
+        if emp_alerts:
+            alerts.append({
+                "employee_id": emp["employee_id"],
+                "employee_name": emp["full_name"],
+                "department": emp.get("department"),
+                "alerts": emp_alerts
+            })
+    
+    # Sort by most urgent
+    alerts.sort(key=lambda x: min([a["days_remaining"] for a in x["alerts"]]))
+    
+    # Summary
+    summary = {
+        "critical_30_days": len([a for a in alerts if any(al["days_remaining"] <= 30 for al in a["alerts"])]),
+        "warning_60_days": len([a for a in alerts if any(30 < al["days_remaining"] <= 60 for al in a["alerts"])]),
+        "info_90_days": len([a for a in alerts if any(60 < al["days_remaining"] <= 90 for al in a["alerts"])]),
+        "total_employees_with_alerts": len(alerts)
+    }
+    
+    return {"summary": summary, "alerts": alerts}
+
+# ==================== HR MODULE - LEAVE MANAGEMENT ====================
+
+@api_router.post("/hr/leave-requests")
+async def create_leave_request(data: LeaveRequest, user = Depends(get_current_user)):
+    """Create a new leave request"""
+    # Get employee record
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": data.employee_id}, {"user_id": user["id"]}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee record not found")
+    
+    # Calculate leave days
+    leave_days = calculate_leave_days(data.start_date, data.end_date, data.half_day)
+    
+    # Check leave balance
+    if data.leave_type.value == "annual":
+        if employee.get("annual_leave_balance", 0) < leave_days:
+            raise HTTPException(status_code=400, detail=f"Insufficient annual leave balance. Available: {employee.get('annual_leave_balance', 0)} days")
+    elif data.leave_type.value == "sick":
+        if employee.get("sick_leave_balance", 0) < leave_days:
+            raise HTTPException(status_code=400, detail=f"Insufficient sick leave balance. Available: {employee.get('sick_leave_balance', 0)} days")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    request_id = str(uuid.uuid4())
+    
+    # Determine approval workflow based on role
+    # Direct to CEO roles skip team lead/sales manager
+    direct_to_ceo_roles = ["hr", "finance", "admin"]
+    employee_role = user.get("role", "")
+    
+    leave_request = {
+        "id": request_id,
+        "employee_id": employee["id"],
+        "employee_code": employee["employee_id"],
+        "employee_name": employee["full_name"],
+        "department": employee.get("department"),
+        "leave_type": data.leave_type.value,
+        "start_date": data.start_date,
+        "end_date": data.end_date,
+        "half_day": data.half_day,
+        "leave_days": leave_days,
+        "reason": data.reason,
+        "contact_during_leave": data.contact_during_leave,
+        "handover_to": data.handover_to,
+        "status": "pending",
+        "current_approver_level": "hr" if employee_role in direct_to_ceo_roles else "team_lead",
+        "approval_history": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"]
+    }
+    
+    await db.hr_leave_requests.insert_one(leave_request)
+    
+    # Create notification for approver
+    # TODO: Find actual approver and notify
+    
+    return {"message": "Leave request submitted", "request_id": request_id, "leave_days": leave_days}
+
+@api_router.get("/hr/leave-requests")
+async def get_leave_requests(
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    pending_approval: bool = False,
+    user = Depends(get_current_user)
+):
+    """Get leave requests"""
+    query = {}
+    
+    # If not HR/admin, only show own requests
+    if user["role"] not in ["super_admin", "admin", "hr", "sales_manager", "team_leader"]:
+        query["created_by"] = user["id"]
+    elif employee_id:
+        query["$or"] = [{"employee_id": employee_id}, {"employee_code": employee_id}]
+    
+    if status:
+        query["status"] = status
+    
+    if pending_approval and user["role"] in ["team_leader", "sales_manager", "hr", "super_admin"]:
+        # Show requests pending at user's approval level
+        level_map = {
+            "team_leader": "team_lead",
+            "sales_manager": "sales_manager",
+            "hr": "hr",
+            "super_admin": "ceo",
+            "admin": "ceo"
+        }
+        query["current_approver_level"] = level_map.get(user["role"], "team_lead")
+        query["status"] = "pending"
+    
+    requests = await db.hr_leave_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return requests
+
+@api_router.put("/hr/leave-requests/{request_id}/approve")
+async def approve_leave_request(
+    request_id: str,
+    data: LeaveApproval,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "sales_manager", "team_leader"]))
+):
+    """Approve or reject a leave request"""
+    leave_req = await db.hr_leave_requests.find_one({"id": request_id})
+    if not leave_req:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    if leave_req["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Leave request is not pending approval")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Determine current level and next level
+    level_progression = ["team_lead", "sales_manager", "hr", "ceo"]
+    current_level = leave_req.get("current_approver_level", "team_lead")
+    
+    approval_entry = {
+        "level": current_level,
+        "action": data.action,
+        "approved_by": user["id"],
+        "approved_by_name": user["full_name"],
+        "comments": data.comments,
+        "timestamp": now
+    }
+    
+    if data.action == "reject":
+        # Rejected at any level stops the process
+        await db.hr_leave_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "rejected",
+                "updated_at": now
+            }, "$push": {"approval_history": approval_entry}}
+        )
+        return {"message": "Leave request rejected", "status": "rejected"}
+    
+    # Approve and move to next level
+    if current_level == "ceo" or (current_level == "hr" and user["role"] in ["super_admin", "admin"]):
+        # Final approval - deduct leave balance
+        employee = await db.hr_employees.find_one({"id": leave_req["employee_id"]})
+        if employee:
+            leave_type = leave_req.get("leave_type", "annual")
+            leave_days = leave_req.get("leave_days", 0)
+            
+            if leave_type == "annual":
+                new_balance = max(0, employee.get("annual_leave_balance", 0) - leave_days)
+                await db.hr_employees.update_one(
+                    {"id": employee["id"]},
+                    {"$set": {"annual_leave_balance": new_balance}}
+                )
+            elif leave_type == "sick":
+                new_balance = max(0, employee.get("sick_leave_balance", 0) - leave_days)
+                await db.hr_employees.update_one(
+                    {"id": employee["id"]},
+                    {"$set": {"sick_leave_balance": new_balance}}
+                )
+        
+        await db.hr_leave_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "final_approved_by": user["id"],
+                "final_approved_at": now,
+                "updated_at": now
+            }, "$push": {"approval_history": approval_entry}}
+        )
+        return {"message": "Leave request fully approved", "status": "approved"}
+    else:
+        # Move to next level
+        current_idx = level_progression.index(current_level) if current_level in level_progression else 0
+        next_level = level_progression[min(current_idx + 1, len(level_progression) - 1)]
+        
+        await db.hr_leave_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "current_approver_level": next_level,
+                "updated_at": now
+            }, "$push": {"approval_history": approval_entry}}
+        )
+        return {"message": f"Approved at {current_level} level. Pending {next_level} approval", "next_level": next_level}
+
+# ==================== HR MODULE - ATTENDANCE ====================
+
+@api_router.post("/hr/attendance/biometric-sync")
+async def sync_biometric_attendance(
+    employee_id: str,
+    timestamp: str,
+    punch_type: str,  # IN or OUT
+    biometric_id: Optional[str] = None
+):
+    """API endpoint for biometric device to sync attendance"""
+    # Find employee by employee_id or biometric_id
+    query = {"employee_id": employee_id}
+    if biometric_id:
+        query = {"$or": [{"employee_id": employee_id}, {"biometric_id": biometric_id}]}
+    
+    employee = await db.hr_employees.find_one(query, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Parse timestamp
+    try:
+        punch_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except:
+        punch_time = datetime.now(timezone.utc)
+    
+    date_str = punch_time.strftime("%Y-%m-%d")
+    time_str = punch_time.strftime("%H:%M:%S")
+    
+    # Find or create attendance record for today
+    attendance = await db.hr_attendance.find_one({
+        "employee_id": employee["id"],
+        "date": date_str
+    })
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if attendance:
+        update = {"updated_at": now}
+        if punch_type.upper() == "IN":
+            update["biometric_in"] = time_str
+            # Calculate late minutes (assuming 9:00 AM start)
+            if time_str > "09:00:00":
+                try:
+                    in_time = datetime.strptime(time_str, "%H:%M:%S")
+                    start_time = datetime.strptime("09:00:00", "%H:%M:%S")
+                    update["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                except:
+                    pass
+        else:
+            update["biometric_out"] = time_str
+            # Calculate early exit (assuming 6:00 PM end)
+            if time_str < "18:00:00":
+                try:
+                    out_time = datetime.strptime(time_str, "%H:%M:%S")
+                    end_time = datetime.strptime("18:00:00", "%H:%M:%S")
+                    update["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                except:
+                    pass
+            
+            # Calculate total work hours if both in and out exist
+            if attendance.get("biometric_in"):
+                try:
+                    in_time = datetime.strptime(attendance["biometric_in"], "%H:%M:%S")
+                    out_time = datetime.strptime(time_str, "%H:%M:%S")
+                    work_hours = (out_time - in_time).total_seconds() / 3600
+                    update["total_work_hours"] = round(work_hours, 2)
+                except:
+                    pass
+        
+        await db.hr_attendance.update_one({"id": attendance["id"]}, {"$set": update})
+    else:
+        # Create new attendance record
+        attendance_record = {
+            "id": str(uuid.uuid4()),
+            "employee_id": employee["id"],
+            "employee_code": employee["employee_id"],
+            "employee_name": employee["full_name"],
+            "department": employee.get("department"),
+            "date": date_str,
+            "biometric_in": time_str if punch_type.upper() == "IN" else None,
+            "biometric_out": time_str if punch_type.upper() == "OUT" else None,
+            "crm_login": None,
+            "crm_logout": None,
+            "total_work_hours": 0,
+            "break_hours": 0,
+            "late_minutes": 0,
+            "early_exit_minutes": 0,
+            "status": "present",
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        # Calculate late minutes for IN punch
+        if punch_type.upper() == "IN" and time_str > "09:00:00":
+            try:
+                in_time = datetime.strptime(time_str, "%H:%M:%S")
+                start_time = datetime.strptime("09:00:00", "%H:%M:%S")
+                attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+            except:
+                pass
+        
+        await db.hr_attendance.insert_one(attendance_record)
+    
+    return {"message": f"Attendance {punch_type} recorded", "employee_id": employee["employee_id"], "time": time_str}
+
+@api_router.get("/hr/attendance")
+async def get_attendance(
+    employee_id: Optional[str] = None,
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    department: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+):
+    """Get attendance records"""
+    query = {}
+    
+    if employee_id:
+        query["$or"] = [{"employee_id": employee_id}, {"employee_code": employee_id}]
+    if date:
+        query["date"] = date
+    if start_date and end_date:
+        query["date"] = {"$gte": start_date, "$lte": end_date}
+    if department:
+        query["department"] = department
+    
+    records = await db.hr_attendance.find(query, {"_id": 0}).sort([("date", -1), ("employee_code", 1)]).to_list(1000)
+    return records
+
+# ==================== HR MODULE - ATTENDANCE REGULARIZATION ====================
+
+@api_router.post("/hr/regularization-requests")
+async def create_regularization_request(data: RegularizationRequest, user = Depends(get_current_user)):
+    """Create attendance regularization request"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": data.employee_id}, {"user_id": user["id"]}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee record not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    request_id = str(uuid.uuid4())
+    
+    request = {
+        "id": request_id,
+        "employee_id": employee["id"],
+        "employee_code": employee["employee_id"],
+        "employee_name": employee["full_name"],
+        "department": employee.get("department"),
+        "date": data.date,
+        "type": data.type.value,
+        "original_in": data.original_in,
+        "original_out": data.original_out,
+        "corrected_in": data.corrected_in,
+        "corrected_out": data.corrected_out,
+        "reason": data.reason,
+        "supporting_document_url": data.supporting_document_url,
+        "status": "pending",
+        "current_approver_level": "team_lead",
+        "approval_history": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"]
+    }
+    
+    await db.hr_regularization_requests.insert_one(request)
+    
+    return {"message": "Regularization request submitted", "request_id": request_id}
+
+@api_router.get("/hr/regularization-requests")
+async def get_regularization_requests(
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    pending_approval: bool = False,
+    user = Depends(get_current_user)
+):
+    """Get regularization requests"""
+    query = {}
+    
+    if user["role"] not in ["super_admin", "admin", "hr", "team_leader"]:
+        query["created_by"] = user["id"]
+    elif employee_id:
+        query["$or"] = [{"employee_id": employee_id}, {"employee_code": employee_id}]
+    
+    if status:
+        query["status"] = status
+    
+    if pending_approval:
+        query["status"] = "pending"
+    
+    requests = await db.hr_regularization_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return requests
+
+@api_router.put("/hr/regularization-requests/{request_id}/approve")
+async def approve_regularization(
+    request_id: str,
+    action: str,  # approve or reject
+    comments: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+):
+    """Approve or reject regularization request - CEO approval required for final"""
+    request = await db.hr_regularization_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Request is not pending")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    level_progression = ["team_lead", "hr", "ceo"]
+    current_level = request.get("current_approver_level", "team_lead")
+    
+    approval_entry = {
+        "level": current_level,
+        "action": action,
+        "approved_by": user["id"],
+        "approved_by_name": user["full_name"],
+        "comments": comments,
+        "timestamp": now
+    }
+    
+    if action == "reject":
+        await db.hr_regularization_requests.update_one(
+            {"id": request_id},
+            {"$set": {"status": "rejected", "updated_at": now}, "$push": {"approval_history": approval_entry}}
+        )
+        return {"message": "Request rejected", "status": "rejected"}
+    
+    # CEO approval (super_admin) is final
+    if current_level == "ceo" or user["role"] == "super_admin":
+        # Apply the regularization to attendance record
+        attendance = await db.hr_attendance.find_one({
+            "employee_id": request["employee_id"],
+            "date": request["date"]
+        })
+        
+        if attendance:
+            update = {"updated_at": now}
+            if request.get("corrected_in"):
+                update["biometric_in"] = request["corrected_in"]
+                update["regularized"] = True
+            if request.get("corrected_out"):
+                update["biometric_out"] = request["corrected_out"]
+                update["regularized"] = True
+            if request["type"] == "work_from_home":
+                update["status"] = "wfh"
+                update["regularized"] = True
+            
+            await db.hr_attendance.update_one({"id": attendance["id"]}, {"$set": update})
+        
+        await db.hr_regularization_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "final_approved_by": user["id"],
+                "final_approved_at": now,
+                "updated_at": now
+            }, "$push": {"approval_history": approval_entry}}
+        )
+        
+        # Audit log
+        await db.hr_audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "regularization",
+            "entity_id": request_id,
+            "action": "final_approval",
+            "user_id": user["id"],
+            "user_name": user["full_name"],
+            "timestamp": now,
+            "changes": {
+                "old": {"in": request.get("original_in"), "out": request.get("original_out")},
+                "new": {"in": request.get("corrected_in"), "out": request.get("corrected_out")}
+            }
+        })
+        
+        return {"message": "Regularization approved and applied", "status": "approved"}
+    else:
+        # Move to next level
+        current_idx = level_progression.index(current_level) if current_level in level_progression else 0
+        next_level = level_progression[min(current_idx + 1, len(level_progression) - 1)]
+        
+        await db.hr_regularization_requests.update_one(
+            {"id": request_id},
+            {"$set": {"current_approver_level": next_level, "updated_at": now}, "$push": {"approval_history": approval_entry}}
+        )
+        return {"message": f"Approved at {current_level}. Pending {next_level} approval", "next_level": next_level}
+
+# ==================== HR MODULE - DASHBOARD ====================
+
+@api_router.get("/hr/dashboard")
+async def get_hr_dashboard(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get HR dashboard with real-time metrics"""
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    
+    # Workforce Insights
+    total_employees = await db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
+    
+    gender_pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$gender", "count": {"$sum": 1}}}
+    ]
+    gender_data = await db.hr_employees.aggregate(gender_pipeline).to_list(10)
+    gender_counts = {g["_id"]: g["count"] for g in gender_data if g["_id"]}
+    
+    dept_pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$department", "count": {"$sum": 1}}}
+    ]
+    dept_data = await db.hr_employees.aggregate(dept_pipeline).to_list(20)
+    dept_counts = {d["_id"]: d["count"] for d in dept_data if d["_id"]}
+    
+    # Visa counts
+    visa_pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$visa_details.company_sponsor", "count": {"$sum": 1}}}
+    ]
+    visa_data = await db.hr_employees.aggregate(visa_pipeline).to_list(5)
+    company_visa = sum(v["count"] for v in visa_data if v["_id"] == True)
+    
+    # Document expiry alerts
+    expiry_alerts = await get_document_expiry_alerts(90, user)
+    
+    # Attendance Insights
+    present_today = await db.hr_attendance.count_documents({"date": today, "status": "present"})
+    absent_today = total_employees - present_today
+    late_today = await db.hr_attendance.count_documents({"date": today, "late_minutes": {"$gt": 0}})
+    
+    # Leave & Regularization
+    pending_leaves = await db.hr_leave_requests.count_documents({"status": "pending"})
+    pending_regularizations = await db.hr_regularization_requests.count_documents({"status": "pending"})
+    
+    # Leave balance summary
+    leave_pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {
+            "_id": None,
+            "total_annual": {"$sum": "$annual_leave_balance"},
+            "total_sick": {"$sum": "$sick_leave_balance"}
+        }}
+    ]
+    leave_data = await db.hr_employees.aggregate(leave_pipeline).to_list(1)
+    
+    # Upcoming confirmations (employees in probation)
+    probation_employees = await db.hr_employees.find(
+        {"employment_status": "probation"},
+        {"_id": 0, "employee_id": 1, "full_name": 1, "joining_date": 1, "probation_days": 1}
+    ).to_list(50)
+    
+    upcoming_confirmations = []
+    for emp in probation_employees:
+        if emp.get("joining_date") and emp.get("probation_days"):
+            try:
+                join_date = datetime.strptime(emp["joining_date"], "%Y-%m-%d")
+                confirm_date = join_date + timedelta(days=emp["probation_days"])
+                days_remaining = (confirm_date.date() - now.date()).days
+                if 0 <= days_remaining <= 30:
+                    upcoming_confirmations.append({
+                        "employee_id": emp["employee_id"],
+                        "employee_name": emp["full_name"],
+                        "confirmation_date": confirm_date.strftime("%Y-%m-%d"),
+                        "days_remaining": days_remaining
+                    })
+            except:
+                pass
+    
+    return {
+        "workforce": {
+            "total_employees": total_employees,
+            "gender_ratio": gender_counts,
+            "by_department": dept_counts,
+            "company_visa": company_visa,
+            "own_visa": total_employees - company_visa,
+            "probation": await db.hr_employees.count_documents({"employment_status": "probation"}),
+            "active": await db.hr_employees.count_documents({"employment_status": "active"})
+        },
+        "document_alerts": expiry_alerts["summary"],
+        "attendance": {
+            "present_today": present_today,
+            "absent_today": absent_today,
+            "late_today": late_today,
+            "on_leave_today": await db.hr_attendance.count_documents({"date": today, "status": "leave"})
+        },
+        "approvals": {
+            "pending_leave_requests": pending_leaves,
+            "pending_regularizations": pending_regularizations
+        },
+        "leave_summary": {
+            "total_annual_balance": leave_data[0]["total_annual"] if leave_data else 0,
+            "total_sick_balance": leave_data[0]["total_sick"] if leave_data else 0
+        },
+        "upcoming_confirmations": upcoming_confirmations[:10]
+    }
+
+# ==================== HR MODULE - SAMPLE DATA & IMPORT ====================
+
+@api_router.get("/hr/sample-data")
+async def get_sample_employee_data(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get sample employee data format for bulk import"""
+    return {
+        "sample_record": SAMPLE_EMPLOYEE_DATA,
+        "field_descriptions": {
+            "employee_id": "Unique ID like CLT-001 (required)",
+            "full_name": "Full name of employee (required)",
+            "gender": "male, female, or other",
+            "date_of_birth": "YYYY-MM-DD format",
+            "nationality": "Country name",
+            "personal_email": "Personal email address",
+            "company_email": "Company email (must be unique)",
+            "mobile_number": "With country code like +971xxxxxxxxx",
+            "department": "One of: Sales, Finance, Customer Service, Mentors/Academics, Operations, Marketing, HR, Quality Control",
+            "designation": "Job title",
+            "employment_type": "full_time, contract, consultant, intern, part_time",
+            "work_location": "UAE, India, or other location",
+            "joining_date": "YYYY-MM-DD format (required)",
+            "employment_status": "active, probation, suspended, resigned, terminated",
+            "employee_category": "A+, A, B, C (for sales team)",
+            "visa_details": "Object with visa_type, visa_expiry, emirates_id, etc.",
+            "salary_structure": "Object with basic_salary, allowances, commission settings",
+            "bank_details": "Object with bank_name, iban, wps_id"
+        },
+        "import_endpoint": "POST /api/hr/employees/bulk-import",
+        "import_format": "JSON array of employee records"
+    }
+
+@api_router.post("/hr/employees/bulk-import")
+async def bulk_import_employees(
+    employees: List[Dict[str, Any]],
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Bulk import employees from JSON array"""
+    now = datetime.now(timezone.utc).isoformat()
+    imported = 0
+    errors = []
+    
+    for idx, emp_data in enumerate(employees):
+        try:
+            # Validate required fields
+            if not emp_data.get("employee_id"):
+                errors.append({"row": idx + 1, "error": "Missing employee_id"})
+                continue
+            if not emp_data.get("full_name"):
+                errors.append({"row": idx + 1, "error": "Missing full_name"})
+                continue
+            if not emp_data.get("joining_date"):
+                errors.append({"row": idx + 1, "error": "Missing joining_date"})
+                continue
+            if not emp_data.get("department"):
+                errors.append({"row": idx + 1, "error": "Missing department"})
+                continue
+            if not emp_data.get("designation"):
+                errors.append({"row": idx + 1, "error": "Missing designation"})
+                continue
+            
+            # Check for duplicate
+            existing = await db.hr_employees.find_one({"employee_id": emp_data["employee_id"]})
+            if existing:
+                errors.append({"row": idx + 1, "error": f"Employee ID {emp_data['employee_id']} already exists"})
+                continue
+            
+            # Create employee record
+            employee = {
+                "id": str(uuid.uuid4()),
+                **emp_data,
+                "documents": [],
+                "annual_leave_balance": emp_data.get("annual_leave_balance", 30),
+                "sick_leave_balance": emp_data.get("sick_leave_balance", 15),
+                "created_at": now,
+                "updated_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"],
+                "imported": True
+            }
+            
+            await db.hr_employees.insert_one(employee)
+            imported += 1
+            
+        except Exception as e:
+            errors.append({"row": idx + 1, "error": str(e)})
+    
+    return {
+        "message": f"Import complete. {imported} employees imported, {len(errors)} errors",
+        "imported_count": imported,
+        "error_count": len(errors),
+        "errors": errors
+    }
+
+# ==================== HR MODULE - AUDIT LOGS ====================
+
+@api_router.get("/hr/audit-logs")
+async def get_hr_audit_logs(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    action: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get HR audit logs"""
+    query = {}
+    
+    if entity_type:
+        query["entity_type"] = entity_type
+    if entity_id:
+        query["entity_id"] = entity_id
+    if action:
+        query["action"] = action
+    if start_date and end_date:
+        query["timestamp"] = {"$gte": start_date, "$lte": end_date}
+    
+    logs = await db.hr_audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    return logs
+
 # Include the router in the main app
 app.include_router(api_router)
 
