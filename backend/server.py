@@ -6719,6 +6719,569 @@ async def get_finance_audit_logs(
     logs = await db.finance_audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
     return logs
 
+# ==================== BANK STATEMENT IMPORT & RECONCILIATION ====================
+
+class BankStatementUpload(BaseModel):
+    bank_account_id: str
+    statement_data: List[Dict[str, Any]]  # Parsed CSV data
+    statement_date: str  # YYYY-MM-DD
+    file_name: Optional[str] = None
+
+class ReconciliationMatch(BaseModel):
+    statement_line_id: str
+    payment_id: Optional[str] = None
+    journal_entry_id: Optional[str] = None
+    match_type: str  # auto, manual, unmatched
+
+@api_router.post("/accounting/bank-statements/upload")
+async def upload_bank_statement(data: BankStatementUpload, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Upload a bank statement for reconciliation"""
+    # Validate bank account
+    account = await db.accounts.find_one({"id": data.bank_account_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    now = datetime.now(timezone.utc)
+    statement_id = str(uuid.uuid4())
+    
+    # Create statement record
+    statement = {
+        "id": statement_id,
+        "bank_account_id": data.bank_account_id,
+        "bank_account_name": account.get("name"),
+        "statement_date": data.statement_date,
+        "file_name": data.file_name,
+        "line_count": len(data.statement_data),
+        "total_debits": 0,
+        "total_credits": 0,
+        "reconciled_count": 0,
+        "unmatched_count": len(data.statement_data),
+        "status": "pending",  # pending, in_progress, completed
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat()
+    }
+    
+    # Process statement lines
+    statement_lines = []
+    total_debits = 0
+    total_credits = 0
+    
+    for i, row in enumerate(data.statement_data):
+        line_id = str(uuid.uuid4())
+        amount = float(row.get("amount", 0))
+        
+        line = {
+            "id": line_id,
+            "statement_id": statement_id,
+            "line_number": i + 1,
+            "transaction_date": row.get("date", row.get("transaction_date", "")),
+            "description": row.get("description", row.get("narration", "")),
+            "reference": row.get("reference", row.get("ref", "")),
+            "amount": amount,
+            "transaction_type": "credit" if amount >= 0 else "debit",
+            "balance": float(row.get("balance", 0)),
+            "status": "unmatched",  # unmatched, matched, excluded
+            "matched_payment_id": None,
+            "matched_journal_id": None,
+            "match_confidence": 0,
+            "match_notes": None,
+            "created_at": now.isoformat()
+        }
+        
+        if amount >= 0:
+            total_credits += amount
+        else:
+            total_debits += abs(amount)
+        
+        statement_lines.append(line)
+    
+    statement["total_debits"] = total_debits
+    statement["total_credits"] = total_credits
+    
+    await db.bank_statements.insert_one(statement)
+    if statement_lines:
+        await db.bank_statement_lines.insert_many(statement_lines)
+    
+    # Log audit
+    await db.finance_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "bank_statement",
+        "entity_id": statement_id,
+        "action": "upload",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now.isoformat(),
+        "details": {"line_count": len(statement_lines), "bank": account.get("name")}
+    })
+    
+    return {
+        "statement_id": statement_id,
+        "line_count": len(statement_lines),
+        "total_debits": total_debits,
+        "total_credits": total_credits,
+        "message": f"Bank statement uploaded with {len(statement_lines)} transactions"
+    }
+
+@api_router.get("/accounting/bank-statements")
+async def get_bank_statements(
+    bank_account_id: Optional[str] = None,
+    status: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Get all bank statements"""
+    query = {}
+    if bank_account_id:
+        query["bank_account_id"] = bank_account_id
+    if status:
+        query["status"] = status
+    
+    statements = await db.bank_statements.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return statements
+
+@api_router.get("/accounting/bank-statements/{statement_id}")
+async def get_bank_statement(statement_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Get a bank statement with its lines"""
+    statement = await db.bank_statements.find_one({"id": statement_id}, {"_id": 0})
+    if not statement:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    
+    lines = await db.bank_statement_lines.find(
+        {"statement_id": statement_id}, 
+        {"_id": 0}
+    ).sort("line_number", 1).to_list(5000)
+    
+    statement["lines"] = lines
+    return statement
+
+@api_router.post("/accounting/bank-statements/{statement_id}/auto-reconcile")
+async def auto_reconcile_statement(statement_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Auto-match statement lines with payments and journal entries"""
+    statement = await db.bank_statements.find_one({"id": statement_id})
+    if not statement:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    
+    lines = await db.bank_statement_lines.find(
+        {"statement_id": statement_id, "status": "unmatched"},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    matched_count = 0
+    now = datetime.now(timezone.utc)
+    
+    for line in lines:
+        # Try to match with payments by amount and date
+        amount = abs(line["amount"])
+        date_str = line.get("transaction_date", "")
+        
+        # Search for matching payment
+        payment_query = {
+            "amount": {"$gte": amount - 1, "$lte": amount + 1},  # Allow small variance
+        }
+        payment = await db.payments.find_one(payment_query)
+        
+        if payment:
+            # Found a match
+            await db.bank_statement_lines.update_one(
+                {"id": line["id"]},
+                {"$set": {
+                    "status": "matched",
+                    "matched_payment_id": payment["id"],
+                    "match_confidence": 90,
+                    "match_notes": "Auto-matched by amount"
+                }}
+            )
+            matched_count += 1
+            continue
+        
+        # Try matching with journal entries
+        je_query = {
+            "status": {"$in": ["approved", "posted"]}
+        }
+        # Search journal lines
+        je_line = await db.journal_lines.find_one({
+            "$or": [
+                {"debit": {"$gte": amount - 1, "$lte": amount + 1}},
+                {"credit": {"$gte": amount - 1, "$lte": amount + 1}}
+            ]
+        })
+        
+        if je_line:
+            await db.bank_statement_lines.update_one(
+                {"id": line["id"]},
+                {"$set": {
+                    "status": "matched",
+                    "matched_journal_id": je_line.get("journal_entry_id"),
+                    "match_confidence": 80,
+                    "match_notes": "Auto-matched with journal entry"
+                }}
+            )
+            matched_count += 1
+    
+    # Update statement stats
+    unmatched = await db.bank_statement_lines.count_documents({"statement_id": statement_id, "status": "unmatched"})
+    matched = await db.bank_statement_lines.count_documents({"statement_id": statement_id, "status": "matched"})
+    
+    await db.bank_statements.update_one(
+        {"id": statement_id},
+        {"$set": {
+            "reconciled_count": matched,
+            "unmatched_count": unmatched,
+            "status": "completed" if unmatched == 0 else "in_progress",
+            "updated_at": now.isoformat()
+        }}
+    )
+    
+    return {
+        "matched_count": matched_count,
+        "remaining_unmatched": unmatched,
+        "total_matched": matched,
+        "message": f"Auto-reconciliation complete. {matched_count} new matches found."
+    }
+
+@api_router.put("/accounting/bank-statements/{statement_id}/lines/{line_id}/match")
+async def manual_match_line(
+    statement_id: str,
+    line_id: str,
+    match_data: ReconciliationMatch,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Manually match a statement line with a payment or journal entry"""
+    line = await db.bank_statement_lines.find_one({"id": line_id, "statement_id": statement_id})
+    if not line:
+        raise HTTPException(status_code=404, detail="Statement line not found")
+    
+    now = datetime.now(timezone.utc)
+    update = {
+        "status": "matched" if match_data.match_type != "unmatched" else "unmatched",
+        "matched_payment_id": match_data.payment_id,
+        "matched_journal_id": match_data.journal_entry_id,
+        "match_confidence": 100 if match_data.match_type == "manual" else 0,
+        "match_notes": f"Manual match by {user['full_name']}"
+    }
+    
+    await db.bank_statement_lines.update_one({"id": line_id}, {"$set": update})
+    
+    # Update statement stats
+    unmatched = await db.bank_statement_lines.count_documents({"statement_id": statement_id, "status": "unmatched"})
+    matched = await db.bank_statement_lines.count_documents({"statement_id": statement_id, "status": "matched"})
+    
+    await db.bank_statements.update_one(
+        {"id": statement_id},
+        {"$set": {
+            "reconciled_count": matched,
+            "unmatched_count": unmatched,
+            "status": "completed" if unmatched == 0 else "in_progress",
+            "updated_at": now.isoformat()
+        }}
+    )
+    
+    return {"message": "Match updated", "status": update["status"]}
+
+@api_router.get("/accounting/reconciliation/summary")
+async def get_reconciliation_summary(user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Get overall reconciliation summary"""
+    # Get all bank accounts
+    bank_accounts = await db.accounts.find(
+        {"account_type": "asset", "subtype": "bank"},
+        {"_id": 0}
+    ).to_list(50)
+    
+    summary = {
+        "total_statements": await db.bank_statements.count_documents({}),
+        "pending_reconciliation": await db.bank_statements.count_documents({"status": {"$ne": "completed"}}),
+        "completed_statements": await db.bank_statements.count_documents({"status": "completed"}),
+        "total_unmatched_lines": await db.bank_statement_lines.count_documents({"status": "unmatched"}),
+        "accounts": []
+    }
+    
+    for acc in bank_accounts:
+        acc_statements = await db.bank_statements.find(
+            {"bank_account_id": acc["id"]},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(1).to_list(1)
+        
+        last_reconciled = acc_statements[0] if acc_statements else None
+        
+        summary["accounts"].append({
+            "account_id": acc["id"],
+            "account_name": acc["name"],
+            "balance": acc.get("balance", 0),
+            "last_reconciled": last_reconciled.get("statement_date") if last_reconciled else None,
+            "status": last_reconciled.get("status") if last_reconciled else "never"
+        })
+    
+    return summary
+
+# ==================== USER PROFILE MANAGEMENT ====================
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    additional_phones: Optional[List[str]] = None
+    profile_photo_url: Optional[str] = None
+    bio: Optional[str] = None
+
+@api_router.put("/users/me/profile")
+async def update_my_profile(data: UserProfileUpdate, user = Depends(get_current_user)):
+    """Update current user's profile (self-service)"""
+    update_data = {}
+    
+    if data.full_name:
+        update_data["full_name"] = data.full_name
+    if data.phone:
+        update_data["phone"] = data.phone
+    if data.additional_phones is not None:
+        update_data["additional_phones"] = data.additional_phones
+    if data.profile_photo_url is not None:
+        update_data["profile_photo_url"] = data.profile_photo_url
+    if data.bio is not None:
+        update_data["bio"] = data.bio
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.users.update_one({"id": user["id"]}, {"$set": update_data})
+    
+    # Log the update
+    await log_audit(
+        user,
+        "profile_update",
+        "user",
+        entity_id=user["id"],
+        entity_name=user.get("full_name"),
+        details={"fields_updated": list(update_data.keys())}
+    )
+    
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
+    return updated_user
+
+@api_router.post("/users/me/profile-photo")
+async def upload_profile_photo(file: UploadFile, user = Depends(get_current_user)):
+    """Upload profile photo"""
+    import base64
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, GIF, WebP allowed.")
+    
+    # Read and convert to base64 (simple storage for now)
+    contents = await file.read()
+    if len(contents) > 2 * 1024 * 1024:  # 2MB limit
+        raise HTTPException(status_code=400, detail="File too large. Maximum 2MB allowed.")
+    
+    # Store as base64 data URL
+    b64 = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{b64}"
+    
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"profile_photo_url": data_url, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Profile photo uploaded", "photo_url": data_url[:100] + "..."}
+
+# ==================== MENTOR LEADERBOARD ====================
+
+@api_router.get("/mentor/leaderboard")
+async def get_mentor_leaderboard(
+    period: str = "monthly",  # monthly, quarterly, yearly, all_time
+    user = Depends(get_current_user)
+):
+    """Get mentor leaderboard with rankings"""
+    now = datetime.now(timezone.utc)
+    
+    # Define date range
+    if period == "monthly":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "quarterly":
+        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
+        start_date = now.replace(month=quarter_start_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif period == "yearly":
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:  # all_time
+        start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    
+    # Get all mentors
+    mentors = await db.users.find(
+        {"role": {"$in": ["mentor", "academic_master"]}, "is_active": True},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    
+    leaderboard = []
+    
+    for mentor in mentors:
+        mentor_id = mentor["id"]
+        
+        # Count students
+        total_students = await db.students.count_documents({"mentor_id": mentor_id})
+        
+        # Active students (with activity after start_date)
+        active_students = await db.students.count_documents({
+            "mentor_id": mentor_id,
+            "updated_at": {"$gte": start_date.isoformat()}
+        })
+        
+        # Upgrades
+        upgrades = await db.students.count_documents({
+            "mentor_id": mentor_id,
+            "upgrade_closed": True,
+            "updated_at": {"$gte": start_date.isoformat()}
+        })
+        
+        # Commissions
+        commissions_pipeline = [
+            {"$match": {
+                "user_id": mentor_id,
+                "created_at": {"$gte": start_date.isoformat()}
+            }},
+            {"$group": {
+                "_id": None,
+                "total": {"$sum": "$commission_amount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+        commission_result = await db.commissions.aggregate(commissions_pipeline).to_list(1)
+        total_commission = commission_result[0]["total"] if commission_result else 0
+        
+        # Student satisfaction (avg score)
+        satisfaction_pipeline = [
+            {"$match": {"mentor_id": mentor_id, "satisfaction_score": {"$exists": True, "$ne": None}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$satisfaction_score"}, "count": {"$sum": 1}}}
+        ]
+        satisfaction_result = await db.students.aggregate(satisfaction_pipeline).to_list(1)
+        avg_satisfaction = satisfaction_result[0]["avg"] if satisfaction_result else 0
+        reviews_count = satisfaction_result[0]["count"] if satisfaction_result else 0
+        
+        leaderboard.append({
+            "mentor_id": mentor_id,
+            "mentor_name": mentor.get("full_name"),
+            "email": mentor.get("email"),
+            "department": mentor.get("department"),
+            "total_students": total_students,
+            "active_students": active_students,
+            "upgrades": upgrades,
+            "total_commission": total_commission,
+            "avg_satisfaction": round(avg_satisfaction, 1) if avg_satisfaction else 0,
+            "reviews_count": reviews_count,
+            "score": (upgrades * 100) + (total_commission / 100) + (avg_satisfaction * 20)  # Composite score
+        })
+    
+    # Sort by score
+    leaderboard.sort(key=lambda x: x["score"], reverse=True)
+    
+    # Add ranks
+    for i, entry in enumerate(leaderboard):
+        entry["rank"] = i + 1
+    
+    return {
+        "period": period,
+        "start_date": start_date.isoformat(),
+        "leaderboard": leaderboard,
+        "total_mentors": len(leaderboard)
+    }
+
+# ==================== QUICK STATS WIDGET ====================
+
+@api_router.get("/dashboard/quick-stats")
+async def get_quick_stats(user = Depends(get_current_user)):
+    """Get quick stats for home launcher widget"""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    stats = {}
+    role = user.get("role")
+    
+    # Role-specific stats
+    if role in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
+        # Sales stats
+        if role == "sales_executive":
+            lead_query = {"assigned_to": user["id"]}
+        elif role == "team_leader":
+            team_members = await db.users.find({"team_id": user.get("team_id")}).to_list(100)
+            team_ids = [t["id"] for t in team_members] + [user["id"]]
+            lead_query = {"assigned_to": {"$in": team_ids}}
+        else:
+            lead_query = {}
+        
+        stats["total_leads"] = await db.leads.count_documents(lead_query)
+        stats["new_leads_today"] = await db.leads.count_documents({
+            **lead_query,
+            "created_at": {"$gte": today_start.isoformat()}
+        })
+        stats["hot_leads"] = await db.leads.count_documents({**lead_query, "stage": "hot_lead"})
+        stats["enrolled_this_month"] = await db.leads.count_documents({
+            **lead_query,
+            "stage": "enrolled",
+            "updated_at": {"$gte": month_start.isoformat()}
+        })
+    
+    if role in ["super_admin", "admin", "cs_head", "cs_agent"]:
+        # CS stats
+        if role == "cs_agent":
+            student_query = {"cs_agent_id": user["id"]}
+        else:
+            student_query = {}
+        
+        stats["total_students"] = await db.students.count_documents(student_query)
+        stats["new_students_today"] = await db.students.count_documents({
+            **student_query,
+            "created_at": {"$gte": today_start.isoformat()}
+        })
+        stats["pending_activation"] = await db.students.count_documents({
+            **student_query,
+            "stage": "new_student"
+        })
+    
+    if role in ["super_admin", "admin", "mentor", "academic_master"]:
+        # Mentor stats
+        if role in ["mentor", "academic_master"]:
+            mentor_query = {"mentor_id": user["id"]}
+        else:
+            mentor_query = {}
+        
+        stats["mentor_students"] = await db.students.count_documents({**mentor_query, "mentor_id": {"$exists": True}})
+        stats["upgrade_opportunities"] = await db.students.count_documents({
+            **mentor_query,
+            "upgrade_eligible": True,
+            "upgrade_closed": {"$ne": True}
+        })
+    
+    if role in ["super_admin", "admin", "finance"]:
+        # Finance stats
+        stats["pending_payments"] = await db.payments.count_documents({"stage": "pending_verification"})
+        stats["pending_settlements"] = await db.settlement_batches.count_documents({"status": "pending"})
+        
+        # MTD Revenue
+        revenue_pipeline = [
+            {"$match": {
+                "stage": "verified",
+                "created_at": {"$gte": month_start.isoformat()}
+            }},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+        ]
+        revenue_result = await db.payments.aggregate(revenue_pipeline).to_list(1)
+        stats["mtd_revenue"] = revenue_result[0]["total"] if revenue_result else 0
+    
+    # Common stats for all
+    stats["pending_followups"] = await db.leads.count_documents({
+        "reminder_date": {"$lte": now.isoformat()},
+        "reminder_completed": {"$ne": True}
+    })
+    
+    # Unread notifications
+    stats["unread_notifications"] = await db.notifications.count_documents({
+        "user_id": user["id"],
+        "read": False
+    })
+    
+    return stats
+
 # Include the router in the main app
 app.include_router(api_router)
 
