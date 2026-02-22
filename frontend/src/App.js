@@ -174,6 +174,11 @@ function AppRoutes() {
                         <MentorDashboardPage />
                     </ProtectedRoute>
                 } />
+                <Route path="mentor/leaderboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
+                        <MentorLeaderboard />
+                    </ProtectedRoute>
+                } />
                 
                 {/* Finance - Entity Selection */}
                 <Route path="finance" element={
@@ -197,6 +202,7 @@ function AppRoutes() {
                     <Route path="accounts" element={<AccountsPage />} />
                     <Route path="commission-engine" element={<FinanceCommissionEnginePage />} />
                     <Route path="commission-settlements" element={<CommissionSettlementsPage />} />
+                    <Route path="reconciliation" element={<ReconciliationPage />} />
                 </Route>
                 
                 {/* User Management */}
