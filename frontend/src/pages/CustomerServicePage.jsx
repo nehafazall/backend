@@ -75,17 +75,20 @@ const CS_STAGES = [
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
-const StudentCard = ({ student, onView, onSetReminder }) => {
+const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
 
     return (
         <div
-            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer`}
-            onClick={() => onView(student)}
+            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''}`}
+            onClick={() => !isDragging && onView(student)}
             data-testid={`student-card-${student.id}`}
         >
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
+                    <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
+                        <GripVertical className="h-4 w-4" />
+                    </div>
                     <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white text-sm font-medium">
                         {student.full_name?.charAt(0) || '?'}
                     </div>
@@ -156,6 +159,34 @@ const StudentCard = ({ student, onView, onSetReminder }) => {
                     {student.classes_attended} classes
                 </span>
             </div>
+        </div>
+    );
+};
+
+// Sortable wrapper for StudentCard
+const SortableStudentCard = ({ student, onView, onSetReminder }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: student.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            <StudentCard
+                student={student}
+                onView={onView}
+                onSetReminder={onSetReminder}
+                isDragging={isDragging}
+            />
         </div>
     );
 };
