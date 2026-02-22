@@ -3062,6 +3062,9 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
         if mentor:
             update_data["mentor_id"] = mentor["id"]
             update_data["mentor_name"] = mentor["full_name"]
+            # Initialize mentor stage when student is activated by CS
+            if not existing.get("mentor_stage"):
+                update_data["mentor_stage"] = "new_student"
             await create_notification(
                 mentor["id"],
                 "New Student Assigned",
