@@ -76,8 +76,24 @@ logger.info(f"🔧 Environment: {CURRENT_APP_ENV} | Database: {CURRENT_DB_NAME}"
 ROLES = [
     "super_admin", "admin", "sales_manager", "team_leader", 
     "sales_executive", "cs_head", "cs_agent", "mentor", 
-    "academic_master", "finance", "hr", "marketing", "operations", "quality_control"
+    "academic_master", "finance", "hr", "marketing", "operations", "quality_control",
+    # Finance-specific roles
+    "finance_manager", "finance_admin", "finance_treasurer", 
+    "finance_verifier", "financier", "accounts"
 ]
+
+# Finance role entity access mapping
+FINANCE_ROLE_ACCESS = {
+    "finance_manager": ["clt", "miles"],  # Access to both
+    "finance_admin": ["miles"],            # MILES only
+    "finance_treasurer": ["miles"],        # MILES only
+    "finance_verifier": ["miles"],         # MILES only
+    "financier": ["miles"],                # MILES only
+    "accounts": ["clt"],                   # CLT only
+    "finance": ["clt", "miles"],           # Legacy - full access
+    "super_admin": ["clt", "miles"],       # Full access
+    "admin": ["clt", "miles"],             # Full access
+}
 
 DEPARTMENTS = [
     "Sales", "Finance", "Customer Service", "Mentors/Academics",
