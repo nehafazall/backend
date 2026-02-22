@@ -5,6 +5,35 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 22, 2026 - Finance Roles with Entity Access
+
+#### NEW: Finance-Specific Roles with CLT/MILES Access Control (COMPLETED)
+
+**New Finance Roles:**
+| Role | Display Name | Entity Access |
+|------|--------------|---------------|
+| finance_manager | Finance Manager | CLT + MILES |
+| finance_admin | Finance Admin | MILES only |
+| finance_treasurer | Finance Treasurer | MILES only |
+| finance_verifier | Finance Verifier | MILES only |
+| financier | Financier | MILES only |
+| accounts | Accounts | CLT only |
+| finance | Finance (Legacy) | CLT + MILES |
+
+**User Model Update:**
+- Added `entity_access` field to User schema: `["clt", "miles"]`
+- Default entity access auto-set based on role
+- Entity Access checkboxes shown when creating finance users
+
+**API Changes:**
+- `GET /api/roles` - Returns 16 roles with entity_access info
+- `POST /api/users` - Now accepts and stores entity_access
+
+**Frontend Changes:**
+- Role dropdown now grouped: "General Roles" and "Finance Roles"
+- Finance roles show description (e.g., "MILES only", "Both CLT & MILES")
+- Entity Access checkboxes appear when finance role selected
+
 ### Session Feb 22, 2026 - BioCloud Biometric Integration
 
 #### NEW: ZK BioCloud Attendance System Integration (COMPLETED)
