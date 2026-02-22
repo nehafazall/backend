@@ -1723,17 +1723,88 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
     if data.role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {ROLES}")
     
+    now = datetime.now(timezone.utc).isoformat()
+    
     # Set default permissions based on role
     default_permissions = get_default_permissions(data.role)
     
+    user_uuid = str(uuid.uuid4())
+    employee_uuid = None
+    
     new_user = {
-        "id": str(uuid.uuid4()),
-        **data.model_dump(),
+        "id": user_uuid,
+        **data.model_dump(exclude={"create_employee_record", "designation", "joining_date", "employment_type", "work_location"}),
         "password": hash_password(data.password),
         "permissions": data.permissions or default_permissions,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now,
+        "updated_at": now
     }
+    
+    # Create employee record if requested
+    if data.create_employee_record:
+        # Check if email already exists in employees
+        existing_employee = await db.hr_employees.find_one({"company_email": data.email})
+        if existing_employee:
+            raise HTTPException(status_code=400, detail="Email already exists in employee records")
+        
+        # Generate employee ID
+        last_emp = await db.hr_employees.find_one(sort=[("employee_id", -1)])
+        if last_emp and last_emp.get("employee_id"):
+            try:
+                last_num = int(last_emp["employee_id"].replace("CLT-", ""))
+                new_num = last_num + 1
+            except:
+                new_num = 1
+        else:
+            new_num = 1
+        employee_id = f"CLT-{str(new_num).zfill(3)}"
+        
+        employee_uuid = str(uuid.uuid4())
+        
+        employee_record = {
+            "id": employee_uuid,
+            "employee_id": employee_id,
+            "full_name": data.full_name,
+            "company_email": data.email,
+            "department": data.department,
+            "designation": data.designation or data.role.replace("_", " ").title(),
+            "role": data.role,
+            "employment_type": data.employment_type or "full_time",
+            "work_location": data.work_location or "Office",
+            "joining_date": data.joining_date or now[:10],
+            "employment_status": "active",
+            "mobile_number": data.phone,
+            "user_id": user_uuid,
+            "annual_leave_balance": 30.0,
+            "sick_leave_balance": 15.0,
+            "documents": [],
+            "created_at": now,
+            "updated_at": now,
+            "created_by": user["id"],
+            "created_by_name": user["full_name"],
+            "created_via": "user_management"
+        }
+        
+        await db.hr_employees.insert_one(employee_record)
+        
+        # Link user to employee
+        new_user["employee_id"] = employee_uuid
+        
+        # Audit log for employee creation
+        await db.hr_audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "employee",
+            "entity_id": employee_uuid,
+            "action": "create_from_user",
+            "user_id": user["id"],
+            "user_name": user["full_name"],
+            "timestamp": now,
+            "changes": {
+                "employee_created": True,
+                "source": "user_management",
+                "user_id": user_uuid
+            }
+        })
     
     await db.users.insert_one(new_user)
     await log_activity("user", new_user["id"], "created", user, {"email": data.email})
@@ -1745,7 +1816,12 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
         "user",
         entity_id=new_user["id"],
         entity_name=data.full_name,
-        details={"email": data.email, "role": data.role, "department": data.department}
+        details={
+            "email": data.email, 
+            "role": data.role, 
+            "department": data.department,
+            "employee_record_created": data.create_employee_record
+        }
     )
     
     return {k: v for k, v in new_user.items() if k != "password" and k != "_id"}
