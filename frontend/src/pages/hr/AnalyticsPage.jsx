@@ -5,10 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { 
-    RefreshCw, Users, TrendingUp, TrendingDown, DollarSign, 
-    Clock, Calendar, BarChart3, PieChart, Activity
-} from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { AttritionCard, DeptCostsCard, TenureCard, AgeCard, HeadcountTrendCard } from '@/components/hr/AnalyticsWidgets';
 
 const AnalyticsPage = () => {
     const [overview, setOverview] = useState(null);
@@ -43,19 +41,11 @@ const AnalyticsPage = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', maximumFractionDigits: 0 }).format(amount || 0);
-    };
-
-    const getTenurePercentage = (tenure) => {
-        if (!overview?.tenure_distribution) return 0;
-        const total = Object.values(overview.tenure_distribution).reduce((a, b) => a + b, 0);
-        return total > 0 ? Math.round((tenure / total) * 100) : 0;
-    };
-
-    const getAgePercentage = (age) => {
-        if (!overview?.age_distribution) return 0;
-        const total = Object.values(overview.age_distribution).reduce((a, b) => a + b, 0);
-        return total > 0 ? Math.round((age / total) * 100) : 0;
+        return new Intl.NumberFormat('en-AE', { 
+            style: 'currency', 
+            currency: 'AED', 
+            maximumFractionDigits: 0 
+        }).format(amount || 0);
     };
 
     return (
@@ -90,129 +80,22 @@ const AnalyticsPage = () => {
                     <TabsTrigger value="payroll">Payroll</TabsTrigger>
                 </TabsList>
 
-                {/* OVERVIEW TAB */}
                 <TabsContent value="overview" className="space-y-4">
                     {overview && (
                         <>
-                            {/* Attrition Card */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <TrendingDown className="h-5 w-5 text-red-500" />
-                                            Attrition
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-4xl font-bold">{overview.attrition.attrition_rate}%</p>
-                                                <p className="text-muted-foreground">Attrition Rate YTD</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-2xl font-semibold text-red-500">{overview.attrition.resigned_ytd}</p>
-                                                <p className="text-sm text-muted-foreground">Employees Left</p>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Department Costs */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <DollarSign className="h-5 w-5 text-green-500" />
-                                            Department Costs (Current Month)
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-3">
-                                            {overview.department_costs && Object.entries(overview.department_costs).slice(0, 5).map(([dept, cost]) => (
-                                                <div key={dept} className="flex items-center justify-between">
-                                                    <span className="text-sm">{dept}</span>
-                                                    <span className="font-medium">{formatCurrency(cost)}</span>
-                                                </div>
-                                            ))}
-                                            {(!overview.department_costs || Object.keys(overview.department_costs).length === 0) && (
-                                                <p className="text-muted-foreground text-sm">No payroll data for current month</p>
-                                            )}
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <AttritionCard data={overview.attrition} />
+                                <DeptCostsCard costs={overview.department_costs} formatCurrency={formatCurrency} />
                             </div>
-
-                            {/* Tenure & Age Distribution */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Clock className="h-5 w-5 text-blue-500" />
-                                            Tenure Distribution
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {overview.tenure_distribution && Object.entries(overview.tenure_distribution).map(([range, count]) => (
-                                            <div key={range} className="space-y-2">
-                                                <div className="flex items-center justify-between text-sm">
-                                                    <span>{range}</span>
-                                                    <span className="font-medium">{count} ({getTenurePercentage(count)}%)</span>
-                                                </div>
-                                                <Progress value={getTenurePercentage(count)} className="h-2" />
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Users className="h-5 w-5 text-purple-500" />
-                                            Age Distribution
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {overview.age_distribution && Object.entries(overview.age_distribution).map(([range, count]) => (
-                                            <div key={range} className="space-y-2">
-                                                <div className="flex items-center justify-between text-sm">
-                                                    <span>{range}</span>
-                                                    <span className="font-medium">{count} ({getAgePercentage(count)}%)</span>
-                                                </div>
-                                                <Progress value={getAgePercentage(count)} className="h-2" />
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
+                                <TenureCard data={overview.tenure_distribution} />
+                                <AgeCard data={overview.age_distribution} />
                             </div>
-
-                            {/* Headcount Trend */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <TrendingUp className="h-5 w-5 text-green-500" />
-                                        Headcount Trend (Last 12 Months)
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-end gap-2 h-40">
-                                        {overview.headcount_trends && overview.headcount_trends.map((item, i) => (
-                                            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                                <div 
-                                                    className="w-full bg-blue-500 rounded-t transition-all"
-                                                    style={{ height: `${Math.max((item.count / Math.max(...overview.headcount_trends.map(h => h.count || 1))) * 100, 5)}%` }}
-                                                />
-                                                <span className="text-xs text-muted-foreground rotate-45 origin-left">
-                                                    {item.month?.slice(5)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            <HeadcountTrendCard trends={overview.headcount_trends} />
                         </>
                     )}
                 </TabsContent>
 
-                {/* ATTENDANCE TAB */}
                 <TabsContent value="attendance" className="space-y-4">
                     {attendanceAnalytics && (
                         <>
@@ -254,7 +137,9 @@ const AnalyticsPage = () => {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Attendance by Day of Week</CardTitle>
-                                    <CardDescription>Period: {attendanceAnalytics.period.start} to {attendanceAnalytics.period.end}</CardDescription>
+                                    <CardDescription>
+                                        Period: {attendanceAnalytics.period.start} to {attendanceAnalytics.period.end}
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="grid grid-cols-7 gap-4">
@@ -274,7 +159,6 @@ const AnalyticsPage = () => {
                     )}
                 </TabsContent>
 
-                {/* LEAVE TAB */}
                 <TabsContent value="leave" className="space-y-4">
                     {leaveAnalytics && (
                         <>
@@ -298,7 +182,6 @@ const AnalyticsPage = () => {
                                         )}
                                     </CardContent>
                                 </Card>
-
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>Leave by Status</CardTitle>
@@ -313,7 +196,6 @@ const AnalyticsPage = () => {
                                     </CardContent>
                                 </Card>
                             </div>
-
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Leave by Department</CardTitle>
@@ -336,7 +218,6 @@ const AnalyticsPage = () => {
                     )}
                 </TabsContent>
 
-                {/* PAYROLL TAB */}
                 <TabsContent value="payroll" className="space-y-4">
                     {payrollAnalytics && (
                         <>
@@ -355,7 +236,10 @@ const AnalyticsPage = () => {
                                                             <span className="text-sm text-muted-foreground">{item.employee_count} employees</span>
                                                             <span className="font-medium">{formatCurrency(item.total_net)}</span>
                                                         </div>
-                                                        <Progress value={(item.total_net / (payrollAnalytics.monthly_trend[0]?.total_net || 1)) * 100} className="h-2" />
+                                                        <Progress 
+                                                            value={(item.total_net / (payrollAnalytics.monthly_trend[0]?.total_net || 1)) * 100} 
+                                                            className="h-2" 
+                                                        />
                                                     </div>
                                                 </div>
                                             ))}
@@ -365,7 +249,6 @@ const AnalyticsPage = () => {
                                     )}
                                 </CardContent>
                             </Card>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Card>
                                     <CardHeader>
@@ -389,7 +272,6 @@ const AnalyticsPage = () => {
                                         )}
                                     </CardContent>
                                 </Card>
-
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>Deduction Breakdown</CardTitle>
@@ -397,11 +279,15 @@ const AnalyticsPage = () => {
                                     <CardContent className="space-y-3">
                                         <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
                                             <span>Late Penalties</span>
-                                            <span className="font-medium text-amber-600">{formatCurrency(payrollAnalytics.deduction_breakdown?.late_penalties)}</span>
+                                            <span className="font-medium text-amber-600">
+                                                {formatCurrency(payrollAnalytics.deduction_breakdown?.late_penalties)}
+                                            </span>
                                         </div>
                                         <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                                             <span>Absence Deductions</span>
-                                            <span className="font-medium text-red-600">{formatCurrency(payrollAnalytics.deduction_breakdown?.absence_deductions)}</span>
+                                            <span className="font-medium text-red-600">
+                                                {formatCurrency(payrollAnalytics.deduction_breakdown?.absence_deductions)}
+                                            </span>
                                         </div>
                                     </CardContent>
                                 </Card>
