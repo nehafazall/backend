@@ -28,6 +28,7 @@ import AuditLogPage from "@/pages/AuditLogPage";
 import PasswordResetPage from "@/pages/PasswordResetPage";
 import RolesPage from "@/pages/RolesPage";
 import TeamsPage from "@/pages/TeamsPage";
+import MentorLeaderboard from "@/pages/MentorLeaderboard";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -40,6 +41,7 @@ import TransfersPage from "@/pages/finance/TransfersPage";
 import AccountsPage from "@/pages/finance/AccountsPage";
 import FinanceCommissionEnginePage from "@/pages/finance/CommissionEnginePage";
 import CommissionSettlementsPage from "@/pages/finance/CommissionSettlementsPage";
+import ReconciliationPage from "@/pages/finance/ReconciliationPage";
 import Layout from "@/components/Layout";
 
 // Protected Route Component
