@@ -5,6 +5,78 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Features (February 2026)
 
+### New Features Implemented (Feb 22, 2026)
+
+#### 1. Quick Stats Widget on Home Launcher (COMPLETED)
+- **Location**: Home page above module icons
+- **Role-Appropriate Stats**: Shows different stats based on user role
+  - Sales: Total Leads, New Today, Hot Leads, Enrolled MTD
+  - CS: Total Students, Pending Activation
+  - Mentor: My Students, Upgrade Opportunities
+  - Finance: MTD Revenue, Pending Payments
+- **Auto-Refresh**: Updates every 5 minutes
+- **API**: `/api/dashboard/quick-stats`
+- **Component**: `/app/frontend/src/components/QuickStatsWidget.jsx`
+
+#### 2. Commission Engine with Rules Configuration (COMPLETED)
+- **Location**: Finance > CLT > Commission Engine
+- **Tabs**: Commissions (auto-calculated) and Commission Rules
+- **Commission Rules CRUD**:
+  - Create rules by: Role, Commission Type (% or Fixed), Value, Course Filter, Sale Range
+  - Enable/disable rules with toggle
+  - Edit and delete rules
+- **API**: `/api/commission-rules` - Full CRUD
+- **Page**: `/app/frontend/src/pages/finance/CommissionEnginePage.jsx`
+
+#### 3. Bank Statement Import & Reconciliation Engine (COMPLETED)
+- **Location**: Finance > CLT > Bank Reconciliation
+- **Features**:
+  - Import CSV bank statements
+  - Auto-reconcile with payments and journal entries
+  - Manual matching for unmatched items
+  - Progress tracking per statement
+- **Summary Cards**: Total Statements, Pending Reconciliation, Completed, Unmatched Items
+- **API Endpoints**:
+  - `POST /api/accounting/bank-statements/upload` - Upload CSV
+  - `GET /api/accounting/bank-statements` - List statements
+  - `POST /api/accounting/bank-statements/{id}/auto-reconcile` - Auto-match
+  - `PUT /api/accounting/bank-statements/{id}/lines/{line_id}/match` - Manual match
+  - `GET /api/accounting/reconciliation/summary` - Summary stats
+- **Page**: `/app/frontend/src/pages/finance/ReconciliationPage.jsx`
+
+#### 4. Mentor Leaderboard (COMPLETED)
+- **Location**: Academics > Leaderboard
+- **Podium Display**: Top 3 mentors with 1st/2nd/3rd place styling
+- **Full Rankings Table**: Rank, Mentor, Students, Active, Upgrades, Commission, Rating, Score
+- **Period Filter**: This Month, This Quarter, This Year, All Time
+- **Scoring Formula**: (Upgrades × 100) + (Commission / 100) + (Satisfaction × 20)
+- **API**: `/api/mentor/leaderboard?period={monthly|quarterly|yearly|all_time}`
+- **Page**: `/app/frontend/src/pages/MentorLeaderboard.jsx`
+
+#### 5. Editable Profile in Settings (COMPLETED)
+- **Location**: Settings > Profile > Edit Profile button
+- **Editable Fields**:
+  - Profile Photo (upload with preview, max 2MB)
+  - Full Name
+  - Primary Phone
+  - Additional Phone Numbers (add/remove multiple)
+  - Bio
+- **Display**: Profile shows bio and additional numbers
+- **API**: `PUT /api/users/me/profile`
+- **Components**: 
+  - `/app/frontend/src/components/EditProfileDialog.jsx`
+  - `/app/frontend/src/pages/SettingsPage.jsx`
+
+### Sales Team Management (COMPLETED - Feb 22, 2026)
+- **Team Structure**: Create teams with leader and members
+- **Team-Based Data Access**:
+  - Super Admin: Sees all leads
+  - Team Leader: Sees own leads + team members' leads
+  - Sales Executive: Sees only own leads
+- **Team Assignment**: Assign team to users in User Management
+- **APIs**: `/api/teams` - Full CRUD, `/api/teams/{id}/members`
+- **Page**: `/app/frontend/src/pages/TeamsPage.jsx`
+
 ### Finance Module Restructure (COMPLETED - Feb 11)
 - **Entity Selection**: Two entities - CLT Academy (Active) and MILES (Under Development)
 - **Left Sidebar Navigation**: Organized into Overview, Accounting, and Commissions sections
