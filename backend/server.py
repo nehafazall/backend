@@ -7805,60 +7805,6 @@ async def update_employee_status(
         "user_status_synced": user_status_synced
     }
 
-@api_router.get("/hr/employees/sync-options")
-async def get_employee_sync_options(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
-    """Get all available options for employee creation (departments, roles, teams, managers)"""
-    # Get departments
-    departments = await db.departments.find({}, {"_id": 0, "id": 1, "name": 1, "head_id": 1, "head_name": 1}).to_list(100)
-    
-    # Get roles (predefined)
-    roles = [
-        {"value": "super_admin", "label": "Super Admin", "description": "Full system access"},
-        {"value": "admin", "label": "Admin", "description": "Administrative access"},
-        {"value": "sales_manager", "label": "Sales Manager", "description": "Sales team management"},
-        {"value": "team_leader", "label": "Team Leader", "description": "Team lead access"},
-        {"value": "sales_executive", "label": "Sales Executive", "description": "Sales access"},
-        {"value": "cs_head", "label": "CS Head", "description": "Customer service management"},
-        {"value": "cs_agent", "label": "CS Agent", "description": "Customer service access"},
-        {"value": "mentor", "label": "Mentor", "description": "Academic mentoring"},
-        {"value": "academic_master", "label": "Academic Master", "description": "Academic management"},
-        {"value": "finance", "label": "Finance", "description": "Finance access"},
-        {"value": "hr", "label": "HR", "description": "Human resources access"},
-        {"value": "marketing", "label": "Marketing", "description": "Marketing access"},
-        {"value": "operations", "label": "Operations", "description": "Operations access"},
-        {"value": "quality_control", "label": "Quality Control", "description": "QC access"},
-    ]
-    
-    # Get teams
-    teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1, "department": 1, "leader_id": 1, "leader_name": 1}).to_list(100)
-    
-    # Get active employees as potential managers
-    managers = await db.hr_employees.find(
-        {"employment_status": {"$in": ["active", "probation"]}},
-        {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "department": 1, "designation": 1}
-    ).sort("full_name", 1).to_list(500)
-    
-    # Get work locations
-    locations = ["Dubai", "Abu Dhabi", "Sharjah", "Remote", "Hybrid"]
-    
-    # Get employment types
-    employment_types = [
-        {"value": "full_time", "label": "Full Time"},
-        {"value": "part_time", "label": "Part Time"},
-        {"value": "contract", "label": "Contract"},
-        {"value": "intern", "label": "Intern"},
-        {"value": "consultant", "label": "Consultant"},
-    ]
-    
-    return {
-        "departments": departments,
-        "roles": roles,
-        "teams": teams,
-        "managers": managers,
-        "locations": locations,
-        "employment_types": employment_types
-    }
-
 @api_router.post("/hr/sync-user-to-employee")
 async def sync_user_to_employee(
     user_id: str,
