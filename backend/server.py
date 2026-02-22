@@ -136,6 +136,12 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    # Employee sync options
+    create_employee_record: bool = False
+    designation: Optional[str] = None
+    joining_date: Optional[str] = None
+    employment_type: Optional[str] = "full_time"
+    work_location: Optional[str] = "Office"
 
 class UserResponse(UserBase):
     id: str
