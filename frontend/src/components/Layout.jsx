@@ -556,6 +556,9 @@ function HomePageContent({ user, visibleSections, selectSection }) {
     const { theme } = useTheme();
     const isDark = theme === 'dark';
     
+    // Dynamically import QuickStatsWidget
+    const QuickStatsWidget = React.lazy(() => import('@/components/QuickStatsWidget'));
+    
     return (
         <div className="min-h-[calc(100vh-4rem)] relative overflow-hidden" data-testid="home-launcher">
             {/* Trading chart background with 15-20% opacity */}
@@ -566,7 +569,7 @@ function HomePageContent({ user, visibleSections, selectSection }) {
             {/* Content */}
             <div className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
                 {/* CLT Logo in center - LARGE */}
-                <div className="mb-12">
+                <div className="mb-8">
                     <CLTLogo 
                         className="h-40 md:h-48 lg:h-56 w-auto mx-auto"
                         isDark={isDark}
@@ -575,10 +578,15 @@ function HomePageContent({ user, visibleSections, selectSection }) {
                 </div>
                 
                 {/* Welcome message */}
-                <div className="text-center mb-12">
+                <div className="text-center mb-6">
                     <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
                     <p className="text-muted-foreground">Select a module to get started</p>
                 </div>
+                
+                {/* Quick Stats Widget */}
+                <React.Suspense fallback={<div className="h-20 w-full max-w-5xl animate-pulse bg-muted/30 rounded-lg" />}>
+                    <QuickStatsWidget className="max-w-5xl w-full mb-8" />
+                </React.Suspense>
                 
                 {/* Section icons grid */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl">
