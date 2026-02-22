@@ -52,6 +52,7 @@ import PayrollPage from "@/pages/hr/PayrollPage";
 import PerformancePage from "@/pages/hr/PerformancePage";
 import AssetsPage from "@/pages/hr/AssetsPage";
 import AnalyticsPage from "@/pages/hr/AnalyticsPage";
+import BioCloudSyncPage from "@/pages/hr/BioCloudSyncPage";
 
 import Layout from "@/components/Layout";
 
