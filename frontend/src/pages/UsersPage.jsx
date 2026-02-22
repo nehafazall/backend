@@ -475,15 +475,27 @@ const UsersPage = () => {
                                 <Label>Role *</Label>
                                 <Select
                                     value={formData.role || undefined}
-                                    onValueChange={(value) => setFormData({ ...formData, role: value })}
+                                    onValueChange={handleRoleChange}
                                 >
                                     <SelectTrigger data-testid="user-role-select">
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
-                                    <SelectContent position="popper" className="z-[9999]">
-                                        {ROLES.map((role) => (
+                                    <SelectContent position="popper" className="z-[9999] max-h-80">
+                                        <div className="p-2 text-xs text-muted-foreground font-medium">General Roles</div>
+                                        {ROLES.filter(r => !FINANCE_ROLES.includes(r.id)).map((role) => (
                                             <SelectItem key={role.id} value={role.id}>
                                                 {role.label}
+                                            </SelectItem>
+                                        ))}
+                                        <div className="p-2 text-xs text-muted-foreground font-medium border-t mt-2">Finance Roles</div>
+                                        {ROLES.filter(r => FINANCE_ROLES.includes(r.id)).map((role) => (
+                                            <SelectItem key={role.id} value={role.id}>
+                                                <div className="flex items-center gap-2">
+                                                    <span>{role.label}</span>
+                                                    {role.description && (
+                                                        <span className="text-xs text-muted-foreground">({role.description})</span>
+                                                    )}
+                                                </div>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -508,6 +520,48 @@ const UsersPage = () => {
                                 </Select>
                             </div>
                         </div>
+                        
+                        {/* Entity Access for Finance Roles */}
+                        {FINANCE_ROLES.includes(formData.role) && (
+                            <div className="space-y-3 p-4 border rounded-lg bg-blue-500/10 border-blue-500/30">
+                                <Label className="text-sm font-medium">Entity Access</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Which financial entities can this user access?
+                                </p>
+                                <div className="flex gap-4">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="clt-access"
+                                            checked={formData.entity_access?.includes('clt')}
+                                            onCheckedChange={(checked) => {
+                                                const newAccess = checked 
+                                                    ? [...(formData.entity_access || []), 'clt']
+                                                    : (formData.entity_access || []).filter(e => e !== 'clt');
+                                                setFormData({ ...formData, entity_access: newAccess });
+                                            }}
+                                        />
+                                        <label htmlFor="clt-access" className="text-sm font-medium cursor-pointer">
+                                            CLT Academy
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="miles-access"
+                                            checked={formData.entity_access?.includes('miles')}
+                                            onCheckedChange={(checked) => {
+                                                const newAccess = checked 
+                                                    ? [...(formData.entity_access || []), 'miles']
+                                                    : (formData.entity_access || []).filter(e => e !== 'miles');
+                                                setFormData({ ...formData, entity_access: newAccess });
+                                            }}
+                                        />
+                                        <label htmlFor="miles-access" className="text-sm font-medium cursor-pointer">
+                                            MILES
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
