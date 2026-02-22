@@ -102,6 +102,7 @@ const SECTIONS = {
         items: [
             { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor' },
             { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard' },
+            { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard' },
         ],
     },
     operations: {
