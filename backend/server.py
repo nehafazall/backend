@@ -4047,16 +4047,23 @@ class RoleUpdate(BaseModel):
 
 # Default system roles
 DEFAULT_SYSTEM_ROLES = [
-    {"id": "super_admin", "name": "super_admin", "display_name": "Super Admin", "is_system_role": True, "color": "bg-purple-500", "data_visibility": "all"},
-    {"id": "admin", "name": "admin", "display_name": "Admin", "is_system_role": True, "color": "bg-blue-500", "data_visibility": "all"},
+    {"id": "super_admin", "name": "super_admin", "display_name": "Super Admin", "is_system_role": True, "color": "bg-purple-500", "data_visibility": "all", "entity_access": ["clt", "miles"]},
+    {"id": "admin", "name": "admin", "display_name": "Admin", "is_system_role": True, "color": "bg-blue-500", "data_visibility": "all", "entity_access": ["clt", "miles"]},
     {"id": "sales_manager", "name": "sales_manager", "display_name": "Sales Manager", "is_system_role": True, "color": "bg-green-500", "data_visibility": "team"},
     {"id": "team_leader", "name": "team_leader", "display_name": "Team Leader", "is_system_role": True, "color": "bg-cyan-500", "data_visibility": "team"},
     {"id": "sales_executive", "name": "sales_executive", "display_name": "Sales Executive", "is_system_role": True, "color": "bg-yellow-500", "data_visibility": "own"},
     {"id": "cs_head", "name": "cs_head", "display_name": "CS Head", "is_system_role": True, "color": "bg-pink-500", "data_visibility": "all"},
     {"id": "cs_agent", "name": "cs_agent", "display_name": "CS Agent", "is_system_role": True, "color": "bg-indigo-500", "data_visibility": "own"},
     {"id": "mentor", "name": "mentor", "display_name": "Mentor", "is_system_role": True, "color": "bg-orange-500", "data_visibility": "own"},
-    {"id": "finance", "name": "finance", "display_name": "Finance", "is_system_role": True, "color": "bg-emerald-500", "data_visibility": "all"},
+    {"id": "finance", "name": "finance", "display_name": "Finance (Legacy)", "is_system_role": True, "color": "bg-emerald-500", "data_visibility": "all", "entity_access": ["clt", "miles"]},
     {"id": "hr", "name": "hr", "display_name": "HR", "is_system_role": True, "color": "bg-rose-500", "data_visibility": "all"},
+    # New Finance-specific roles
+    {"id": "finance_manager", "name": "finance_manager", "display_name": "Finance Manager", "is_system_role": True, "color": "bg-emerald-600", "data_visibility": "all", "entity_access": ["clt", "miles"], "description": "Full access to both CLT and MILES"},
+    {"id": "finance_admin", "name": "finance_admin", "display_name": "Finance Admin", "is_system_role": True, "color": "bg-teal-500", "data_visibility": "all", "entity_access": ["miles"], "description": "MILES entity access only"},
+    {"id": "finance_treasurer", "name": "finance_treasurer", "display_name": "Finance Treasurer", "is_system_role": True, "color": "bg-cyan-600", "data_visibility": "all", "entity_access": ["miles"], "description": "MILES entity access only"},
+    {"id": "finance_verifier", "name": "finance_verifier", "display_name": "Finance Verifier", "is_system_role": True, "color": "bg-sky-500", "data_visibility": "all", "entity_access": ["miles"], "description": "MILES entity access only"},
+    {"id": "financier", "name": "financier", "display_name": "Financier", "is_system_role": True, "color": "bg-blue-600", "data_visibility": "own", "entity_access": ["miles"], "description": "MILES entity access only"},
+    {"id": "accounts", "name": "accounts", "display_name": "Accounts", "is_system_role": True, "color": "bg-green-600", "data_visibility": "all", "entity_access": ["clt"], "description": "CLT entity access only"},
 ]
 
 @api_router.get("/roles")
