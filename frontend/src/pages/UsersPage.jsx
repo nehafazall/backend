@@ -51,17 +51,26 @@ import {
 import ImportButton from '@/components/ImportButton';
 
 const ROLES = [
-    { id: 'super_admin', label: 'Super Admin', color: 'bg-purple-500' },
-    { id: 'admin', label: 'Admin', color: 'bg-blue-500' },
+    { id: 'super_admin', label: 'Super Admin', color: 'bg-purple-500', entity_access: ['clt', 'miles'] },
+    { id: 'admin', label: 'Admin', color: 'bg-blue-500', entity_access: ['clt', 'miles'] },
     { id: 'sales_manager', label: 'Sales Manager', color: 'bg-green-500' },
     { id: 'team_leader', label: 'Team Leader', color: 'bg-cyan-500' },
     { id: 'sales_executive', label: 'Sales Executive', color: 'bg-yellow-500' },
     { id: 'cs_head', label: 'CS Head', color: 'bg-pink-500' },
     { id: 'cs_agent', label: 'CS Agent', color: 'bg-indigo-500' },
     { id: 'mentor', label: 'Mentor', color: 'bg-orange-500' },
-    { id: 'finance', label: 'Finance', color: 'bg-emerald-500' },
     { id: 'hr', label: 'HR', color: 'bg-rose-500' },
+    // Finance-specific roles
+    { id: 'finance_manager', label: 'Finance Manager', color: 'bg-emerald-600', entity_access: ['clt', 'miles'], description: 'Both CLT & MILES' },
+    { id: 'finance_admin', label: 'Finance Admin', color: 'bg-teal-500', entity_access: ['miles'], description: 'MILES only' },
+    { id: 'finance_treasurer', label: 'Finance Treasurer', color: 'bg-cyan-600', entity_access: ['miles'], description: 'MILES only' },
+    { id: 'finance_verifier', label: 'Finance Verifier', color: 'bg-sky-500', entity_access: ['miles'], description: 'MILES only' },
+    { id: 'financier', label: 'Financier', color: 'bg-blue-600', entity_access: ['miles'], description: 'MILES only' },
+    { id: 'accounts', label: 'Accounts', color: 'bg-green-600', entity_access: ['clt'], description: 'CLT only' },
+    { id: 'finance', label: 'Finance (Legacy)', color: 'bg-emerald-500', entity_access: ['clt', 'miles'] },
 ];
+
+const FINANCE_ROLES = ['finance_manager', 'finance_admin', 'finance_treasurer', 'finance_verifier', 'financier', 'accounts', 'finance'];
 
 const DEPARTMENTS = [
     'Sales',
