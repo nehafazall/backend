@@ -119,6 +119,7 @@ const SECTIONS = {
             { title: 'Employee Master', icon: UserCircle, path: '/hr/employees' },
             { title: 'Leave Management', icon: Calendar, path: '/hr/leave' },
             { title: 'Attendance', icon: Clock, path: '/hr/attendance' },
+            { title: 'BioCloud Sync', icon: Fingerprint, path: '/hr/biocloud' },
             { title: 'Payroll', icon: DollarSign, path: '/hr/payroll' },
             { title: 'Performance', icon: TrendingUp, path: '/hr/performance' },
             { title: 'Assets', icon: Briefcase, path: '/hr/assets' },
