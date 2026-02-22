@@ -8389,6 +8389,1180 @@ async def get_hr_audit_logs(
     logs = await db.hr_audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
     return logs
 
+# ==================== HR MODULE - PAYROLL ENGINE ====================
+
+class PayrollRunCreate(BaseModel):
+    month: int  # 1-12
+    year: int
+    department: Optional[str] = None
+
+class PayrollAdjustment(BaseModel):
+    deductions: Optional[List[Dict]] = None
+    additions: Optional[List[Dict]] = None
+    comments: Optional[str] = None
+
+@api_router.post("/hr/payroll/run")
+async def run_payroll(
+    data: PayrollRunCreate,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Generate payroll for a specific month"""
+    now = datetime.now(timezone.utc).isoformat()
+    month_str = f"{data.year}-{str(data.month).zfill(2)}"
+    
+    # Check if payroll already exists for this month
+    existing = await db.hr_payroll.find_one({"month": month_str, "status": {"$ne": "draft"}})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed")
+    
+    # Get all active employees
+    emp_query = {"employment_status": {"$in": ["active", "probation"]}}
+    if data.department:
+        emp_query["department"] = data.department
+    
+    employees = await db.hr_employees.find(emp_query, {"_id": 0}).to_list(500)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No employees found for payroll processing")
+    
+    # Calculate working days in month
+    import calendar
+    total_days = calendar.monthrange(data.year, data.month)[1]
+    
+    payroll_records = []
+    
+    for emp in employees:
+        salary = emp.get("salary_structure", {})
+        if not salary:
+            continue
+        
+        # Get attendance data for the month
+        start_date = f"{data.year}-{str(data.month).zfill(2)}-01"
+        end_date = f"{data.year}-{str(data.month).zfill(2)}-{total_days}"
+        
+        attendance = await db.hr_attendance.find({
+            "employee_id": emp["id"],
+            "date": {"$gte": start_date, "$lte": end_date}
+        }).to_list(31)
+        
+        # Calculate attendance metrics
+        present_days = len([a for a in attendance if a.get("status") == "present"])
+        absent_days = total_days - present_days - len([a for a in attendance if a.get("status") in ["leave", "holiday", "wfh"]])
+        total_late_minutes = sum(a.get("late_minutes", 0) for a in attendance)
+        
+        # Calculate base salary
+        basic = salary.get("basic_salary", 0)
+        housing = salary.get("housing_allowance", 0)
+        transport = salary.get("transport_allowance", 0)
+        food = salary.get("food_allowance", 0)
+        phone = salary.get("phone_allowance", 0)
+        other = salary.get("other_allowances", 0)
+        fixed_incentive = salary.get("fixed_incentive", 0)
+        
+        gross_salary = basic + housing + transport + food + phone + other + fixed_incentive
+        daily_rate = gross_salary / total_days
+        
+        # Calculate deductions
+        deductions = []
+        
+        # Late penalty
+        if total_late_minutes > 0:
+            late_penalty = (total_late_minutes // 15) * 50
+            if late_penalty > 0:
+                deductions.append({
+                    "type": "late",
+                    "description": f"Late penalty ({total_late_minutes} minutes)",
+                    "amount": late_penalty
+                })
+        
+        # Absence deduction
+        if absent_days > 0:
+            absence_deduction = round(absent_days * daily_rate, 2)
+            deductions.append({
+                "type": "absence",
+                "description": f"Absent days ({absent_days} days)",
+                "amount": absence_deduction
+            })
+        
+        total_deductions = sum(d["amount"] for d in deductions)
+        
+        # Get commissions for this month
+        commissions = await db.commissions.find({
+            "user_id": emp.get("user_id"),
+            "month": month_str,
+            "status": {"$in": ["pending", "approved"]}
+        }).to_list(100)
+        
+        additions = []
+        commission_amount = sum(c.get("commission_amount", 0) for c in commissions)
+        if commission_amount > 0:
+            additions.append({
+                "type": "commission",
+                "description": f"Sales commission for {month_str}",
+                "amount": commission_amount
+            })
+        
+        total_additions = sum(a["amount"] for a in additions)
+        net_salary = gross_salary - total_deductions + total_additions
+        
+        payroll_record = {
+            "id": str(uuid.uuid4()),
+            "employee_id": emp["id"],
+            "employee_code": emp["employee_id"],
+            "employee_name": emp["full_name"],
+            "department": emp.get("department"),
+            "month": month_str,
+            "year": data.year,
+            "month_num": data.month,
+            "basic_salary": basic,
+            "housing_allowance": housing,
+            "transport_allowance": transport,
+            "food_allowance": food,
+            "phone_allowance": phone,
+            "other_allowances": other,
+            "fixed_incentive": fixed_incentive,
+            "gross_salary": round(gross_salary, 2),
+            "deductions": deductions,
+            "total_deductions": round(total_deductions, 2),
+            "additions": additions,
+            "total_additions": round(total_additions, 2),
+            "net_salary": round(net_salary, 2),
+            "days_worked": present_days,
+            "absent_days": absent_days,
+            "late_minutes": total_late_minutes,
+            "bank_details": emp.get("bank_details", {}),
+            "status": "draft",
+            "created_at": now,
+            "updated_at": now,
+            "created_by": user["id"]
+        }
+        
+        payroll_records.append(payroll_record)
+    
+    # Delete existing draft payroll for this month
+    await db.hr_payroll.delete_many({"month": month_str, "status": "draft"})
+    
+    # Insert new payroll records
+    if payroll_records:
+        await db.hr_payroll.insert_many(payroll_records)
+    
+    # Create payroll batch
+    batch = {
+        "id": str(uuid.uuid4()),
+        "month": month_str,
+        "year": data.year,
+        "month_num": data.month,
+        "department": data.department,
+        "employee_count": len(payroll_records),
+        "total_gross": sum(p["gross_salary"] for p in payroll_records),
+        "total_deductions": sum(p["total_deductions"] for p in payroll_records),
+        "total_additions": sum(p["total_additions"] for p in payroll_records),
+        "total_net": sum(p["net_salary"] for p in payroll_records),
+        "status": "draft",
+        "created_at": now,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"]
+    }
+    
+    await db.hr_payroll_batches.insert_one(batch)
+    
+    return {
+        "message": f"Payroll generated for {len(payroll_records)} employees",
+        "batch_id": batch["id"],
+        "month": month_str,
+        "total_gross": batch["total_gross"],
+        "total_net": batch["total_net"]
+    }
+
+@api_router.get("/hr/payroll")
+async def get_payroll(
+    month: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    status: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Get payroll records"""
+    query = {}
+    if month:
+        query["month"] = month
+    if employee_id:
+        query["$or"] = [{"employee_id": employee_id}, {"employee_code": employee_id}]
+    if status:
+        query["status"] = status
+    
+    records = await db.hr_payroll.find(query, {"_id": 0}).sort([("month", -1), ("employee_code", 1)]).to_list(500)
+    return records
+
+@api_router.get("/hr/payroll/batches")
+async def get_payroll_batches(
+    year: Optional[int] = None,
+    status: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Get payroll batches"""
+    query = {}
+    if year:
+        query["year"] = year
+    if status:
+        query["status"] = status
+    
+    batches = await db.hr_payroll_batches.find(query, {"_id": 0}).sort("month", -1).to_list(100)
+    return batches
+
+@api_router.put("/hr/payroll/{payroll_id}/adjust")
+async def adjust_payroll(
+    payroll_id: str,
+    data: PayrollAdjustment,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Adjust individual payroll record"""
+    payroll = await db.hr_payroll.find_one({"id": payroll_id})
+    if not payroll:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+    
+    if payroll["status"] not in ["draft", "calculated"]:
+        raise HTTPException(status_code=400, detail="Cannot adjust approved/paid payroll")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update = {"updated_at": now}
+    
+    if data.deductions is not None:
+        update["deductions"] = data.deductions
+        update["total_deductions"] = sum(d.get("amount", 0) for d in data.deductions)
+    
+    if data.additions is not None:
+        update["additions"] = data.additions
+        update["total_additions"] = sum(a.get("amount", 0) for a in data.additions)
+    
+    if data.comments:
+        update["adjustment_comments"] = data.comments
+    
+    # Recalculate net salary
+    current_deductions = update.get("total_deductions", payroll["total_deductions"])
+    current_additions = update.get("total_additions", payroll["total_additions"])
+    update["net_salary"] = round(payroll["gross_salary"] - current_deductions + current_additions, 2)
+    
+    await db.hr_payroll.update_one({"id": payroll_id}, {"$set": update})
+    
+    # Log audit
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "payroll",
+        "entity_id": payroll_id,
+        "action": "adjustment",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"adjustments": data.model_dump()}
+    })
+    
+    return {"message": "Payroll adjusted", "new_net_salary": update["net_salary"]}
+
+@api_router.put("/hr/payroll/batch/{batch_id}/approve")
+async def approve_payroll_batch(
+    batch_id: str,
+    approval_level: str,  # hr, finance
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Approve payroll batch"""
+    batch = await db.hr_payroll_batches.find_one({"id": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Payroll batch not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if approval_level == "hr" and batch["status"] in ["draft", "calculated"]:
+        new_status = "hr_approved"
+    elif approval_level == "finance" and batch["status"] == "hr_approved":
+        new_status = "finance_approved"
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid approval sequence. Current status: {batch['status']}")
+    
+    await db.hr_payroll_batches.update_one(
+        {"id": batch_id},
+        {"$set": {
+            "status": new_status,
+            f"{approval_level}_approved_by": user["id"],
+            f"{approval_level}_approved_at": now,
+            "updated_at": now
+        }}
+    )
+    
+    # Update all payroll records in batch
+    await db.hr_payroll.update_many(
+        {"month": batch["month"], "status": {"$in": ["draft", "calculated", "hr_approved"]}},
+        {"$set": {"status": new_status, "updated_at": now}}
+    )
+    
+    return {"message": f"Payroll batch {new_status}", "batch_id": batch_id}
+
+@api_router.put("/hr/payroll/batch/{batch_id}/pay")
+async def mark_payroll_paid(
+    batch_id: str,
+    payment_reference: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "finance"]))
+):
+    """Mark payroll as paid"""
+    batch = await db.hr_payroll_batches.find_one({"id": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Payroll batch not found")
+    
+    if batch["status"] != "finance_approved":
+        raise HTTPException(status_code=400, detail="Payroll must be finance approved before payment")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.hr_payroll_batches.update_one(
+        {"id": batch_id},
+        {"$set": {
+            "status": "paid",
+            "paid_at": now,
+            "paid_by": user["id"],
+            "payment_reference": payment_reference,
+            "updated_at": now
+        }}
+    )
+    
+    await db.hr_payroll.update_many(
+        {"month": batch["month"]},
+        {"$set": {"status": "paid", "paid_at": now, "updated_at": now}}
+    )
+    
+    return {"message": "Payroll marked as paid", "batch_id": batch_id}
+
+# ==================== HR MODULE - ASSET MANAGEMENT ====================
+
+@api_router.get("/hr/assets")
+async def get_assets(
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Get all assets"""
+    query = {}
+    if category:
+        query["category"] = category
+    if status:
+        query["status"] = status
+    if assigned_to:
+        query["assigned_to_id"] = assigned_to
+    
+    assets = await db.hr_assets.find(query, {"_id": 0}).sort("asset_code", 1).to_list(500)
+    return assets
+
+@api_router.post("/hr/assets")
+async def create_asset(
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Create a new asset"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check for duplicate asset code
+    if data.get("asset_code"):
+        existing = await db.hr_assets.find_one({"asset_code": data["asset_code"]})
+        if existing:
+            raise HTTPException(status_code=400, detail="Asset code already exists")
+    else:
+        # Auto-generate asset code
+        last_asset = await db.hr_assets.find_one(sort=[("asset_code", -1)])
+        if last_asset and last_asset.get("asset_code", "").startswith("AST-"):
+            try:
+                last_num = int(last_asset["asset_code"].split("-")[1])
+                data["asset_code"] = f"AST-{str(last_num + 1).zfill(4)}"
+            except:
+                data["asset_code"] = "AST-0001"
+        else:
+            data["asset_code"] = "AST-0001"
+    
+    asset = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "status": "available",
+        "assigned_to_id": None,
+        "assigned_to_name": None,
+        "assignment_history": [],
+        "maintenance_history": [],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"]
+    }
+    
+    await db.hr_assets.insert_one(asset)
+    
+    return {"message": "Asset created", "asset_id": asset["id"], "asset_code": asset["asset_code"]}
+
+@api_router.put("/hr/assets/{asset_id}")
+async def update_asset(
+    asset_id: str,
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Update asset details"""
+    asset = await db.hr_assets.find_one({"id": asset_id})
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update = {k: v for k, v in data.items() if k not in ["id", "created_at", "asset_code"]}
+    update["updated_at"] = now
+    
+    await db.hr_assets.update_one({"id": asset_id}, {"$set": update})
+    
+    return {"message": "Asset updated"}
+
+@api_router.post("/hr/assets/{asset_id}/assign")
+async def assign_asset(
+    asset_id: str,
+    employee_id: str,
+    notes: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Assign asset to employee"""
+    asset = await db.hr_assets.find_one({"id": asset_id})
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    if asset.get("status") != "available":
+        raise HTTPException(status_code=400, detail=f"Asset is not available. Current status: {asset.get('status')}")
+    
+    employee = await db.hr_employees.find_one({"id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    assignment = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee_id,
+        "employee_name": employee["full_name"],
+        "employee_code": employee["employee_id"],
+        "assigned_at": now,
+        "assigned_by": user["id"],
+        "assigned_by_name": user["full_name"],
+        "notes": notes,
+        "returned_at": None
+    }
+    
+    await db.hr_assets.update_one(
+        {"id": asset_id},
+        {
+            "$set": {
+                "status": "assigned",
+                "assigned_to_id": employee_id,
+                "assigned_to_name": employee["full_name"],
+                "assigned_to_code": employee["employee_id"],
+                "current_assignment_id": assignment["id"],
+                "updated_at": now
+            },
+            "$push": {"assignment_history": assignment}
+        }
+    )
+    
+    # Create asset assignment record
+    await db.hr_asset_assignments.insert_one({
+        **assignment,
+        "asset_id": asset_id,
+        "asset_code": asset["asset_code"],
+        "asset_name": asset["asset_name"],
+        "category": asset.get("category")
+    })
+    
+    return {"message": f"Asset assigned to {employee['full_name']}", "assignment_id": assignment["id"]}
+
+@api_router.post("/hr/assets/{asset_id}/return")
+async def return_asset(
+    asset_id: str,
+    condition: str = "good",
+    notes: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Return assigned asset"""
+    asset = await db.hr_assets.find_one({"id": asset_id})
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    if asset.get("status") != "assigned":
+        raise HTTPException(status_code=400, detail="Asset is not currently assigned")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Update current assignment in history
+    await db.hr_assets.update_one(
+        {"id": asset_id, "assignment_history.id": asset.get("current_assignment_id")},
+        {"$set": {
+            "assignment_history.$.returned_at": now,
+            "assignment_history.$.return_condition": condition,
+            "assignment_history.$.return_notes": notes,
+            "assignment_history.$.returned_by": user["id"]
+        }}
+    )
+    
+    # Update asset status
+    await db.hr_assets.update_one(
+        {"id": asset_id},
+        {"$set": {
+            "status": "available",
+            "assigned_to_id": None,
+            "assigned_to_name": None,
+            "assigned_to_code": None,
+            "current_assignment_id": None,
+            "condition": condition,
+            "updated_at": now
+        }}
+    )
+    
+    # Update assignment record
+    await db.hr_asset_assignments.update_one(
+        {"asset_id": asset_id, "returned_at": None},
+        {"$set": {
+            "returned_at": now,
+            "return_condition": condition,
+            "return_notes": notes
+        }}
+    )
+    
+    return {"message": "Asset returned successfully"}
+
+@api_router.get("/hr/assets/requests")
+async def get_asset_requests(
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get asset requests"""
+    query = {}
+    
+    if user["role"] not in ["super_admin", "admin", "hr", "operations"]:
+        query["requested_by"] = user["id"]
+    
+    if status:
+        query["status"] = status
+    
+    requests = await db.hr_asset_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return requests
+
+@api_router.post("/hr/assets/requests")
+async def create_asset_request(
+    data: Dict[str, Any],
+    user = Depends(get_current_user)
+):
+    """Create asset request"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get employee record
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"company_email": user["email"]}]},
+        {"_id": 0}
+    )
+    
+    request = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee["id"] if employee else None,
+        "employee_name": employee["full_name"] if employee else user["full_name"],
+        "employee_code": employee["employee_id"] if employee else None,
+        "department": employee.get("department") if employee else user.get("department"),
+        "asset_category": data.get("asset_category"),
+        "asset_id": data.get("asset_id"),  # If requesting specific asset
+        "reason": data.get("reason"),
+        "expected_return_date": data.get("expected_return_date"),
+        "status": "pending",
+        "requested_by": user["id"],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.hr_asset_requests.insert_one(request)
+    
+    return {"message": "Asset request submitted", "request_id": request["id"]}
+
+@api_router.put("/hr/assets/requests/{request_id}/approve")
+async def approve_asset_request(
+    request_id: str,
+    action: str,  # approve or reject
+    asset_id: Optional[str] = None,  # Asset to assign if approved
+    comments: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))
+):
+    """Approve or reject asset request"""
+    request = await db.hr_asset_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if action == "reject":
+        await db.hr_asset_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "rejected",
+                "rejected_by": user["id"],
+                "rejected_at": now,
+                "rejection_reason": comments,
+                "updated_at": now
+            }}
+        )
+        return {"message": "Request rejected"}
+    
+    if action == "approve":
+        if asset_id:
+            # Assign specific asset
+            asset = await db.hr_assets.find_one({"id": asset_id})
+            if not asset or asset.get("status") != "available":
+                raise HTTPException(status_code=400, detail="Asset not available")
+            
+            # Auto-assign asset
+            employee = await db.hr_employees.find_one({"id": request["employee_id"]})
+            if employee:
+                assignment = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": employee["id"],
+                    "employee_name": employee["full_name"],
+                    "employee_code": employee["employee_id"],
+                    "assigned_at": now,
+                    "assigned_by": user["id"],
+                    "assigned_by_name": user["full_name"],
+                    "notes": f"Auto-assigned from request {request_id}",
+                    "returned_at": None
+                }
+                
+                await db.hr_assets.update_one(
+                    {"id": asset_id},
+                    {
+                        "$set": {
+                            "status": "assigned",
+                            "assigned_to_id": employee["id"],
+                            "assigned_to_name": employee["full_name"],
+                            "current_assignment_id": assignment["id"],
+                            "updated_at": now
+                        },
+                        "$push": {"assignment_history": assignment}
+                    }
+                )
+        
+        await db.hr_asset_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "approved_by": user["id"],
+                "approved_at": now,
+                "assigned_asset_id": asset_id,
+                "comments": comments,
+                "updated_at": now
+            }}
+        )
+        return {"message": "Request approved", "assigned_asset_id": asset_id}
+    
+    raise HTTPException(status_code=400, detail="Invalid action")
+
+@api_router.get("/hr/assets/dashboard")
+async def get_asset_dashboard(user = Depends(require_roles(["super_admin", "admin", "hr", "operations"]))):
+    """Get asset dashboard statistics"""
+    total = await db.hr_assets.count_documents({})
+    available = await db.hr_assets.count_documents({"status": "available"})
+    assigned = await db.hr_assets.count_documents({"status": "assigned"})
+    maintenance = await db.hr_assets.count_documents({"status": "under_maintenance"})
+    
+    # By category
+    category_pipeline = [
+        {"$group": {"_id": "$category", "count": {"$sum": 1}, "value": {"$sum": "$purchase_price"}}}
+    ]
+    categories = await db.hr_assets.aggregate(category_pipeline).to_list(20)
+    
+    # Pending requests
+    pending_requests = await db.hr_asset_requests.count_documents({"status": "pending"})
+    
+    # Warranty expiring soon
+    from datetime import datetime, timedelta
+    thirty_days = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    warranty_expiring = await db.hr_assets.count_documents({
+        "warranty_expiry": {"$gte": today, "$lte": thirty_days}
+    })
+    
+    return {
+        "summary": {
+            "total": total,
+            "available": available,
+            "assigned": assigned,
+            "under_maintenance": maintenance
+        },
+        "by_category": {c["_id"]: {"count": c["count"], "value": c.get("value", 0)} for c in categories if c["_id"]},
+        "pending_requests": pending_requests,
+        "warranty_expiring": warranty_expiring
+    }
+
+# ==================== HR MODULE - PERFORMANCE & KPIs ====================
+
+@api_router.get("/hr/kpis")
+async def get_kpis(
+    category: Optional[str] = None,
+    department: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get KPI definitions"""
+    query = {}
+    if category:
+        query["category"] = category
+    if department:
+        query["department"] = department
+    
+    kpis = await db.hr_kpis.find(query, {"_id": 0}).to_list(100)
+    return kpis
+
+@api_router.post("/hr/kpis")
+async def create_kpi(
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Create KPI definition"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    kpi = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"]
+    }
+    
+    await db.hr_kpis.insert_one(kpi)
+    return {"message": "KPI created", "kpi_id": kpi["id"]}
+
+@api_router.put("/hr/kpis/{kpi_id}")
+async def update_kpi(
+    kpi_id: str,
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update KPI definition"""
+    kpi = await db.hr_kpis.find_one({"id": kpi_id})
+    if not kpi:
+        raise HTTPException(status_code=404, detail="KPI not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update = {k: v for k, v in data.items() if k not in ["id", "created_at"]}
+    update["updated_at"] = now
+    
+    await db.hr_kpis.update_one({"id": kpi_id}, {"$set": update})
+    return {"message": "KPI updated"}
+
+@api_router.delete("/hr/kpis/{kpi_id}")
+async def delete_kpi(
+    kpi_id: str,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Delete KPI"""
+    result = await db.hr_kpis.delete_one({"id": kpi_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="KPI not found")
+    return {"message": "KPI deleted"}
+
+@api_router.post("/hr/kpi-scores")
+async def record_kpi_score(
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+):
+    """Record KPI score"""
+    kpi = await db.hr_kpis.find_one({"id": data.get("kpi_id")})
+    if not kpi:
+        raise HTTPException(status_code=404, detail="KPI not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    actual = data.get("actual_value", 0)
+    target = kpi.get("target_value", 1)
+    achievement = min((actual / target) * 100, 150) if target > 0 else 0
+    
+    score_record = {
+        "id": str(uuid.uuid4()),
+        "kpi_id": data["kpi_id"],
+        "kpi_name": kpi["name"],
+        "employee_id": data.get("employee_id"),
+        "department": data.get("department") or kpi.get("department"),
+        "period_month": data.get("period_month"),
+        "period_year": data.get("period_year"),
+        "target_value": target,
+        "actual_value": actual,
+        "achievement_percentage": round(achievement, 2),
+        "weighted_score": round(achievement * kpi.get("weight", 1), 2),
+        "comments": data.get("comments"),
+        "created_at": now,
+        "recorded_by": user["id"]
+    }
+    
+    await db.hr_kpi_scores.insert_one(score_record)
+    return {"message": "KPI score recorded", "achievement": achievement}
+
+@api_router.get("/hr/kpi-scores")
+async def get_kpi_scores(
+    employee_id: Optional[str] = None,
+    department: Optional[str] = None,
+    period_month: Optional[int] = None,
+    period_year: Optional[int] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+):
+    """Get KPI scores"""
+    query = {}
+    if employee_id:
+        query["employee_id"] = employee_id
+    if department:
+        query["department"] = department
+    if period_month:
+        query["period_month"] = period_month
+    if period_year:
+        query["period_year"] = period_year
+    
+    scores = await db.hr_kpi_scores.find(query, {"_id": 0}).sort([("period_year", -1), ("period_month", -1)]).to_list(500)
+    return scores
+
+@api_router.get("/hr/performance-reviews")
+async def get_performance_reviews(
+    employee_id: Optional[str] = None,
+    review_period: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get performance reviews"""
+    query = {}
+    if employee_id:
+        query["employee_id"] = employee_id
+    if review_period:
+        query["review_period"] = review_period
+    
+    reviews = await db.hr_performance_reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return reviews
+
+@api_router.post("/hr/performance-reviews")
+async def create_performance_review(
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+):
+    """Create performance review"""
+    employee = await db.hr_employees.find_one({"id": data.get("employee_id")})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    review = {
+        "id": str(uuid.uuid4()),
+        "employee_id": data["employee_id"],
+        "employee_name": employee["full_name"],
+        "employee_code": employee["employee_id"],
+        "department": employee.get("department"),
+        "review_period": data.get("review_period"),
+        "reviewer_id": data.get("reviewer_id") or user["id"],
+        "reviewer_name": data.get("reviewer_name") or user["full_name"],
+        "overall_rating": data.get("overall_rating"),
+        "strengths": data.get("strengths"),
+        "areas_for_improvement": data.get("areas_for_improvement"),
+        "goals_next_period": data.get("goals_next_period"),
+        "kpi_scores": data.get("kpi_scores", []),
+        "comments": data.get("comments"),
+        "status": "draft",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"]
+    }
+    
+    await db.hr_performance_reviews.insert_one(review)
+    return {"message": "Performance review created", "review_id": review["id"]}
+
+@api_router.put("/hr/performance-reviews/{review_id}")
+async def update_performance_review(
+    review_id: str,
+    data: Dict[str, Any],
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update performance review"""
+    review = await db.hr_performance_reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update = {k: v for k, v in data.items() if k not in ["id", "created_at", "employee_id"]}
+    update["updated_at"] = now
+    
+    await db.hr_performance_reviews.update_one({"id": review_id}, {"$set": update})
+    return {"message": "Performance review updated"}
+
+# ==================== HR MODULE - ANALYTICS & REPORTS ====================
+
+@api_router.get("/hr/analytics/overview")
+async def get_hr_analytics_overview(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get HR analytics overview"""
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+    current_year = now.year
+    
+    # Headcount trends (last 12 months)
+    headcount_data = []
+    for i in range(12):
+        month_date = now - timedelta(days=30*i)
+        month_str = month_date.strftime("%Y-%m")
+        # Count employees who were active at that time (simplified)
+        count = await db.hr_employees.count_documents({
+            "employment_status": {"$in": ["active", "probation"]},
+            "joining_date": {"$lte": f"{month_str}-28"}
+        })
+        headcount_data.append({"month": month_str, "count": count})
+    
+    # Attrition data
+    resigned = await db.hr_employees.count_documents({
+        "employment_status": {"$in": ["resigned", "terminated"]},
+        "updated_at": {"$gte": f"{current_year}-01-01"}
+    })
+    total_active = await db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
+    attrition_rate = round((resigned / max(total_active + resigned, 1)) * 100, 2)
+    
+    # Tenure distribution
+    tenure_data = {"0-1 year": 0, "1-2 years": 0, "2-5 years": 0, "5+ years": 0}
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"joining_date": 1}
+    ).to_list(1000)
+    
+    for emp in employees:
+        if emp.get("joining_date"):
+            try:
+                join = datetime.strptime(emp["joining_date"], "%Y-%m-%d")
+                years = (now - join).days / 365
+                if years < 1:
+                    tenure_data["0-1 year"] += 1
+                elif years < 2:
+                    tenure_data["1-2 years"] += 1
+                elif years < 5:
+                    tenure_data["2-5 years"] += 1
+                else:
+                    tenure_data["5+ years"] += 1
+            except:
+                pass
+    
+    # Age distribution
+    age_data = {"18-25": 0, "26-35": 0, "36-45": 0, "46+": 0}
+    employees_dob = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"date_of_birth": 1}
+    ).to_list(1000)
+    
+    for emp in employees_dob:
+        if emp.get("date_of_birth"):
+            try:
+                dob = datetime.strptime(emp["date_of_birth"], "%Y-%m-%d")
+                age = (now - dob).days / 365
+                if age < 26:
+                    age_data["18-25"] += 1
+                elif age < 36:
+                    age_data["26-35"] += 1
+                elif age < 46:
+                    age_data["36-45"] += 1
+                else:
+                    age_data["46+"] += 1
+            except:
+                pass
+    
+    # Department costs (from payroll)
+    dept_cost_pipeline = [
+        {"$match": {"month": current_month}},
+        {"$group": {"_id": "$department", "total_cost": {"$sum": "$net_salary"}}}
+    ]
+    dept_costs = await db.hr_payroll.aggregate(dept_cost_pipeline).to_list(20)
+    
+    return {
+        "headcount_trends": list(reversed(headcount_data)),
+        "attrition": {
+            "resigned_ytd": resigned,
+            "attrition_rate": attrition_rate
+        },
+        "tenure_distribution": tenure_data,
+        "age_distribution": age_data,
+        "department_costs": {d["_id"]: d["total_cost"] for d in dept_costs if d["_id"]}
+    }
+
+@api_router.get("/hr/analytics/attendance")
+async def get_attendance_analytics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    department: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get attendance analytics"""
+    now = datetime.now(timezone.utc)
+    
+    if not start_date:
+        start_date = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    if not end_date:
+        end_date = now.strftime("%Y-%m-%d")
+    
+    query = {"date": {"$gte": start_date, "$lte": end_date}}
+    if department:
+        query["department"] = department
+    
+    records = await db.hr_attendance.find(query).to_list(5000)
+    
+    # Calculate metrics
+    total_records = len(records)
+    present = len([r for r in records if r.get("status") == "present"])
+    absent = len([r for r in records if r.get("status") == "absent"])
+    late = len([r for r in records if r.get("late_minutes", 0) > 0])
+    wfh = len([r for r in records if r.get("status") == "wfh"])
+    
+    total_late_minutes = sum(r.get("late_minutes", 0) for r in records)
+    avg_work_hours = sum(r.get("total_work_hours", 0) for r in records) / max(present, 1)
+    
+    # By day of week
+    day_stats = {i: {"present": 0, "absent": 0, "late": 0} for i in range(7)}
+    for r in records:
+        try:
+            date = datetime.strptime(r["date"], "%Y-%m-%d")
+            day = date.weekday()
+            if r.get("status") == "present":
+                day_stats[day]["present"] += 1
+            elif r.get("status") == "absent":
+                day_stats[day]["absent"] += 1
+            if r.get("late_minutes", 0) > 0:
+                day_stats[day]["late"] += 1
+        except:
+            pass
+    
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    by_day = {day_names[i]: day_stats[i] for i in range(7)}
+    
+    return {
+        "period": {"start": start_date, "end": end_date},
+        "summary": {
+            "total_records": total_records,
+            "present": present,
+            "absent": absent,
+            "late": late,
+            "wfh": wfh,
+            "attendance_rate": round((present / max(total_records, 1)) * 100, 2),
+            "punctuality_rate": round(((present - late) / max(present, 1)) * 100, 2)
+        },
+        "late_minutes": {
+            "total": total_late_minutes,
+            "average_per_employee": round(total_late_minutes / max(present, 1), 2)
+        },
+        "avg_work_hours": round(avg_work_hours, 2),
+        "by_day_of_week": by_day
+    }
+
+@api_router.get("/hr/analytics/leave")
+async def get_leave_analytics(
+    year: Optional[int] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get leave analytics"""
+    if not year:
+        year = datetime.now(timezone.utc).year
+    
+    start = f"{year}-01-01"
+    end = f"{year}-12-31"
+    
+    # Leave requests by type
+    type_pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$group": {"_id": "$leave_type", "count": {"$sum": 1}, "total_days": {"$sum": "$leave_days"}}}
+    ]
+    by_type = await db.hr_leave_requests.aggregate(type_pipeline).to_list(20)
+    
+    # Leave by status
+    status_pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    by_status = await db.hr_leave_requests.aggregate(status_pipeline).to_list(10)
+    
+    # Leave by department
+    dept_pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lte": end}, "status": "approved"}},
+        {"$group": {"_id": "$department", "count": {"$sum": 1}, "total_days": {"$sum": "$leave_days"}}}
+    ]
+    by_dept = await db.hr_leave_requests.aggregate(dept_pipeline).to_list(20)
+    
+    # Monthly trend
+    monthly_pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$addFields": {"month": {"$substr": ["$created_at", 0, 7]}}},
+        {"$group": {"_id": "$month", "count": {"$sum": 1}, "total_days": {"$sum": "$leave_days"}}}
+    ]
+    monthly = await db.hr_leave_requests.aggregate(monthly_pipeline).to_list(12)
+    
+    return {
+        "year": year,
+        "by_type": {t["_id"]: {"count": t["count"], "total_days": t.get("total_days", 0)} for t in by_type if t["_id"]},
+        "by_status": {s["_id"]: s["count"] for s in by_status if s["_id"]},
+        "by_department": {d["_id"]: {"count": d["count"], "total_days": d.get("total_days", 0)} for d in by_dept if d["_id"]},
+        "monthly_trend": sorted([{"month": m["_id"], "count": m["count"]} for m in monthly if m["_id"]], key=lambda x: x["month"])
+    }
+
+@api_router.get("/hr/analytics/payroll")
+async def get_payroll_analytics(
+    year: Optional[int] = None,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Get payroll analytics"""
+    if not year:
+        year = datetime.now(timezone.utc).year
+    
+    # Monthly payroll totals
+    monthly_pipeline = [
+        {"$match": {"year": year}},
+        {"$group": {
+            "_id": "$month",
+            "total_gross": {"$sum": "$gross_salary"},
+            "total_deductions": {"$sum": "$total_deductions"},
+            "total_additions": {"$sum": "$total_additions"},
+            "total_net": {"$sum": "$net_salary"},
+            "employee_count": {"$sum": 1}
+        }}
+    ]
+    monthly = await db.hr_payroll.aggregate(monthly_pipeline).to_list(12)
+    
+    # By department
+    dept_pipeline = [
+        {"$match": {"year": year}},
+        {"$group": {
+            "_id": "$department",
+            "total_net": {"$sum": "$net_salary"},
+            "avg_salary": {"$avg": "$net_salary"},
+            "employee_count": {"$sum": 1}
+        }}
+    ]
+    by_dept = await db.hr_payroll.aggregate(dept_pipeline).to_list(20)
+    
+    # Deduction breakdown
+    # This is an approximation since deductions are stored as array
+    total_late = 0
+    total_absence = 0
+    payroll_records = await db.hr_payroll.find({"year": year}).to_list(1000)
+    for p in payroll_records:
+        for d in p.get("deductions", []):
+            if d.get("type") == "late":
+                total_late += d.get("amount", 0)
+            elif d.get("type") == "absence":
+                total_absence += d.get("amount", 0)
+    
+    return {
+        "year": year,
+        "monthly_trend": sorted([{
+            "month": m["_id"],
+            "total_gross": m["total_gross"],
+            "total_net": m["total_net"],
+            "employee_count": m["employee_count"]
+        } for m in monthly if m["_id"]], key=lambda x: x["month"]),
+        "by_department": {d["_id"]: {
+            "total_net": round(d["total_net"], 2),
+            "avg_salary": round(d["avg_salary"], 2),
+            "employee_count": d["employee_count"]
+        } for d in by_dept if d["_id"]},
+        "deduction_breakdown": {
+            "late_penalties": round(total_late, 2),
+            "absence_deductions": round(total_absence, 2)
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
