@@ -1890,6 +1890,206 @@ async def delete_user(user_id: str, user = Depends(require_roles(["super_admin"]
     
     return {"message": "User deleted"}
 
+# ==================== TEAMS MANAGEMENT ====================
+
+@api_router.get("/teams")
+async def get_teams(
+    department: Optional[str] = None,
+    active_only: bool = True,
+    user = Depends(require_roles(["super_admin", "admin", "sales_manager", "team_leader", "cs_head"]))
+):
+    """Get all teams, optionally filtered by department"""
+    query = {}
+    if department:
+        query["department"] = department
+    if active_only:
+        query["active"] = {"$ne": False}
+    
+    teams = await db.teams.find(query, {"_id": 0}).sort("name", 1).to_list(100)
+    
+    # Enrich with leader name and member count
+    for team in teams:
+        if team.get("leader_id"):
+            leader = await db.users.find_one({"id": team["leader_id"]})
+            team["leader_name"] = leader.get("full_name") if leader else None
+        
+        # Count members
+        member_count = await db.users.count_documents({"team_id": team["id"], "active": {"$ne": False}})
+        team["member_count"] = member_count
+    
+    return teams
+
+@api_router.post("/teams")
+async def create_team(
+    team: TeamCreate,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Create a new team"""
+    # Check if team name already exists in department
+    existing = await db.teams.find_one({"name": team.name, "department": team.department})
+    if existing:
+        raise HTTPException(status_code=400, detail="Team name already exists in this department")
+    
+    now = datetime.now(timezone.utc)
+    team_data = {
+        "id": str(uuid.uuid4()),
+        "name": team.name,
+        "department": team.department,
+        "description": team.description,
+        "leader_id": None,
+        "active": True,
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat()
+    }
+    
+    await db.teams.insert_one(team_data)
+    
+    await log_activity("team", team_data["id"], "created", user, {"name": team.name})
+    
+    return team_data
+
+@api_router.get("/teams/{team_id}")
+async def get_team(team_id: str, user = Depends(get_current_user)):
+    """Get a specific team with members"""
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Get leader info
+    if team.get("leader_id"):
+        leader = await db.users.find_one({"id": team["leader_id"]})
+        team["leader_name"] = leader.get("full_name") if leader else None
+        team["leader_email"] = leader.get("email") if leader else None
+    
+    # Get team members
+    members = await db.users.find(
+        {"team_id": team_id, "active": {"$ne": False}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    team["members"] = members
+    team["member_count"] = len(members)
+    
+    return team
+
+@api_router.put("/teams/{team_id}")
+async def update_team(
+    team_id: str,
+    team_update: TeamUpdate,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Update a team"""
+    existing = await db.teams.find_one({"id": team_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    update_data = {k: v for k, v in team_update.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # If setting a new leader, verify they exist and update their role
+    if "leader_id" in update_data and update_data["leader_id"]:
+        new_leader = await db.users.find_one({"id": update_data["leader_id"]})
+        if not new_leader:
+            raise HTTPException(status_code=400, detail="Leader user not found")
+        
+        # Update the leader's team_id and role if needed
+        await db.users.update_one(
+            {"id": update_data["leader_id"]},
+            {"$set": {"team_id": team_id, "role": "team_leader", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    await db.teams.update_one({"id": team_id}, {"$set": update_data})
+    
+    await log_activity("team", team_id, "updated", user, update_data)
+    
+    updated = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/teams/{team_id}")
+async def delete_team(
+    team_id: str,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Delete (deactivate) a team"""
+    existing = await db.teams.find_one({"id": team_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Check if team has members
+    member_count = await db.users.count_documents({"team_id": team_id})
+    if member_count > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete team with {member_count} members. Reassign members first.")
+    
+    await db.teams.update_one(
+        {"id": team_id},
+        {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    await log_activity("team", team_id, "deleted", user)
+    
+    return {"message": "Team deactivated"}
+
+@api_router.post("/teams/{team_id}/members")
+async def add_team_member(
+    team_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))
+):
+    """Add a user to a team"""
+    team = await db.teams.find_one({"id": team_id})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    user_id = data.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    
+    member = await db.users.find_one({"id": user_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update user's team
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "team_id": team_id,
+            "team_leader_id": team.get("leader_id"),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    await log_activity("team", team_id, "member_added", user, {"member_id": user_id, "member_name": member.get("full_name")})
+    
+    return {"message": f"User {member.get('full_name')} added to team {team.get('name')}"}
+
+@api_router.delete("/teams/{team_id}/members/{member_id}")
+async def remove_team_member(
+    team_id: str,
+    member_id: str,
+    user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))
+):
+    """Remove a user from a team"""
+    team = await db.teams.find_one({"id": team_id})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    member = await db.users.find_one({"id": member_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Remove user from team
+    await db.users.update_one(
+        {"id": member_id},
+        {"$set": {
+            "team_id": None,
+            "team_leader_id": None,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    await log_activity("team", team_id, "member_removed", user, {"member_id": member_id, "member_name": member.get("full_name")})
+    
+    return {"message": f"User {member.get('full_name')} removed from team {team.get('name')}"}
+
 # ==================== LEADS (SALES CRM) ====================
 
 @api_router.get("/leads", response_model=List[LeadResponse])
