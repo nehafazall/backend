@@ -239,6 +239,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Teams Management */}
+                <Route path="teams" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager']}>
+                        <TeamsPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* QC Dashboard */}
                 <Route path="qc-dashboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'sales_manager']}>
