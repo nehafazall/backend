@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useParams, Navigate } from 'react-router-dom';
 import { 
     LayoutDashboard, FileText, CreditCard, Receipt, ArrowRightLeft, 
-    Building2, Calculator, Coins, ChevronLeft 
+    Building2, Calculator, Coins, ChevronLeft, FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
