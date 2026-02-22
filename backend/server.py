@@ -5172,7 +5172,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://hr-dashboard-preview.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://hr-user-link.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
