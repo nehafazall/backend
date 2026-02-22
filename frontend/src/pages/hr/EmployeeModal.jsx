@@ -63,9 +63,9 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
                             </Select>
                         </div>
                         <div><Label>Team</Label>
-                            <Select value={f.team_id||''} onValueChange={v => set('team_id', v)}>
+                            <Select value={f.team_id||'none'} onValueChange={v => set('team_id', v === 'none' ? '' : v)}>
                                 <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                                <SelectContent><SelectItem value="">None</SelectItem>{opts.teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                <SelectContent><SelectItem value="none">None</SelectItem>{opts.teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
                     </div>
