@@ -97,6 +97,9 @@ const UsersPage = () => {
         team_id: '',
         is_active: true,
         environment_access: [],
+        create_employee_record: true,
+        designation: '',
+        joining_date: new Date().toISOString().split('T')[0],
     });
 
     useEffect(() => {
