@@ -106,10 +106,22 @@ const UsersPage = () => {
         team_id: '',
         is_active: true,
         environment_access: [],
+        entity_access: [],
         create_employee_record: true,
         designation: '',
         joining_date: new Date().toISOString().split('T')[0],
     });
+
+    // Update entity_access when role changes
+    const handleRoleChange = (role) => {
+        const roleData = ROLES.find(r => r.id === role);
+        setFormData({
+            ...formData,
+            role,
+            entity_access: roleData?.entity_access || [],
+            department: FINANCE_ROLES.includes(role) ? 'Finance' : formData.department
+        });
+    };
 
     useEffect(() => {
         fetchUsers();
