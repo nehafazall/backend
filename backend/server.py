@@ -7945,7 +7945,7 @@ async def link_employee_to_user(
 
 @api_router.put("/hr/employees/{employee_id}", response_model=EmployeeResponse)
 async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
-    """Update an employee record"""
+    """Update an employee record with automatic user sync"""
     employee = await db.hr_employees.find_one(
         {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
     )
@@ -7975,6 +7975,40 @@ async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends
     
     await db.hr_employees.update_one({"id": employee["id"]}, {"$set": update_data})
     
+    # Sync changes to linked user account
+    user_synced = False
+    if employee.get("user_id"):
+        user_update = {}
+        if "full_name" in update_data:
+            user_update["full_name"] = update_data["full_name"]
+        if "department" in update_data:
+            user_update["department"] = update_data["department"]
+        if "role" in update_data:
+            user_update["role"] = update_data["role"]
+        if "company_email" in update_data:
+            user_update["email"] = update_data["company_email"]
+        
+        if user_update:
+            user_update["updated_at"] = now
+            await db.users.update_one({"id": employee["user_id"]}, {"$set": user_update})
+            user_synced = True
+    
+    # Handle status changes - sync to user
+    if "employment_status" in update_data:
+        new_status = update_data["employment_status"]
+        if new_status in ["resigned", "terminated", "absconding"] and employee.get("user_id"):
+            await db.users.update_one(
+                {"id": employee["user_id"]},
+                {"$set": {"status": "inactive", "deactivated_at": now}}
+            )
+            user_synced = True
+        elif new_status in ["active", "probation"] and employee.get("user_id"):
+            await db.users.update_one(
+                {"id": employee["user_id"]},
+                {"$set": {"status": "active", "reactivated_at": now}}
+            )
+            user_synced = True
+    
     # Audit log
     await db.hr_audit_logs.insert_one({
         "id": str(uuid.uuid4()),
@@ -7984,7 +8018,7 @@ async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends
         "user_id": user["id"],
         "user_name": user["full_name"],
         "timestamp": now,
-        "changes": {"old": old_values, "new": update_data}
+        "changes": {"old": old_values, "new": update_data, "user_synced": user_synced}
     })
     
     updated = await db.hr_employees.find_one({"id": employee["id"]}, {"_id": 0})
