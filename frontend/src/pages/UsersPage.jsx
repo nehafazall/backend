@@ -328,21 +328,16 @@ const UsersPage = () => {
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{user.email}</TableCell>
                                             <TableCell>{getRoleBadge(user.role)}</TableCell>
-                                            <TableCell>{user.department || '-'}</TableCell>
-                                            <TableCell>{user.region || '-'}</TableCell>
                                             <TableCell>
-                                                <div className="flex items-center gap-1">
-                                                    {user.environment_access?.includes('development') && (
-                                                        <Badge className="bg-blue-500 text-white text-xs">Dev</Badge>
-                                                    )}
-                                                    {user.environment_access?.includes('testing') && (
-                                                        <Badge className="bg-amber-500 text-white text-xs">Test</Badge>
-                                                    )}
-                                                    {(!user.environment_access || user.environment_access.length === 0) && (
-                                                        <span className="text-xs text-muted-foreground">Prod only</span>
-                                                    )}
-                                                </div>
+                                                {user.team_id ? (
+                                                    <Badge variant="outline">
+                                                        {teams.find(t => t.id === user.team_id)?.name || 'Unknown'}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
                                             </TableCell>
+                                            <TableCell>{user.department || '-'}</TableCell>
                                             <TableCell>
                                                 {user.is_active ? (
                                                     <Badge className="bg-emerald-500 text-white">Active</Badge>
