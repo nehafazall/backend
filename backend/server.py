@@ -4732,7 +4732,11 @@ async def get_3cx_extensions(user = Depends(get_current_user)):
     
     # Get all users with threecx_extension field
     users_with_extensions = await db.users.find(
-        {"threecx_extension": {"$exists": True, "$ne": None, "$ne": ""}},
+        {"$and": [
+            {"threecx_extension": {"$exists": True}},
+            {"threecx_extension": {"$ne": None}},
+            {"threecx_extension": {"$ne": ""}}
+        ]},
         {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1, "threecx_extension": 1, "is_active": 1}
     ).to_list(length=100)
     
