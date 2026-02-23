@@ -335,6 +335,7 @@ const UsersPage = () => {
                                     <TableHead>Role</TableHead>
                                     <TableHead>Team</TableHead>
                                     <TableHead>Department</TableHead>
+                                    <TableHead>3CX Ext</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Created</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -343,7 +344,7 @@ const UsersPage = () => {
                             <TableBody>
                                 {filteredUsers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                                             No users found
                                         </TableCell>
                                     </TableRow>
@@ -370,6 +371,15 @@ const UsersPage = () => {
                                                 )}
                                             </TableCell>
                                             <TableCell>{user.department || '-'}</TableCell>
+                                            <TableCell>
+                                                {user.threecx_extension ? (
+                                                    <Badge variant="outline" className="bg-orange-500/10 border-orange-500/30 text-orange-400">
+                                                        {user.threecx_extension}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 {user.is_active ? (
                                                     <Badge className="bg-emerald-500 text-white">Active</Badge>
