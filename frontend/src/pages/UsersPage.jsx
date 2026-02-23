@@ -200,6 +200,7 @@ const UsersPage = () => {
             region: user.region || '',
             is_active: user.is_active,
             environment_access: user.environment_access || [],
+            threecx_extension: user.threecx_extension || '',
         });
         setShowEditModal(true);
     };
