@@ -42,6 +42,26 @@ import AccountsPage from "@/pages/finance/AccountsPage";
 import FinanceCommissionEnginePage from "@/pages/finance/CommissionEnginePage";
 import CommissionSettlementsPage from "@/pages/finance/CommissionSettlementsPage";
 import ReconciliationPage from "@/pages/finance/ReconciliationPage";
+// Finance Suite - CLT
+import CltFinanceDashboard from "@/pages/finance/CltFinanceDashboard";
+import CltPayablesPage from "@/pages/finance/CltPayablesPage";
+import CltReceivablesPage from "@/pages/finance/CltReceivablesPage";
+// Finance Suite - Miles
+import MilesDashboard from "@/pages/finance/MilesDashboard";
+import MilesDepositsPage from "@/pages/finance/MilesDepositsPage";
+import MilesWithdrawalsPage from "@/pages/finance/MilesWithdrawalsPage";
+import MilesExpensePage from "@/pages/finance/MilesExpensePage";
+import MilesOperatingProfitPage from "@/pages/finance/MilesOperatingProfitPage";
+// Finance Suite - Treasury
+import TreasuryDashboard from "@/pages/finance/TreasuryDashboard";
+import TreasuryBalancesPage from "@/pages/finance/TreasuryBalancesPage";
+import TreasurySettlementsPage from "@/pages/finance/TreasurySettlementsPage";
+// Finance Suite - Budgeting
+import BudgetSheetPage from "@/pages/finance/BudgetSheetPage";
+import BudgetDashboard from "@/pages/finance/BudgetDashboard";
+// Finance Suite - PNL & Data
+import OverallPNLDashboard from "@/pages/finance/OverallPNLDashboard";
+import DataManagementPage from "@/pages/finance/DataManagementPage";
 
 // HR Module
 import HRDashboard from "@/pages/hr/HRDashboard";
