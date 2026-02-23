@@ -10576,6 +10576,334 @@ async def get_payroll_analytics(
         }
     }
 
+# ==================== FINANCE SUITE ENDPOINTS ====================
+
+# --- CLT Payables ---
+@api_router.get("/finance/clt/payables")
+async def get_clt_payables(user = Depends(get_current_user)):
+    """Get all CLT payables"""
+    payables = await db.finance_clt_payables.find({}, {"_id": 0}).to_list(length=1000)
+    return payables
+
+@api_router.post("/finance/clt/payables")
+async def create_clt_payable(data: dict, user = Depends(get_current_user)):
+    """Create a CLT payable record"""
+    payable = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_clt_payables.insert_one(payable)
+    return {"id": payable["id"], "message": "Payable created"}
+
+@api_router.put("/finance/clt/payables/{payable_id}")
+async def update_clt_payable(payable_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a CLT payable record"""
+    result = await db.finance_clt_payables.update_one(
+        {"id": payable_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Payable not found")
+    return {"message": "Payable updated"}
+
+@api_router.delete("/finance/clt/payables/{payable_id}")
+async def delete_clt_payable(payable_id: str, user = Depends(get_current_user)):
+    """Delete a CLT payable record"""
+    result = await db.finance_clt_payables.delete_one({"id": payable_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payable not found")
+    return {"message": "Payable deleted"}
+
+# --- CLT Receivables ---
+@api_router.get("/finance/clt/receivables")
+async def get_clt_receivables(user = Depends(get_current_user)):
+    """Get all CLT receivables"""
+    receivables = await db.finance_clt_receivables.find({}, {"_id": 0}).to_list(length=1000)
+    return receivables
+
+@api_router.post("/finance/clt/receivables")
+async def create_clt_receivable(data: dict, user = Depends(get_current_user)):
+    """Create a CLT receivable record"""
+    receivable = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_clt_receivables.insert_one(receivable)
+    return {"id": receivable["id"], "message": "Receivable created"}
+
+@api_router.put("/finance/clt/receivables/{receivable_id}")
+async def update_clt_receivable(receivable_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a CLT receivable record"""
+    result = await db.finance_clt_receivables.update_one(
+        {"id": receivable_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Receivable not found")
+    return {"message": "Receivable updated"}
+
+@api_router.delete("/finance/clt/receivables/{receivable_id}")
+async def delete_clt_receivable(receivable_id: str, user = Depends(get_current_user)):
+    """Delete a CLT receivable record"""
+    result = await db.finance_clt_receivables.delete_one({"id": receivable_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Receivable not found")
+    return {"message": "Receivable deleted"}
+
+# --- Miles Deposits ---
+@api_router.get("/finance/miles/deposits")
+async def get_miles_deposits(user = Depends(get_current_user)):
+    """Get all Miles deposits"""
+    deposits = await db.finance_miles_deposits.find({}, {"_id": 0}).to_list(length=1000)
+    return deposits
+
+@api_router.post("/finance/miles/deposits")
+async def create_miles_deposit(data: dict, user = Depends(get_current_user)):
+    """Create a Miles deposit record"""
+    deposit = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_miles_deposits.insert_one(deposit)
+    return {"id": deposit["id"], "message": "Deposit created"}
+
+@api_router.put("/finance/miles/deposits/{deposit_id}")
+async def update_miles_deposit(deposit_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a Miles deposit record"""
+    result = await db.finance_miles_deposits.update_one(
+        {"id": deposit_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Deposit not found")
+    return {"message": "Deposit updated"}
+
+@api_router.delete("/finance/miles/deposits/{deposit_id}")
+async def delete_miles_deposit(deposit_id: str, user = Depends(get_current_user)):
+    """Delete a Miles deposit record"""
+    result = await db.finance_miles_deposits.delete_one({"id": deposit_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Deposit not found")
+    return {"message": "Deposit deleted"}
+
+# --- Miles Withdrawals ---
+@api_router.get("/finance/miles/withdrawals")
+async def get_miles_withdrawals(user = Depends(get_current_user)):
+    """Get all Miles withdrawals"""
+    withdrawals = await db.finance_miles_withdrawals.find({}, {"_id": 0}).to_list(length=1000)
+    return withdrawals
+
+@api_router.post("/finance/miles/withdrawals")
+async def create_miles_withdrawal(data: dict, user = Depends(get_current_user)):
+    """Create a Miles withdrawal record"""
+    withdrawal = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_miles_withdrawals.insert_one(withdrawal)
+    return {"id": withdrawal["id"], "message": "Withdrawal created"}
+
+@api_router.put("/finance/miles/withdrawals/{withdrawal_id}")
+async def update_miles_withdrawal(withdrawal_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a Miles withdrawal record"""
+    result = await db.finance_miles_withdrawals.update_one(
+        {"id": withdrawal_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Withdrawal not found")
+    return {"message": "Withdrawal updated"}
+
+@api_router.delete("/finance/miles/withdrawals/{withdrawal_id}")
+async def delete_miles_withdrawal(withdrawal_id: str, user = Depends(get_current_user)):
+    """Delete a Miles withdrawal record"""
+    result = await db.finance_miles_withdrawals.delete_one({"id": withdrawal_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Withdrawal not found")
+    return {"message": "Withdrawal deleted"}
+
+# --- Miles Expenses ---
+@api_router.get("/finance/miles/expenses")
+async def get_miles_expenses(user = Depends(get_current_user)):
+    """Get all Miles expenses"""
+    expenses = await db.finance_miles_expenses.find({}, {"_id": 0}).to_list(length=1000)
+    return expenses
+
+@api_router.post("/finance/miles/expenses")
+async def create_miles_expense(data: dict, user = Depends(get_current_user)):
+    """Create a Miles expense record"""
+    expense = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_miles_expenses.insert_one(expense)
+    return {"id": expense["id"], "message": "Expense created"}
+
+@api_router.put("/finance/miles/expenses/{expense_id}")
+async def update_miles_expense(expense_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a Miles expense record"""
+    result = await db.finance_miles_expenses.update_one(
+        {"id": expense_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"message": "Expense updated"}
+
+@api_router.delete("/finance/miles/expenses/{expense_id}")
+async def delete_miles_expense(expense_id: str, user = Depends(get_current_user)):
+    """Delete a Miles expense record"""
+    result = await db.finance_miles_expenses.delete_one({"id": expense_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"message": "Expense deleted"}
+
+# --- Miles Operating Profit ---
+@api_router.get("/finance/miles/operating-profit")
+async def get_miles_operating_profit(user = Depends(get_current_user)):
+    """Get all Miles operating profit records"""
+    profits = await db.finance_miles_operating_profit.find({}, {"_id": 0}).to_list(length=1000)
+    return profits
+
+@api_router.post("/finance/miles/operating-profit")
+async def create_miles_operating_profit(data: dict, user = Depends(get_current_user)):
+    """Create a Miles operating profit record"""
+    profit = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_miles_operating_profit.insert_one(profit)
+    return {"id": profit["id"], "message": "Operating profit recorded"}
+
+@api_router.put("/finance/miles/operating-profit/{profit_id}")
+async def update_miles_operating_profit(profit_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a Miles operating profit record"""
+    result = await db.finance_miles_operating_profit.update_one(
+        {"id": profit_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"message": "Operating profit updated"}
+
+@api_router.delete("/finance/miles/operating-profit/{profit_id}")
+async def delete_miles_operating_profit(profit_id: str, user = Depends(get_current_user)):
+    """Delete a Miles operating profit record"""
+    result = await db.finance_miles_operating_profit.delete_one({"id": profit_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"message": "Operating profit deleted"}
+
+# --- Treasury Balances ---
+@api_router.get("/finance/treasury/balances")
+async def get_treasury_balances(user = Depends(get_current_user)):
+    """Get all treasury balances"""
+    balances = await db.finance_treasury_balances.find({}, {"_id": 0}).to_list(length=1000)
+    return balances
+
+@api_router.post("/finance/treasury/balances")
+async def create_treasury_balance(data: dict, user = Depends(get_current_user)):
+    """Create a treasury balance record"""
+    balance = {
+        "id": str(uuid.uuid4()),
+        **data,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.finance_treasury_balances.insert_one(balance)
+    return {"id": balance["id"], "message": "Balance created"}
+
+@api_router.put("/finance/treasury/balances/{balance_id}")
+async def update_treasury_balance(balance_id: str, data: dict, user = Depends(get_current_user)):
+    """Update a treasury balance record"""
+    result = await db.finance_treasury_balances.update_one(
+        {"id": balance_id},
+        {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Balance not found")
+    return {"message": "Balance updated"}
+
+@api_router.delete("/finance/treasury/balances/{balance_id}")
+async def delete_treasury_balance(balance_id: str, user = Depends(get_current_user)):
+    """Delete a treasury balance record"""
+    result = await db.finance_treasury_balances.delete_one({"id": balance_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Balance not found")
+    return {"message": "Balance deleted"}
+
+# --- Treasury Pending Settlements ---
+@api_router.get("/finance/treasury/pending-settlements")
+async def get_treasury_settlements(user = Depends(get_current_user)):
+    """Get all treasury pending settlements"""
+    settlements = await db.finance_treasury_settlements.find({}, {"_id": 0}).to_list(length=1000)
+    return settlements
+
+@api_router.put("/finance/treasury/pending-settlements/{settlement_id}/settle")
+async def settle_treasury_settlement(settlement_id: str, user = Depends(get_current_user)):
+    """Mark a settlement as settled"""
+    result = await db.finance_treasury_settlements.update_one(
+        {"id": settlement_id},
+        {"$set": {"status": "settled", "settled_at": datetime.now(timezone.utc).isoformat(), "settled_by": user["id"]}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    return {"message": "Settlement marked as settled"}
+
+# --- Budgeting ---
+@api_router.get("/finance/budgeting/sheet")
+async def get_budget_sheet(year: int, entity: str, user = Depends(get_current_user)):
+    """Get budget sheet for a year and entity"""
+    budgets = await db.finance_budgets.find(
+        {"year": year, "entity": entity},
+        {"_id": 0}
+    ).to_list(length=100)
+    return budgets
+
+@api_router.post("/finance/budgeting/sheet")
+async def save_budget_sheet(data: dict, user = Depends(get_current_user)):
+    """Save budget sheet for a year and entity"""
+    year = data.get("year")
+    entity = data.get("entity")
+    items = data.get("items", [])
+    
+    # Delete existing budgets for this year/entity
+    await db.finance_budgets.delete_many({"year": year, "entity": entity})
+    
+    # Insert new budgets
+    for item in items:
+        budget = {
+            "id": str(uuid.uuid4()),
+            "year": year,
+            "entity": entity,
+            "cost_center": item.get("cost_center"),
+            "monthly_budgets": item.get("monthly_budgets", {}),
+            "created_by": user["id"],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.finance_budgets.insert_one(budget)
+    
+    return {"message": f"Budget saved for {entity} {year}", "count": len(items)}
+
+@api_router.get("/finance/budgeting/actuals")
+async def get_budget_actuals(year: int, entity: str, user = Depends(get_current_user)):
+    """Get actual spending vs budget for a year and entity"""
+    # This would aggregate from payables/expenses collections
+    # For now, return empty to allow frontend to display
+    return []
+
 # Include the router in the main app
 app.include_router(api_router)
 
