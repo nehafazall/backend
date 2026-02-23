@@ -1,0 +1,45 @@
+[
+  {
+    "id": "318633ae-b614-4760-b23a-6a21b3ff7f8d",
+    "employee_id": "b9ae306e-a867-422c-8eba-fe5666489fe8",
+    "employee_code": "CLT-001",
+    "employee_name": "Ahmed Khan",
+    "department": "Sales",
+    "month": "2026-02",
+    "year": 2026,
+    "month_num": 2,
+    "basic_salary": 5000.0,
+    "housing_allowance": 2000.0,
+    "transport_allowance": 500.0,
+    "food_allowance": 0,
+    "phone_allowance": 0,
+    "other_allowances": 0,
+    "fixed_incentive": 0,
+    "gross_salary": 7500.0,
+    "deductions": [
+      {
+        "type": "absence",
+        "description": "Absent days (28 days)",
+        "amount": 7500.0
+      }
+    ],
+    "total_deductions": 7500.0,
+    "additions": [],
+    "total_additions": 0,
+    "net_salary": 0.0,
+    "days_worked": 0,
+    "absent_days": 28,
+    "late_minutes": 0,
+    "bank_details": {
+      "bank_name": "Emirates NBD",
+      "account_number": null,
+      "iban": "AE070331234567890123456",
+      "swift_code": null,
+      "wps_id": null
+    },
+    "status": "draft",
+    "created_at": "2026-02-22T20:09:54.651123+00:00",
+    "updated_at": "2026-02-22T20:09:54.651123+00:00",
+    "created_by": "77e0d531-0624-4d20-a9a8-1ee032c706cd"
+  }
+]

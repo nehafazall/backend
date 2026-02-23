@@ -1,0 +1,18 @@
+[
+  {
+    "id": "978fd1a8-2ac2-49b8-9d20-0e77751c272e",
+    "month": "2026-02",
+    "year": 2026,
+    "month_num": 2,
+    "department": null,
+    "employee_count": 1,
+    "total_gross": 7500.0,
+    "total_deductions": 7500.0,
+    "total_additions": 0,
+    "total_net": 0.0,
+    "status": "draft",
+    "created_at": "2026-02-22T20:09:54.552009+00:00",
+    "created_by": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "created_by_name": "Aqib (Super Admin)"
+  }
+]

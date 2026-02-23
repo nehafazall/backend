@@ -1,0 +1,1266 @@
+[
+  {
+    "id": "d821034b-a946-470e-b334-4e086024afbd",
+    "entity_type": "student",
+    "entity_id": "2348259f-577d-46f2-8d59-cc42868bd107",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "activated",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "mentor_id": "ef11c9fe-9be9-4028-97aa-e0ac4dd16362",
+      "mentor_name": "Edwin ",
+      "updated_at": "2026-02-23T01:08:09.277332+00:00"
+    },
+    "created_at": "2026-02-23T01:08:09.277875+00:00"
+  },
+  {
+    "id": "d1e86c25-7ce1-4333-93bb-eca34a5518b1",
+    "entity_type": "lead",
+    "entity_id": "a32f653f-9bfa-4ea9-b4be-842b8e42a4d7",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "enrolled",
+      "first_contact_at": "2026-02-23T01:07:45.785181+00:00",
+      "sla_status": "ok",
+      "sla_breach": false,
+      "sla_warning_level": 0,
+      "sla_warning_at": null,
+      "updated_at": "2026-02-23T01:07:45.785181+00:00",
+      "last_activity": "2026-02-23T01:07:45.785181+00:00"
+    },
+    "created_at": "2026-02-23T01:07:45.802687+00:00"
+  },
+  {
+    "id": "888c7d0b-25e8-4c19-a679-a4a335b718b8",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "activated",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T21:18:29.796410+00:00"
+    },
+    "created_at": "2026-02-22T21:18:29.797051+00:00"
+  },
+  {
+    "id": "d442f6d5-ac1d-4399-a5b4-24be55344aa6",
+    "entity_type": "user",
+    "entity_id": "fcd95a59-5bf9-433c-9715-b079c9017ad8",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:03:28.731781+00:00"
+  },
+  {
+    "id": "cb665583-7740-4248-96ad-fef2304bd22b",
+    "entity_type": "user",
+    "entity_id": "d1372edd-0139-4a53-8fa6-0599154ba8d2",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:03:27.470064+00:00"
+  },
+  {
+    "id": "4e5464f8-0910-4b13-85b4-1826f63f310e",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:03:27.350257+00:00"
+  },
+  {
+    "id": "19084b44-97a5-48dc-aaef-dc3284dea543",
+    "entity_type": "user",
+    "entity_id": "7704689d-170a-45d4-ae50-b0fe4bc70063",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:03:27.090791+00:00"
+  },
+  {
+    "id": "f2d58f69-47da-4475-b72d-626d46abc306",
+    "entity_type": "user",
+    "entity_id": "7704689d-170a-45d4-ae50-b0fe4bc70063",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.delete.1771794206@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:03:26.855320+00:00"
+  },
+  {
+    "id": "b606d433-c327-45da-aa20-1dca8d9c1762",
+    "entity_type": "user",
+    "entity_id": "d1372edd-0139-4a53-8fa6-0599154ba8d2",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.nosync.1771794206@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:03:26.387628+00:00"
+  },
+  {
+    "id": "cdcc2951-8d9e-4c97-8b83-4021c77b53cc",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "full_name": "Updated Test User Name",
+      "updated_at": "2026-02-22T21:03:25.872995+00:00"
+    },
+    "created_at": "2026-02-22T21:03:25.873417+00:00"
+  },
+  {
+    "id": "c361e7cf-2871-4f4c-9f12-082b22d57d70",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "role": "team_leader",
+      "updated_at": "2026-02-22T21:03:25.455615+00:00"
+    },
+    "created_at": "2026-02-22T21:03:25.456109+00:00"
+  },
+  {
+    "id": "e060a2dd-24c7-4979-83ef-d93a4ae4511f",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "department": "Marketing",
+      "updated_at": "2026-02-22T21:03:25.058832+00:00"
+    },
+    "created_at": "2026-02-22T21:03:25.059309+00:00"
+  },
+  {
+    "id": "d789dc61-8d85-43f9-a821-e22ff47a87eb",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": true,
+      "updated_at": "2026-02-22T21:03:24.712953+00:00"
+    },
+    "created_at": "2026-02-22T21:03:24.713398+00:00"
+  },
+  {
+    "id": "6a1439c9-7904-4a95-a9bf-18e295ccf393",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": false,
+      "updated_at": "2026-02-22T21:03:24.314584+00:00"
+    },
+    "created_at": "2026-02-22T21:03:24.315028+00:00"
+  },
+  {
+    "id": "23facbe6-a966-485a-b896-3b010abd23e9",
+    "entity_type": "user",
+    "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync.1771794203@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:03:23.933799+00:00"
+  },
+  {
+    "id": "10f7aab0-dafa-4b9b-ba48-8327c86489e9",
+    "entity_type": "user",
+    "entity_id": "6af56061-6c87-4b79-af39-3937f72fc4de",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:03:00.389986+00:00"
+  },
+  {
+    "id": "f3cfd5ff-e874-4a00-85eb-b2aaa952c62a",
+    "entity_type": "user",
+    "entity_id": "313cbbd1-cd42-4a4a-9bea-d80737d30454",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:59.202707+00:00"
+  },
+  {
+    "id": "75041cdb-4a63-4916-97be-3337e48950fb",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:59.078235+00:00"
+  },
+  {
+    "id": "e3d260ef-b1f7-4e5b-a4ba-fe5d0c2189fb",
+    "entity_type": "user",
+    "entity_id": "f7e633a3-0fdf-48a2-9863-12a3fce6edb1",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:58.705322+00:00"
+  },
+  {
+    "id": "618214b1-bd74-44a6-a112-0c12cb4af294",
+    "entity_type": "user",
+    "entity_id": "f7e633a3-0fdf-48a2-9863-12a3fce6edb1",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.delete.1771794178@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:58.426705+00:00"
+  },
+  {
+    "id": "bd299e95-5228-440e-b538-7c3fac24fdb9",
+    "entity_type": "user",
+    "entity_id": "313cbbd1-cd42-4a4a-9bea-d80737d30454",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.nosync.1771794177@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:58.071174+00:00"
+  },
+  {
+    "id": "43fef642-3610-4ded-9a92-a8a1f5d9ee29",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "full_name": "Updated Test User Name",
+      "updated_at": "2026-02-22T21:02:57.583446+00:00"
+    },
+    "created_at": "2026-02-22T21:02:57.584024+00:00"
+  },
+  {
+    "id": "3f80ad78-c865-45a5-901a-7c2362dc6150",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "role": "team_leader",
+      "updated_at": "2026-02-22T21:02:57.233750+00:00"
+    },
+    "created_at": "2026-02-22T21:02:57.234420+00:00"
+  },
+  {
+    "id": "71a9a260-fa2d-426c-9a69-127649561832",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "department": "Marketing",
+      "updated_at": "2026-02-22T21:02:56.465230+00:00"
+    },
+    "created_at": "2026-02-22T21:02:56.465909+00:00"
+  },
+  {
+    "id": "0c73e334-5927-41b0-9d27-6f1af8729b94",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": true,
+      "updated_at": "2026-02-22T21:02:56.085704+00:00"
+    },
+    "created_at": "2026-02-22T21:02:56.086311+00:00"
+  },
+  {
+    "id": "24e61e2f-5414-4d56-b126-f99dc1484e49",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": false,
+      "updated_at": "2026-02-22T21:02:55.739942+00:00"
+    },
+    "created_at": "2026-02-22T21:02:55.740429+00:00"
+  },
+  {
+    "id": "686bdde5-214b-4b8d-9cae-0b1a563d1b63",
+    "entity_type": "user",
+    "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync.1771794174@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:54.994060+00:00"
+  },
+  {
+    "id": "378596b0-92ce-492b-bcc3-a5ef65b73dbb",
+    "entity_type": "user",
+    "entity_id": "cbaaad84-f68c-43a5-8a8b-84ad50415ca9",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:26.003705+00:00"
+  },
+  {
+    "id": "53dada7c-ae9a-41fa-b7a6-780ec4fd959f",
+    "entity_type": "user",
+    "entity_id": "91f69a9b-19bf-49b8-9962-410ed8bed3ee",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:24.952106+00:00"
+  },
+  {
+    "id": "b5c0493b-d369-49b0-a19e-871e7ee0a592",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:24.796302+00:00"
+  },
+  {
+    "id": "bf661aed-a51d-4871-a011-ddb77b108f97",
+    "entity_type": "user",
+    "entity_id": "c01a1429-ae62-4cac-9f65-472a1aa3a0a8",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:02:24.579107+00:00"
+  },
+  {
+    "id": "9cc08d0d-c5a2-4cf5-a092-b45318ea58f3",
+    "entity_type": "user",
+    "entity_id": "c01a1429-ae62-4cac-9f65-472a1aa3a0a8",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.delete.1771794143@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:24.342094+00:00"
+  },
+  {
+    "id": "64378a32-302d-41c2-90ae-239a924dcf69",
+    "entity_type": "user",
+    "entity_id": "91f69a9b-19bf-49b8-9962-410ed8bed3ee",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.nosync.1771794143@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:23.926367+00:00"
+  },
+  {
+    "id": "6392caee-1052-47b2-9a2f-6001fa5db833",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "full_name": "Updated Test User Name",
+      "updated_at": "2026-02-22T21:02:23.445010+00:00"
+    },
+    "created_at": "2026-02-22T21:02:23.445563+00:00"
+  },
+  {
+    "id": "8c5e315e-2c01-486f-98c2-e8f83bbf490a",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "role": "team_leader",
+      "updated_at": "2026-02-22T21:02:23.079794+00:00"
+    },
+    "created_at": "2026-02-22T21:02:23.080397+00:00"
+  },
+  {
+    "id": "92fb1a5d-6a98-4dba-981e-fd46d5084efa",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "department": "Marketing",
+      "updated_at": "2026-02-22T21:02:22.691280+00:00"
+    },
+    "created_at": "2026-02-22T21:02:22.691958+00:00"
+  },
+  {
+    "id": "2fd2a77b-f76f-4c2c-996b-b791ce504280",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": true,
+      "updated_at": "2026-02-22T21:02:22.318009+00:00"
+    },
+    "created_at": "2026-02-22T21:02:22.318453+00:00"
+  },
+  {
+    "id": "cc73b656-7d17-4c23-8e29-5bea3cd7dbb5",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": false,
+      "updated_at": "2026-02-22T21:02:21.930401+00:00"
+    },
+    "created_at": "2026-02-22T21:02:21.931009+00:00"
+  },
+  {
+    "id": "d6e45386-d105-454f-8d67-dbf12e0581d1",
+    "entity_type": "user",
+    "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync.1771794141@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:02:21.529951+00:00"
+  },
+  {
+    "id": "ff94b2bd-aae8-42e1-aca6-f1887f1b1d91",
+    "entity_type": "user",
+    "entity_id": "1a9731f3-9c51-4dca-9aa2-354416ac1074",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "testapi.1771794076@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:01:17.030219+00:00"
+  },
+  {
+    "id": "9c61bcd3-b735-477c-a377-ba9bb692f601",
+    "entity_type": "user",
+    "entity_id": "70f5926a-fc2a-425e-b6f1-4ced74552371",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:01:08.627160+00:00"
+  },
+  {
+    "id": "f4b4bedb-f4df-4178-a716-9d65f1a9f093",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T21:01:08.407417+00:00"
+  },
+  {
+    "id": "c07d88b4-1684-456a-97c1-b352bf4a568a",
+    "entity_type": "user",
+    "entity_id": "79da558f-f863-415e-808a-5031fa125ae1",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.delete.1771794067@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:01:08.280005+00:00"
+  },
+  {
+    "id": "381cd05c-563e-4f47-86b7-9fb892e16863",
+    "entity_type": "user",
+    "entity_id": "70f5926a-fc2a-425e-b6f1-4ced74552371",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.nosync.1771794067@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:01:07.939453+00:00"
+  },
+  {
+    "id": "fdde371b-1223-481c-a662-0c13c72afccc",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "full_name": "Updated Test User Name",
+      "updated_at": "2026-02-22T21:01:07.329309+00:00"
+    },
+    "created_at": "2026-02-22T21:01:07.329834+00:00"
+  },
+  {
+    "id": "3dbcb946-fb0f-426f-930b-59171ab26cfc",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "role": "team_leader",
+      "updated_at": "2026-02-22T21:01:06.875160+00:00"
+    },
+    "created_at": "2026-02-22T21:01:06.875754+00:00"
+  },
+  {
+    "id": "35579b47-de47-4649-b552-e664c16f667f",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "department": "Marketing",
+      "updated_at": "2026-02-22T21:01:06.447413+00:00"
+    },
+    "created_at": "2026-02-22T21:01:06.448022+00:00"
+  },
+  {
+    "id": "3d2f23c9-dae2-4597-8b77-592499fc021d",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": true,
+      "updated_at": "2026-02-22T21:01:06.052204+00:00"
+    },
+    "created_at": "2026-02-22T21:01:06.052778+00:00"
+  },
+  {
+    "id": "5753fa68-6a38-4e76-a04f-883e1c00cd3e",
+    "entity_type": "user",
+    "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync.1771794065@clt-academy.com"
+    },
+    "created_at": "2026-02-22T21:01:05.646729+00:00"
+  },
+  {
+    "id": "d6fe636b-a241-4a60-9afe-887a231b9219",
+    "entity_type": "user",
+    "entity_id": "0444548b-e0a3-4afa-bdff-1232e917dfea",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "is_active": false,
+      "updated_at": "2026-02-22T20:58:48.246265+00:00"
+    },
+    "created_at": "2026-02-22T20:58:48.246769+00:00"
+  },
+  {
+    "id": "80df9569-e741-4ec6-9cdd-f1e461dd2285",
+    "entity_type": "user",
+    "entity_id": "0444548b-e0a3-4afa-bdff-1232e917dfea",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync2@clt-academy.com"
+    },
+    "created_at": "2026-02-22T20:58:11.824730+00:00"
+  },
+  {
+    "id": "2d0b1181-9380-4485-b567-cce6a89bdf74",
+    "entity_type": "user",
+    "entity_id": "baf7a2c5-e0b8-48d6-b483-14bb59d68042",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "test.sync@clt-academy.com"
+    },
+    "created_at": "2026-02-22T20:57:28.537032+00:00"
+  },
+  {
+    "id": "981811ab-009b-4eb6-b5ff-a2dc74e842d6",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "a49fb8ba-e65b-4f0a-9ef9-6b6e889c39d5",
+    "user_name": "Nubin Nuhais ",
+    "details": {
+      "stage": "new_student",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:50.533274+00:00"
+    },
+    "created_at": "2026-02-22T20:47:50.534073+00:00"
+  },
+  {
+    "id": "78629326-1a0c-4e1b-b0cb-828ef6476abf",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "a49fb8ba-e65b-4f0a-9ef9-6b6e889c39d5",
+    "user_name": "Nubin Nuhais ",
+    "details": {
+      "stage": "activated",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:36.661677+00:00"
+    },
+    "created_at": "2026-02-22T20:47:36.662321+00:00"
+  },
+  {
+    "id": "e5ee492b-f618-4264-a268-a016f3cb4841",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "mentor_stage": "new_student",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:24.439405+00:00"
+    },
+    "created_at": "2026-02-22T20:47:24.440096+00:00"
+  },
+  {
+    "id": "986b6697-765b-4fb1-ae8e-0239570cef36",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "mentor_stage": "discussion_started",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:24.306548+00:00"
+    },
+    "created_at": "2026-02-22T20:47:24.307218+00:00"
+  },
+  {
+    "id": "db564aa5-d4f1-4191-89d2-af13d299fdb4",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "new_student",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:24.023342+00:00"
+    },
+    "created_at": "2026-02-22T20:47:24.024012+00:00"
+  },
+  {
+    "id": "0b3f3f11-3abd-4e09-9ac1-07f9b114ebf7",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "activated",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:23.917313+00:00"
+    },
+    "created_at": "2026-02-22T20:47:23.918097+00:00"
+  },
+  {
+    "id": "5dbab91a-92c0-4bf4-a3ac-d31cad6a9249",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "mentor_stage": "new_student",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:03.622151+00:00"
+    },
+    "created_at": "2026-02-22T20:47:03.622707+00:00"
+  },
+  {
+    "id": "7107643d-9314-455d-b542-ae0c3b7ba706",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "mentor_stage": "discussion_started",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:03.513642+00:00"
+    },
+    "created_at": "2026-02-22T20:47:03.515889+00:00"
+  },
+  {
+    "id": "699d9794-40ed-4465-841d-3c3b491c0d94",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "new_student",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-22T20:47:03.243818+00:00"
+    },
+    "created_at": "2026-02-22T20:47:03.244457+00:00"
+  },
+  {
+    "id": "37dd2eda-b0dc-4219-b8f3-2e4f439785e0",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "activated",
+      "onboarding_complete": false,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "mentor_id": "ef11c9fe-9be9-4028-97aa-e0ac4dd16362",
+      "mentor_name": "Edwin ",
+      "updated_at": "2026-02-22T20:47:03.106021+00:00"
+    },
+    "created_at": "2026-02-22T20:47:03.115498+00:00"
+  },
+  {
+    "id": "84ebe9d0-2e32-4d8a-9602-8a71c2242cff",
+    "entity_type": "commission_rule",
+    "entity_id": "13ed74b5-3fbd-4d8e-9a02-011c9352b09f",
+    "action": "deleted",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": null,
+    "created_at": "2026-02-22T19:16:16.185353+00:00"
+  },
+  {
+    "id": "0e906f47-41a4-4b68-8d12-788333c308f9",
+    "entity_type": "commission_rule",
+    "entity_id": "13ed74b5-3fbd-4d8e-9a02-011c9352b09f",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "commission_value": 7.5,
+      "updated_at": "2026-02-22T19:16:15.801166+00:00"
+    },
+    "created_at": "2026-02-22T19:16:15.801677+00:00"
+  },
+  {
+    "id": "63e7e1aa-5559-4353-8f10-7d63f789633f",
+    "entity_type": "commission_rule",
+    "entity_id": "13ed74b5-3fbd-4d8e-9a02-011c9352b09f",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "name": "TEST_Sales Executive Basic Commission"
+    },
+    "created_at": "2026-02-22T19:16:15.428506+00:00"
+  },
+  {
+    "id": "dc11538c-672f-44d6-8f73-af36c7b71dd4",
+    "entity_type": "user",
+    "entity_id": "b90f752f-2895-4ec9-898a-d9a6e1f9d735",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "password": "$2b$12$xNz01cYhHwGIS/k0FJJzvux0ahThFNrYDdRfQP3ZuyA5CLkJWyfXq",
+      "updated_at": "2026-02-22T19:01:06.351815+00:00"
+    },
+    "created_at": "2026-02-22T19:01:06.352955+00:00"
+  },
+  {
+    "id": "82d5147e-14df-435e-a918-9b08e4d6b542",
+    "entity_type": "user",
+    "entity_id": "3af3af7a-7987-4f49-b8c9-4f40620ab16e",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "password": "$2b$12$7SGEM.VzE7fmN0PHXkSuv.iW1he1akKnLJaeuCyR5bZfNoF37HTau",
+      "updated_at": "2026-02-22T19:00:55.488730+00:00"
+    },
+    "created_at": "2026-02-22T19:00:55.489680+00:00"
+  },
+  {
+    "id": "1b4eb40a-9531-4588-befc-f3f2cb00b2a0",
+    "entity_type": "lead",
+    "entity_id": "a32f653f-9bfa-4ea9-b4be-842b8e42a4d7",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "assigned_to": "6e1ee62c-7bd2-4c99-9e93-8d552dfc3eca",
+      "updated_at": "2026-02-22T19:00:43.742044+00:00",
+      "last_activity": "2026-02-22T19:00:43.742044+00:00"
+    },
+    "created_at": "2026-02-22T19:00:43.742614+00:00"
+  },
+  {
+    "id": "7573f8d1-91cd-44aa-a50a-71b7d4b0fd70",
+    "entity_type": "lead",
+    "entity_id": "a32f653f-9bfa-4ea9-b4be-842b8e42a4d7",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "phone": "+971503333333"
+    },
+    "created_at": "2026-02-22T19:00:43.494180+00:00"
+  },
+  {
+    "id": "e8539dd4-e302-45a3-b4ff-305adb210ed1",
+    "entity_type": "lead",
+    "entity_id": "798ebf7e-70c4-4eb7-9857-ff7bbeceba83",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "assigned_to": "b90f752f-2895-4ec9-898a-d9a6e1f9d735",
+      "updated_at": "2026-02-22T19:00:43.250400+00:00",
+      "last_activity": "2026-02-22T19:00:43.250400+00:00"
+    },
+    "created_at": "2026-02-22T19:00:43.251045+00:00"
+  },
+  {
+    "id": "b86d6c2c-820c-4fa5-9628-ef61ce30e88c",
+    "entity_type": "lead",
+    "entity_id": "798ebf7e-70c4-4eb7-9857-ff7bbeceba83",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "phone": "+971502222222"
+    },
+    "created_at": "2026-02-22T19:00:43.004325+00:00"
+  },
+  {
+    "id": "b19bcd10-d832-42ff-b9e3-97294ade482a",
+    "entity_type": "lead",
+    "entity_id": "f875ca37-8cea-4304-8bff-0bd7cd6a42d1",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "assigned_to": "3af3af7a-7987-4f49-b8c9-4f40620ab16e",
+      "updated_at": "2026-02-22T19:00:42.847193+00:00",
+      "last_activity": "2026-02-22T19:00:42.847193+00:00"
+    },
+    "created_at": "2026-02-22T19:00:42.847736+00:00"
+  },
+  {
+    "id": "0baf5cf0-d09d-4e3a-b54f-d639a95f3a92",
+    "entity_type": "lead",
+    "entity_id": "f875ca37-8cea-4304-8bff-0bd7cd6a42d1",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "phone": "+971501111111"
+    },
+    "created_at": "2026-02-22T19:00:42.574063+00:00"
+  },
+  {
+    "id": "56e73898-fb11-4843-be31-4ecee133ccd7",
+    "entity_type": "team",
+    "entity_id": "8343dbc3-0f89-49e1-a632-3649bc75de40",
+    "action": "member_added",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "member_id": "b90f752f-2895-4ec9-898a-d9a6e1f9d735",
+      "member_name": "Aleesha Shahjahan "
+    },
+    "created_at": "2026-02-22T19:00:26.269862+00:00"
+  },
+  {
+    "id": "5e19b237-8571-4dd7-82a4-8f5512937dfb",
+    "entity_type": "team",
+    "entity_id": "8343dbc3-0f89-49e1-a632-3649bc75de40",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "leader_id": "3af3af7a-7987-4f49-b8c9-4f40620ab16e",
+      "updated_at": "2026-02-22T19:00:26.139844+00:00"
+    },
+    "created_at": "2026-02-22T19:00:26.141258+00:00"
+  },
+  {
+    "id": "5e17c233-4fb5-43b3-9382-cf486180f827",
+    "entity_type": "team",
+    "entity_id": "a9e78ab5-786f-4f10-a7a3-ae44a8150b01",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "name": "Gamma Team"
+    },
+    "created_at": "2026-02-22T18:46:49.988626+00:00"
+  },
+  {
+    "id": "c9757a00-bd50-4771-a338-1c13ac3d917c",
+    "entity_type": "team",
+    "entity_id": "67396dd3-37c8-4720-b783-43bf5af3af33",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "name": "Beta Team"
+    },
+    "created_at": "2026-02-22T18:46:49.789711+00:00"
+  },
+  {
+    "id": "8e15566c-1eb5-4bff-a70a-10f770071374",
+    "entity_type": "team",
+    "entity_id": "8343dbc3-0f89-49e1-a632-3649bc75de40",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "name": "Alpha Team"
+    },
+    "created_at": "2026-02-22T18:46:49.666649+00:00"
+  },
+  {
+    "id": "452e88ef-d30f-45ab-867b-4d3ea4dec9cc",
+    "entity_type": "user",
+    "entity_id": "f35bbcf3-a041-41d8-bc9f-4e0519cbc6cb",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Ifa@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:34:04.123023+00:00"
+  },
+  {
+    "id": "42f3b31d-3a2f-4af7-bb6a-4e77b35c063f",
+    "entity_type": "user",
+    "entity_id": "a49fb8ba-e65b-4f0a-9ef9-6b6e889c39d5",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "it@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:33:05.228884+00:00"
+  },
+  {
+    "id": "8474fb49-a5c6-4f24-b41d-1f4ce980ea27",
+    "entity_type": "user",
+    "entity_id": "b1e9ef5b-be92-4bae-920c-257e27389495",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Accounts@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:32:06.887151+00:00"
+  },
+  {
+    "id": "09749e7e-5eb2-44eb-8665-e4218ec0bf7d",
+    "entity_type": "user",
+    "entity_id": "ef11c9fe-9be9-4028-97aa-e0ac4dd16362",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Edwin@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:31:03.286393+00:00"
+  },
+  {
+    "id": "92a47cec-76c6-43f8-a686-385ee93dc596",
+    "entity_type": "user",
+    "entity_id": "3b3e8e80-103f-4924-a9f9-60a9580b3469",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Della@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:30:16.867700+00:00"
+  },
+  {
+    "id": "16cc2a45-12f3-44eb-a5a5-fa33a1961327",
+    "entity_type": "user",
+    "entity_id": "6d3340e5-d395-4ed8-a42b-dd1a3112639e",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Falja@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:29:31.171237+00:00"
+  },
+  {
+    "id": "d8d65971-a087-476c-b369-9e0776721c54",
+    "entity_type": "user",
+    "entity_id": "6e1ee62c-7bd2-4c99-9e93-8d552dfc3eca",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Rukaiyya@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:28:33.842485+00:00"
+  },
+  {
+    "id": "05bb2815-8420-49f9-8d21-d5567e73f1dd",
+    "entity_type": "user",
+    "entity_id": "b90f752f-2895-4ec9-898a-d9a6e1f9d735",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Aleesha@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:27:40.341532+00:00"
+  },
+  {
+    "id": "fea03d46-e80b-4ba1-8bed-0d1505cc40bd",
+    "entity_type": "user",
+    "entity_id": "3af3af7a-7987-4f49-b8c9-4f40620ab16e",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "email": "Mohammed@clt-academy.com"
+    },
+    "created_at": "2026-02-22T18:22:17.891724+00:00"
+  },
+  {
+    "id": "df688177-347c-4951-b62f-78ea74316676",
+    "entity_type": "student",
+    "entity_id": "a2322812-f43e-4024-bbb1-d4491b5af438",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "new_student",
+      "notes": "",
+      "onboarding_complete": true,
+      "classes_attended": 0,
+      "upgrade_eligible": false,
+      "upgrade_pitched": false,
+      "upgrade_closed": false,
+      "updated_at": "2026-02-19T09:16:28.517725+00:00"
+    },
+    "created_at": "2026-02-19T09:16:28.518343+00:00"
+  },
+  {
+    "id": "db011579-4b27-4526-8e2c-efd4cef408f8",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "enrolled",
+      "updated_at": "2026-02-19T09:16:04.637771+00:00",
+      "last_activity": "2026-02-19T09:16:04.637771+00:00"
+    },
+    "created_at": "2026-02-19T09:16:04.657279+00:00"
+  },
+  {
+    "id": "0c12bdfb-dd0a-4eae-b186-3a2bec5e7c19",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "hot_lead",
+      "updated_at": "2026-02-19T09:16:00.652749+00:00",
+      "last_activity": "2026-02-19T09:16:00.652749+00:00"
+    },
+    "created_at": "2026-02-19T09:16:00.653240+00:00"
+  },
+  {
+    "id": "8a891496-e4ec-4ac9-99f7-68d4a1152e51",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "call_back",
+      "call_notes": "call this customer he is interested and will be closed soon\n",
+      "follow_up_date": "2026-02-20T17:19:00",
+      "sla_status": "ok",
+      "sla_breach": false,
+      "sla_warning_level": 0,
+      "sla_warning_at": null,
+      "updated_at": "2026-02-19T09:15:32.211059+00:00",
+      "last_activity": "2026-02-19T09:15:32.211059+00:00"
+    },
+    "created_at": "2026-02-19T09:15:32.211546+00:00"
+  },
+  {
+    "id": "c9886770-1b63-456d-a6e6-d4e039e309ea",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "new_lead",
+      "updated_at": "2026-02-19T09:13:39.900365+00:00",
+      "last_activity": "2026-02-19T09:13:39.900365+00:00"
+    },
+    "created_at": "2026-02-19T09:13:39.900815+00:00"
+  },
+  {
+    "id": "3fd4eab5-d586-43d8-8473-b0995bde279f",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "updated",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "stage": "no_answer",
+      "first_contact_at": "2026-02-19T09:13:35.343742+00:00",
+      "sla_status": "ok",
+      "sla_breach": false,
+      "sla_warning_level": 0,
+      "sla_warning_at": null,
+      "updated_at": "2026-02-19T09:13:35.343742+00:00",
+      "last_activity": "2026-02-19T09:13:35.343742+00:00"
+    },
+    "created_at": "2026-02-19T09:13:35.345863+00:00"
+  },
+  {
+    "id": "709540f9-d47d-4a7f-bc77-bfcc27ebf04c",
+    "entity_type": "lead",
+    "entity_id": "563274b2-d2da-449f-9237-7d26ab4778ca",
+    "action": "created",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "phone": "0564464420"
+    },
+    "created_at": "2026-02-16T15:04:34.962319+00:00"
+  },
+  {
+    "id": "29803862-279c-4b36-8055-577473ad01cc",
+    "entity_type": "system",
+    "entity_id": "environment",
+    "action": "mode_changed",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "new_mode": "production"
+    },
+    "created_at": "2026-02-11T06:33:07.259849+00:00"
+  },
+  {
+    "id": "2b71acea-e29f-45f1-9c14-2fb923442cd2",
+    "entity_type": "system",
+    "entity_id": "environment",
+    "action": "mode_changed",
+    "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "user_name": "Aqib (Super Admin)",
+    "details": {
+      "new_mode": "development"
+    },
+    "created_at": "2026-02-11T06:32:47.197770+00:00"
+  }
+]

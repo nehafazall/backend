@@ -1,0 +1,20 @@
+[
+  {
+    "id": "0d869134-ef7a-405c-9f1c-c2ed8173d350",
+    "date": "2026-02-11",
+    "vendor": "TEST_Vendor Marketing Agency",
+    "expense_account_id": "66a26c1f-f783-4af6-8603-e4fb9968a76a",
+    "amount": 2500.0,
+    "currency": "AED",
+    "base_amount_aed": 2500.0,
+    "paid_from_account_id": "fae9e975-fb3f-4f61-a617-1d251049e228",
+    "proof_link": null,
+    "notes": "Test marketing expense",
+    "journal_entry_id": "911c9ce3-06c6-475d-b26e-15702af9e268",
+    "status": "Draft",
+    "created_by": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "created_at": "2026-02-11T02:49:16.508501+00:00",
+    "expense_account_name": "Marketing Expense",
+    "paid_from_account_name": "ADCB Bank"
+  }
+]

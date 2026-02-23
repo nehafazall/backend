@@ -1,0 +1,9 @@
+{
+  "summary": {
+    "critical_30_days": 0,
+    "warning_60_days": 0,
+    "info_90_days": 0,
+    "total_employees_with_alerts": 0
+  },
+  "alerts": []
+}
