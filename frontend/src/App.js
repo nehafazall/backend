@@ -62,6 +62,8 @@ import BudgetDashboard from "@/pages/finance/BudgetDashboard";
 // Finance Suite - PNL & Data
 import OverallPNLDashboard from "@/pages/finance/OverallPNLDashboard";
 import DataManagementPage from "@/pages/finance/DataManagementPage";
+// Finance Dashboard Router
+import FinanceDashboardRouter from "@/pages/FinanceDashboardRouter";
 
 // HR Module
 import HRDashboard from "@/pages/hr/HRDashboard";
