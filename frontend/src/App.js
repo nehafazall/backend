@@ -228,8 +228,8 @@ function AppRoutes() {
                     </ProtectedRoute>
                 }>
                     <Route index element={<Navigate to="dashboard" replace />} />
-                    {/* Common Dashboard - will be overridden by entity-specific */}
-                    <Route path="dashboard" element={<CltFinanceDashboard />} />
+                    {/* Dashboard - uses router to select correct dashboard based on entity */}
+                    <Route path="dashboard" element={<FinanceDashboardRouter />} />
                     {/* CLT Routes */}
                     <Route path="payables" element={<CltPayablesPage />} />
                     <Route path="receivables" element={<CltReceivablesPage />} />
@@ -248,6 +248,7 @@ function AppRoutes() {
                     <Route path="profit" element={<MilesOperatingProfitPage />} />
                     {/* Treasury Routes */}
                     <Route path="balances" element={<TreasuryBalancesPage />} />
+                    <Route path="pending-settlements" element={<TreasurySettlementsPage />} />
                     {/* Budgeting Routes */}
                     <Route path="sheet" element={<BudgetSheetPage />} />
                     {/* Data Management */}
