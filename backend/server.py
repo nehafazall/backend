@@ -158,6 +158,7 @@ class UserBase(BaseModel):
     commission_rate_override: Optional[float] = None
     environment_access: Optional[List[str]] = None  # ["development", "testing", "production"]
     entity_access: Optional[List[str]] = None  # ["clt", "miles"] - for finance roles
+    threecx_extension: Optional[str] = None  # 3CX PBX extension number for call mapping
 
 class UserCreate(UserBase):
     password: str
