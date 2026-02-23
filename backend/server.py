@@ -5056,7 +5056,7 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
                 contact_type = "student"
                 contact_name = student.get("full_name")
     
-    # Log the click-to-call attempt
+    # Log the click-to-call attempt with user's extension
     call_log = {
         "id": call_id,
         "contact_id": contact_id,
@@ -5069,6 +5069,7 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
         "call_date": now,
         "initiated_by": user["id"],
         "initiated_by_name": user.get("full_name"),
+        "extension": user.get("threecx_extension"),  # User's 3CX extension
         "status": "initiated",
         "logged_at": now,
         "system": "ERP_Click2Call"
@@ -5076,12 +5077,13 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
     
     await db.call_logs.insert_one(call_log)
     
-    logger.info(f"Click-to-call initiated by {user.get('full_name')} to {phone_number}")
+    logger.info(f"Click-to-call initiated by {user.get('full_name')} (ext: {user.get('threecx_extension')}) to {phone_number}")
     
     return {
         "success": True,
         "call_id": call_id,
         "phone_number": phone_number,
+        "extension": user.get("threecx_extension"),
         "message": "Call initiated - connect via 3CX client"
     }
 
