@@ -5000,9 +5000,16 @@ async def get_call_history(contact_id: str, user = Depends(get_current_user)):
     }
 
 @api_router.get("/3cx/recent-calls")
-async def get_recent_calls(limit: int = 50, user = Depends(get_current_user)):
-    """Get recent calls across all contacts"""
-    calls = await db.call_logs.find().sort("call_date", -1).to_list(length=limit)
+async def get_recent_calls(limit: int = 50, extension: Optional[str] = None, user = Depends(get_current_user)):
+    """Get recent calls across all contacts, optionally filtered by extension"""
+    query = {}
+    
+    # Filter by extension if provided, or by user's assigned extension
+    filter_extension = extension or user.get("threecx_extension")
+    if filter_extension:
+        query["extension"] = filter_extension
+    
+    calls = await db.call_logs.find(query).sort("call_date", -1).to_list(length=limit)
     
     return {
         "calls": [
@@ -5016,11 +5023,13 @@ async def get_recent_calls(limit: int = 50, user = Depends(get_current_user)):
                 "call_direction": call.get("call_direction"),
                 "call_duration": call.get("call_duration", 0),
                 "call_date": call.get("call_date"),
-                "recording_url": call.get("recording_file")
+                "recording_url": call.get("recording_file"),
+                "extension": call.get("extension")
             }
             for call in calls
         ],
-        "total": len(calls)
+        "total": len(calls),
+        "filtered_by_extension": filter_extension
     }
 
 @api_router.post("/3cx/click-to-call")
