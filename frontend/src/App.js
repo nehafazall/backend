@@ -214,19 +214,22 @@ function AppRoutes() {
                 
                 {/* Finance - Entity Selection */}
                 <Route path="finance" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_executive', 'finance_manager_clt', 'finance_manager_miles', 'finance_viewer']}>
                         <FinanceEntitySelector />
                     </ProtectedRoute>
                 } />
                 
                 {/* Finance - Entity Layout with Sub-routes */}
                 <Route path="finance/:entity" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_executive', 'finance_manager_clt', 'finance_manager_miles', 'finance_viewer']}>
                         <FinanceLayout />
                     </ProtectedRoute>
                 }>
                     <Route index element={<Navigate to="dashboard" replace />} />
-                    <Route path="dashboard" element={<FinanceDashboard />} />
+                    {/* CLT Routes */}
+                    <Route path="dashboard" element={<CltFinanceDashboard />} />
+                    <Route path="payables" element={<CltPayablesPage />} />
+                    <Route path="receivables" element={<CltReceivablesPage />} />
                     <Route path="journal" element={<JournalPage />} />
                     <Route path="settlements" element={<SettlementsPage />} />
                     <Route path="expenses" element={<ExpensesPage />} />
@@ -235,6 +238,61 @@ function AppRoutes() {
                     <Route path="commission-engine" element={<FinanceCommissionEnginePage />} />
                     <Route path="commission-settlements" element={<CommissionSettlementsPage />} />
                     <Route path="reconciliation" element={<ReconciliationPage />} />
+                    {/* Miles Routes */}
+                    <Route path="deposits" element={<MilesDepositsPage />} />
+                    <Route path="withdrawals" element={<MilesWithdrawalsPage />} />
+                    <Route path="expense" element={<MilesExpensePage />} />
+                    <Route path="profit" element={<MilesOperatingProfitPage />} />
+                    {/* Treasury Routes */}
+                    <Route path="balances" element={<TreasuryBalancesPage />} />
+                    {/* Budgeting Routes */}
+                    <Route path="sheet" element={<BudgetSheetPage />} />
+                    {/* Data Management */}
+                    <Route path="management" element={<DataManagementPage />} />
+                </Route>
+                
+                {/* Finance Suite - Miles Dashboard (separate because it has different dashboard) */}
+                <Route path="finance/miles/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_executive', 'finance_manager_miles', 'finance_viewer']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<MilesDashboard />} />
+                </Route>
+                
+                {/* Finance Suite - Treasury Dashboard */}
+                <Route path="finance/treasury/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<TreasuryDashboard />} />
+                </Route>
+                
+                <Route path="finance/treasury/settlements" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<TreasurySettlementsPage />} />
+                </Route>
+                
+                {/* Finance Suite - Budgeting Dashboard */}
+                <Route path="finance/budgeting/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<BudgetDashboard />} />
+                </Route>
+                
+                {/* Finance Suite - PNL Dashboard */}
+                <Route path="finance/pnl/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
+                        <FinanceLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route index element={<OverallPNLDashboard />} />
                 </Route>
                 
                 {/* HR Module */}
