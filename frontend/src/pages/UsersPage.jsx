@@ -180,6 +180,7 @@ const UsersPage = () => {
                 create_employee_record: true,
                 designation: '',
                 joining_date: new Date().toISOString().split('T')[0],
+                threecx_extension: '',
             });
             fetchUsers();
         } catch (error) {
