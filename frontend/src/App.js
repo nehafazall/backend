@@ -220,14 +220,15 @@ function AppRoutes() {
                 } />
                 
                 {/* Finance - Entity Layout with Sub-routes */}
-                <Route path="finance/:entity" element={
+                <Route path="finance/:entity/*" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_executive', 'finance_manager_clt', 'finance_manager_miles', 'finance_viewer']}>
                         <FinanceLayout />
                     </ProtectedRoute>
                 }>
                     <Route index element={<Navigate to="dashboard" replace />} />
-                    {/* CLT Routes */}
+                    {/* Common Dashboard - will be overridden by entity-specific */}
                     <Route path="dashboard" element={<CltFinanceDashboard />} />
+                    {/* CLT Routes */}
                     <Route path="payables" element={<CltPayablesPage />} />
                     <Route path="receivables" element={<CltReceivablesPage />} />
                     <Route path="journal" element={<JournalPage />} />
@@ -249,41 +250,6 @@ function AppRoutes() {
                     <Route path="sheet" element={<BudgetSheetPage />} />
                     {/* Data Management */}
                     <Route path="management" element={<DataManagementPage />} />
-                </Route>
-                
-                {/* Finance Suite - Miles Dashboard (separate because it has different dashboard) */}
-                <Route path="finance/miles/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_executive', 'finance_manager_miles', 'finance_viewer']}>
-                        <FinanceLayout />
-                    </ProtectedRoute>
-                }>
-                    <Route index element={<MilesDashboard />} />
-                </Route>
-                
-                {/* Finance Suite - Treasury Dashboard */}
-                <Route path="finance/treasury/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
-                        <FinanceLayout />
-                    </ProtectedRoute>
-                }>
-                    <Route index element={<TreasuryDashboard />} />
-                </Route>
-                
-                <Route path="finance/treasury/settlements" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
-                        <FinanceLayout />
-                    </ProtectedRoute>
-                }>
-                    <Route index element={<TreasurySettlementsPage />} />
-                </Route>
-                
-                {/* Finance Suite - Budgeting Dashboard */}
-                <Route path="finance/budgeting/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
-                        <FinanceLayout />
-                    </ProtectedRoute>
-                }>
-                    <Route index element={<BudgetDashboard />} />
                 </Route>
                 
                 {/* Finance Suite - PNL Dashboard */}
