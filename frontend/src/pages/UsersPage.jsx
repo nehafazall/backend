@@ -597,6 +597,27 @@ const UsersPage = () => {
                             </div>
                         </div>
 
+                        {/* 3CX Extension for Sales/CS roles */}
+                        {['sales_executive', 'team_leader', 'sales_manager', 'cs_head', 'cs_agent'].includes(formData.role) && (
+                            <div className="space-y-2 p-4 border rounded-lg bg-orange-500/10 border-orange-500/30">
+                                <Label htmlFor="threecx_extension" className="text-sm font-medium flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                    3CX Extension
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    PBX extension number for call tracking and click-to-call
+                                </p>
+                                <Input
+                                    id="threecx_extension"
+                                    value={formData.threecx_extension}
+                                    onChange={(e) => setFormData({ ...formData, threecx_extension: e.target.value })}
+                                    placeholder="e.g. 101, 102, 103"
+                                    className="mt-2"
+                                    data-testid="user-3cx-extension-input"
+                                />
+                            </div>
+                        )}
+
                         {/* Team Selection */}
                         {['sales_executive', 'team_leader', 'sales_manager'].includes(formData.role) && teams.length > 0 && (
                             <div className="space-y-2">
