@@ -4720,6 +4720,41 @@ def normalize_phone(phone: str) -> str:
     import re
     return re.sub(r'\D', '', phone)
 
+@api_router.get("/3cx/extensions")
+async def get_3cx_extensions(user = Depends(get_current_user)):
+    """
+    Get all users with their 3CX extension mappings
+    Useful for admin view of extension assignments
+    """
+    # Only allow admin roles to view all extensions
+    if user.get("role") not in ["super_admin", "admin", "sales_manager", "cs_head"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view extension mappings")
+    
+    # Get all users with threecx_extension field
+    users_with_extensions = await db.users.find(
+        {"threecx_extension": {"$exists": True, "$ne": None, "$ne": ""}},
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1, "threecx_extension": 1, "is_active": 1}
+    ).to_list(length=100)
+    
+    # Get all users without extensions (for mapping purposes)
+    users_without_extensions = await db.users.find(
+        {"$or": [
+            {"threecx_extension": {"$exists": False}},
+            {"threecx_extension": None},
+            {"threecx_extension": ""}
+        ],
+        "role": {"$in": ["sales_executive", "team_leader", "sales_manager", "cs_head", "cs_agent"]}
+        },
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1, "is_active": 1}
+    ).to_list(length=100)
+    
+    return {
+        "mapped": users_with_extensions,
+        "unmapped": users_without_extensions,
+        "total_mapped": len(users_with_extensions),
+        "total_unmapped": len(users_without_extensions)
+    }
+
 @api_router.get("/3cx/contact-lookup")
 async def threecx_contact_lookup(phone_number: str):
     """
