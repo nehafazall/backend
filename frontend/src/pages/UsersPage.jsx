@@ -934,7 +934,7 @@ const UsersPage = () => {
 
             {/* Edit User Modal */}
             <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-                <DialogContent className="max-w-lg overflow-visible">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit User</DialogTitle>
                         <DialogDescription>
