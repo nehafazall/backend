@@ -1036,6 +1036,120 @@ const UsersPage = () => {
                                 />
                             </div>
                         )}
+
+                        {/* Finance Module Permissions in Edit */}
+                        {FINANCE_ROLES.includes(formData.role) && (
+                            <div className="space-y-4 p-4 border rounded-lg bg-purple-500/10 border-purple-500/30" data-testid="edit-finance-permissions-section">
+                                <div>
+                                    <Label className="text-sm font-medium flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                        Module Permissions
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Set View, Edit, Delete access for each finance module
+                                    </p>
+                                </div>
+                                
+                                <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
+                                    {Object.entries(
+                                        FINANCE_MODULES.reduce((acc, mod) => {
+                                            if (!acc[mod.group]) acc[mod.group] = [];
+                                            acc[mod.group].push(mod);
+                                            return acc;
+                                        }, {})
+                                    ).map(([group, modules]) => (
+                                        <div key={group} className="space-y-2">
+                                            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border pb-1">
+                                                {group}
+                                            </div>
+                                            {modules.map((mod) => {
+                                                const perms = formData.finance_permissions?.[mod.id] || { view: false, edit: false, delete: false };
+                                                return (
+                                                    <div key={mod.id} className="flex items-center justify-between py-1.5 px-2 rounded bg-background/50">
+                                                        <span className="text-sm font-medium">{mod.label}</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                                <Checkbox
+                                                                    checked={perms.view}
+                                                                    onCheckedChange={(checked) => handleFinancePermissionChange(mod.id, 'view', checked)}
+                                                                    data-testid={`edit-perm-${mod.id}-view`}
+                                                                />
+                                                                <span className="text-xs text-muted-foreground">View</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                                <Checkbox
+                                                                    checked={perms.edit}
+                                                                    onCheckedChange={(checked) => handleFinancePermissionChange(mod.id, 'edit', checked)}
+                                                                    data-testid={`edit-perm-${mod.id}-edit`}
+                                                                />
+                                                                <span className="text-xs text-muted-foreground">Edit</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                                                <Checkbox
+                                                                    checked={perms.delete}
+                                                                    onCheckedChange={(checked) => handleFinancePermissionChange(mod.id, 'delete', checked)}
+                                                                    data-testid={`edit-perm-${mod.id}-delete`}
+                                                                />
+                                                                <span className="text-xs text-red-400">Delete</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {/* Quick Actions */}
+                                <div className="flex gap-2 pt-2 border-t border-purple-500/30">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs"
+                                        onClick={() => {
+                                            const allView = FINANCE_MODULES.reduce((acc, mod) => {
+                                                acc[mod.id] = { view: true, edit: false, delete: false };
+                                                return acc;
+                                            }, {});
+                                            setFormData({ ...formData, finance_permissions: allView });
+                                        }}
+                                    >
+                                        View Only
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs"
+                                        onClick={() => {
+                                            const allEdit = FINANCE_MODULES.reduce((acc, mod) => {
+                                                acc[mod.id] = { view: true, edit: true, delete: false };
+                                                return acc;
+                                            }, {});
+                                            setFormData({ ...formData, finance_permissions: allEdit });
+                                        }}
+                                    >
+                                        Edit (No Delete)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs"
+                                        onClick={() => {
+                                            const noAccess = FINANCE_MODULES.reduce((acc, mod) => {
+                                                acc[mod.id] = { view: false, edit: false, delete: false };
+                                                return acc;
+                                            }, {});
+                                            setFormData({ ...formData, finance_permissions: noAccess });
+                                        }}
+                                    >
+                                        Clear All
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="flex items-center gap-2">
                             <Switch
