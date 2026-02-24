@@ -328,6 +328,14 @@ User Management                    Employee Master
 - `/app/test_reports/iteration_17.json` - Z-Index bug fix verification (100% pass - 6/6 tests)
 - `/app/test_reports/iteration_18.json` - Finance Suite navigation fix (100% pass - 12/12 tests)
 - `/app/test_reports/iteration_19.json` - Dashboard Quick Stats expansion (100% pass - 18/18 tests)
+- `/app/test_reports/iteration_20.json` - Admin Settings, Data Reset, Feature Flags (100% pass - 21/21 tests)
+
+## New Admin Features
+- **Admin Settings Page**: `/admin-settings` (Super Admin only)
+  - Data Reset: One-click clear all test data
+  - Feature Flags: Toggle features per environment
+  - Environment Info: Shows current environment and database
+- **Finance Permissions**: Granular View/Edit/Delete per module in User Management
 
 ## Future/Backlog Tasks
 - Meta Ads and Google Ads webhook integration
