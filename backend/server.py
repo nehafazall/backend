@@ -11054,7 +11054,8 @@ async def get_feature_flags(user = Depends(require_roles(["super_admin", "admin"
             },
         ]
         await db.feature_flags.insert_many(default_flags)
-        flags = default_flags
+        # Re-fetch to avoid _id in response
+        flags = await db.feature_flags.find({}, {"_id": 0}).to_list(100)
     
     return flags
 
