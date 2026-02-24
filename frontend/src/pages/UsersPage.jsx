@@ -72,6 +72,27 @@ const ROLES = [
 
 const FINANCE_ROLES = ['finance_manager', 'finance_admin', 'finance_treasurer', 'finance_verifier', 'financier', 'accounts', 'finance'];
 
+// Finance module permission definitions
+const FINANCE_MODULES = [
+    { id: 'clt_payables', label: 'CLT Payables', entity: 'clt', group: 'CLT Academy' },
+    { id: 'clt_receivables', label: 'CLT Receivables', entity: 'clt', group: 'CLT Academy' },
+    { id: 'miles_deposits', label: 'Miles Deposits', entity: 'miles', group: 'Miles Capitals' },
+    { id: 'miles_withdrawals', label: 'Miles Withdrawals', entity: 'miles', group: 'Miles Capitals' },
+    { id: 'miles_expenses', label: 'Miles Expenses', entity: 'miles', group: 'Miles Capitals' },
+    { id: 'miles_operating_profit', label: 'Operating Profit', entity: 'miles', group: 'Miles Capitals' },
+    { id: 'treasury_balances', label: 'Treasury Balances', entity: 'both', group: 'Treasury' },
+    { id: 'treasury_settlements', label: 'Treasury Settlements', entity: 'both', group: 'Treasury' },
+    { id: 'budgeting', label: 'Budgeting', entity: 'both', group: 'Budgeting' },
+    { id: 'overall_pnl', label: 'Overall PNL', entity: 'both', group: 'Reports' },
+    { id: 'data_management', label: 'Data Management', entity: 'both', group: 'Data' },
+];
+
+// Default finance permissions (all access)
+const DEFAULT_FINANCE_PERMISSIONS = FINANCE_MODULES.reduce((acc, mod) => {
+    acc[mod.id] = { view: true, edit: true, delete: false };
+    return acc;
+}, {});
+
 const DEPARTMENTS = [
     'Sales',
     'Customer Service',
