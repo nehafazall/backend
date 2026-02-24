@@ -469,11 +469,17 @@ function Layout() {
                             ))}
 
                             {/* Settings at bottom */}
-                            <div className="border-t border-slate-800 mt-4 pt-4">
+                            <div className="border-t border-slate-800 mt-4 pt-4 space-y-1">
                                 <button onClick={() => goTo('/settings')} className={`sidebar-item w-full ${currentPath === '/settings' ? 'active' : ''}`}>
                                     <Settings className="h-5 w-5 flex-shrink-0" />
                                     <span className="truncate">Settings</span>
                                 </button>
+                                {userRole === 'super_admin' && (
+                                    <button onClick={() => goTo('/admin-settings')} className={`sidebar-item w-full ${currentPath === '/admin-settings' ? 'active' : ''}`}>
+                                        <Shield className="h-5 w-5 flex-shrink-0" />
+                                        <span className="truncate">Admin Settings</span>
+                                    </button>
+                                )}
                             </div>
                         </nav>
                     </ScrollArea>
