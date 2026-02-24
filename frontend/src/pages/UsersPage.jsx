@@ -232,10 +232,12 @@ const UsersPage = () => {
                 region: '',
                 is_active: true,
                 environment_access: [],
+                entity_access: [],
                 create_employee_record: true,
                 designation: '',
                 joining_date: new Date().toISOString().split('T')[0],
                 threecx_extension: '',
+                finance_permissions: {},
             });
             fetchUsers();
         } catch (error) {
