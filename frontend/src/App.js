@@ -248,7 +248,7 @@ function AppRoutes() {
                     <Route path="profit" element={<MilesOperatingProfitPage />} />
                     {/* Treasury Routes */}
                     <Route path="balances" element={<TreasuryBalancesPage />} />
-                    <Route path="pending-settlements" element={<TreasurySettlementsPage />} />
+                    <Route path="settlements" element={<TreasurySettlementsPage />} />
                     {/* Budgeting Routes */}
                     <Route path="sheet" element={<BudgetSheetPage />} />
                     {/* Data Management */}
