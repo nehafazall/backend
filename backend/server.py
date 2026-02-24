@@ -10905,6 +10905,262 @@ async def get_budget_actuals(year: int, entity: str, user = Depends(get_current_
     # For now, return empty to allow frontend to display
     return []
 
+# ==================== ADMIN: DATA RESET & FEATURE FLAGS ====================
+
+class DataResetRequest(BaseModel):
+    password: str
+    confirm_text: str  # Must be "RESET ALL DATA"
+
+@api_router.post("/admin/reset-data")
+async def reset_all_data(request: DataResetRequest, user = Depends(require_roles(["super_admin"]))):
+    """
+    Reset all data except Super Admin accounts.
+    Requires password confirmation and typing 'RESET ALL DATA'.
+    """
+    # Verify confirmation text
+    if request.confirm_text != "RESET ALL DATA":
+        raise HTTPException(status_code=400, detail="Please type 'RESET ALL DATA' to confirm")
+    
+    # Verify password
+    stored_user = await db.users.find_one({"id": user["id"]})
+    if not stored_user or not verify_password(request.password, stored_user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Collections to clear (everything except system data)
+    collections_to_clear = [
+        "leads", "students", "payments", "payment_verifications",
+        "notifications", "activity_logs", "call_logs", "sms_logs",
+        "email_logs", "tasks", "notes", "follow_ups",
+        "commissions", "approval_requests", "bank_transactions",
+        "bank_statements", "reconciliation_logs",
+        "hr_employees", "hr_attendance", "hr_leave_requests",
+        "hr_payroll", "hr_performance", "hr_assets",
+        "finance_payables", "finance_receivables",
+        "finance_deposits", "finance_withdrawals",
+        "finance_expenses", "finance_operating_profit",
+        "finance_treasury_balances", "finance_settlements",
+        "finance_budgets", "finance_audit_logs",
+        "mentor_activities", "student_activities",
+        "upgrade_pipelines", "redeposit_pipelines"
+    ]
+    
+    # Preserve super_admin users, clear all others
+    non_super_admin_count = await db.users.count_documents({"role": {"$ne": "super_admin"}})
+    await db.users.delete_many({"role": {"$ne": "super_admin"}})
+    
+    # Clear all other collections
+    cleared_counts = {"users (non-super_admin)": non_super_admin_count}
+    for collection_name in collections_to_clear:
+        try:
+            collection = db[collection_name]
+            result = await collection.delete_many({})
+            cleared_counts[collection_name] = result.deleted_count
+        except Exception as e:
+            logger.warning(f"Could not clear {collection_name}: {e}")
+            cleared_counts[collection_name] = f"Error: {str(e)}"
+    
+    # Log the reset action
+    await log_activity("system", "data_reset", "reset", user, {
+        "cleared_collections": list(cleared_counts.keys()),
+        "environment": os.environ.get('APP_ENV', 'production')
+    })
+    
+    return {
+        "success": True,
+        "message": "All data has been reset. Super Admin accounts preserved.",
+        "cleared": cleared_counts
+    }
+
+@api_router.get("/admin/data-stats")
+async def get_data_stats(user = Depends(require_roles(["super_admin"]))):
+    """Get counts of all data that would be affected by reset"""
+    stats = {}
+    
+    # User counts by role
+    stats["users"] = {
+        "super_admin": await db.users.count_documents({"role": "super_admin"}),
+        "other_users": await db.users.count_documents({"role": {"$ne": "super_admin"}}),
+    }
+    
+    # Main collections
+    collections = [
+        ("leads", "leads"),
+        ("students", "students"),
+        ("payments", "payments"),
+        ("employees", "hr_employees"),
+        ("attendance_records", "hr_attendance"),
+        ("tasks", "tasks"),
+        ("call_logs", "call_logs"),
+        ("commissions", "commissions"),
+    ]
+    
+    for name, collection in collections:
+        try:
+            stats[name] = await db[collection].count_documents({})
+        except:
+            stats[name] = 0
+    
+    return stats
+
+# ==================== FEATURE FLAGS ====================
+
+@api_router.get("/admin/feature-flags")
+async def get_feature_flags(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Get all feature flags"""
+    flags = await db.feature_flags.find({}, {"_id": 0}).to_list(100)
+    
+    # If no flags exist, create defaults
+    if not flags:
+        default_flags = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "finance_suite",
+                "display_name": "Finance Suite",
+                "description": "CLT & MILES Finance modules including Treasury, Budgeting, PNL",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "biocloud_sync",
+                "display_name": "BioCloud Attendance Sync",
+                "description": "Automatic attendance sync with ZK BioCloud",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "3cx_integration",
+                "display_name": "3CX Phone Integration",
+                "description": "Click-to-call and call logging with 3CX PBX",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "commission_engine",
+                "display_name": "Commission Engine",
+                "description": "Automatic commission calculation for sales",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "mentor_crm",
+                "display_name": "Mentor CRM",
+                "description": "Mentor student management and redeposit pipeline",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+        ]
+        await db.feature_flags.insert_many(default_flags)
+        flags = default_flags
+    
+    return flags
+
+@api_router.post("/admin/feature-flags")
+async def create_feature_flag(data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """Create a new feature flag"""
+    flag = {
+        "id": str(uuid.uuid4()),
+        "name": data.get("name"),
+        "display_name": data.get("display_name"),
+        "description": data.get("description", ""),
+        "enabled_environments": data.get("enabled_environments", ["development"]),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"]
+    }
+    await db.feature_flags.insert_one(flag)
+    return {k: v for k, v in flag.items() if k != "_id"}
+
+@api_router.put("/admin/feature-flags/{flag_id}")
+async def update_feature_flag(flag_id: str, data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """Update a feature flag's enabled environments"""
+    update_data = {
+        "enabled_environments": data.get("enabled_environments", []),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": user["id"]
+    }
+    
+    if "display_name" in data:
+        update_data["display_name"] = data["display_name"]
+    if "description" in data:
+        update_data["description"] = data["description"]
+    
+    result = await db.feature_flags.update_one(
+        {"id": flag_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    
+    return {"message": "Feature flag updated"}
+
+@api_router.delete("/admin/feature-flags/{flag_id}")
+async def delete_feature_flag(flag_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Delete a feature flag"""
+    result = await db.feature_flags.delete_one({"id": flag_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    return {"message": "Feature flag deleted"}
+
+@api_router.get("/admin/feature-flags/check/{feature_name}")
+async def check_feature_enabled(feature_name: str, user = Depends(get_current_user)):
+    """Check if a feature is enabled for the current environment"""
+    current_env = os.environ.get('APP_ENV', 'production').lower()
+    
+    flag = await db.feature_flags.find_one({"name": feature_name}, {"_id": 0})
+    if not flag:
+        return {"enabled": True, "environment": current_env}  # Default to enabled if flag doesn't exist
+    
+    enabled = current_env in flag.get("enabled_environments", [])
+    return {
+        "enabled": enabled,
+        "environment": current_env,
+        "flag": flag
+    }
+
+# ==================== ENVIRONMENT MANAGEMENT ====================
+
+@api_router.get("/admin/environment")
+async def get_current_environment(user = Depends(get_current_user)):
+    """Get current environment and database info"""
+    current_env = os.environ.get('APP_ENV', 'production').lower()
+    return {
+        "environment": current_env,
+        "database": CURRENT_DB_NAME,
+        "available_environments": ["development", "testing", "production"]
+    }
+
+@api_router.post("/admin/switch-environment")
+async def switch_environment(data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """
+    Switch the application environment.
+    Note: This requires a server restart to take effect.
+    """
+    new_env = data.get("environment", "").lower()
+    if new_env not in ["development", "testing", "production"]:
+        raise HTTPException(status_code=400, detail="Invalid environment. Use: development, testing, or production")
+    
+    # Update the environment variable (will require restart)
+    os.environ['APP_ENV'] = new_env
+    
+    # Calculate new database name
+    if new_env == 'development':
+        new_db = os.environ.get('DB_NAME_DEV', 'clt_synapse_dev')
+    elif new_env == 'testing':
+        new_db = os.environ.get('DB_NAME_TEST', 'clt_synapse_test')
+    else:
+        new_db = os.environ.get('DB_NAME_PROD', os.environ.get('DB_NAME', 'clt_synapse_prod'))
+    
+    return {
+        "message": f"Environment switched to {new_env}. Server restart required for database switch.",
+        "new_environment": new_env,
+        "new_database": new_db,
+        "restart_required": True
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
