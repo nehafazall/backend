@@ -373,6 +373,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Admin Settings - Data Reset & Feature Flags */}
+                <Route path="admin-settings" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <AdminSettingsPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Settings */}
                 <Route path="settings" element={<SettingsPage />} />
             </Route>
