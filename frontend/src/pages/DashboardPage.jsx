@@ -26,6 +26,15 @@ import {
     Clock,
     Phone,
     GraduationCap,
+    Target,
+    Percent,
+    Star,
+    Wallet,
+    ArrowUpRight,
+    ArrowDownRight,
+    RefreshCw,
+    Building2,
+    CalendarDays,
 } from 'lucide-react';
 
 const STAGE_COLORS = {
