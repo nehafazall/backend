@@ -132,17 +132,51 @@ const UsersPage = () => {
         designation: '',
         joining_date: new Date().toISOString().split('T')[0],
         threecx_extension: '',
+        finance_permissions: {},
     });
 
-    // Update entity_access when role changes
+    // Update entity_access and finance_permissions when role changes
     const handleRoleChange = (role) => {
         const roleData = ROLES.find(r => r.id === role);
+        const isFinanceRole = FINANCE_ROLES.includes(role);
         setFormData({
             ...formData,
             role,
             entity_access: roleData?.entity_access || [],
-            department: FINANCE_ROLES.includes(role) ? 'Finance' : formData.department
+            department: isFinanceRole ? 'Finance' : formData.department,
+            finance_permissions: isFinanceRole ? DEFAULT_FINANCE_PERMISSIONS : {}
         });
+    };
+
+    // Handle finance permission toggle
+    const handleFinancePermissionChange = (moduleId, permission, checked) => {
+        setFormData(prev => ({
+            ...prev,
+            finance_permissions: {
+                ...prev.finance_permissions,
+                [moduleId]: {
+                    ...(prev.finance_permissions[moduleId] || { view: false, edit: false, delete: false }),
+                    [permission]: checked
+                }
+            }
+        }));
+    };
+
+    // Set all permissions for a module
+    const setModuleAccess = (moduleId, accessLevel) => {
+        const accessMap = {
+            'none': { view: false, edit: false, delete: false },
+            'view': { view: true, edit: false, delete: false },
+            'edit': { view: true, edit: true, delete: false },
+            'full': { view: true, edit: true, delete: true },
+        };
+        setFormData(prev => ({
+            ...prev,
+            finance_permissions: {
+                ...prev.finance_permissions,
+                [moduleId]: accessMap[accessLevel]
+            }
+        }));
     };
 
     useEffect(() => {
