@@ -5,18 +5,52 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
-### Session Feb 24, 2026 - P0 Fix, Dashboard Enhancement, Feature Completion
+### Session Feb 24, 2026 - Admin Settings, Data Reset, Feature Flags
+
+#### Finance User Granular Permissions (COMPLETED)
+**Problem:** Finance users needed granular control over specific modules to avoid discrepancies.
+
+**Solution:** Added Module Permissions system with View/Edit/Delete toggles per finance module.
+- 11 finance modules with individual permission controls
+- Entity Access: CLT Academy and MILES toggles
+- Quick actions: "View Only (All)", "Edit (No Delete)", "Clear All"
+- Available in both Create and Edit User modals for finance roles
+
+**Modules Covered:**
+- CLT: Payables, Receivables
+- Miles: Deposits, Withdrawals, Expenses, Operating Profit
+- Treasury: Balances, Settlements
+- Budgeting, Overall PNL, Data Management
+
+#### One-Click Data Reset (COMPLETED)
+**Feature:** Reset all test data with one click while preserving Super Admin accounts.
+- Location: Admin Settings (accessible via Security > Admin Settings)
+- Requires password confirmation + typing "RESET ALL DATA"
+- Clears: leads, students, payments, employees, attendance, call logs, finance data, etc.
+- Preserves: Super Admin user accounts
+
+#### Feature Flags System (COMPLETED)
+**Feature:** Enable/disable features per environment (Development, Testing, Production).
+- Toggle features on/off for each environment
+- Default flags: Finance Suite, BioCloud Sync, 3CX Integration, Commission Engine, Mentor CRM
+- Add custom feature flags via dialog
+- Each flag has name, display name, description, and environment toggles
+
+#### Environment Separation (COMPLETED)
+**Feature:** Separate databases for Development, Testing, and Production.
+- Development: `clt_synapse_dev`
+- Testing: `clt_synapse_test`
+- Production: `clt_synapse_prod`
+- Environment displayed in Admin Settings page
+
+### Session Feb 24, 2026 - P0 Fix, Dashboard Enhancement
 
 #### P0: Finance Suite Navigation Bug Fix (COMPLETED)
-**Problem:** Clicking on "Miles Capitals," "Budgeting," "Overall PNL," "Treasury," and "Data Management" modules led to blank pages. Only "CLT Academy" worked.
+**Problem:** Clicking on "Miles Capitals," "Budgeting," "Overall PNL," "Treasury," and "Data Management" modules led to blank pages.
 
-**Root Cause:** Conflicting route definition for PNL dashboard at lines 258-265 in App.js created a nested structure that didn't render correctly. Also, treasury route path mismatch ('pending-settlements' vs 'settlements').
-
-**Solution Applied:**
+**Solution:**
 - Removed conflicting PNL route block from App.js
-- Fixed treasury settlements route path to 'settlements' to match FinanceLayout.jsx config
-
-**Testing:** All 6 finance modules now navigate correctly - verified with testing agent (100% pass).
+- Fixed treasury settlements route path to 'settlements'
 
 #### Dashboard Quick Stats Widget Expansion (COMPLETED)
 **Enhanced Dashboard** (`/dashboard`) now shows comprehensive role-based statistics:
@@ -29,17 +63,6 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 **Extended Stats Grid (8 cards for super_admin):**
 - Sales Extended: Conversion Rate, Avg Deal Size, Total Enrolled, Commission (Month)
 - CS Extended: Onboarding Rate, Upgrade Pitched, Upgrades Closed, Avg Satisfaction
-
-**Charts:**
-- Lead Funnel bar chart (stage distribution)
-- Payment Methods pie chart (revenue by payment method)
-- Recent Leads activity list
-
-#### Verified Features (All Working):
-1. **Finance Suite** - All 6 modules navigable and functional
-2. **Mentor Dashboard** - Connected to live MongoDB data via `/api/mentor/dashboard`
-3. **Mentor Leaderboard** - Connected to live data via `/api/mentor/leaderboard`
-4. **BioCloud Integration Phase 2** - Employee mapping and attendance sync functional
 
 ### Session Feb 23, 2026 - Finance Suite Integration
 
