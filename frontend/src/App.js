@@ -255,15 +255,6 @@ function AppRoutes() {
                     <Route path="management" element={<DataManagementPage />} />
                 </Route>
                 
-                {/* Finance Suite - PNL Dashboard */}
-                <Route path="finance/pnl/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'finance_manager', 'finance_admin', 'finance_viewer']}>
-                        <FinanceLayout />
-                    </ProtectedRoute>
-                }>
-                    <Route index element={<OverallPNLDashboard />} />
-                </Route>
-                
                 {/* HR Module */}
                 <Route path="hr/dashboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
