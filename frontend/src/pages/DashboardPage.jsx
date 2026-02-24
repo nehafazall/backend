@@ -136,8 +136,9 @@ const DashboardPage = () => {
 
     const isSalesRole = ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive'].includes(user?.role);
     const isCSRole = ['super_admin', 'admin', 'cs_head', 'cs_agent'].includes(user?.role);
-    const isMentorRole = ['super_admin', 'admin', 'mentor'].includes(user?.role);
-    const isFinanceRole = ['super_admin', 'admin', 'finance'].includes(user?.role);
+    const isMentorRole = ['super_admin', 'admin', 'mentor', 'academic_master'].includes(user?.role);
+    const isFinanceRole = ['super_admin', 'admin', 'finance', 'finance_manager'].includes(user?.role);
+    const isAdmin = ['super_admin', 'admin'].includes(user?.role);
 
     return (
         <div className="space-y-6" data-testid="dashboard-page">
