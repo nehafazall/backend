@@ -498,7 +498,7 @@ const UsersPage = () => {
 
             {/* Create User Modal */}
             <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-                <DialogContent className="max-w-lg overflow-visible">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Create New User</DialogTitle>
                         <DialogDescription>
