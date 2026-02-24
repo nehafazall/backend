@@ -233,11 +233,12 @@ const DashboardPage = () => {
                     <>
                         <StatCard
                             title="Total Revenue"
-                            value={formatCurrency(stats.total_revenue)}
+                            value={formatCurrency(stats.total_verified_revenue || stats.total_revenue)}
                             icon={DollarSign}
                             description="Verified payments"
                             trend="up"
                             loading={loading}
+                            valueColor="text-emerald-500"
                         />
                         <StatCard
                             title="Pending Payments"
@@ -265,6 +266,121 @@ const DashboardPage = () => {
                     </>
                 )}
             </div>
+
+            {/* Extended Quick Stats - Role Based */}
+            {(isSalesRole || isCSRole || isMentorRole) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {isSalesRole && (
+                        <>
+                            <StatCard
+                                title="Conversion Rate"
+                                value={`${stats.conversion_rate || 0}%`}
+                                icon={Percent}
+                                description="Leads to enrollment"
+                                trend={stats.conversion_rate > 5 ? 'up' : 'down'}
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Avg Deal Size"
+                                value={formatCurrency(stats.avg_deal_size)}
+                                icon={Target}
+                                description="Per enrollment"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Total Enrolled"
+                                value={stats.enrolled_total || 0}
+                                icon={GraduationCap}
+                                description="All time"
+                                trend="up"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Commission (Month)"
+                                value={formatCurrency(stats.commission_current_month)}
+                                icon={Wallet}
+                                description={`All time: ${formatCurrency(stats.commission_all_time)}`}
+                                trend="up"
+                                loading={loading}
+                                valueColor="text-emerald-500"
+                            />
+                        </>
+                    )}
+                    
+                    {isCSRole && (
+                        <>
+                            <StatCard
+                                title="Onboarding Rate"
+                                value={`${stats.onboarding_rate || 0}%`}
+                                icon={Percent}
+                                description="Students onboarded"
+                                trend={stats.onboarding_rate > 70 ? 'up' : 'down'}
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Upgrade Pitched"
+                                value={stats.upgrade_pitched || 0}
+                                icon={Target}
+                                description="In pipeline"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Upgrades Closed"
+                                value={stats.upgrade_closed || 0}
+                                icon={CheckCircle}
+                                description={formatCurrency(stats.upgrade_revenue)}
+                                trend="up"
+                                loading={loading}
+                                valueColor="text-emerald-500"
+                            />
+                            <StatCard
+                                title="Avg Satisfaction"
+                                value={stats.avg_satisfaction_score ? `${stats.avg_satisfaction_score}/5` : '-'}
+                                icon={Star}
+                                description="Student rating"
+                                trend={stats.avg_satisfaction_score > 4 ? 'up' : 'down'}
+                                loading={loading}
+                            />
+                        </>
+                    )}
+                    
+                    {isMentorRole && !isSalesRole && !isCSRole && (
+                        <>
+                            <StatCard
+                                title="My Students"
+                                value={stats.mentor_students || 0}
+                                icon={Users}
+                                description="Assigned to me"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Discussion Started"
+                                value={stats.discussion_started || 0}
+                                icon={Phone}
+                                description="Active engagement"
+                                trend="up"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Redeposit Pitched"
+                                value={stats.redeposit_pitched || 0}
+                                icon={Target}
+                                description="In pipeline"
+                                loading={loading}
+                            />
+                            <StatCard
+                                title="Redeposits Closed"
+                                value={stats.redeposit_closed || 0}
+                                icon={CheckCircle}
+                                description="Successful conversions"
+                                trend="up"
+                                loading={loading}
+                                valueColor="text-emerald-500"
+                            />
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
