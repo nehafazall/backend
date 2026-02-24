@@ -303,11 +303,14 @@ User Management                    Employee Master
 - `/app/test_reports/iteration_15.json` - P0/P1 features (100% pass)
 - `/app/test_reports/iteration_16.json` - Bidirectional sync (100% pass)
 - `/app/test_reports/iteration_17.json` - Z-Index bug fix verification (100% pass - 6/6 tests)
+- `/app/test_reports/iteration_18.json` - Finance Suite navigation fix (100% pass - 12/12 tests)
+- `/app/test_reports/iteration_19.json` - Dashboard Quick Stats expansion (100% pass - 18/18 tests)
 
 ## Future/Backlog Tasks
-- Direct ZKTeco biometric device API integration (if network access available)
 - Meta Ads and Google Ads webhook integration
 - WhatsApp/SMS notifications
 - Self-hosting package (Docker, PostgreSQL migration)
 - Mobile app
 - AI-powered lead scoring
+- Direct ZKTeco biometric device API integration (if network access available)
+
