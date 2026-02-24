@@ -50,7 +50,7 @@ const STAGE_COLORS = {
 
 const PAYMENT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
-const StatCard = ({ title, value, icon: Icon, description, trend, loading }) => (
+const StatCard = ({ title, value, icon: Icon, description, trend, loading, valueColor }) => (
     <Card className="stat-card" data-testid={`stat-${title.toLowerCase().replace(/\s/g, '-')}`}>
         <CardContent className="p-6">
             {loading ? (
@@ -63,7 +63,7 @@ const StatCard = ({ title, value, icon: Icon, description, trend, loading }) => 
                 <div className="flex items-start justify-between">
                     <div>
                         <p className="text-sm text-muted-foreground">{title}</p>
-                        <p className="stat-card-value mt-2">{value}</p>
+                        <p className={`stat-card-value mt-2 ${valueColor || ''}`}>{value}</p>
                         {description && (
                             <p className="text-xs text-muted-foreground mt-1">{description}</p>
                         )}
