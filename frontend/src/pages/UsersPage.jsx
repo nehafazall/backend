@@ -247,6 +247,7 @@ const UsersPage = () => {
 
     const handleEditUser = (user) => {
         setSelectedUser(user);
+        const isFinanceRole = FINANCE_ROLES.includes(user.role);
         setFormData({
             email: user.email,
             password: '',
@@ -257,7 +258,9 @@ const UsersPage = () => {
             region: user.region || '',
             is_active: user.is_active,
             environment_access: user.environment_access || [],
+            entity_access: user.entity_access || [],
             threecx_extension: user.threecx_extension || '',
+            finance_permissions: user.finance_permissions || (isFinanceRole ? DEFAULT_FINANCE_PERMISSIONS : {}),
         });
         setShowEditModal(true);
     };
