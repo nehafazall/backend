@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Sales",
+    "description": "Sales Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "6bb46088-3cfb-4493-bc8e-c71df22a162a",
+    "head_name": null,
+    "member_count": 7,
+    "created_at": "2026-02-11T02:11:24.541780Z",
+    "updated_at": "2026-02-11T02:11:24.541789Z"
+  },
+  {
+    "name": "Finance",
+    "description": "Finance Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "aa69317b-d899-4afa-a735-7fa431c5de3c",
+    "head_name": null,
+    "member_count": 1,
+    "created_at": "2026-02-11T02:11:24.552840Z",
+    "updated_at": "2026-02-11T02:11:24.552851Z"
+  },
+  {
+    "name": "Customer Service",
+    "description": "Customer Service Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "9a683da6-50fc-48c8-a63e-bce29186c0aa",
+    "head_name": null,
+    "member_count": 2,
+    "created_at": "2026-02-11T02:11:24.553648Z",
+    "updated_at": "2026-02-11T02:11:24.553655Z"
+  },
+  {
+    "name": "Mentors/Academics",
+    "description": "Mentors/Academics Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "68a2f009-0cc5-4392-8283-97f91c65b25e",
+    "head_name": null,
+    "member_count": 0,
+    "created_at": "2026-02-11T02:11:24.554361Z",
+    "updated_at": "2026-02-11T02:11:24.554367Z"
+  },
+  {
+    "name": "Operations",
+    "description": "Operations Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "4ba7a998-63f8-441a-9f26-1fb5b52f6e2f",
+    "head_name": null,
+    "member_count": 2,
+    "created_at": "2026-02-11T02:11:24.554956Z",
+    "updated_at": "2026-02-11T02:11:24.554962Z"
+  },
+  {
+    "name": "Marketing",
+    "description": "Marketing Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "dac4b383-1aed-446c-b5fa-d7d493e23c8b",
+    "head_name": null,
+    "member_count": 0,
+    "created_at": "2026-02-11T02:11:24.555555Z",
+    "updated_at": "2026-02-11T02:11:24.555561Z"
+  },
+  {
+    "name": "HR",
+    "description": "HR Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "9963e8b5-452a-4b78-aa59-f1025aaad8ec",
+    "head_name": null,
+    "member_count": 0,
+    "created_at": "2026-02-11T02:11:24.556152Z",
+    "updated_at": "2026-02-11T02:11:24.556158Z"
+  },
+  {
+    "name": "Quality Control",
+    "description": "Quality Control Department",
+    "head_id": null,
+    "is_active": true,
+    "id": "7b1577ef-df1f-4f47-a382-7e44eb30ca54",
+    "head_name": null,
+    "member_count": 0,
+    "created_at": "2026-02-11T02:11:24.556733Z",
+    "updated_at": "2026-02-11T02:11:24.556739Z"
+  }
+]

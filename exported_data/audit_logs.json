@@ -1,0 +1,1973 @@
+{
+  "logs": [
+    {
+      "id": "2d4f991d-b178-442e-92d2-a226f47130f1",
+      "timestamp": "2026-02-23T14:01:16.705042+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "2f108080-5bee-4b7d-b6eb-a58ce02bf826",
+      "timestamp": "2026-02-23T13:25:06.676425+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "1aa293d0-188e-409e-be2e-814935babbb8",
+      "timestamp": "2026-02-23T13:24:11.876491+00:00",
+      "user_id": "unknown",
+      "user_name": "Unknown",
+      "user_email": "admin@clt-academy.com",
+      "user_role": "unknown",
+      "action": "login_failed",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "email": "admin@clt-academy.com",
+        "reason": "Invalid credentials"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "15306a68-6f59-4e5a-b558-805d08bfe573",
+      "timestamp": "2026-02-23T13:24:00.914814+00:00",
+      "user_id": "unknown",
+      "user_name": "Unknown",
+      "user_email": "admin@clt-academy.com",
+      "user_role": "unknown",
+      "action": "login_failed",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "email": "admin@clt-academy.com",
+        "reason": "Invalid credentials"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "dc56e07f-f3ec-4cd8-bd31-13480148ad8f",
+      "timestamp": "2026-02-23T13:23:37.596331+00:00",
+      "user_id": "unknown",
+      "user_name": "Unknown",
+      "user_email": "admin@clt-academy.com",
+      "user_role": "unknown",
+      "action": "login_failed",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "email": "admin@clt-academy.com",
+        "reason": "Invalid credentials"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "738a3c88-4232-4159-9458-22dfb6e8c99d",
+      "timestamp": "2026-02-23T13:20:52.320694+00:00",
+      "user_id": "a49fb8ba-e65b-4f0a-9ef9-6b6e889c39d5",
+      "user_name": "Nubin Nuhais ",
+      "user_email": "it@clt-academy.com",
+      "user_role": "admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "e800b4e4-3dd2-4306-b66d-5a95c46ed370",
+      "timestamp": "2026-02-23T01:07:45.807230+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "lead",
+      "entity_id": "a32f653f-9bfa-4ea9-b4be-842b8e42a4d7",
+      "entity_name": "TestLead Other",
+      "details": {
+        "phone": "+971503333333",
+        "stage": "enrolled"
+      },
+      "changes": {
+        "stage": {
+          "old": "new_lead",
+          "new": "enrolled"
+        },
+        "first_contact_at": {
+          "old": null,
+          "new": "2026-02-23T01:07:45.785181+00:00"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "ee3a964e-4ff2-4b2b-a39c-492ec4197626",
+      "timestamp": "2026-02-23T01:06:33.828559+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "d831cc8d-f8af-486a-8b0c-9061b56b2d25",
+      "timestamp": "2026-02-22T22:34:51.380003+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9c63e190-bebc-4654-9618-3c9e67c73330",
+      "timestamp": "2026-02-22T22:34:39.042385+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "557fd775-903e-47ec-98fa-491f4cc43c66",
+      "timestamp": "2026-02-22T22:33:26.780565+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f7787945-acc4-47d6-bc36-af4699639155",
+      "timestamp": "2026-02-22T22:31:35.189719+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "3eea5119-c0fc-4307-a167-dac9e931797e",
+      "timestamp": "2026-02-22T22:31:02.972755+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "a2dca6c6-70ff-4c4f-bd10-aefa42ab8a4d",
+      "timestamp": "2026-02-22T22:30:21.876769+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f6b1b3d4-32d5-4ddc-86af-95a6a88fec1d",
+      "timestamp": "2026-02-22T22:29:45.117158+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c7643306-ddf6-4c5f-8439-f315d5a24575",
+      "timestamp": "2026-02-22T22:29:14.973062+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "25427bc5-a5e1-47d8-8bab-c76c439d0549",
+      "timestamp": "2026-02-22T22:28:34.012016+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "e5c465a1-19db-4865-8062-7532f3f57844",
+      "timestamp": "2026-02-22T22:28:15.054436+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "4eb8c4fd-2683-4bc5-9ca2-0aaef9ff04fe",
+      "timestamp": "2026-02-22T22:27:59.000004+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "ca09c7c9-9926-4197-b53d-94742455d024",
+      "timestamp": "2026-02-22T22:26:50.640032+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "a08e7ec8-bf91-4a05-a175-890bfa4d048b",
+      "timestamp": "2026-02-22T22:26:18.377394+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "d38bec70-9215-4bb3-be0e-e04eaf1648b5",
+      "timestamp": "2026-02-22T22:25:50.810487+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "65fcc28a-c881-40de-8dcf-3e526357b2e8",
+      "timestamp": "2026-02-22T22:24:06.420384+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "88b22235-3f44-4fa4-aaa5-d0222fe7eee5",
+      "timestamp": "2026-02-22T21:56:27.015593+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "ee7f08d3-d645-482b-8c77-11f379490c81",
+      "timestamp": "2026-02-22T21:55:34.689985+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "b93a5de9-7f4b-41d7-bec4-436be09c4c04",
+      "timestamp": "2026-02-22T21:55:08.854483+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "cbc70ca9-2ca2-4697-8687-c48d4b57cef9",
+      "timestamp": "2026-02-22T21:41:23.762208+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "e8cce3ac-21ae-4203-879d-73c187802099",
+      "timestamp": "2026-02-22T21:38:51.646487+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "e75a693c-f659-47d4-8e1c-fecd480ea4c2",
+      "timestamp": "2026-02-22T21:38:42.651250+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "6077323d-c04e-4709-b37f-fc0216c6c927",
+      "timestamp": "2026-02-22T21:18:43.431808+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "b997f08b-b9a4-4aa8-9644-167e6bbafa2b",
+      "timestamp": "2026-02-22T21:18:29.470157+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "3fdccfac-8045-4f95-a631-c3db17c45be0",
+      "timestamp": "2026-02-22T21:18:07.352881+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "aee73489-544a-44e4-a1b6-ee038ec6d315",
+      "timestamp": "2026-02-22T21:17:53.083107+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c3bef1bb-acb9-4cd5-bb9d-058d6535784e",
+      "timestamp": "2026-02-22T21:04:41.984708+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "4b8eec9c-999a-423d-9f82-1f91cc44146f",
+      "timestamp": "2026-02-22T21:04:16.372081+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "192f3dc0-47c8-4baf-bfaa-e74a3e0a21ab",
+      "timestamp": "2026-02-22T21:03:46.246815+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "bd4175bb-34fd-40f3-97c4-d9981fce920c",
+      "timestamp": "2026-02-22T21:03:28.732005+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "fcd95a59-5bf9-433c-9715-b079c9017ad8",
+      "entity_name": "Test Employee Sync 1771794207",
+      "details": {
+        "email": "emp.sync.1771794207@clt-academy.com",
+        "role": "finance"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "8bd88e4d-2f07-4a47-bab8-482d566a1975",
+      "timestamp": "2026-02-22T21:03:27.808837+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "4e92ecb4-fcc4-41a4-acb4-f6b5723352aa",
+      "timestamp": "2026-02-22T21:03:27.470439+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "d1372edd-0139-4a53-8fa6-0599154ba8d2",
+      "entity_name": "Test NoSync User 1771794206",
+      "details": {
+        "email": "test.nosync.1771794206@clt-academy.com",
+        "role": "cs_agent"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "dbdce5b1-c5c2-40e4-a02b-85fab925de3b",
+      "timestamp": "2026-02-22T21:03:27.350640+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Updated Test User Name",
+      "details": {
+        "email": "test.sync.1771794203@clt-academy.com",
+        "role": "team_leader"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "6b363480-cef1-42f5-95d8-2d92f8776fc5",
+      "timestamp": "2026-02-22T21:03:27.091110+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "7704689d-170a-45d4-ae50-b0fe4bc70063",
+      "entity_name": "Test Delete User 1771794206",
+      "details": {
+        "email": "test.delete.1771794206@clt-academy.com",
+        "role": "sales_executive"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9293004c-9393-4caf-9826-1219629c69d4",
+      "timestamp": "2026-02-22T21:03:26.855701+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "7704689d-170a-45d4-ae50-b0fe4bc70063",
+      "entity_name": "Test Delete User 1771794206",
+      "details": {
+        "email": "test.delete.1771794206@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "98ff471e-67cd-4e98-8eda-c5289279a398",
+      "timestamp": "2026-02-22T21:03:26.388046+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "d1372edd-0139-4a53-8fa6-0599154ba8d2",
+      "entity_name": "Test NoSync User 1771794206",
+      "details": {
+        "email": "test.nosync.1771794206@clt-academy.com",
+        "role": "cs_agent",
+        "department": "Customer Service",
+        "employee_record_created": false
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "8c0968c7-5f8a-4199-8faf-b839e456eeb2",
+      "timestamp": "2026-02-22T21:03:25.874209+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": null,
+      "changes": {
+        "old": {
+          "full_name": "Test Sync User 1771794203"
+        },
+        "new": {
+          "full_name": "Updated Test User Name"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9efae9a1-09af-4893-b5ff-1ef38269ed7a",
+      "timestamp": "2026-02-22T21:03:25.457104+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": null,
+      "changes": {
+        "old": {
+          "role": "sales_executive"
+        },
+        "new": {
+          "role": "team_leader"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9aee271a-1eaf-49fa-a17c-9b1d6ce4d22f",
+      "timestamp": "2026-02-22T21:03:25.060168+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": null,
+      "changes": {
+        "old": {
+          "department": "Sales"
+        },
+        "new": {
+          "department": "Marketing"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "6c42d45f-cc32-4473-8dae-52fc618ed3a2",
+      "timestamp": "2026-02-22T21:03:24.714309+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": false
+        },
+        "new": {
+          "is_active": true
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "faae26e9-438d-41e1-992f-6daf66dc4ed0",
+      "timestamp": "2026-02-22T21:03:24.315882+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": true
+        },
+        "new": {
+          "is_active": false
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "49e17a4c-3cf7-469f-b7fe-9a50b0950720",
+      "timestamp": "2026-02-22T21:03:23.934299+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "d6416a36-91cf-491b-b598-82d7516ef729",
+      "entity_name": "Test Sync User 1771794203",
+      "details": {
+        "email": "test.sync.1771794203@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "67d59809-39ef-4a58-86ad-7ecd6e58355e",
+      "timestamp": "2026-02-22T21:03:23.581642+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "b89e0985-8149-43c1-bbc5-d54e90f6f561",
+      "timestamp": "2026-02-22T21:03:23.239622+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "ed306a5c-3e88-4179-bcc4-1edfb8e146dd",
+      "timestamp": "2026-02-22T21:03:00.390257+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "6af56061-6c87-4b79-af39-3937f72fc4de",
+      "entity_name": "Test Employee Sync 1771794179",
+      "details": {
+        "email": "emp.sync.1771794179@clt-academy.com",
+        "role": "finance"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "3f3d799b-906b-4171-afbe-d8363216b8bc",
+      "timestamp": "2026-02-22T21:02:59.586390+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c74d9bd9-dc1f-49d3-a897-b3d12bcad3b2",
+      "timestamp": "2026-02-22T21:02:59.203138+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "313cbbd1-cd42-4a4a-9bea-d80737d30454",
+      "entity_name": "Test NoSync User 1771794177",
+      "details": {
+        "email": "test.nosync.1771794177@clt-academy.com",
+        "role": "cs_agent"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "77924620-26f9-4457-abfc-f86aae62da06",
+      "timestamp": "2026-02-22T21:02:59.078605+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Updated Test User Name",
+      "details": {
+        "email": "test.sync.1771794174@clt-academy.com",
+        "role": "team_leader"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "ef17c2d6-5af6-453e-ab8a-9c86d708fcfd",
+      "timestamp": "2026-02-22T21:02:58.705689+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "f7e633a3-0fdf-48a2-9863-12a3fce6edb1",
+      "entity_name": "Test Delete User 1771794178",
+      "details": {
+        "email": "test.delete.1771794178@clt-academy.com",
+        "role": "sales_executive"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "79603c41-a066-4326-8f94-cc619665ddca",
+      "timestamp": "2026-02-22T21:02:58.427134+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "f7e633a3-0fdf-48a2-9863-12a3fce6edb1",
+      "entity_name": "Test Delete User 1771794178",
+      "details": {
+        "email": "test.delete.1771794178@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "682c0d28-1c22-483a-91e2-4d3f104e23b5",
+      "timestamp": "2026-02-22T21:02:58.071703+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "313cbbd1-cd42-4a4a-9bea-d80737d30454",
+      "entity_name": "Test NoSync User 1771794177",
+      "details": {
+        "email": "test.nosync.1771794177@clt-academy.com",
+        "role": "cs_agent",
+        "department": "Customer Service",
+        "employee_record_created": false
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "1911dad0-84a2-4d65-b0b0-50893273a96b",
+      "timestamp": "2026-02-22T21:02:57.585289+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": null,
+      "changes": {
+        "old": {
+          "full_name": "Test Sync User 1771794174"
+        },
+        "new": {
+          "full_name": "Updated Test User Name"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9ca35d68-4489-45d8-aff3-098e2d9237d5",
+      "timestamp": "2026-02-22T21:02:57.235891+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": null,
+      "changes": {
+        "old": {
+          "role": "sales_executive"
+        },
+        "new": {
+          "role": "team_leader"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "421d8e1d-86af-41e9-a7e3-4753f846dfd7",
+      "timestamp": "2026-02-22T21:02:56.467206+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": null,
+      "changes": {
+        "old": {
+          "department": "Sales"
+        },
+        "new": {
+          "department": "Marketing"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "8212e24e-e648-4678-99eb-0a5fe12fd8d6",
+      "timestamp": "2026-02-22T21:02:56.087630+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": false
+        },
+        "new": {
+          "is_active": true
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "df8d07f7-88e0-4477-9270-8962b5b04735",
+      "timestamp": "2026-02-22T21:02:55.741449+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": true
+        },
+        "new": {
+          "is_active": false
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "1ad4bee5-48ed-4479-9ca1-9fd078c3d084",
+      "timestamp": "2026-02-22T21:02:54.994431+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "f8992fc0-7167-4d12-87d2-456ae1ec5994",
+      "entity_name": "Test Sync User 1771794174",
+      "details": {
+        "email": "test.sync.1771794174@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9196d126-f991-485e-8363-68c8d1ff10b8",
+      "timestamp": "2026-02-22T21:02:54.633345+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "58ac7ade-cc67-4173-9238-e05400c29efe",
+      "timestamp": "2026-02-22T21:02:54.246444+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c7878c05-d6fe-4217-85a4-ec1e026333cc",
+      "timestamp": "2026-02-22T21:02:26.004049+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "cbaaad84-f68c-43a5-8a8b-84ad50415ca9",
+      "entity_name": "Test Employee Sync 1771794145",
+      "details": {
+        "email": "emp.sync.1771794145@clt-academy.com",
+        "role": "finance"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c9c07161-f020-4762-ab21-fbef401a8eeb",
+      "timestamp": "2026-02-22T21:02:25.292725+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "c89490ac-409f-4387-a6c4-e0475e901b41",
+      "timestamp": "2026-02-22T21:02:24.952473+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "91f69a9b-19bf-49b8-9962-410ed8bed3ee",
+      "entity_name": "Test NoSync User 1771794143",
+      "details": {
+        "email": "test.nosync.1771794143@clt-academy.com",
+        "role": "cs_agent"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "27e1bc34-97b8-4337-93a7-cb8f9d897979",
+      "timestamp": "2026-02-22T21:02:24.796621+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Updated Test User Name",
+      "details": {
+        "email": "test.sync.1771794141@clt-academy.com",
+        "role": "team_leader"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "4fef348d-78d6-4f2b-b327-d2f51ca5b3ec",
+      "timestamp": "2026-02-22T21:02:24.579328+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "c01a1429-ae62-4cac-9f65-472a1aa3a0a8",
+      "entity_name": "Test Delete User 1771794143",
+      "details": {
+        "email": "test.delete.1771794143@clt-academy.com",
+        "role": "sales_executive"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "924c19e9-2775-4a1b-9c84-a4d66ec8f21a",
+      "timestamp": "2026-02-22T21:02:24.342305+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "c01a1429-ae62-4cac-9f65-472a1aa3a0a8",
+      "entity_name": "Test Delete User 1771794143",
+      "details": {
+        "email": "test.delete.1771794143@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "aba19521-851c-4e61-891f-208e771eb547",
+      "timestamp": "2026-02-22T21:02:23.927112+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "91f69a9b-19bf-49b8-9962-410ed8bed3ee",
+      "entity_name": "Test NoSync User 1771794143",
+      "details": {
+        "email": "test.nosync.1771794143@clt-academy.com",
+        "role": "cs_agent",
+        "department": "Customer Service",
+        "employee_record_created": false
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f64d8c59-61ba-40a0-bbbb-db3672d5cc07",
+      "timestamp": "2026-02-22T21:02:23.446700+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": null,
+      "changes": {
+        "old": {
+          "full_name": "Test Sync User 1771794141"
+        },
+        "new": {
+          "full_name": "Updated Test User Name"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "d2633e79-0e61-4ab6-9466-e0c3ec9916e0",
+      "timestamp": "2026-02-22T21:02:23.081545+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": null,
+      "changes": {
+        "old": {
+          "role": "sales_executive"
+        },
+        "new": {
+          "role": "team_leader"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "d8777591-1123-4b44-8fd2-2bef431a4864",
+      "timestamp": "2026-02-22T21:02:22.693248+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": null,
+      "changes": {
+        "old": {
+          "department": "Sales"
+        },
+        "new": {
+          "department": "Marketing"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "7f7d3f72-97ef-49f8-87f0-af66f9d20af6",
+      "timestamp": "2026-02-22T21:02:22.319551+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": false
+        },
+        "new": {
+          "is_active": true
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "e4658682-3d54-48d7-a5bd-f5eac5fbe7d9",
+      "timestamp": "2026-02-22T21:02:21.932265+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": true
+        },
+        "new": {
+          "is_active": false
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "5ba9291c-c4b4-499f-ab41-44a33facfd7e",
+      "timestamp": "2026-02-22T21:02:21.530182+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "84d9f9d9-e780-4d2a-a83a-bf3465ad2aa1",
+      "entity_name": "Test Sync User 1771794141",
+      "details": {
+        "email": "test.sync.1771794141@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "bcbdf4d3-f585-46e7-bdec-a9c9a85b6250",
+      "timestamp": "2026-02-22T21:02:21.116845+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "abffff31-1221-47da-be74-4044d821b39e",
+      "timestamp": "2026-02-22T21:02:20.660529+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "a2916fe8-fdee-45b2-ba06-8422b064f1f9",
+      "timestamp": "2026-02-22T21:01:17.030588+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "1a9731f3-9c51-4dca-9aa2-354416ac1074",
+      "entity_name": "Test API User 1771794076",
+      "details": {
+        "email": "testapi.1771794076@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "be7303c1-03b9-4889-8011-aec320486687",
+      "timestamp": "2026-02-22T21:01:16.674650+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f7108c5c-5f85-45d7-9aba-ff8f03bbff01",
+      "timestamp": "2026-02-22T21:01:09.051881+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "2cabffae-d460-47bf-88a0-8564fd386700",
+      "timestamp": "2026-02-22T21:01:08.627543+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "70f5926a-fc2a-425e-b6f1-4ced74552371",
+      "entity_name": "Test NoSync User 1771794067",
+      "details": {
+        "email": "test.nosync.1771794067@clt-academy.com",
+        "role": "cs_agent"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f5048a91-5960-4794-a5ee-3b0fc15ceb76",
+      "timestamp": "2026-02-22T21:01:08.407793+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "delete",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Updated Test User Name",
+      "details": {
+        "email": "test.sync.1771794065@clt-academy.com",
+        "role": "team_leader"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f732dd24-beea-439b-ab25-c633afb4790e",
+      "timestamp": "2026-02-22T21:01:08.280305+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "79da558f-f863-415e-808a-5031fa125ae1",
+      "entity_name": "Test Delete User 1771794067",
+      "details": {
+        "email": "test.delete.1771794067@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "b1c17bb4-7f03-4d8b-bcb3-a2fe7c694d53",
+      "timestamp": "2026-02-22T21:01:07.939786+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "70f5926a-fc2a-425e-b6f1-4ced74552371",
+      "entity_name": "Test NoSync User 1771794067",
+      "details": {
+        "email": "test.nosync.1771794067@clt-academy.com",
+        "role": "cs_agent",
+        "department": "Customer Service",
+        "employee_record_created": false
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "9ed28144-6848-4743-bda3-7dd1112da301",
+      "timestamp": "2026-02-22T21:01:07.330693+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Test Sync User 1771794065",
+      "details": null,
+      "changes": {
+        "old": {
+          "full_name": "Test Sync User 1771794065"
+        },
+        "new": {
+          "full_name": "Updated Test User Name"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "f574579a-c8ea-4bf8-9a9f-18345da441c5",
+      "timestamp": "2026-02-22T21:01:06.876841+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Test Sync User 1771794065",
+      "details": null,
+      "changes": {
+        "old": {
+          "role": "sales_executive"
+        },
+        "new": {
+          "role": "team_leader"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "bfeecc83-871a-41f6-b170-6fc33fb14d0c",
+      "timestamp": "2026-02-22T21:01:06.449083+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Test Sync User 1771794065",
+      "details": null,
+      "changes": {
+        "old": {
+          "department": "Sales"
+        },
+        "new": {
+          "department": "Marketing"
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "5f794e62-dbfa-427b-bc07-adfce3e99d1f",
+      "timestamp": "2026-02-22T21:01:06.053863+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Test Sync User 1771794065",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": true
+        },
+        "new": {
+          "is_active": true
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "b1fbd457-4162-49d1-8175-f522ecf5fa1e",
+      "timestamp": "2026-02-22T21:01:05.646976+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "create",
+      "entity_type": "user",
+      "entity_id": "86a3a309-5aa1-488e-9798-901987fb4fe1",
+      "entity_name": "Test Sync User 1771794065",
+      "details": {
+        "email": "test.sync.1771794065@clt-academy.com",
+        "role": "sales_executive",
+        "department": "Sales",
+        "employee_record_created": true
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "a14f5b95-bf4e-476c-88ee-793c1be3b5f8",
+      "timestamp": "2026-02-22T21:01:05.173408+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "3d806b86-7a41-4951-92a6-1c5544d00829",
+      "timestamp": "2026-02-22T21:01:04.818999+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "7dcafebb-b38d-4057-93a9-09d4b20c2ea3",
+      "timestamp": "2026-02-22T20:59:19.946429+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "94248aeb-007a-4745-a5ea-0ddb310af8ec",
+      "timestamp": "2026-02-22T20:58:59.899621+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "eed61cc0-20f1-4b04-85a6-21ef17bf5106",
+      "timestamp": "2026-02-22T20:58:48.248191+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "update",
+      "entity_type": "user",
+      "entity_id": "0444548b-e0a3-4afa-bdff-1232e917dfea",
+      "entity_name": "Test Sync User 2",
+      "details": null,
+      "changes": {
+        "old": {
+          "is_active": true
+        },
+        "new": {
+          "is_active": false
+        }
+      },
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "6a4df247-b20b-4ede-9062-8487f5a4df48",
+      "timestamp": "2026-02-22T20:58:47.966246+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    },
+    {
+      "id": "270f89af-8138-45b8-9519-6efe1eaf16af",
+      "timestamp": "2026-02-22T20:58:39.803112+00:00",
+      "user_id": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+      "user_name": "Aqib (Super Admin)",
+      "user_email": "aqib@clt-academy.com",
+      "user_role": "super_admin",
+      "action": "login",
+      "entity_type": "auth",
+      "entity_id": null,
+      "entity_name": null,
+      "details": {
+        "method": "email_password"
+      },
+      "changes": null,
+      "ip_address": null,
+      "user_agent": null
+    }
+  ],
+  "total": 303,
+  "limit": 100,
+  "skip": 0
+}

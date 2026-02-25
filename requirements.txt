@@ -1,0 +1,23 @@
+# CLT Synapse CRM - Production Dependencies
+# Python 3.11 compatible, optimized for Render deployment
+
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==1.10.13
+
+# Database
+motor==3.3.2
+pymongo==4.6.1
+
+# Authentication
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# HTTP Client
+httpx==0.26.0
+
+# Utilities
+python-dateutil==2.8.2
+email-validator

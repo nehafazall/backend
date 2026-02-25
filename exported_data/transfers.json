@@ -1,0 +1,18 @@
+[
+  {
+    "id": "775d2294-7f64-46a4-9d15-efdfd4c99487",
+    "date": "2026-02-11",
+    "source_account_id": "fae9e975-fb3f-4f61-a617-1d251049e228",
+    "destination_account_id": "28d29203-39f2-4afc-8ad4-61ab696fb564",
+    "amount": 5000.0,
+    "currency": "AED",
+    "base_amount_aed": 5000.0,
+    "notes": "TEST_Transfer between banks",
+    "journal_entry_id": "5e9ea1ae-d400-412e-b3e3-324c96627ee8",
+    "status": "Draft",
+    "created_by": "77e0d531-0624-4d20-a9a8-1ee032c706cd",
+    "created_at": "2026-02-11T02:49:17.345158+00:00",
+    "source_account_name": "ADCB Bank",
+    "destination_account_name": "ADIB Bank"
+  }
+]
