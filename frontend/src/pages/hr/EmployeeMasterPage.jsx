@@ -163,6 +163,9 @@ const EmployeeMasterPage = () => {
                     <Button variant="outline" size="sm" onClick={fetchEmployees}>
                         <RefreshCw className="h-4 w-4 mr-2" />Refresh
                     </Button>
+                    <Button variant="outline" size="sm" onClick={handleSyncToUsers} disabled={syncing}>
+                        <UserCheck className="h-4 w-4 mr-2" />{syncing ? 'Syncing...' : 'Sync to Users'}
+                    </Button>
                     <Button onClick={openCreateModal} data-testid="add-employee-btn">
                         <UserPlus className="h-4 w-4 mr-2" />Add Employee
                     </Button>
