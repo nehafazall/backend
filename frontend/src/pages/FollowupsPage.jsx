@@ -260,6 +260,7 @@ function FollowupsPage() {
                     items={followups.morning}
                     onComplete={handleComplete}
                     onCall={handleCall}
+                    onOpenCard={handleOpenCard}
                 />
                 <TimeSlotColumn
                     title="Afternoon (12 PM - 5 PM)"
@@ -267,6 +268,7 @@ function FollowupsPage() {
                     items={followups.afternoon}
                     onComplete={handleComplete}
                     onCall={handleCall}
+                    onOpenCard={handleOpenCard}
                 />
                 <TimeSlotColumn
                     title="Evening (After 5 PM)"
@@ -274,6 +276,7 @@ function FollowupsPage() {
                     items={followups.evening}
                     onComplete={handleComplete}
                     onCall={handleCall}
+                    onOpenCard={handleOpenCard}
                 />
                 <TimeSlotColumn
                     title="Unscheduled"
@@ -281,8 +284,17 @@ function FollowupsPage() {
                     items={followups.unscheduled}
                     onComplete={handleComplete}
                     onCall={handleCall}
+                    onOpenCard={handleOpenCard}
                 />
             </div>
+
+            {/* Lead Detail Modal */}
+            <LeadDetailModal
+                open={showLeadModal}
+                onClose={handleCloseLeadModal}
+                lead={selectedLead}
+                onUpdate={handleLeadUpdate}
+            />
         </div>
     );
 }
