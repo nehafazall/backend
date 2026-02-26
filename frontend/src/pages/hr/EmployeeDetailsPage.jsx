@@ -209,14 +209,8 @@ const EmployeeDetailsPage = () => {
             parseFloat(salary.housing_allowance || 0) +
             parseFloat(salary.transport_allowance || 0) +
             parseFloat(salary.telephone_allowance || 0) +
-            parseFloat(salary.other_allowances || 0) +
-            parseFloat(salary.commission || 0) +
-            parseFloat(salary.incentives || 0)
+            parseFloat(salary.other_allowances || 0)
         );
-    };
-
-    const calculateNet = () => {
-        return calculateGross() - parseFloat(salary.deductions || 0);
     };
 
     if (loading) {
