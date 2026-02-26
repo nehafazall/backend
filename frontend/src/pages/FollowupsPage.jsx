@@ -81,7 +81,7 @@ function FollowupCard({ item, onComplete, onCall, onOpenCard }) {
     );
 }
 
-function TimeSlotColumn({ title, icon, items, onComplete, onCall }) {
+function TimeSlotColumn({ title, icon, items, onComplete, onCall, onOpenCard }) {
     const Icon = icon;
     return (
         <div className="flex-1 min-w-[300px]">
@@ -101,6 +101,7 @@ function TimeSlotColumn({ title, icon, items, onComplete, onCall }) {
                                 item={item}
                                 onComplete={onComplete}
                                 onCall={onCall}
+                                onOpenCard={onOpenCard}
                             />
                         ))
                     )}
