@@ -48,6 +48,7 @@ import {
     Calendar,
     BarChart3,
     Fingerprint,
+    CheckSquare,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
