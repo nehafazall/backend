@@ -34,6 +34,7 @@ const REJECTION_REASONS = [
 ];
 
 const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
+    const { user } = useAuth();
     const [updateData, setUpdateData] = useState({
         stage: '',
         call_notes: '',
@@ -41,6 +42,18 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
         follow_up_date: '',
     });
     const [loading, setLoading] = useState(false);
+    
+    // Reassignment state
+    const [showReassign, setShowReassign] = useState(false);
+    const [availableAgents, setAvailableAgents] = useState([]);
+    const [reassignData, setReassignData] = useState({
+        new_agent_id: '',
+        reason: ''
+    });
+    const [reassignLoading, setReassignLoading] = useState(false);
+    
+    // Can reassign if user is team_leader, sales_manager, admin, or super_admin
+    const canReassign = ['team_leader', 'sales_manager', 'admin', 'super_admin'].includes(user?.role);
 
     useEffect(() => {
         if (lead) {
