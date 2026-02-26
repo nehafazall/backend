@@ -46,16 +46,20 @@ const EmployeeDetailsPage = () => {
     const [showAddDocModal, setShowAddDocModal] = useState(false);
     const [newDoc, setNewDoc] = useState({ name: '', number: '', expiry_date: '' });
     
-    // Salary editing
+    // Salary editing (base salary + allowances only)
     const [salary, setSalary] = useState({
         basic_salary: 0,
         housing_allowance: 0,
         transport_allowance: 0,
         telephone_allowance: 0,
-        other_allowances: 0,
-        deductions: 0,
-        commission: 0,
-        incentives: 0
+        other_allowances: 0
+    });
+    
+    // Bank Details
+    const [bankDetails, setBankDetails] = useState({
+        bank_name: '',
+        account_number: '',
+        iban: ''
     });
     
     // Payslip
