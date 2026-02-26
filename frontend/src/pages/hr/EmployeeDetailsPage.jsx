@@ -713,25 +713,6 @@ const EmployeeDetailsPage = () => {
                         </CardContent>
                     </Card>
                 </TabsContent>
-                                <CardContent className="space-y-3">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Gross Salary</span>
-                                        <span className="font-medium">AED {calculateGross().toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Total Deductions</span>
-                                        <span className="font-medium text-red-500">- AED {parseFloat(salary.deductions || 0).toLocaleString()}</span>
-                                    </div>
-                                    <Separator />
-                                    <div className="flex justify-between">
-                                        <span className="font-semibold">Net Salary</span>
-                                        <span className="font-bold text-2xl text-emerald-500">AED {calculateNet().toLocaleString()}</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </div>
-                </TabsContent>
 
                 {/* Payslip Tab */}
                 <TabsContent value="payslip" className="space-y-4">
