@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Phone, Mail, PhoneCall, Calendar, Clock, User, MapPin, Target, Building2 } from 'lucide-react';
-import ClickToCall from './ClickToCall';
-import CallHistory from './CallHistory';
+import { ClickToCall, CallHistory } from './ClickToCall';
 
 const LEAD_STAGES = [
     { id: 'new_lead', label: 'New Lead', color: 'bg-blue-500' },
