@@ -125,6 +125,7 @@ const UsersPage = () => {
         phone: '',
         region: '',
         team_id: '',
+        team_leader_id: '',
         is_active: true,
         environment_access: [],
         entity_access: [],
