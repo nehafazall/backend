@@ -3330,14 +3330,121 @@ async def get_activity_logs(
 
 # ==================== DASHBOARD ====================
 
+@api_router.get("/dashboard/viewable-users")
+async def get_viewable_users(user = Depends(get_current_user)):
+    """Get list of users whose dashboard the current user can view"""
+    user_role = user["role"]
+    user_id = user["id"]
+    
+    viewable_users = []
+    
+    if user_role == "super_admin":
+        # Super admin can view everyone
+        all_users = await db.users.find(
+            {"is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(500)
+        viewable_users = all_users
+    elif user_role == "admin":
+        # Admin can view everyone except super_admin
+        all_users = await db.users.find(
+            {"is_active": True, "role": {"$ne": "super_admin"}},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(500)
+        viewable_users = all_users
+    elif user_role == "sales_manager":
+        # Sales manager can view team leaders and sales executives
+        team_users = await db.users.find(
+            {"is_active": True, "role": {"$in": ["team_leader", "sales_executive"]}},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(200)
+        viewable_users = team_users
+    elif user_role == "team_leader":
+        # Team leader can view their team members
+        team_members = await db.users.find(
+            {"is_active": True, "team_leader_id": user_id},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = team_members
+    elif user_role == "cs_head":
+        # CS head can view CS agents
+        cs_agents = await db.users.find(
+            {"is_active": True, "role": "cs_agent"},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = cs_agents
+    elif user_role == "academic_master":
+        # Academic master can view mentors
+        mentors = await db.users.find(
+            {"is_active": True, "role": "mentor"},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = mentors
+    
+    # Group by role for easier frontend display
+    grouped = {}
+    for u in viewable_users:
+        role = u.get("role", "unknown")
+        if role not in grouped:
+            grouped[role] = []
+        grouped[role].append(u)
+    
+    return {
+        "can_view_others": len(viewable_users) > 0,
+        "users": viewable_users,
+        "grouped": grouped,
+        "total": len(viewable_users)
+    }
+
+
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(user = Depends(get_current_user)):
+async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    """Get dashboard stats. Use view_as parameter to view another user's dashboard (if authorized)"""
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     current_month = datetime.now(timezone.utc).strftime("%Y-%m")
     
+    # Determine target user for dashboard
+    target_user = user
+    viewing_as = None
+    
+    if view_as and view_as != user["id"]:
+        # Check if current user can view this user's dashboard
+        can_view = False
+        current_role = user["role"]
+        
+        if current_role == "super_admin":
+            can_view = True
+        elif current_role == "admin":
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            can_view = target and target.get("role") != "super_admin"
+        elif current_role == "sales_manager":
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            can_view = target and target.get("role") in ["team_leader", "sales_executive"]
+        elif current_role == "team_leader":
+            target = await db.users.find_one({"id": view_as, "team_leader_id": user["id"]}, {"_id": 0})
+            can_view = target is not None
+        elif current_role == "cs_head":
+            target = await db.users.find_one({"id": view_as, "role": "cs_agent"}, {"_id": 0})
+            can_view = target is not None
+        elif current_role == "academic_master":
+            target = await db.users.find_one({"id": view_as, "role": "mentor"}, {"_id": 0})
+            can_view = target is not None
+        
+        if can_view:
+            target_user = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target_user:
+                viewing_as = {
+                    "id": target_user["id"],
+                    "full_name": target_user.get("full_name"),
+                    "role": target_user.get("role"),
+                    "email": target_user.get("email")
+                }
+        else:
+            raise HTTPException(status_code=403, detail="Not authorized to view this user's dashboard")
+    
     stats = {}
-    user_id = user["id"]
-    user_role = user["role"]
+    user_id = target_user["id"]
+    user_role = target_user["role"]
     
     # Lead stats for sales roles
     if user_role in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
