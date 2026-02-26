@@ -257,6 +257,7 @@ const UsersPage = () => {
             department: user.department || '',
             phone: user.phone || '',
             region: user.region || '',
+            team_leader_id: user.team_leader_id || '',
             is_active: user.is_active,
             environment_access: user.environment_access || [],
             entity_access: user.entity_access || [],
