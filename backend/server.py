@@ -3149,6 +3149,37 @@ async def reject_reassignment_request(
         "status": "rejected"
     }
 
+
+@api_router.get("/leads/reassignment/available-agents")
+async def get_available_agents_for_reassignment(
+    user = Depends(require_roles(["team_leader", "sales_manager", "admin", "super_admin"]))
+):
+    """Get list of agents available for lead reassignment"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    query = {"is_active": True, "role": {"$in": ["sales_executive", "team_leader"]}}
+    
+    # Team leaders can only reassign to their own team members
+    if user_role == "team_leader":
+        query["$or"] = [
+            {"team_leader_id": user_id},
+            {"id": user_id}  # Can also assign to themselves
+        ]
+    
+    agents = await db.users.find(
+        query,
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+    ).to_list(100)
+    
+    # Add lead count for each agent
+    for agent in agents:
+        lead_count = await db.leads.count_documents({"assigned_to": agent["id"]})
+        agent["current_lead_count"] = lead_count
+    
+    return agents
+
+
 @api_router.post("/students/{student_id}/reminder")
 async def set_student_reminder(student_id: str, reminder_date: str, reminder_time: str, reminder_type: str = "general", reminder_note: str = "", user = Depends(get_current_user)):
     """Set a reminder for a student (upgrade/redeposit)"""
