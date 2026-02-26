@@ -25,6 +25,7 @@ const STATUS_COLORS = {
 };
 
 const EmployeeMasterPage = () => {
+    const navigate = useNavigate();
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
