@@ -78,6 +78,9 @@ import AssetsPage from "@/pages/hr/AssetsPage";
 import AnalyticsPage from "@/pages/hr/AnalyticsPage";
 import BioCloudSyncPage from "@/pages/hr/BioCloudSyncPage";
 
+// Approvals
+import ApprovalsPage from "@/pages/ApprovalsPage";
+
 import Layout from "@/components/Layout";
 
 // Protected Route Component
