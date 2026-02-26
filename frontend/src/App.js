@@ -183,6 +183,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Approval Requests */}
+                <Route path="approvals" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader']}>
+                        <ApprovalsPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* Customer Master */}
                 <Route path="customers" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance']}>
