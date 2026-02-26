@@ -2,7 +2,7 @@ services:
   - type: web
     name: clt-synapse
     env: python
-    pythonVersion: "3.11.0"
+    pythonVersion: "3.11.9"
     rootDir: backend
     buildCommand: |
       pip install --upgrade pip setuptools wheel
