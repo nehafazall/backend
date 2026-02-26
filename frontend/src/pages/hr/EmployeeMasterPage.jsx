@@ -31,6 +31,7 @@ const EmployeeMasterPage = () => {
     const [filterStatus, setFilterStatus] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [syncing, setSyncing] = useState(false);
     const [stats, setStats] = useState({ total: 0, active: 0, probation: 0 });
     const [departments, setDepartments] = useState([]);
 
