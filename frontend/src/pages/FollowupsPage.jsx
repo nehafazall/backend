@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import LeadDetailModal from '@/components/LeadDetailModal';
 import {
     Phone,
     Clock,
@@ -18,15 +19,20 @@ import {
     Bell,
     TrendingUp,
     DollarSign,
+    ExternalLink,
 } from 'lucide-react';
 
-function FollowupCard({ item, onComplete, onCall }) {
+function FollowupCard({ item, onComplete, onCall, onOpenCard }) {
     const isLead = item.entity_type === 'lead';
     const typeLabel = isLead ? 'Lead' : (item.reminder_type === 'upgrade' ? 'Upgrade' : item.reminder_type === 'redeposit' ? 'Redeposit' : 'Student');
     const typeColor = isLead ? 'bg-blue-500' : (item.reminder_type === 'upgrade' ? 'bg-emerald-500' : item.reminder_type === 'redeposit' ? 'bg-purple-500' : 'bg-gray-500');
     
     return (
-        <Card className="hover:shadow-md transition-shadow">
+        <Card 
+            className="hover:shadow-md transition-shadow cursor-pointer hover:border-primary/50" 
+            onClick={() => onOpenCard(item)}
+            data-testid={`followup-card-${item.id}`}
+        >
             <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -37,8 +43,17 @@ function FollowupCard({ item, onComplete, onCall }) {
                                     <Clock className="h-3 w-3" />{item.reminder_time}
                                 </span>
                             )}
+                            {!item.reminder_time && item.follow_up_date && (
+                                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(item.follow_up_date).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
                         </div>
-                        <p className="font-semibold">{item.full_name}</p>
+                        <p className="font-semibold flex items-center gap-2">
+                            {item.full_name}
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        </p>
                         <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <Phone className="h-3 w-3" />{item.phone}
                         </p>
@@ -52,11 +67,11 @@ function FollowupCard({ item, onComplete, onCall }) {
                             <p className="text-xs text-muted-foreground mt-1">{item.package_bought}</p>
                         )}
                     </div>
-                    <div className="flex flex-col gap-2">
-                        <Button size="sm" variant="outline" onClick={() => onCall(item)}>
+                    <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" variant="outline" onClick={() => onCall(item)} title="Call">
                             <Phone className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="default" onClick={() => onComplete(item)}>
+                        <Button size="sm" variant="default" onClick={() => onComplete(item)} title="Mark Complete">
                             <CheckCircle className="h-4 w-4" />
                         </Button>
                     </div>
