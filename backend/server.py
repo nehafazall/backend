@@ -7908,6 +7908,7 @@ async def create_employee_with_user(
                 "full_name": data.full_name,
                 "role": data.role,
                 "department": data.department,
+                "is_active": True,
                 "status": "active",
                 "permissions": permissions,
                 "employee_id": employee_uuid,  # Link to employee
