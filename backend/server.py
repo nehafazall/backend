@@ -2813,8 +2813,16 @@ async def complete_student_reminder(student_id: str, user = Depends(get_current_
 async def get_todays_followups(user = Depends(get_current_user)):
     """Get all follow-ups due today for the current user"""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_start = f"{today}T00:00:00"
+    today_end = f"{today}T23:59:59"
     
-    query_base = {"reminder_date": today, "reminder_completed": {"$ne": True}}
+    # Query for leads with either reminder_date OR follow_up_date today
+    query_base = {
+        "$or": [
+            {"reminder_date": today, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today_start, "$lte": today_end}}
+        ]
+    }
     
     # Filter by user role
     if user["role"] == "sales_executive":
@@ -2835,25 +2843,34 @@ async def get_todays_followups(user = Depends(get_current_user)):
             leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
     
     # Get students with reminders (CS for upgrades, Mentors for redeposits)
+    student_query_base = {
+        "$or": [
+            {"reminder_date": today, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today_start, "$lte": today_end}}
+        ]
+    }
     students = []
     if user["role"] in ["cs_agent", "cs_head"]:
         if user["role"] == "cs_agent":
-            students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
+            students = await db.students.find({**student_query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
-            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+            students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     elif user["role"] in ["mentor", "academic_master"]:
         if user["role"] == "mentor":
-            students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
+            students = await db.students.find({**student_query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
-            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+            students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     elif user["role"] in ["super_admin", "admin"]:
-        students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+        students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     
     # Categorize by time
     def get_time_slot(time_str):
         if not time_str:
             return "unscheduled"
         try:
+            # Handle both "HH:MM" and ISO datetime formats
+            if "T" in str(time_str):
+                time_str = str(time_str).split("T")[1][:5]
             hour = int(time_str.split(":")[0])
             if hour < 12:
                 return "morning"
@@ -2875,17 +2892,20 @@ async def get_todays_followups(user = Depends(get_current_user)):
     for lead in leads:
         lead["entity_type"] = "lead"
         lead["reminder_type"] = "sales"
-        slot = get_time_slot(lead.get("reminder_time"))
+        # Use follow_up_date if reminder_time not set
+        time_val = lead.get("reminder_time") or (lead.get("follow_up_date", "").split("T")[1][:5] if lead.get("follow_up_date") and "T" in str(lead.get("follow_up_date")) else None)
+        slot = get_time_slot(time_val)
         followups[slot].append(lead)
     
     for student in students:
         student["entity_type"] = "student"
-        slot = get_time_slot(student.get("reminder_time"))
+        time_val = student.get("reminder_time") or (student.get("follow_up_date", "").split("T")[1][:5] if student.get("follow_up_date") and "T" in str(student.get("follow_up_date")) else None)
+        slot = get_time_slot(time_val)
         followups[slot].append(student)
     
     # Sort each slot by time
     for slot in followups:
-        followups[slot].sort(key=lambda x: x.get("reminder_time") or "99:99")
+        followups[slot].sort(key=lambda x: x.get("reminder_time") or x.get("follow_up_date") or "99:99")
     
     total = len(leads) + len(students)
     
