@@ -10106,22 +10106,22 @@ async def run_payroll(
         fixed_incentive = salary.get("fixed_incentive", 0)
         
         gross_salary = basic + housing + transport + food + phone + other + fixed_incentive
-        daily_rate = gross_salary / total_days
+        daily_rate = gross_salary / 30  # Fixed 30-day calculation as per requirement
         
-        # Calculate deductions
+        # Calculate deductions based on attendance
         deductions = []
         
-        # Late penalty
-        if total_late_minutes > 0:
-            late_penalty = (total_late_minutes // 15) * 50
-            if late_penalty > 0:
-                deductions.append({
-                    "type": "late",
-                    "description": f"Late penalty ({total_late_minutes} minutes)",
-                    "amount": late_penalty
-                })
+        # Half-day deduction for late arrivals (> 30 mins late = half day)
+        late_days = len([a for a in attendance if a.get("late_minutes", 0) > 30])
+        if late_days > 0:
+            late_deduction = round((late_days * 0.5) * daily_rate, 2)  # Half day per late day
+            deductions.append({
+                "type": "late",
+                "description": f"Late arrivals ({late_days} days > 30 mins = {late_days * 0.5} half days)",
+                "amount": late_deduction
+            })
         
-        # Absence deduction
+        # Full day absence deduction
         if absent_days > 0:
             absence_deduction = round(absent_days * daily_rate, 2)
             deductions.append({
