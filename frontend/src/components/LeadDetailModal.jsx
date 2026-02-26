@@ -381,6 +381,109 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
                         </CardContent>
                     </Card>
                     
+                    {/* Reassignment Section - Only for authorized roles */}
+                    {canReassign && (
+                        <Card className="border-amber-500/30 bg-amber-500/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <ArrowRightLeft className="h-5 w-5 text-amber-600" />
+                                    Reassign Lead
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {!showReassign ? (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground mb-3">
+                                            Transfer this lead to another sales agent. 
+                                            {user?.role === 'team_leader' && (
+                                                <span className="text-amber-600"> Requires approval from Sales Manager and CEO.</span>
+                                            )}
+                                            {user?.role === 'sales_manager' && (
+                                                <span className="text-amber-600"> Requires approval from CEO.</span>
+                                            )}
+                                        </p>
+                                        <Button 
+                                            variant="outline" 
+                                            className="border-amber-500 text-amber-700 hover:bg-amber-500/10"
+                                            onClick={() => setShowReassign(true)}
+                                            data-testid="show-reassign-btn"
+                                        >
+                                            <UserPlus className="h-4 w-4 mr-2" />
+                                            Request Reassignment
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>Reassign To *</Label>
+                                            <Select
+                                                value={reassignData.new_agent_id}
+                                                onValueChange={(value) => setReassignData({ ...reassignData, new_agent_id: value })}
+                                            >
+                                                <SelectTrigger data-testid="reassign-agent-select">
+                                                    <SelectValue placeholder="Select agent" />
+                                                </SelectTrigger>
+                                                <SelectContent position="popper" className="z-[9999]">
+                                                    {availableAgents
+                                                        .filter(a => a.id !== lead?.assigned_to)
+                                                        .map((agent) => (
+                                                            <SelectItem key={agent.id} value={agent.id}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span>{agent.full_name}</span>
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {agent.current_lead_count} leads
+                                                                    </Badge>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))
+                                                    }
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                            <Label>Reason for Reassignment *</Label>
+                                            <Textarea
+                                                value={reassignData.reason}
+                                                onChange={(e) => setReassignData({ ...reassignData, reason: e.target.value })}
+                                                placeholder="Explain why this lead should be reassigned..."
+                                                rows={2}
+                                                data-testid="reassign-reason-input"
+                                            />
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setShowReassign(false);
+                                                    setReassignData({ new_agent_id: '', reason: '' });
+                                                }}
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                onClick={handleRequestReassignment}
+                                                disabled={reassignLoading}
+                                                className="bg-amber-600 hover:bg-amber-700"
+                                                data-testid="submit-reassign-btn"
+                                            >
+                                                {reassignLoading ? (
+                                                    'Submitting...'
+                                                ) : (
+                                                    <>
+                                                        <Send className="h-4 w-4 mr-2" />
+                                                        Submit Request
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                    
                     <DialogFooter>
                         <Button variant="outline" onClick={onClose}>
                             Cancel
