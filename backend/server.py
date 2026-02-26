@@ -721,14 +721,27 @@ async def create_notification(
     await db.notifications.insert_one(notification)
 
 async def get_round_robin_agent(role: str, region: str = None, department: str = None) -> Optional[Dict]:
-    """Get next available agent using round-robin"""
+    """Get next available agent using round-robin with fallback to any agent if regional match not found"""
     query = {"role": role, "is_active": True}
+    
+    # First try with region filter if provided
     if region:
         query["region"] = region
-    if department:
-        query["department"] = department
+        agents = await db.users.find(query).to_list(100)
+        
+        # If no regional agents found, fallback to any agent with this role
+        if not agents:
+            del query["region"]
+            agents = await db.users.find(query).to_list(100)
+    else:
+        agents = await db.users.find(query).to_list(100)
     
-    agents = await db.users.find(query).to_list(100)
+    if department:
+        # Filter by department if specified
+        dept_agents = [a for a in agents if a.get("department") == department]
+        if dept_agents:
+            agents = dept_agents
+    
     if not agents:
         return None
     
