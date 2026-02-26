@@ -2812,15 +2812,16 @@ async def complete_student_reminder(student_id: str, user = Depends(get_current_
 @api_router.get("/followups/today")
 async def get_todays_followups(user = Depends(get_current_user)):
     """Get all follow-ups due today for the current user"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    today_start = f"{today}T00:00:00"
-    today_end = f"{today}T23:59:59"
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today.replace(hour=23, minute=59, second=59)
+    today_str = today.strftime("%Y-%m-%d")
     
     # Query for leads with either reminder_date OR follow_up_date today
+    # reminder_date is stored as string "YYYY-MM-DD", follow_up_date is datetime
     query_base = {
         "$or": [
-            {"reminder_date": today, "reminder_completed": {"$ne": True}},
-            {"follow_up_date": {"$gte": today_start, "$lte": today_end}}
+            {"reminder_date": today_str, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today, "$lte": today_end}}
         ]
     }
     
@@ -2845,8 +2846,8 @@ async def get_todays_followups(user = Depends(get_current_user)):
     # Get students with reminders (CS for upgrades, Mentors for redeposits)
     student_query_base = {
         "$or": [
-            {"reminder_date": today, "reminder_completed": {"$ne": True}},
-            {"follow_up_date": {"$gte": today_start, "$lte": today_end}}
+            {"reminder_date": today_str, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today, "$lte": today_end}}
         ]
     }
     students = []
@@ -2864,14 +2865,23 @@ async def get_todays_followups(user = Depends(get_current_user)):
         students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     
     # Categorize by time
-    def get_time_slot(time_str):
-        if not time_str:
+    def get_time_slot(time_val):
+        if not time_val:
             return "unscheduled"
         try:
-            # Handle both "HH:MM" and ISO datetime formats
-            if "T" in str(time_str):
-                time_str = str(time_str).split("T")[1][:5]
-            hour = int(time_str.split(":")[0])
+            # Handle datetime objects
+            if hasattr(time_val, 'hour'):
+                hour = time_val.hour
+            # Handle string formats
+            elif isinstance(time_val, str):
+                if "T" in time_val:
+                    time_val = time_val.split("T")[1][:5]
+                elif " " in time_val:
+                    time_val = time_val.split(" ")[1][:5]
+                hour = int(time_val.split(":")[0])
+            else:
+                return "unscheduled"
+            
             if hour < 12:
                 return "morning"
             elif hour < 17:
@@ -2893,24 +2903,35 @@ async def get_todays_followups(user = Depends(get_current_user)):
         lead["entity_type"] = "lead"
         lead["reminder_type"] = "sales"
         # Use follow_up_date if reminder_time not set
-        time_val = lead.get("reminder_time") or (lead.get("follow_up_date", "").split("T")[1][:5] if lead.get("follow_up_date") and "T" in str(lead.get("follow_up_date")) else None)
+        time_val = lead.get("reminder_time") or lead.get("follow_up_date")
         slot = get_time_slot(time_val)
         followups[slot].append(lead)
     
     for student in students:
         student["entity_type"] = "student"
-        time_val = student.get("reminder_time") or (student.get("follow_up_date", "").split("T")[1][:5] if student.get("follow_up_date") and "T" in str(student.get("follow_up_date")) else None)
+        time_val = student.get("reminder_time") or student.get("follow_up_date")
         slot = get_time_slot(time_val)
         followups[slot].append(student)
     
     # Sort each slot by time
+    def get_sort_key(x):
+        rt = x.get("reminder_time")
+        fud = x.get("follow_up_date")
+        if rt:
+            return rt
+        if fud:
+            if hasattr(fud, 'strftime'):
+                return fud.strftime("%H:%M")
+            return str(fud)
+        return "99:99"
+    
     for slot in followups:
-        followups[slot].sort(key=lambda x: x.get("reminder_time") or x.get("follow_up_date") or "99:99")
+        followups[slot].sort(key=get_sort_key)
     
     total = len(leads) + len(students)
     
     return {
-        "date": today,
+        "date": today_str,
         "total_followups": total,
         "followups": followups,
         "leads_count": len(leads),
