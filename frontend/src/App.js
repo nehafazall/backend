@@ -69,6 +69,7 @@ import FinanceDashboardRouter from "@/pages/FinanceDashboardRouter";
 // HR Module
 import HRDashboard from "@/pages/hr/HRDashboard";
 import EmployeeMasterPage from "@/pages/hr/EmployeeMasterPage";
+import EmployeeDetailsPage from "@/pages/hr/EmployeeDetailsPage";
 import LeavePage from "@/pages/hr/LeavePage";
 import AttendancePage from "@/pages/hr/AttendancePage";
 import PayrollPage from "@/pages/hr/PayrollPage";
