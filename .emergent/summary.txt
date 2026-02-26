@@ -1,82 +1,112 @@
 <analysis>**original_problem_statement:**
-The user requested to integrate a custom-built CLT Finance Suite into the existing CLT Synapse application. The user provided a  file with the complete code and specifications.
+The user initially requested to integrate a custom CLT Finance Suite into their existing CLT Synapse application. Following that, the scope expanded significantly to include:
+- A full-featured HR module with employee data management (personal info, visa/passport tracking with expiry alerts), and a comprehensive payroll system.
+- A multi-level approval workflow (HR → CEO → Finance) for processing payroll.
+- A one-click data reset feature and environment separation (dev/test/prod) for better development practices.
+- Granular, role-based access control for finance users.
+- Numerous bug fixes, including a critical finance navigation bug and persistent issues with a BioCloud attendance sync integration.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Integration:** Embed the Finance Suite within the existing Finance module of the CLT Synapse application.
-2.  **App Name:** Keep the main application name as CLT Synapse.
-3.  **UI Structure:** Inside the Finance module, create two separate, distinct sections/icons for CLT and MILES workflows.
-4.  **Modules to Integrate:** Implement all six financial modules:
-    *   CLT (Payables, Receivables)
-    *   Miles Capitals (Deposits, Withdrawals)
-    *   Treasury
-    *   Budgeting
-    *   Overall PNL
-    *   Data Management
-5.  **Modules to Skip:** Do NOT integrate User Management, Authentication, Audit Logs, or the Admin Panel, as these functionalities already exist in CLT Synapse.
-6.  **Tech Stack:** Use the existing MongoDB database and adapt the frontend to use the current UI components and design patterns.
-7.  **Initial Goal:** The immediate task was to build out the complete user interface (frontend pages and navigation) for the Finance Suite, with backend logic to be implemented afterward.
+1.  **HR Module (Employee Master):** Collect and manage employee personal information, visa/passport details, Emirates ID, and salary structures. Track document expiry dates and send email alerts.
+2.  **Payroll Module:**
+    *   Create a monthly payroll run that pulls salary data from the Employee Master.
+    *   Incorporate commissions and manually addable incentives/deductions.
+    *   Automatically calculate deductions based on attendance data (absences, late arrivals).
+    *   Implement a three-stage approval workflow: HR initiates, CEO approves, Finance processes payment.
+    *   Generate and email payslips to employees.
+3.  **Company Document Management:** A central place to upload and track the expiry of company-wide documents.
+4.  **Admin & Security:**
+    *   Implement a one-click data reset button for non-production environments.
+    *   Separate development, testing, and production environments using feature flags and distinct databases.
+    *   Fine-grained permissions for finance users with toggles for view, edit, delete, and none.
+5.  **Bug Fixes:**
+    *   Resolve the failing BioCloud attendance sync.
+    *   Fix errors preventing the payroll from running.
+    *   Ensure employees created in the Employee Master are automatically created as users in User Management.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack React/FastAPI/MongoDB platform. The agent has successfully created the frontend pages and placeholder backend API endpoints for all six modules of the CLT Finance Suite as requested. The main dashboard for the finance suite is visible, and the CLT Academy sub-module is accessible. However, navigation to the other five modules is broken.
-
-Prior to this, the agent fixed a global UI  bug and implemented a  field in the user management module for one-to-one call mapping in the 3CX integration.
+The application is a full-stack React/FastAPI/MongoDB platform. The agent has successfully fixed several initial bugs and implemented foundational features like environment separation and data reset. A new, detailed Employee Details page () has been created with tabs for personal info, document tracking, and salary. The backend has been updated with corresponding models and endpoints. However, the agent was in the middle of a large, multi-part task involving the HR and Payroll modules, leaving several key features in an incomplete or broken state.
 
 **Last working item**:
--   **Last item agent was working:** Fixing a critical routing bug where clicking on the Miles Capitals, Budgeting, Overall PNL, and Treasury modules on the Finance Suite dashboard resulted in a blank page. The agent identified a conflict in the React routing structure.
+-   **Last item agent was working:** A major refactoring of the HR and Payroll modules. The agent was simultaneously:
+    1.  Updating the  frontend to add editable bank details and a gender field, while simplifying the salary structure as requested.
+    2.  Adding a backend endpoint () to support this.
+    3.  Starting to implement the logic for the payroll approval workflow (HR → CEO → Finance) and the new attendance-based deduction calculations in .
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend testing agent. Start with the screenshot tool to verify each module link navigates to the correct page. Once confirmed, run the testing agent to ensure no regressions across the application.
--   **User Testing Done:** N (User reported the bug)
+-   **Which testing method agent to use?** Both.
+    -   **Backend:** Use  to test the payroll run endpoint to verify deduction calculations and the state changes of the approval workflow.
+    -   **Frontend:** Use the screenshot tool to verify the UI of the enhanced Employee Details page and the new Payroll page. Follow up with the frontend testing agent to test the full approval workflow interaction.
+-   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Finance Suite navigation is broken for most modules (P0 - HIGHEST PRIORITY)**
-    -   **Description:** Clicking on module cards for Miles Capitals, Budgeting, Overall PNL, Treasury, and Data Management on the main finance dashboard () leads to a blank page. Only the CLT Academy card navigates correctly.
-    -   **Attempted fixes:** The agent identified the issue was with nested routing in . A new component  was created as a potential fix, but the implementation was not completed and may be flawed.
+-   **Issue 1: BioCloud attendance sync is broken (P0 - BLOCKER)**
+    -   **Description:** The user has repeatedly reported that the Sync Attendance feature in the HR module fails. The agent identified that the target website's UI changed, breaking the Playwright web scraping script. An API-based alternative is not available.
+    -   **Attempted fixes:** The agent installed Playwright browsers and attempted to refactor the scraping script in  to handle a new date picker, but the fix was not completed.
     -   **Next debug checklist:**
-        1.  Review and correct the  prop for each  component in . Ensure each module card points to the correct, unique route (e.g., , ).
-        2.  Refactor the routes in . Remove the complex nesting that is causing conflicts. Define a flat structure for all finance pages.
-        3.  Delete the un-used and likely incorrect  file.
-        4.  Verify that the  component correctly renders the sidebar and content for all finance pages.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a critical blocker preventing access to the newly created finance UI. Fixing it will make the entire Finance Suite navigable, completing the user's initial request for the UI implementation.
+        1.  Open  and focus on the  function.
+        2.  The script needs to correctly interact with the new JavaScript-based date picker to set the date before scraping the attendance table.
+        3.  Implement robust interaction logic, potentially by simulating clicks on the date picker elements rather than trying to set the input value directly.
+        4.  Add extensive logging within the Playwright block to trace execution and inspect the page HTML at each step.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a critical blocker for the Payroll module, as attendance data is required for automatic salary deductions.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Backend (the API endpoint).
+    -   **Blocked on other issue:** None. This is a top-level blocker.
+
+-   **Issue 2: Run Payroll feature is failing (P1)**
+    -   **Description:** The user reported an error when clicking Run Payroll. This is due to the incomplete refactoring of the payroll logic.
+    -   **Attempted fixes:** The agent started modifying the  endpoint in  to add new deduction logic but did not finish the implementation.
+    -   **Next debug checklist:**
+        1.  Complete the implementation of the  endpoint in .
+        2.  Implement the deduction logic as per the user's formula: absence = (gross salary / 30), late arrival > 30 mins = half-day deduction.
+        3.  Integrate the new multi-level approval workflow into this endpoint.
+    -   **Why fix this issue and what will be achieved with the fix?** This is the core function of the Payroll module. Fixing it will enable the entire payroll processing workflow.
     -   **Status:** IN PROGRESS
     -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Frontend
+    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Blocked on other issue:** BioCloud attendance sync (Issue 1).
 
 **In progress Task List**:
--   **Task 1: Complete Finance Suite UI Integration (P0)**
-    -   **Where to resume:** Resume by fixing the routing bug as detailed in Issue 1 above. The focus should be on  and .
-    -   **What will be achieved with this?** A fully navigable user interface for all modules of the CLT Finance Suite.
+-   **Task 1: Complete the Payroll Approval Workflow (P0)**
+    -   **Where to resume:**
+        1.  **Backend ():**
+            *   Create a new MongoDB collection () to track the status of each monthly run (e.g., ).
+            *   Create new endpoints to handle , , and  actions for each role in the workflow.
+        2.  **Frontend ():**
+            *   Completely refactor the page to display all employees with fields for salary, commissions, incentives, and deductions.
+            *   Add input fields for manual entry of incentives and other deductions.
+            *   Conditionally render Approve and Reject buttons based on the logged-in user's role and the current status of the payroll run.
+    -   **What will be achieved with this?** A fully functional, multi-stage payroll processing system as requested by the user.
     -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Frontend
-    -   **Blocked on something:** The routing bug (Issue 1).
+    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Blocked on something:** BioCloud attendance sync (Issue 1) and Payroll Run error (Issue 2).
 
 **Upcoming and Future Tasks**
 **Upcoming Tasks:**
--   **P1: Implement Finance Suite Backend Logic:**
-    -   The backend API endpoints created in  are currently placeholders. The next step is to implement the full business logic for each endpoint (e.g., for payables, receivables, deposits) to perform CRUD operations against the MongoDB database. This logic should be placed in a new  file.
+-   **P1: Company Document Management:** Create a UI and backend to upload, track, and receive expiry alerts for company-level documents (trade license, etc.).
+-   **P2: Payslip Generation & Emailing:** Implement the backend logic to generate a PDF payslip and email it to the employee, then connect the UI button.
+-   **P2: Complete Finance User Permissions:** Fix the UI bug in the  dropdown that prevents the finance permissions section from appearing.
 
 **Future Tasks:**
--   BioCloud Integration - Phase 2 (Data Sync & Mapping).
--   Create a self-hosting package (, ) and support database migration to PostgreSQL.
--   Connect the Mentor Dashboard leaderboard to live data.
+-   Database migration to a managed service like MongoDB Atlas.
+-   Create a self-hosting package (, ).
 -   Integrate with Meta and Google Ads APIs.
--   Expand the Quick Stats widget on the dashboard.
+-   Verify that the Mentor Dashboard leaderboard is connected to live data.
 
 **Completed work in this session**
--   **Global UI z-index Fix:** Resolved a critical UI bug where dropdowns and popovers rendered behind modals. The fix was verified with the frontend testing agent.
--   **3CX Extension Mapping:** Added a  field to the User model and UI, enabling one-to-one mapping between users and their 3CX phone extensions for call tracking.
--   **Finance Suite Scaffolding:**
-    -   Created all required frontend pages for the 6 core finance modules in .
-    -   Created placeholder backend API endpoints for all new finance features in .
-    -   Implemented the main finance suite dashboard UI.
--   **Data Export Script:** Created a Python script at  to export all major data collections into JSON files, along with a ZIP archive of the output.
+-   **Finance Suite Navigation:** Fixed a critical routing bug, making all finance modules accessible.
+-   **Environment Separation & Data Reset:** Implemented a system for development/testing/production environments with separate databases and a one-click data reset feature on a new Admin Settings page.
+-   **Employee-to-User Sync:** Created a one-time sync script and fixed the logic to ensure employees created in the HR module automatically appear in User Management.
+-   **Dashboard Quick Stats:** Expanded the main dashboard's Quick Stats widget with more role-based metrics.
+-   **HR Module Scaffolding:** Created the new  and added backend models/endpoints for managing documents, salary, and bank details.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: **.
-    -   **Debug checklist:** The issue originates from . The plugin remains disabled in  as an effective workaround.
-    -   **Why to solve this issue and what will be achieved with this?** The platform's visual editing feature might be impaired. This is a low priority as long as the workaround holds.
+    -   **Debug checklist:** The issue is in . The plugin is disabled in  as a workaround.
+    -   **Why to solve this issue and what will be achieved with this?** The platform's visual editing feature is likely impaired. It is a low priority.
     -   **Should Test frontend/backend/both after fix:** Frontend
     -   **Is recurring issue?** Y
 
@@ -87,66 +117,73 @@ Prior to this, the agent fixed a global UI  bug and implemented a  field in the 
 
 
 **Key Technical Concepts**
--   **Modular UI Integration:** Integrating a large, external set of features (the Finance Suite) into a specific module () of an existing application, requiring adaptation of routing, layout, and UI components.
--   **Conditional UI:** The User Management page conditionally displays the 3CX Extension field based on the user's role.
+-   **Multi-Level Approval Workflow:** A state machine managed in the backend to handle a sequential approval process.
+-   **Environment Separation:** Using environment variables to switch database connection strings.
+-   **Feature Flags:** A system to toggle features on/off per environment.
+-   **Web Scraping with Playwright:** Debugging a scraper when the target UI changes.
 
 **key DB schema**
--   **:** Modified to include an optional  field.
+-   **:** Modified to include  and .
+-   **:** Heavily modified to include nested documents for , , , and . Also includes a  field.
+-   **:** New collection to store feature toggle states.
+-   ** (Proposed):** New collection to manage the state of the payroll approval workflow.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   **/app/frontend/src/App.js**: Critically important. Contains the broken routing logic that must be fixed.
--   **/app/frontend/src/pages/finance/FinanceEntitySelector.jsx**: Defines the main clickable cards for the finance suite; their  props need to be verified and corrected.
--   **/app/frontend/src/pages/finance/**: This directory contains all the new UI pages for the CLT Finance Suite.
--   **/app/backend/server.py**: Contains the placeholder API endpoints that will need to be implemented next.
--   **/app/frontend/src/pages/admin/UsersPage.jsx**: Reference for the completed 3CX extension feature.
+-   **/app/backend/biocloud_sync.py**: Contains the broken Playwright script that is blocking the payroll feature.
+-   **/app/backend/server.py**: Contains the incomplete payroll and approval workflow logic.
+-   **/app/frontend/src/pages/hr/PayrollPage.jsx**: Requires a complete rewrite for the approval workflow UI.
+-   **/app/frontend/src/pages/hr/EmployeeDetailsPage.jsx**: Contains the new UI for viewing/editing employee details.
+-   **/app/frontend/src/pages/admin/UsersPage.jsx**: Contains the incomplete UI for finance permissions.
 
 **Areas that need refactoring**:
--   Once the finance backend logic is implemented, it should be extracted from the monolithic  into a new, dedicated  file to maintain code organization.
+-   ** is now a monolith.** The payroll, HR, and admin logic should be extracted into separate route files (e.g., ) to improve maintainability.
 
 **key api endpoints**
--   **New (Placeholders):** A full suite of finance endpoints were added (e.g., , , ). All currently return empty arrays .
--   **New (Functional):**  provides a summary of mapped and unmapped users for 3CX.
--   **Modified:**  and  were updated to handle the  field.
+-   ****: **(BROKEN)** Fetches attendance data.
+-   ****: **(BROKEN)** Initiates the payroll run.
+-   ****: Wipes application data.
+-   ****: Syncs existing employees to user accounts.
+-   ****: Endpoints to update specific parts of an employee's profile.
 
 **Critical Info for New Agent**
--   **IMMEDIATE BLOCKER:** Your first and only priority is to fix the broken navigation in the Finance Suite. The user cannot access most of the modules. The problem lies in the frontend routing logic in  and .
--   **NEXT MAJOR TASK:** After fixing the UI navigation, the next phase is to implement the backend business logic for all the placeholder finance APIs in , moving the logic to a new .
--   **USER INTEREST:** The user has shown interest in migrating from MongoDB to Supabase. An export script has been provided as a first step. Be prepared for follow-up questions or requests regarding this migration.
+-   **Your immediate priority is to fix the **. This is a hard blocker for the entire Payroll module, which is the user's main focus. The problem is in the Playwright script in .
+-   **Once the blocker is resolved, you must complete the Payroll module.** This involves finishing the backend approval workflow logic (state management, new endpoints) and completely refactoring the frontend  to support the new interactive process.
+-   **The codebase has several incomplete features.** The previous agent started multiple tasks in parallel. You will need to carefully review the Last working item and In progress sections to understand where to resume each task.
 
 **documents and test reports created in this job**
--   
--   
+-   /app/memory/PRD.md
+-   Multiple test reports in  from previous successful tests.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** When I click Miles Capitals, Budgeting, PNL, or Treasury, nothing shows. (BLOCKER)
-2.  **User:** Go ahead and integrate the Finance Suite with separate CLT/Miles sections. (ADDRESSED - IN PROGRESS)
-3.  **User:** Provided the  file with all the code. (ADDRESSED)
-4.  **User:** Can I paste my finance app code here for you to integrate? (ADDRESSED)
-5.  **User:** Yes, please add the 3CX extension field for one-to-one mapping. (COMPLETED)
-6.  **User:** Asked for clarification on how the 3CX integration and user-to-extension mapping works. (ADDRESSED)
-7.  **User:** Write a Python script to export all my data to JSON for migration. (COMPLETED)
-8.  **User:** What are the GET API endpoints to export all my data? (ADDRESSED)
-9.  **User:** Can I use Supabase as the DB instead of MongoDB? (ADDRESSED - Explained possibility, provided export script)
-10. **User:** What is the super user password? (ADDRESSED)
+1.  **User:** Provided detailed requirements for the payroll module, approval workflow, deduction logic, and other HR features. (PENDING)
+2.  **User:** Confirmed the payroll approval workflow and deduction formulas. (PENDING)
+3.  **User:** Requested comprehensive enhancements to the Employee Master page. (IN PROGRESS)
+4.  **User:** Inquired about MongoDB Atlas recommendations. (ADDRESSED)
+5.  **User:** Asked for database environment specifications. (ADDRESSED)
+6.  **User:** Reported that the BioCloud sync and employee-to-user creation were not working. (IN PROGRESS)
+7.  **User:** Requested a one-click data reset feature and environment separation. (COMPLETED)
+8.  **User:** Provided detailed requirements for granular finance user permissions. (IN PROGRESS)
+9.  **User:** Asked to modify finance management features. (IN PROGRESS)
+10. **User:** Set priorities for the agent's work. (ADDRESSED)
 
 **Project Health Check:**
--   **Working:** Core application features, z-index UI fix, 3CX extension mapping.
--   **In Progress:** The CLT Finance Suite integration.
--   **Broken:** Navigation within the newly created Finance Suite is critically broken, preventing access to five of the six new modules.
+-   **Working:** Core application, Finance Suite, Admin Settings (Data Reset, Feature Flags), Employee-to-User Sync.
+-   **In Progress:** Payroll Module, Employee Master Enhancements, Finance User Permissions UI.
+-   **Broken:** **BioCloud Attendance Sync (Critical)**, **Run Payroll feature**.
 
 **3rd Party Integrations**
--   **3CX:** (Modified) Integration updated to support per-user extension mapping.
--   **ExchangeRate-API:** In use.
--   **ZK BioCloud:** Integrated via Playwright web scraper.
+-   **3CX:** Integrated for call tracking.
+-   **ZK BioCloud:** Integrated for fetching employee lists. **Attendance sync via Playwright is broken.**
+-   **MongoDB:** The current database.
 
 **Testing status**
--   **Testing agent used after significant changes:** YES (for the z-index fix).
+-   **Testing agent used after significant changes:** YES
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None.
--   **Known regressions:** The finance suite navigation is a new, major regression.
+-   **Test files created:** None
+-   **Known regressions:** BioCloud attendance sync, Run Payroll functionality.
 
 **Credentials to test flow:**
 -   **Super Admin Login:**
@@ -154,4 +191,6 @@ Prior to this, the agent fixed a global UI  bug and implemented a  field in the 
     -   **Password:** 
 
 **What agent forgot to execute**
--   The agent did not complete the routing fix for the finance suite. It started to implement a fix but left the feature in a broken, unusable state without testing. The agent must complete and verify this fix before moving on.</analysis>
+-   The agent did not complete the fix for the **BioCloud sync issue**, leaving it in a broken state.
+-   The agent did not finish the **payroll module refactoring**, leaving the Run Payroll feature non-functional and the approval workflow unimplemented.
+-   The agent did not resolve the UI bug with the **finance permissions dropdown** in User Management.</analysis>
