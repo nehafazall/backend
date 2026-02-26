@@ -9472,6 +9472,7 @@ async def fetch_biocloud_attendance(
     """
     Fetch attendance from BioCloud and sync to CLT Synapse
     Uses Playwright web scraping since direct API not available for attendance
+    Navigates to Attendance > Daily Attendance and scrapes the layui table
     """
     import os as os_module
     os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
@@ -9490,71 +9491,140 @@ async def fetch_biocloud_attendance(
             biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
             biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
             
+            logger.info(f"BioCloud sync: Connecting to {biocloud_url}")
+            
             # Login to BioCloud
-            await page.goto(biocloud_url, wait_until="networkidle")
-            await page.wait_for_timeout(3000)
+            await page.goto(biocloud_url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(2000)
             
             # Fill login form
-            username_input = page.locator('input[placeholder*="Username"], input[name="username"], input[type="text"]').first
-            password_input = page.locator('input[placeholder*="Password"], input[name="password"], input[type="password"]').first
+            username_input = page.locator('input[type="text"]').first
+            password_input = page.locator('input[type="password"]').first
             
             await username_input.fill(biocloud_user)
             await password_input.fill(biocloud_pass)
             
             # Click login button
-            login_btn = page.locator('button:has-text("Login"), button:has-text("Sign"), button[type="submit"]').first
+            login_btn = page.locator('button').first
             await login_btn.click()
             await page.wait_for_timeout(5000)
             
-            # Navigate to Attendance > First & Last
-            await page.click('text=Attendance')
-            await page.wait_for_timeout(2000)
+            logger.info("BioCloud sync: Logged in successfully")
             
-            # Look for First & Last or First/Last punch menu
-            first_last_menu = page.locator('text=First & Last, text=First/Last, text=First Last').first
-            await first_last_menu.click()
-            await page.wait_for_timeout(3000)
+            # Navigate to Attendance menu
+            attendance_menu = page.locator('a:has-text("Attendance")').first
+            await attendance_menu.click()
+            await page.wait_for_timeout(1500)
             
-            # Handle date picker (may be readonly with calendar widget)
-            # Click on date input to open calendar
-            date_inputs = page.locator('.layui-input, input[placeholder*="选择"], input.date-input')
+            # Click on Daily Attendance
+            daily_att = page.locator('a:has-text("Daily Attendance")').first
+            await daily_att.click()
+            await page.wait_for_timeout(4000)
             
-            # Try to use the date API/filter if available
-            # Or parse the default loaded data
+            logger.info("BioCloud sync: Navigated to Daily Attendance")
             
-            # Parse the table data
-            rows = await page.locator('table tbody tr, .layui-table tbody tr').all()
+            # Find the Daily Attendance table container (layui-table-box)
+            # The Daily Attendance table is the second container with Employee ID, Weekday, Name, etc.
+            layui_containers = await page.locator('.layui-table-box').all()
+            
             attendance_data = []
             
-            for row in rows:
-                cells = await row.locator('td').all()
-                if len(cells) >= 4:
-                    try:
-                        emp_code = await cells[0].inner_text()
-                        name = await cells[1].inner_text()
-                        dept = await cells[2].inner_text() if len(cells) > 2 else ""
-                        first_in = await cells[3].inner_text() if len(cells) > 3 else None
-                        last_out = await cells[4].inner_text() if len(cells) > 4 else None
+            if len(layui_containers) >= 2:
+                daily_container = layui_containers[1]  # Second container has Daily Attendance
+                
+                # Try to set page size to maximum (50) to get more records
+                try:
+                    page_size_select = page.locator('.layui-laypage-limits select').nth(1)
+                    await page_size_select.select_option(value='50')
+                    await page.wait_for_timeout(2000)
+                except Exception as e:
+                    logger.warning(f"Could not set page size: {e}")
+                
+                # Get total page count
+                total_pages = 1
+                try:
+                    # Look for last page link to determine total pages
+                    last_page_link = page.locator('.layui-laypage-last')
+                    if await last_page_link.count() > 0:
+                        last_page_text = await last_page_link.get_attribute('data-page')
+                        if last_page_text:
+                            total_pages = int(last_page_text)
+                except:
+                    pass
+                
+                logger.info(f"BioCloud sync: Found {total_pages} pages of data")
+                
+                # Loop through all pages
+                current_page = 1
+                while current_page <= total_pages:
+                    # Get body from the container
+                    body_elements = await daily_container.locator('.layui-table-body').all()
+                    
+                    if body_elements:
+                        body = body_elements[0]
+                        rows = await body.locator('tr').all()
                         
-                        if emp_code and emp_code.strip():
-                            attendance_data.append({
-                                "emp_code": emp_code.strip(),
-                                "name": name.strip(),
-                                "department": dept.strip(),
-                                "first_in": first_in.strip() if first_in else None,
-                                "last_out": last_out.strip() if last_out else None,
-                            })
-                    except:
-                        continue
+                        for row in rows:
+                            cells = await row.locator('td').all()
+                            if len(cells) >= 7:
+                                try:
+                                    cell_texts = []
+                                    for cell in cells[:11]:
+                                        try:
+                                            text = await cell.inner_text()
+                                            cell_texts.append(text.strip())
+                                        except:
+                                            cell_texts.append('')
+                                    
+                                    # Columns: Employee ID | Weekday | Employee Name | Department Name | Punch Date | Actual In | Actual Out | Actual BIn | Actual BOut | Day off
+                                    emp_code = cell_texts[0]
+                                    emp_name = cell_texts[2]
+                                    dept = cell_texts[3]
+                                    punch_date = cell_texts[4]
+                                    actual_in = cell_texts[5] if len(cell_texts) > 5 else ""
+                                    actual_out = cell_texts[6] if len(cell_texts) > 6 else ""
+                                    day_off = cell_texts[9] if len(cell_texts) > 9 else ""
+                                    
+                                    # Validate record
+                                    if emp_code.isdigit() and punch_date and '-' in punch_date:
+                                        status = "Absent" if day_off == "Absent" else ("Present" if actual_in else "No Punch")
+                                        
+                                        record = {
+                                            "emp_code": emp_code,
+                                            "name": emp_name,
+                                            "department": dept,
+                                            "punch_date": punch_date,
+                                            "first_in": actual_in if actual_in else None,
+                                            "last_out": actual_out if actual_out else None,
+                                            "status": status
+                                        }
+                                        attendance_data.append(record)
+                                except Exception as e:
+                                    continue
+                    
+                    # Go to next page if not on last page
+                    if current_page < total_pages:
+                        try:
+                            next_page_link = page.locator(f'.layui-laypage a[data-page="{current_page + 1}"]').nth(1)
+                            await next_page_link.click()
+                            await page.wait_for_timeout(2000)
+                        except Exception as e:
+                            logger.warning(f"Could not navigate to page {current_page + 1}: {e}")
+                            break
+                    
+                    current_page += 1
             
             await browser.close()
             
+            logger.info(f"BioCloud sync: Fetched {len(attendance_data)} raw attendance records")
+            
             # Process and save attendance data
             synced = 0
+            skipped = 0
             for att in attendance_data:
                 emp_code = att["emp_code"]
                 
-                # Find mapped employee
+                # Find mapped employee by biocloud_emp_code
                 employee = await db.hr_employees.find_one(
                     {"biocloud_emp_code": emp_code},
                     {"_id": 0}
@@ -9562,39 +9632,56 @@ async def fetch_biocloud_attendance(
                 
                 if employee:
                     now = datetime.now(timezone.utc).isoformat()
+                    record_date = att["punch_date"]
                     
-                    # Check if attendance already exists
+                    # Check if attendance already exists for this date
                     existing = await db.hr_attendance.find_one({
                         "employee_id": employee["id"],
-                        "date": target_date
+                        "date": record_date
                     })
+                    
+                    # Determine status
+                    if att["status"] == "Absent":
+                        status = "absent"
+                    elif att["first_in"]:
+                        status = "present"
+                    else:
+                        status = "absent"
                     
                     attendance_record = {
                         "employee_id": employee["id"],
                         "employee_code": employee["employee_id"],
                         "employee_name": employee["full_name"],
                         "department": employee.get("department"),
-                        "date": target_date,
+                        "date": record_date,
                         "biometric_in": att["first_in"],
                         "biometric_out": att["last_out"],
+                        "status": status,
                         "source": "biocloud_sync",
                         "synced_at": now
                     }
                     
-                    # Calculate late/early
-                    if att["first_in"] and att["first_in"] > "09:00":
+                    # Calculate late minutes (if check-in after 09:00)
+                    if att["first_in"]:
                         try:
                             in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
                             start_time = datetime.strptime("09:00", "%H:%M")
-                            attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                            if in_time > start_time:
+                                attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                            else:
+                                attendance_record["late_minutes"] = 0
                         except:
                             pass
                     
-                    if att["last_out"] and att["last_out"] < "18:00":
+                    # Calculate early exit minutes (if check-out before 18:00)
+                    if att["last_out"]:
                         try:
                             out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
                             end_time = datetime.strptime("18:00", "%H:%M")
-                            attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                            if out_time < end_time:
+                                attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                            else:
+                                attendance_record["early_exit_minutes"] = 0
                         except:
                             pass
                     
@@ -9609,13 +9696,16 @@ async def fetch_biocloud_attendance(
                         await db.hr_attendance.insert_one(attendance_record)
                     
                     synced += 1
+                else:
+                    skipped += 1
             
             return {
                 "success": True,
                 "date": target_date,
                 "fetched": len(attendance_data),
                 "synced": synced,
-                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse"
+                "skipped": skipped,
+                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse ({skipped} unmapped employees skipped)"
             }
             
     except Exception as e:
