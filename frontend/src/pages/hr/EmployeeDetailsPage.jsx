@@ -556,7 +556,7 @@ const EmployeeDetailsPage = () => {
                 {/* Salary Tab */}
                 <TabsContent value="salary" className="space-y-4">
                     <div className="flex justify-between items-center">
-                        <p className="text-muted-foreground">Manage employee salary structure</p>
+                        <p className="text-muted-foreground">Manage employee salary structure (base salary and allowances only)</p>
                         <Button onClick={handleSaveSalary} disabled={saving}>
                             <Save className="h-4 w-4 mr-2" />{saving ? 'Saving...' : 'Save Salary'}
                         </Button>
@@ -565,7 +565,8 @@ const EmployeeDetailsPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle className="text-lg text-green-500">Earnings</CardTitle>
+                                <CardTitle className="text-lg text-green-500">Base Salary & Allowances</CardTitle>
+                                <CardDescription>Monthly fixed salary components</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>
@@ -608,46 +609,84 @@ const EmployeeDetailsPage = () => {
                                         onChange={(e) => setSalary({ ...salary, other_allowances: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
-                                <div>
-                                    <Label>Commission (AED)</Label>
-                                    <Input
-                                        type="number"
-                                        value={salary.commission}
-                                        onChange={(e) => setSalary({ ...salary, commission: parseFloat(e.target.value) || 0 })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Incentives (AED)</Label>
-                                    <Input
-                                        type="number"
-                                        value={salary.incentives}
-                                        onChange={(e) => setSalary({ ...salary, incentives: parseFloat(e.target.value) || 0 })}
-                                    />
-                                </div>
                             </CardContent>
                         </Card>
 
                         <div className="space-y-4">
-                            <Card>
+                            <Card className="bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/30">
                                 <CardHeader>
-                                    <CardTitle className="text-lg text-red-500">Deductions</CardTitle>
+                                    <CardTitle className="text-lg">Monthly Salary</CardTitle>
+                                    <CardDescription>Total fixed monthly salary (before payroll adjustments)</CardDescription>
                                 </CardHeader>
-                                <CardContent>
-                                    <div>
-                                        <Label>Total Deductions (AED)</Label>
-                                        <Input
-                                            type="number"
-                                            value={salary.deductions}
-                                            onChange={(e) => setSalary({ ...salary, deductions: parseFloat(e.target.value) || 0 })}
-                                        />
+                                <CardContent className="space-y-3">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Basic Salary</span>
+                                        <span className="font-medium">AED {parseFloat(salary.basic_salary || 0).toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Total Allowances</span>
+                                        <span className="font-medium">AED {(
+                                            parseFloat(salary.housing_allowance || 0) +
+                                            parseFloat(salary.transport_allowance || 0) +
+                                            parseFloat(salary.telephone_allowance || 0) +
+                                            parseFloat(salary.other_allowances || 0)
+                                        ).toLocaleString()}</span>
+                                    </div>
+                                    <Separator />
+                                    <div className="flex justify-between">
+                                        <span className="font-semibold">Total Monthly Salary</span>
+                                        <span className="font-bold text-2xl text-emerald-500">AED {calculateGross().toLocaleString()}</span>
                                     </div>
                                 </CardContent>
                             </Card>
 
-                            <Card className="bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/30">
+                            <Card>
                                 <CardHeader>
-                                    <CardTitle className="text-lg">Salary Summary</CardTitle>
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <CreditCard className="h-5 w-5" />Bank Details
+                                    </CardTitle>
                                 </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <Label>Bank Name</Label>
+                                        <Input
+                                            value={bankDetails.bank_name}
+                                            onChange={(e) => setBankDetails({ ...bankDetails, bank_name: e.target.value })}
+                                            placeholder="e.g., Emirates NBD"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>Account Number</Label>
+                                        <Input
+                                            value={bankDetails.account_number}
+                                            onChange={(e) => setBankDetails({ ...bankDetails, account_number: e.target.value })}
+                                            placeholder="Account number"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label>IBAN</Label>
+                                        <Input
+                                            value={bankDetails.iban}
+                                            onChange={(e) => setBankDetails({ ...bankDetails, iban: e.target.value })}
+                                            placeholder="AE..."
+                                        />
+                                    </div>
+                                    <Button variant="outline" onClick={handleSaveBankDetails} disabled={saving} className="w-full">
+                                        <Save className="h-4 w-4 mr-2" />Save Bank Details
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+
+                    <Card className="bg-blue-500/10 border-blue-500/30">
+                        <CardContent className="py-4">
+                            <p className="text-sm text-muted-foreground">
+                                <strong>Note:</strong> Commissions, Incentives, and Deductions are calculated in the Payroll module based on sales performance and attendance records.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
                                 <CardContent className="space-y-3">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Gross Salary</span>
