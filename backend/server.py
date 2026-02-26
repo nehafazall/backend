@@ -8006,6 +8006,93 @@ async def create_employee_with_user(
         )
     }
 
+@api_router.post("/hr/employees/sync-to-users")
+async def sync_employees_to_users(
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """
+    Sync existing employees to user accounts.
+    Creates user accounts for employees that don't have linked users.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get all employees without user_id
+    employees_without_users = await db.hr_employees.find(
+        {"$or": [{"user_id": None}, {"user_id": {"$exists": False}}]},
+        {"_id": 0}
+    ).to_list(500)
+    
+    synced = 0
+    skipped = 0
+    errors = []
+    
+    for emp in employees_without_users:
+        email = emp.get("company_email")
+        if not email:
+            skipped += 1
+            errors.append(f"{emp.get('employee_id')}: No company email")
+            continue
+        
+        # Check if user already exists with this email
+        existing_user = await db.users.find_one({"email": email})
+        
+        if existing_user:
+            # Link existing user to employee
+            await db.hr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"user_id": existing_user["id"], "updated_at": now}}
+            )
+            # Also link employee to user
+            await db.users.update_one(
+                {"id": existing_user["id"]},
+                {"$set": {"employee_id": emp["id"], "updated_at": now}}
+            )
+            synced += 1
+        else:
+            # Create new user
+            user_uuid = str(uuid.uuid4())
+            role = emp.get("role", "staff")
+            
+            # Generate password: First name + @123
+            first_name = emp.get("full_name", "User").split()[0]
+            password = f"{first_name}@123"
+            
+            permissions = get_default_permissions(role)
+            
+            new_user = {
+                "id": user_uuid,
+                "email": email,
+                "password": hash_password(password),
+                "full_name": emp.get("full_name"),
+                "role": role,
+                "department": emp.get("department"),
+                "is_active": True,
+                "status": "active",
+                "permissions": permissions,
+                "employee_id": emp["id"],
+                "created_at": now,
+                "updated_at": now,
+                "created_via": "employee_sync"
+            }
+            
+            await db.users.insert_one(new_user)
+            
+            # Update employee with user_id
+            await db.hr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"user_id": user_uuid, "updated_at": now}}
+            )
+            
+            synced += 1
+    
+    return {
+        "success": True,
+        "synced": synced,
+        "skipped": skipped,
+        "errors": errors,
+        "message": f"Synced {synced} employees to user accounts, skipped {skipped}"
+    }
+
 @api_router.put("/hr/employees/{employee_id}/status")
 async def update_employee_status(
     employee_id: str,
