@@ -1993,8 +1993,23 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Non-super_admin can only update certain fields
-    if user.get("role") != "super_admin":
+    # Permission-based field access
+    user_role = user.get("role")
+    
+    # Super admin and admin can update all fields
+    if user_role in ["super_admin", "admin"]:
+        # All fields allowed
+        pass
+    elif user_role in ["sales_manager", "team_leader"]:
+        # Can update team-related fields for their team members
+        allowed_fields = ["phone", "region", "team_leader_id", "threecx_extension"]
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+    elif user_role == "hr":
+        # HR can update HR-related fields
+        allowed_fields = ["phone", "region", "department", "designation", "is_active"]
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+    else:
+        # Regular users can only update their own basic fields
         allowed_fields = ["phone", "region"]
         data = {k: v for k, v in data.items() if k in allowed_fields}
         
