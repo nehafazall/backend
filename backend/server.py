@@ -8162,6 +8162,93 @@ async def update_employee_documents(
     
     return {"message": "Documents updated successfully", "updated_fields": list(update_data.keys())}
 
+@api_router.put("/hr/employees/{employee_id}/bank-details")
+async def update_employee_bank_details(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Update employee bank details"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    bank_details = {
+        "bank_name": data.get("bank_name", ""),
+        "account_number": data.get("account_number", ""),
+        "iban": data.get("iban", ""),
+        "updated_at": now
+    }
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "bank_details": bank_details,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Bank details updated successfully"}
+
+@api_router.put("/hr/employees/{employee_id}/gender")
+async def update_employee_gender(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee gender"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    gender = data.get("gender")
+    if gender not in ["male", "female", "other"]:
+        raise HTTPException(status_code=400, detail="Gender must be: male, female, or other")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "gender": gender,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Gender updated successfully"}
+
+@api_router.get("/hr/employees/gender-ratio")
+async def get_gender_ratio(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get gender ratio of all active employees"""
+    pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$gender", "count": {"$sum": 1}}}
+    ]
+    
+    results = await db.hr_employees.aggregate(pipeline).to_list(10)
+    
+    ratio = {"male": 0, "female": 0, "other": 0, "unspecified": 0}
+    total = 0
+    for r in results:
+        gender = r["_id"] or "unspecified"
+        ratio[gender] = r["count"]
+        total += r["count"]
+    
+    return {
+        "counts": ratio,
+        "total": total,
+        "percentages": {
+            k: round((v / total * 100), 1) if total > 0 else 0 
+            for k, v in ratio.items()
+        }
+    }
+
 @api_router.put("/hr/employees/{employee_id}/salary")
 async def update_employee_salary(
     employee_id: str,
