@@ -268,6 +268,11 @@ function AppRoutes() {
                         <EmployeeMasterPage />
                     </ProtectedRoute>
                 } />
+                <Route path="hr/employees/:id" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr', 'finance']}>
+                        <EmployeeDetailsPage />
+                    </ProtectedRoute>
+                } />
                 <Route path="hr/leave" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
                         <LeavePage />
