@@ -2786,6 +2786,369 @@ async def delete_lead_reminder(lead_id: str, user = Depends(get_current_user)):
     
     return {"message": "Reminder deleted"}
 
+# =====================
+# LEAD REASSIGNMENT WITH APPROVAL WORKFLOW
+# =====================
+
+@api_router.post("/leads/{lead_id}/reassignment-request")
+async def request_lead_reassignment(
+    lead_id: str, 
+    data: LeadReassignmentRequest,
+    user = Depends(require_roles(["team_leader", "sales_manager", "admin", "super_admin"]))
+):
+    """
+    Request to reassign a lead to a different agent.
+    Team Leaders must get approval from Sales Manager -> CEO
+    Sales Managers must get approval from CEO
+    Admin/Super Admin can reassign directly
+    """
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Get the new agent details
+    new_agent = await db.users.find_one({"id": data.new_agent_id})
+    if not new_agent:
+        raise HTTPException(status_code=404, detail="New agent not found")
+    
+    # Get current agent details
+    current_agent = None
+    if data.current_agent_id:
+        current_agent = await db.users.find_one({"id": data.current_agent_id})
+    
+    now = datetime.now(timezone.utc).isoformat()
+    user_role = user.get("role")
+    
+    # Admin and Super Admin can reassign directly without approval
+    if user_role in ["super_admin", "admin"]:
+        # Direct reassignment
+        await db.leads.update_one(
+            {"id": lead_id},
+            {"$set": {
+                "assigned_to": data.new_agent_id,
+                "assigned_to_name": new_agent["full_name"],
+                "in_pool": False,
+                "assigned_at": now,
+                "updated_at": now
+            }}
+        )
+        await log_activity("lead", lead_id, "reassigned", user, {
+            "from": current_agent["full_name"] if current_agent else "Pool",
+            "to": new_agent["full_name"],
+            "reason": data.reason,
+            "approved_by": "direct_admin"
+        })
+        return {
+            "message": f"Lead reassigned to {new_agent['full_name']}",
+            "status": "completed",
+            "requires_approval": False
+        }
+    
+    # Determine approval workflow
+    # Team Leader -> Sales Manager -> CEO
+    # Sales Manager -> CEO
+    approval_chain = []
+    
+    if user_role == "team_leader":
+        # Check if there's an active Sales Manager
+        sales_manager = await db.users.find_one({"role": "sales_manager", "is_active": True})
+        if sales_manager:
+            approval_chain.append({
+                "role": "sales_manager",
+                "user_id": sales_manager["id"],
+                "user_name": sales_manager["full_name"],
+                "status": "pending"
+            })
+        # CEO is always in the chain
+        ceo = await db.users.find_one({"role": "super_admin", "is_active": True})
+        if ceo:
+            approval_chain.append({
+                "role": "ceo",
+                "user_id": ceo["id"],
+                "user_name": ceo["full_name"],
+                "status": "pending"
+            })
+    elif user_role == "sales_manager":
+        # Sales Manager only needs CEO approval
+        ceo = await db.users.find_one({"role": "super_admin", "is_active": True})
+        if ceo:
+            approval_chain.append({
+                "role": "ceo",
+                "user_id": ceo["id"],
+                "user_name": ceo["full_name"],
+                "status": "pending"
+            })
+    
+    if not approval_chain:
+        raise HTTPException(status_code=400, detail="No approvers found in the system")
+    
+    # Create reassignment request
+    request_id = str(uuid.uuid4())
+    reassignment_request = {
+        "id": request_id,
+        "request_type": "lead_reassignment",
+        "lead_id": lead_id,
+        "lead_name": lead["full_name"],
+        "lead_phone": lead["phone"],
+        "current_agent_id": data.current_agent_id,
+        "current_agent_name": current_agent["full_name"] if current_agent else "Pool",
+        "new_agent_id": data.new_agent_id,
+        "new_agent_name": new_agent["full_name"],
+        "reason": data.reason,
+        "requested_by": user["id"],
+        "requested_by_name": user["full_name"],
+        "requested_by_role": user_role,
+        "approval_chain": approval_chain,
+        "current_approval_step": 0,
+        "status": "pending_approval",
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.lead_reassignment_requests.insert_one(reassignment_request)
+    await log_activity("lead", lead_id, "reassignment_requested", user, {
+        "new_agent": new_agent["full_name"],
+        "reason": data.reason
+    })
+    
+    # Get first approver info
+    first_approver = approval_chain[0]
+    
+    return {
+        "message": f"Reassignment request submitted. Awaiting approval from {first_approver['user_name']} ({first_approver['role'].replace('_', ' ').title()})",
+        "request_id": request_id,
+        "status": "pending_approval",
+        "requires_approval": True,
+        "next_approver": first_approver
+    }
+
+
+@api_router.get("/leads/reassignment-requests")
+async def get_reassignment_requests(
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get lead reassignment requests based on user role"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    query = {}
+    
+    if user_role in ["super_admin", "admin"]:
+        # Can see all requests
+        pass
+    elif user_role == "sales_manager":
+        # Can see requests where they are in the approval chain
+        query["$or"] = [
+            {"approval_chain.user_id": user_id},
+            {"requested_by": user_id}
+        ]
+    elif user_role == "team_leader":
+        # Can only see their own requests
+        query["requested_by"] = user_id
+    else:
+        return []
+    
+    if status:
+        query["status"] = status
+    
+    requests = await db.lead_reassignment_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return requests
+
+
+@api_router.get("/leads/reassignment-requests/pending")
+async def get_pending_reassignment_approvals(user = Depends(get_current_user)):
+    """Get reassignment requests pending the current user's approval"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    # Find requests where this user is the current approver
+    pipeline = [
+        {"$match": {"status": "pending_approval"}},
+        {"$addFields": {
+            "current_approver": {"$arrayElemAt": ["$approval_chain", "$current_approval_step"]}
+        }},
+        {"$match": {
+            "$or": [
+                {"current_approver.user_id": user_id},
+                # Super admin (CEO) can approve if role is ceo
+                {"$and": [
+                    {"current_approver.role": "ceo"},
+                    {"$expr": {"$eq": [user_role, "super_admin"]}}
+                ]}
+            ]
+        }},
+        {"$project": {"_id": 0}}
+    ]
+    
+    requests = await db.lead_reassignment_requests.aggregate(pipeline).to_list(100)
+    return requests
+
+
+@api_router.post("/leads/reassignment-requests/{request_id}/approve")
+async def approve_reassignment_request(
+    request_id: str,
+    user = Depends(get_current_user)
+):
+    """Approve a lead reassignment request"""
+    request = await db.lead_reassignment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Request is already {request['status']}")
+    
+    user_role = user.get("role")
+    user_id = user["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get current approval step
+    current_step = request["current_approval_step"]
+    approval_chain = request["approval_chain"]
+    
+    if current_step >= len(approval_chain):
+        raise HTTPException(status_code=400, detail="Invalid approval step")
+    
+    current_approver = approval_chain[current_step]
+    
+    # Verify this user can approve
+    can_approve = False
+    if current_approver["user_id"] == user_id:
+        can_approve = True
+    elif current_approver["role"] == "ceo" and user_role == "super_admin":
+        can_approve = True
+    
+    if not can_approve:
+        raise HTTPException(status_code=403, detail="You are not authorized to approve this request")
+    
+    # Update the approval chain
+    approval_chain[current_step]["status"] = "approved"
+    approval_chain[current_step]["approved_by"] = user_id
+    approval_chain[current_step]["approved_by_name"] = user["full_name"]
+    approval_chain[current_step]["approved_at"] = now
+    
+    # Check if this was the last approval
+    next_step = current_step + 1
+    
+    if next_step >= len(approval_chain):
+        # All approvals complete - execute the reassignment
+        lead = await db.leads.find_one({"id": request["lead_id"]})
+        if lead:
+            await db.leads.update_one(
+                {"id": request["lead_id"]},
+                {"$set": {
+                    "assigned_to": request["new_agent_id"],
+                    "assigned_to_name": request["new_agent_name"],
+                    "in_pool": False,
+                    "assigned_at": now,
+                    "updated_at": now
+                }}
+            )
+            await log_activity("lead", request["lead_id"], "reassigned", user, {
+                "from": request["current_agent_name"],
+                "to": request["new_agent_name"],
+                "reason": request["reason"],
+                "approved_via": "approval_workflow"
+            })
+        
+        await db.lead_reassignment_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "approval_chain": approval_chain,
+                "status": "approved",
+                "completed_at": now,
+                "updated_at": now
+            }}
+        )
+        
+        return {
+            "message": f"Reassignment approved and executed. Lead assigned to {request['new_agent_name']}",
+            "status": "approved",
+            "lead_reassigned": True
+        }
+    else:
+        # Move to next approval step
+        next_approver = approval_chain[next_step]
+        
+        await db.lead_reassignment_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "approval_chain": approval_chain,
+                "current_approval_step": next_step,
+                "updated_at": now
+            }}
+        )
+        
+        return {
+            "message": f"Approved. Now pending approval from {next_approver['user_name']} ({next_approver['role'].replace('_', ' ').title()})",
+            "status": "pending_approval",
+            "next_approver": next_approver,
+            "lead_reassigned": False
+        }
+
+
+@api_router.post("/leads/reassignment-requests/{request_id}/reject")
+async def reject_reassignment_request(
+    request_id: str,
+    rejection_reason: str = "",
+    user = Depends(get_current_user)
+):
+    """Reject a lead reassignment request"""
+    request = await db.lead_reassignment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Request is already {request['status']}")
+    
+    user_role = user.get("role")
+    user_id = user["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get current approval step
+    current_step = request["current_approval_step"]
+    approval_chain = request["approval_chain"]
+    current_approver = approval_chain[current_step]
+    
+    # Verify this user can reject
+    can_reject = False
+    if current_approver["user_id"] == user_id:
+        can_reject = True
+    elif current_approver["role"] == "ceo" and user_role == "super_admin":
+        can_reject = True
+    
+    if not can_reject:
+        raise HTTPException(status_code=403, detail="You are not authorized to reject this request")
+    
+    # Update the approval chain
+    approval_chain[current_step]["status"] = "rejected"
+    approval_chain[current_step]["rejected_by"] = user_id
+    approval_chain[current_step]["rejected_by_name"] = user["full_name"]
+    approval_chain[current_step]["rejected_at"] = now
+    approval_chain[current_step]["rejection_reason"] = rejection_reason
+    
+    await db.lead_reassignment_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "approval_chain": approval_chain,
+            "status": "rejected",
+            "rejection_reason": rejection_reason,
+            "rejected_by": user_id,
+            "rejected_by_name": user["full_name"],
+            "rejected_at": now,
+            "updated_at": now
+        }}
+    )
+    
+    await log_activity("lead", request["lead_id"], "reassignment_rejected", user, {
+        "reason": rejection_reason
+    })
+    
+    return {
+        "message": "Reassignment request rejected",
+        "status": "rejected"
+    }
+
 @api_router.post("/students/{student_id}/reminder")
 async def set_student_reminder(student_id: str, reminder_date: str, reminder_time: str, reminder_type: str = "general", reminder_note: str = "", user = Depends(get_current_user)):
     """Set a reminder for a student (upgrade/redeposit)"""
