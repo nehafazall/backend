@@ -3588,6 +3588,10 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         result = await db.payments.aggregate(pipeline).to_list(1)
         stats["total_verified_revenue"] = result[0]["total"] if result else 0
     
+    # Add viewing_as info if viewing another user's dashboard
+    if viewing_as:
+        stats["viewing_as"] = viewing_as
+    
     return stats
 
 @api_router.get("/dashboard/lead-funnel")
