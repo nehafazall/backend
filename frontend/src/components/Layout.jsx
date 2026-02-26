@@ -137,6 +137,7 @@ const SECTIONS = {
             { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
             { title: 'QC Dashboard', icon: Headphones, path: '/qc-dashboard', roles: ['super_admin', 'admin', 'cs_head', 'sales_manager'] },
             { title: 'Leads Pool', icon: Inbox, path: '/leads/pool', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
+            { title: 'Approvals', icon: CheckSquare, path: '/approvals', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
             { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
