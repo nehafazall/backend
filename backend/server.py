@@ -270,6 +270,12 @@ class ApprovalRequest(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
 
+class LeadReassignmentRequest(BaseModel):
+    lead_id: str
+    current_agent_id: str
+    new_agent_id: str
+    reason: str
+
 class LeadBase(BaseModel):
     full_name: str
     phone: str
