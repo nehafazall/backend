@@ -115,6 +115,8 @@ function FollowupsPage() {
     const { user } = useAuth();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [selectedLead, setSelectedLead] = useState(null);
+    const [showLeadModal, setShowLeadModal] = useState(false);
 
     useEffect(function() {
         loadFollowups();
@@ -146,6 +148,27 @@ function FollowupsPage() {
 
     function handleCall(item) {
         window.open('tel:' + item.phone, '_blank');
+    }
+
+    function handleOpenCard(item) {
+        if (item.entity_type === 'lead') {
+            setSelectedLead(item);
+            setShowLeadModal(true);
+        } else {
+            // For students, navigate to student detail page (if available)
+            // Or show a student modal in future
+            toast.info('Student details coming soon');
+        }
+    }
+
+    function handleLeadUpdate() {
+        // Reload follow-ups after lead is updated
+        loadFollowups();
+    }
+
+    function handleCloseLeadModal() {
+        setShowLeadModal(false);
+        setSelectedLead(null);
     }
 
     if (loading) {
