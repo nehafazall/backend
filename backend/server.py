@@ -3595,10 +3595,22 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
     return stats
 
 @api_router.get("/dashboard/lead-funnel")
-async def get_lead_funnel(user = Depends(get_current_user)):
+async def get_lead_funnel(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
     query = {}
-    if user["role"] == "sales_executive":
-        query["assigned_to"] = user["id"]
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
     
     pipeline = [
         {"$match": query},
@@ -3614,10 +3626,22 @@ async def get_lead_funnel(user = Depends(get_current_user)):
     return result
 
 @api_router.get("/dashboard/sales-by-course")
-async def get_sales_by_course(user = Depends(get_current_user)):
+async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
     query = {"stage": "enrolled"}
-    if user["role"] == "sales_executive":
-        query["assigned_to"] = user["id"]
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
     
     pipeline = [
         {"$match": query},
