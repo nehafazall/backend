@@ -87,13 +87,41 @@ const EmployeeDetailsPage = () => {
             
             // Initialize salary
             if (res.data.salary_structure) {
-                setSalary(res.data.salary_structure);
+                setSalary({
+                    basic_salary: res.data.salary_structure.basic_salary || 0,
+                    housing_allowance: res.data.salary_structure.housing_allowance || 0,
+                    transport_allowance: res.data.salary_structure.transport_allowance || 0,
+                    telephone_allowance: res.data.salary_structure.telephone_allowance || 0,
+                    other_allowances: res.data.salary_structure.other_allowances || 0
+                });
+            }
+            
+            // Initialize bank details
+            if (res.data.bank_details) {
+                setBankDetails({
+                    bank_name: res.data.bank_details.bank_name || '',
+                    account_number: res.data.bank_details.account_number || '',
+                    iban: res.data.bank_details.iban || ''
+                });
             }
         } catch (error) {
             toast.error('Failed to load employee');
             navigate('/hr/employees');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSaveBankDetails = async () => {
+        setSaving(true);
+        try {
+            await api.put(`/hr/employees/${employee.id}/bank-details`, bankDetails);
+            toast.success('Bank details saved successfully');
+            fetchEmployee();
+        } catch (error) {
+            toast.error('Failed to save bank details');
+        } finally {
+            setSaving(false);
         }
     };
 
