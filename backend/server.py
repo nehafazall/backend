@@ -8126,6 +8126,402 @@ async def sync_employees_to_users(
         "message": f"Synced {synced} employees to user accounts, skipped {skipped}"
     }
 
+# ==================== EMPLOYEE DOCUMENT MANAGEMENT ====================
+
+@api_router.put("/hr/employees/{employee_id}/documents")
+async def update_employee_documents(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee documents (passport, visa, Emirates ID, etc.)"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Document fields that can be updated
+    document_fields = [
+        "passport", "visa", "emirates_id", "labour_card", 
+        "work_permit", "health_insurance", "driving_license",
+        "educational_certificates", "other_documents"
+    ]
+    
+    update_data = {"updated_at": now}
+    for field in document_fields:
+        if field in data:
+            update_data[field] = data[field]
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Documents updated successfully", "updated_fields": list(update_data.keys())}
+
+@api_router.put("/hr/employees/{employee_id}/salary")
+async def update_employee_salary(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Update employee salary structure"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Build salary structure
+    salary_structure = {
+        "basic_salary": data.get("basic_salary", 0),
+        "housing_allowance": data.get("housing_allowance", 0),
+        "transport_allowance": data.get("transport_allowance", 0),
+        "telephone_allowance": data.get("telephone_allowance", 0),
+        "other_allowances": data.get("other_allowances", 0),
+        "deductions": data.get("deductions", 0),
+        "commission": data.get("commission", 0),
+        "incentives": data.get("incentives", 0),
+        "payment_frequency": "monthly",
+        "currency": data.get("currency", "AED"),
+        "effective_date": data.get("effective_date", now[:10]),
+        "updated_at": now,
+        "updated_by": user["id"]
+    }
+    
+    # Calculate totals
+    gross = (salary_structure["basic_salary"] + salary_structure["housing_allowance"] + 
+             salary_structure["transport_allowance"] + salary_structure["telephone_allowance"] + 
+             salary_structure["other_allowances"] + salary_structure["commission"] + 
+             salary_structure["incentives"])
+    salary_structure["gross_salary"] = gross
+    salary_structure["net_salary"] = gross - salary_structure["deductions"]
+    
+    # Store salary history
+    salary_history = employee.get("salary_history", [])
+    if employee.get("salary_structure"):
+        salary_history.append({
+            **employee["salary_structure"],
+            "ended_at": now
+        })
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "salary_structure": salary_structure,
+            "salary_history": salary_history,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Salary updated successfully", "salary_structure": salary_structure}
+
+@api_router.get("/hr/employees/expiring-documents")
+async def get_expiring_documents(
+    days: int = 90,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get documents expiring within specified days"""
+    today = datetime.now(timezone.utc).date()
+    cutoff_date = (today + timedelta(days=days)).isoformat()
+    today_str = today.isoformat()
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    expiring_docs = []
+    document_types = [
+        ("passport", "expiry_date", "Passport"),
+        ("visa", "expiry_date", "Visa"),
+        ("emirates_id", "expiry_date", "Emirates ID"),
+        ("labour_card", "expiry_date", "Labour Card"),
+        ("work_permit", "expiry_date", "Work Permit"),
+        ("health_insurance", "expiry_date", "Health Insurance"),
+        ("driving_license", "expiry_date", "Driving License"),
+    ]
+    
+    for emp in employees:
+        for field, date_key, doc_name in document_types:
+            doc = emp.get(field)
+            if doc and doc.get(date_key):
+                expiry = doc[date_key]
+                if today_str <= expiry <= cutoff_date:
+                    days_until = (datetime.strptime(expiry, "%Y-%m-%d").date() - today).days
+                    expiring_docs.append({
+                        "employee_id": emp["employee_id"],
+                        "employee_name": emp["full_name"],
+                        "company_email": emp.get("company_email"),
+                        "department": emp.get("department"),
+                        "document_type": doc_name,
+                        "expiry_date": expiry,
+                        "days_until_expiry": days_until,
+                        "urgency": "critical" if days_until <= 7 else "high" if days_until <= 15 else "medium" if days_until <= 30 else "low"
+                    })
+        
+        # Check other_documents
+        for doc in emp.get("other_documents", []):
+            if doc.get("expiry_date"):
+                expiry = doc["expiry_date"]
+                if today_str <= expiry <= cutoff_date:
+                    days_until = (datetime.strptime(expiry, "%Y-%m-%d").date() - today).days
+                    expiring_docs.append({
+                        "employee_id": emp["employee_id"],
+                        "employee_name": emp["full_name"],
+                        "company_email": emp.get("company_email"),
+                        "department": emp.get("department"),
+                        "document_type": doc.get("name", "Other Document"),
+                        "expiry_date": expiry,
+                        "days_until_expiry": days_until,
+                        "urgency": "critical" if days_until <= 7 else "high" if days_until <= 15 else "medium" if days_until <= 30 else "low"
+                    })
+    
+    # Sort by days until expiry
+    expiring_docs.sort(key=lambda x: x["days_until_expiry"])
+    
+    return {
+        "total": len(expiring_docs),
+        "critical": len([d for d in expiring_docs if d["urgency"] == "critical"]),
+        "high": len([d for d in expiring_docs if d["urgency"] == "high"]),
+        "medium": len([d for d in expiring_docs if d["urgency"] == "medium"]),
+        "low": len([d for d in expiring_docs if d["urgency"] == "low"]),
+        "documents": expiring_docs
+    }
+
+@api_router.post("/hr/employees/send-expiry-alerts")
+async def send_document_expiry_alerts(
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Send email alerts for expiring documents (90, 60, 30, 15, 7 days)"""
+    alert_days = [90, 60, 30, 15, 7]
+    today = datetime.now(timezone.utc).date()
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Get HR emails for CC
+    hr_users = await db.users.find(
+        {"role": {"$in": ["hr", "admin", "super_admin"]}, "is_active": True},
+        {"_id": 0, "email": 1}
+    ).to_list(50)
+    hr_emails = [u["email"] for u in hr_users]
+    
+    alerts_sent = 0
+    document_types = [
+        ("passport", "expiry_date", "Passport"),
+        ("visa", "expiry_date", "Visa"),
+        ("emirates_id", "expiry_date", "Emirates ID"),
+        ("labour_card", "expiry_date", "Labour Card"),
+        ("work_permit", "expiry_date", "Work Permit"),
+        ("health_insurance", "expiry_date", "Health Insurance"),
+    ]
+    
+    for emp in employees:
+        employee_alerts = []
+        
+        for field, date_key, doc_name in document_types:
+            doc = emp.get(field)
+            if doc and doc.get(date_key):
+                expiry = doc[date_key]
+                try:
+                    expiry_date = datetime.strptime(expiry, "%Y-%m-%d").date()
+                    days_until = (expiry_date - today).days
+                    
+                    if days_until in alert_days:
+                        employee_alerts.append({
+                            "document": doc_name,
+                            "expiry_date": expiry,
+                            "days_until": days_until
+                        })
+                except:
+                    continue
+        
+        # Send email if there are alerts
+        if employee_alerts and emp.get("company_email"):
+            # Log the alert (email sending would be implemented with SendGrid/SMTP)
+            await db.document_expiry_alerts.insert_one({
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_name": emp["full_name"],
+                "email": emp["company_email"],
+                "alerts": employee_alerts,
+                "hr_cc": hr_emails[:3],  # CC first 3 HR emails
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "status": "logged"  # Would be "sent" with actual email integration
+            })
+            alerts_sent += 1
+    
+    return {
+        "message": f"Document expiry alerts processed for {alerts_sent} employees",
+        "alerts_sent": alerts_sent,
+        "note": "Email integration required for actual sending. Alerts have been logged."
+    }
+
+# ==================== PAYSLIP GENERATION ====================
+
+@api_router.get("/hr/employees/{employee_id}/payslip")
+async def generate_payslip(
+    employee_id: str,
+    month: int,
+    year: int,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Generate payslip data for an employee"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    salary = employee.get("salary_structure", {})
+    
+    # Get payroll record if exists
+    payroll = await db.hr_payroll.find_one({
+        "employee_id": employee["id"],
+        "month": month,
+        "year": year
+    }, {"_id": 0})
+    
+    # Calculate components
+    basic = salary.get("basic_salary", 0)
+    housing = salary.get("housing_allowance", 0)
+    transport = salary.get("transport_allowance", 0)
+    telephone = salary.get("telephone_allowance", 0)
+    other_allowances = salary.get("other_allowances", 0)
+    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
+    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
+    
+    gross = basic + housing + transport + telephone + other_allowances + commission + incentives
+    net = gross - deductions
+    
+    # Month name
+    month_names = ["", "January", "February", "March", "April", "May", "June", 
+                   "July", "August", "September", "October", "November", "December"]
+    
+    payslip = {
+        "company": {
+            "name": "CLT Academy",
+            "address": "Dubai, UAE",
+            "logo_url": None
+        },
+        "employee": {
+            "id": employee["employee_id"],
+            "name": employee["full_name"],
+            "email": employee.get("company_email"),
+            "department": employee.get("department"),
+            "designation": employee.get("designation"),
+            "joining_date": employee.get("joining_date"),
+            "bank_name": employee.get("bank_details", {}).get("bank_name"),
+            "account_number": employee.get("bank_details", {}).get("account_number"),
+            "iban": employee.get("bank_details", {}).get("iban")
+        },
+        "pay_period": {
+            "month": month,
+            "month_name": month_names[month],
+            "year": year,
+            "pay_date": f"{year}-{month:02d}-28"
+        },
+        "earnings": {
+            "basic_salary": basic,
+            "housing_allowance": housing,
+            "transport_allowance": transport,
+            "telephone_allowance": telephone,
+            "other_allowances": other_allowances,
+            "commission": commission,
+            "incentives": incentives,
+            "gross_salary": gross
+        },
+        "deductions": {
+            "total_deductions": deductions,
+            "breakdown": payroll.get("deduction_breakdown", []) if payroll else []
+        },
+        "summary": {
+            "gross_salary": gross,
+            "total_deductions": deductions,
+            "net_salary": net,
+            "currency": salary.get("currency", "AED")
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    return payslip
+
+@api_router.post("/hr/employees/{employee_id}/payslip/email")
+async def email_payslip(
+    employee_id: str,
+    month: int,
+    year: int,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Email payslip to employee"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    if not employee.get("company_email"):
+        raise HTTPException(status_code=400, detail="Employee has no email address")
+    
+    # Generate payslip
+    salary = employee.get("salary_structure", {})
+    payroll = await db.hr_payroll.find_one({
+        "employee_id": employee["id"],
+        "month": month,
+        "year": year
+    }, {"_id": 0})
+    
+    basic = salary.get("basic_salary", 0)
+    housing = salary.get("housing_allowance", 0)
+    transport = salary.get("transport_allowance", 0)
+    telephone = salary.get("telephone_allowance", 0)
+    other = salary.get("other_allowances", 0)
+    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
+    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
+    gross = basic + housing + transport + telephone + other + commission + incentives
+    net = gross - deductions
+    
+    month_names = ["", "January", "February", "March", "April", "May", "June", 
+                   "July", "August", "September", "October", "November", "December"]
+    
+    # Log the email (actual sending would use SendGrid/SMTP integration)
+    email_log = {
+        "id": str(uuid.uuid4()),
+        "type": "payslip",
+        "recipient": employee["company_email"],
+        "employee_id": employee["id"],
+        "employee_name": employee["full_name"],
+        "subject": f"Payslip for {month_names[month]} {year}",
+        "pay_period": f"{month_names[month]} {year}",
+        "gross_salary": gross,
+        "net_salary": net,
+        "currency": salary.get("currency", "AED"),
+        "sent_by": user["id"],
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "status": "logged"  # Would be "sent" with actual email integration
+    }
+    
+    await db.payslip_emails.insert_one(email_log)
+    
+    return {
+        "message": f"Payslip for {month_names[month]} {year} prepared for {employee['full_name']}",
+        "recipient": employee["company_email"],
+        "net_salary": net,
+        "note": "Email integration required for actual sending. Email has been logged."
+    }
+
 @api_router.put("/hr/employees/{employee_id}/status")
 async def update_employee_status(
     employee_id: str,
