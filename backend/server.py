@@ -8870,6 +8870,9 @@ async def fetch_biocloud_attendance(
     Fetch attendance from BioCloud and sync to CLT Synapse
     Uses web scraping since direct API not available
     """
+    import os as os_module
+    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
+    
     from playwright.async_api import async_playwright
     
     target_date = date or datetime.now().strftime("%Y-%m-%d")
