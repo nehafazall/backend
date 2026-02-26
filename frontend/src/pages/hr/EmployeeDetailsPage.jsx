@@ -19,11 +19,11 @@ import {
 import {
     User, FileText, DollarSign, Mail, Download, ArrowLeft, Save, 
     Calendar, Building2, Phone, CreditCard, AlertTriangle, Clock,
-    Passport, IdCard, Car, GraduationCap, Heart, Briefcase, Plus
+    IdCard, Car, GraduationCap, Heart, Briefcase, Plus, BookOpen
 } from 'lucide-react';
 
 const DOCUMENT_TYPES = [
-    { key: 'passport', label: 'Passport', icon: Passport, fields: ['number', 'issue_date', 'expiry_date', 'issuing_country'] },
+    { key: 'passport', label: 'Passport', icon: BookOpen, fields: ['number', 'issue_date', 'expiry_date', 'issuing_country'] },
     { key: 'visa', label: 'Visa', icon: IdCard, fields: ['type', 'number', 'expiry_date', 'status'] },
     { key: 'emirates_id', label: 'Emirates ID', icon: IdCard, fields: ['number', 'expiry_date'] },
     { key: 'labour_card', label: 'Labour Card', icon: Briefcase, fields: ['number', 'expiry_date'] },
