@@ -827,6 +827,35 @@ const UsersPage = () => {
                             </div>
                         )}
 
+                        {/* Team Leader Assignment for Sales Executives */}
+                        {formData.role === 'sales_executive' && (
+                            <div className="space-y-2 p-4 border rounded-lg bg-cyan-500/10 border-cyan-500/30">
+                                <Label className="text-sm font-medium flex items-center gap-2">
+                                    <UserCheck className="h-4 w-4" />
+                                    Team Leader Assignment
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Assign this sales executive to a team leader for dashboard visibility
+                                </p>
+                                <Select
+                                    value={formData.team_leader_id || 'none'}
+                                    onValueChange={(value) => setFormData({ ...formData, team_leader_id: value === 'none' ? '' : value })}
+                                >
+                                    <SelectTrigger data-testid="user-team-leader-select">
+                                        <SelectValue placeholder="Select Team Leader" />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[9999]">
+                                        <SelectItem value="none">No Team Leader</SelectItem>
+                                        {users.filter(u => u.role === 'team_leader' && u.is_active).map((tl) => (
+                                            <SelectItem key={tl.id} value={tl.id}>
+                                                {tl.full_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
                         {/* Employee Record Sync */}
                         <div className="space-y-3 p-4 border rounded-lg bg-emerald-500/10 border-emerald-500/30">
                             <div className="flex items-center justify-between">
