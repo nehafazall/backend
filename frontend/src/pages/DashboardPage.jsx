@@ -194,17 +194,75 @@ const DashboardPage = () => {
 
     return (
         <div className="space-y-6" data-testid="dashboard-page">
+            {/* Viewing As Banner */}
+            {viewingAs && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Eye className="h-5 w-5 text-amber-500" />
+                        <div>
+                            <p className="font-medium text-amber-700">
+                                Viewing Dashboard As: <span className="font-bold">{viewingAs.full_name}</span>
+                            </p>
+                            <p className="text-sm text-amber-600">
+                                {formatRoleName(viewingAs.role)} • {viewingAs.email}
+                            </p>
+                        </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={clearViewAs} className="border-amber-500 text-amber-700 hover:bg-amber-500/10">
+                        <X className="h-4 w-4 mr-1" /> Back to My Dashboard
+                    </Button>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        {viewingAs ? `${viewingAs.full_name}'s Dashboard` : 'Dashboard'}
+                    </h1>
                     <p className="text-muted-foreground">
-                        Welcome back, {user?.full_name}! Here's your overview.
+                        {viewingAs 
+                            ? `Viewing ${viewingAs.full_name}'s performance and statistics`
+                            : `Welcome back, ${user?.full_name}! Here's your overview.`
+                        }
                     </p>
                 </div>
-                <Badge className="bg-blue-600 text-white self-start">
-                    {formatStageName(user?.role)}
-                </Badge>
+                <div className="flex items-center gap-3">
+                    {/* View As Selector */}
+                    {canViewOthers && viewableUsers.length > 0 && (
+                        <Select value={viewAsUserId || 'self'} onValueChange={handleViewAsChange}>
+                            <SelectTrigger className="w-[250px]" data-testid="view-as-selector">
+                                <UserCircle className="h-4 w-4 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="View as..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="self">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">My Dashboard</span>
+                                    </div>
+                                </SelectItem>
+                                {Object.entries(groupedUsers).map(([role, users]) => (
+                                    <SelectGroup key={role}>
+                                        <SelectLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+                                            {formatRoleName(role)}
+                                        </SelectLabel>
+                                        {users.map((u) => (
+                                            <SelectItem key={u.id} value={u.id}>
+                                                <div className="flex flex-col">
+                                                    <span>{u.full_name}</span>
+                                                    <span className="text-xs text-muted-foreground">{u.email}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    <Badge className="bg-blue-600 text-white">
+                        {formatRoleName(viewingAs?.role || user?.role)}
+                    </Badge>
+                </div>
             </div>
 
             {/* Stats Grid */}
