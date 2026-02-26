@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
     Users, UserPlus, Search, RefreshCw, Building2, MapPin, 
-    Filter, Download, Eye, Pencil, AlertTriangle, Calendar
+    Filter, Download, Eye, Pencil, AlertTriangle, Calendar, UserCheck
 } from 'lucide-react';
 import EmployeeModal from './EmployeeModal';
 
