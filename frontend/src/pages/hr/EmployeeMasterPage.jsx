@@ -331,6 +331,9 @@ const EmployeeMasterPage = () => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-1">
+                                        <Button variant="ghost" size="sm" onClick={() => navigate(`/hr/employees/${emp.id}`)}>
+                                            <Eye className="h-4 w-4" />
+                                        </Button>
                                         <Button variant="ghost" size="sm" onClick={() => openEditModal(emp)}>
                                             <Pencil className="h-4 w-4" />
                                         </Button>
