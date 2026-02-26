@@ -89,23 +89,44 @@ const DashboardPage = () => {
     const [paymentSummary, setPaymentSummary] = useState([]);
     const [recentLeads, setRecentLeads] = useState([]);
     const [loading, setLoading] = useState(true);
+    
+    // View As feature
+    const [viewableUsers, setViewableUsers] = useState([]);
+    const [viewAsUserId, setViewAsUserId] = useState(null);
+    const [viewingAs, setViewingAs] = useState(null);
+    const [canViewOthers, setCanViewOthers] = useState(false);
+
+    useEffect(() => {
+        fetchViewableUsers();
+    }, []);
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [viewAsUserId]);
+
+    const fetchViewableUsers = async () => {
+        try {
+            const res = await dashboardApi.getViewableUsers();
+            setViewableUsers(res.data.users || []);
+            setCanViewOthers(res.data.can_view_others || false);
+        } catch (error) {
+            console.error('Failed to fetch viewable users:', error);
+        }
+    };
 
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
             
             const [statsRes, funnelRes, paymentRes, leadsRes] = await Promise.all([
-                dashboardApi.getStats(),
-                dashboardApi.getLeadFunnel(),
-                dashboardApi.getPaymentSummary(),
+                dashboardApi.getStats(viewAsUserId),
+                dashboardApi.getLeadFunnel(viewAsUserId),
+                dashboardApi.getPaymentSummary(viewAsUserId),
                 leadApi.getAll({ limit: 5 }),
             ]);
             
             setStats(statsRes.data);
+            setViewingAs(statsRes.data.viewing_as || null);
             setLeadFunnel(funnelRes.data.map(item => ({
                 name: formatStageName(item._id),
                 value: item.count,
@@ -125,6 +146,32 @@ const DashboardPage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleViewAsChange = (userId) => {
+        if (userId === 'self') {
+            setViewAsUserId(null);
+            setViewingAs(null);
+        } else {
+            setViewAsUserId(userId);
+        }
+    };
+
+    const clearViewAs = () => {
+        setViewAsUserId(null);
+        setViewingAs(null);
+    };
+
+    // Group users by role for the dropdown
+    const groupedUsers = viewableUsers.reduce((acc, u) => {
+        const role = u.role || 'unknown';
+        if (!acc[role]) acc[role] = [];
+        acc[role].push(u);
+        return acc;
+    }, {});
+
+    const formatRoleName = (role) => {
+        return role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown';
     };
 
     const formatStageName = (stage) => {
