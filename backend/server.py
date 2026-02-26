@@ -8955,129 +8955,145 @@ async def fetch_biocloud_attendance(
 ):
     """
     Fetch attendance from BioCloud and sync to CLT Synapse
-    Uses web scraping since direct API not available
+    Uses BioCloud API to get transaction/punch records
     """
-    import os as os_module
-    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
-    
-    from playwright.async_api import async_playwright
-    
     target_date = date or datetime.now().strftime("%Y-%m-%d")
     
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+        # Use BioCloud API client
+        client = BioCloudClient()
+        
+        if not await client.authenticate():
+            raise HTTPException(status_code=500, detail="Failed to authenticate with BioCloud")
+        
+        # Fetch attendance/transactions from BioCloud API
+        # Try the transactions endpoint
+        headers = client._get_headers()
+        
+        # Format date for API
+        formatted_date = target_date
+        
+        # Try to fetch first-in/last-out data via API
+        response = await client.client.get(
+            f"{client.base_url}/iclock/api/transactions/",
+            params={
+                "start_time": f"{target_date} 00:00:00",
+                "end_time": f"{target_date} 23:59:59",
+                "page_size": 1000
+            },
+            headers=headers
+        )
+        
+        attendance_data = []
+        
+        if response.status_code == 200:
+            data = response.json()
+            transactions = data.get("data", [])
             
-            # Login to BioCloud
-            await page.goto(f"{os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')}")
-            await page.wait_for_timeout(3000)
+            # Group by employee to get first-in and last-out
+            emp_punches = {}
+            for txn in transactions:
+                emp_code = str(txn.get("emp_code", txn.get("emp", {}).get("emp_code", "")))
+                punch_time = txn.get("punch_time", "")
+                
+                if emp_code and punch_time:
+                    if emp_code not in emp_punches:
+                        emp_punches[emp_code] = {
+                            "emp_code": emp_code,
+                            "name": txn.get("emp", {}).get("first_name", "") + " " + txn.get("emp", {}).get("last_name", ""),
+                            "department": txn.get("emp", {}).get("department", {}).get("dept_name", ""),
+                            "punches": []
+                        }
+                    emp_punches[emp_code]["punches"].append(punch_time)
             
-            await page.fill('input[placeholder="Enter Username"]', os.environ.get('BIOCLOUD_USERNAME', 'Admin'))
-            await page.fill('input[placeholder="Enter Password"]', os.environ.get('BIOCLOUD_PASSWORD', '1'))
-            await page.click('button:has-text("Login")')
-            await page.wait_for_timeout(5000)
-            
-            # Navigate to Attendance > First & Last
-            await page.click('text=Attendance')
-            await page.wait_for_timeout(2000)
-            await page.click('text=First & Last')
-            await page.wait_for_timeout(3000)
-            
-            # Set date range
-            date_inputs = await page.locator('input[type="text"]').all()
-            if len(date_inputs) >= 2:
-                await date_inputs[0].fill(target_date)
-                await date_inputs[1].fill(target_date)
-                await page.click('text=Search')
-                await page.wait_for_timeout(3000)
-            
-            # Parse the table data
-            rows = await page.locator('table tbody tr').all()
-            attendance_data = []
-            
-            for row in rows:
-                cells = await row.locator('td').all()
-                if len(cells) >= 5:
+            # Calculate first-in and last-out for each employee
+            for emp_code, emp_data in emp_punches.items():
+                punches = sorted(emp_data["punches"])
+                if punches:
+                    first_in = punches[0].split(" ")[1][:5] if " " in punches[0] else punches[0][:5]
+                    last_out = punches[-1].split(" ")[1][:5] if " " in punches[-1] else punches[-1][:5]
+                    
                     attendance_data.append({
-                        "emp_code": await cells[0].inner_text(),
-                        "name": await cells[1].inner_text(),
-                        "department": await cells[2].inner_text(),
-                        "first_in": await cells[3].inner_text() if len(cells) > 3 else None,
-                        "last_out": await cells[4].inner_text() if len(cells) > 4 else None,
+                        "emp_code": emp_code,
+                        "name": emp_data["name"].strip(),
+                        "department": emp_data["department"],
+                        "first_in": first_in,
+                        "last_out": last_out if len(punches) > 1 else None
                     })
+        
+        await client.close()
+        
+        # Process and save attendance data
+        synced = 0
+        for att in attendance_data:
+            emp_code = att["emp_code"].strip()
             
-            await browser.close()
+            # Find mapped employee
+            employee = await db.hr_employees.find_one(
+                {"biocloud_emp_code": emp_code},
+                {"_id": 0}
+            )
             
-            # Process and save attendance data
-            synced = 0
-            for att in attendance_data:
-                emp_code = att["emp_code"].strip()
+            if employee:
+                now = datetime.now(timezone.utc).isoformat()
                 
-                # Find mapped employee
-                employee = await db.hr_employees.find_one(
-                    {"biocloud_emp_code": emp_code},
-                    {"_id": 0}
-                )
+                # Check if attendance already exists
+                existing = await db.hr_attendance.find_one({
+                    "employee_id": employee["id"],
+                    "date": target_date
+                })
                 
-                if employee:
-                    now = datetime.now(timezone.utc).isoformat()
-                    
-                    # Check if attendance already exists
-                    existing = await db.hr_attendance.find_one({
-                        "employee_id": employee["id"],
-                        "date": target_date
-                    })
-                    
-                    attendance_record = {
-                        "employee_id": employee["id"],
-                        "employee_code": employee["employee_id"],
-                        "employee_name": employee["full_name"],
-                        "department": employee.get("department"),
-                        "date": target_date,
-                        "biometric_in": att["first_in"],
-                        "biometric_out": att["last_out"],
-                        "source": "biocloud_sync",
-                        "synced_at": now
-                    }
-                    
-                    # Calculate late/early
-                    if att["first_in"] and att["first_in"] > "09:00":
-                        try:
-                            in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
-                            start_time = datetime.strptime("09:00", "%H:%M")
-                            attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
-                        except:
-                            pass
-                    
-                    if att["last_out"] and att["last_out"] < "18:00":
-                        try:
-                            out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
-                            end_time = datetime.strptime("18:00", "%H:%M")
-                            attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
-                        except:
-                            pass
-                    
-                    if existing:
-                        await db.hr_attendance.update_one(
-                            {"id": existing["id"]},
-                            {"$set": attendance_record}
-                        )
-                    else:
-                        attendance_record["id"] = str(uuid.uuid4())
-                        attendance_record["created_at"] = now
-                        await db.hr_attendance.insert_one(attendance_record)
-                    
-                    synced += 1
+                attendance_record = {
+                    "employee_id": employee["id"],
+                    "employee_code": employee["employee_id"],
+                    "employee_name": employee["full_name"],
+                    "department": employee.get("department"),
+                    "date": target_date,
+                    "biometric_in": att["first_in"],
+                    "biometric_out": att["last_out"],
+                    "source": "biocloud_sync",
+                    "synced_at": now
+                }
+                
+                # Calculate late/early
+                if att["first_in"] and att["first_in"] > "09:00":
+                    try:
+                        in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
+                        start_time = datetime.strptime("09:00", "%H:%M")
+                        attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                    except:
+                        pass
+                
+                if att["last_out"] and att["last_out"] < "18:00":
+                    try:
+                        out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
+                        end_time = datetime.strptime("18:00", "%H:%M")
+                        attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                    except:
+                        pass
+                
+                if existing:
+                    await db.hr_attendance.update_one(
+                        {"id": existing["id"]},
+                        {"$set": attendance_record}
+                    )
+                else:
+                    attendance_record["id"] = str(uuid.uuid4())
+                    attendance_record["created_at"] = now
+                    await db.hr_attendance.insert_one(attendance_record)
+                
+                synced += 1
+        
+        return {
+            "success": True,
+            "date": target_date,
+            "fetched": len(attendance_data),
+            "synced": synced,
+            "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse"
+        }
             
-            return {
-                "success": True,
-                "date": target_date,
-                "fetched": len(attendance_data),
-                "synced": synced,
-                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse"
-            }
-            
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch attendance: {str(e)}")
 
