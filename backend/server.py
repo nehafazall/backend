@@ -7612,20 +7612,53 @@ class EmployeeResponse(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period_days: int
     employment_status: str
-    termination_date: Optional[str] = None  # Date when employee was terminated
-    role: Optional[str] = None  # Linked user role for sync
+    termination_date: Optional[str] = None
+    role: Optional[str] = None
     employee_category: Optional[str] = None
     grade: Optional[str] = None
-    visa_details: Optional[Dict] = None
+    # Enhanced Document Tracking
+    passport: Optional[Dict] = None  # number, issue_date, expiry_date, issuing_country
+    visa: Optional[Dict] = None  # type, number, expiry_date, status
+    emirates_id: Optional[Dict] = None  # number, expiry_date
+    labour_card: Optional[Dict] = None  # number, expiry_date
+    work_permit: Optional[Dict] = None  # number, expiry_date
+    health_insurance: Optional[Dict] = None  # provider, card_number, expiry_date
+    driving_license: Optional[Dict] = None  # number, expiry_date, type
+    educational_certificates: Optional[List[Dict]] = None  # list of certificates
+    other_documents: Optional[List[Dict]] = None  # custom documents
+    visa_details: Optional[Dict] = None  # Legacy field
+    # Enhanced Salary Structure
     salary_structure: Optional[Dict] = None
     bank_details: Optional[Dict] = None
     annual_leave_balance: float
     sick_leave_balance: float
     documents: List[Dict] = []
     user_id: Optional[str] = None
-    created_via: Optional[str] = None  # Source: user_management, employee_master
+    created_via: Optional[str] = None
     created_at: str
     updated_at: str
+
+# Salary Structure Model for validation
+class SalaryStructure(BaseModel):
+    basic_salary: float = 0
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    telephone_allowance: float = 0
+    other_allowances: float = 0
+    deductions: float = 0
+    commission: float = 0
+    incentives: float = 0
+    payment_frequency: str = "monthly"
+    currency: str = "AED"
+    
+    @property
+    def gross_salary(self) -> float:
+        return (self.basic_salary + self.housing_allowance + self.transport_allowance + 
+                self.telephone_allowance + self.other_allowances + self.commission + self.incentives)
+    
+    @property
+    def net_salary(self) -> float:
+        return self.gross_salary - self.deductions
 
 @api_router.get("/hr/employees", response_model=List[EmployeeResponse])
 async def get_employees(
