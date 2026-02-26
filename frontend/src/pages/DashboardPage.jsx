@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import {
     BarChart,
     Bar,
@@ -35,6 +37,9 @@ import {
     RefreshCw,
     Building2,
     CalendarDays,
+    Eye,
+    UserCircle,
+    X,
 } from 'lucide-react';
 
 const STAGE_COLORS = {
