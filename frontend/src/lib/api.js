@@ -204,9 +204,10 @@ export const notificationApi = {
 
 // Dashboard APIs
 export const dashboardApi = {
-    getStats: () => api.get('/dashboard/stats'),
-    getLeadFunnel: () => api.get('/dashboard/lead-funnel'),
-    getPaymentSummary: () => api.get('/dashboard/payment-summary'),
+    getStats: (viewAs) => api.get('/dashboard/stats', { params: viewAs ? { view_as: viewAs } : {} }),
+    getLeadFunnel: (viewAs) => api.get('/dashboard/lead-funnel', { params: viewAs ? { view_as: viewAs } : {} }),
+    getPaymentSummary: (viewAs) => api.get('/dashboard/payment-summary', { params: viewAs ? { view_as: viewAs } : {} }),
+    getViewableUsers: () => api.get('/dashboard/viewable-users'),
 };
 
 // Activity Log APIs
