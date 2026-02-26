@@ -5,6 +5,38 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 26, 2026 - BioCloud Sync & Payroll P0 Fixes
+
+#### P0: BioCloud Attendance Sync Fix (COMPLETED)
+**Problem:** The BioCloud attendance sync feature was broken because the target website (ZK BioCloud) had changed its UI structure. The Playwright scraping script was unable to find the menu elements.
+
+**Solution:**
+- Completely rewrote the `fetch_biocloud_attendance` function in `server.py`
+- Changed navigation path from "Attendance > First & Last" to "Attendance > Daily Attendance"
+- Updated scraping logic to handle layui table framework structure:
+  - Uses `.layui-table-box` containers to find the daily attendance table
+  - Parses columns: Employee ID | Weekday | Employee Name | Department Name | Punch Date | Actual In | Actual Out | Day off
+  - Handles pagination by setting page size selector
+- Now successfully fetches attendance data from https://56.biocloud.me:8085
+
+**Test Results:**
+- Fetched 50 records, synced 1 to CLT Synapse (49 unmapped employees skipped)
+- BioCloud Status shows: 106 BioCloud Employees, 5 Mapped, 101 Unmapped
+
+#### P1: Payroll Run Duplicate Key Fix (COMPLETED)
+**Problem:** Running payroll for a month that already had a processed batch resulted in a MongoDB duplicate key error instead of a proper error message.
+
+**Solution:**
+- Changed the duplicate check from `hr_payroll` collection to `hr_payroll_batches` collection
+- Now properly returns: "Payroll for 2026-02 already processed (status: paid)"
+
+#### Bug Fix: EmployeeDetailsPage Syntax Error (COMPLETED)
+**Problem:** EmployeeDetailsPage.jsx had orphaned duplicate code causing "Expected corresponding JSX closing tag" error.
+
+**Solution:**
+- Removed orphaned code block (lines 716-734) that had duplicate CardContent, Card, and TabsContent elements
+- Also referenced a non-existent `calculateNet()` function
+
 ### Session Feb 24, 2026 - Admin Settings, Data Reset, Feature Flags
 
 #### Finance User Granular Permissions (COMPLETED)
