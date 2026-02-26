@@ -63,8 +63,60 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
                 rejection_reason: lead.rejection_reason || '',
                 follow_up_date: '',
             });
+            setShowReassign(false);
+            setReassignData({ new_agent_id: '', reason: '' });
         }
     }, [lead]);
+
+    useEffect(() => {
+        if (showReassign && canReassign) {
+            fetchAvailableAgents();
+        }
+    }, [showReassign]);
+
+    const fetchAvailableAgents = async () => {
+        try {
+            const res = await apiClient.get('/leads/reassignment/available-agents');
+            setAvailableAgents(res.data || []);
+        } catch (error) {
+            console.error('Failed to fetch agents:', error);
+            toast.error('Failed to load available agents');
+        }
+    };
+
+    const handleRequestReassignment = async () => {
+        if (!reassignData.new_agent_id) {
+            toast.error('Please select an agent to reassign to');
+            return;
+        }
+        if (!reassignData.reason.trim()) {
+            toast.error('Please provide a reason for reassignment');
+            return;
+        }
+
+        try {
+            setReassignLoading(true);
+            const res = await apiClient.post(`/leads/${lead.id}/reassignment-request`, {
+                lead_id: lead.id,
+                current_agent_id: lead.assigned_to || '',
+                new_agent_id: reassignData.new_agent_id,
+                reason: reassignData.reason
+            });
+            
+            if (res.data.requires_approval) {
+                toast.success(res.data.message, { duration: 5000 });
+            } else {
+                toast.success(res.data.message);
+                if (onUpdate) onUpdate();
+            }
+            setShowReassign(false);
+            onClose();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to submit reassignment request');
+        } finally {
+            setReassignLoading(false);
+        }
+    };
 
     const handleUpdateLead = async () => {
         if (!lead) return;
