@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { leadApi } from '@/lib/api';
+import { leadApi, useAuth, apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Phone, Mail, PhoneCall, Calendar, Clock, User, MapPin, Target, Building2 } from 'lucide-react';
+import { Phone, Mail, PhoneCall, Calendar, Clock, User, MapPin, Target, Building2, UserPlus, ArrowRightLeft, Send, CheckCircle2 } from 'lucide-react';
 import { ClickToCall, CallHistory } from './ClickToCall';
 
 const LEAD_STAGES = [
