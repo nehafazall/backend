@@ -10146,10 +10146,10 @@ async def run_payroll(
     now = datetime.now(timezone.utc).isoformat()
     month_str = f"{data.year}-{str(data.month).zfill(2)}"
     
-    # Check if payroll already exists for this month
-    existing = await db.hr_payroll.find_one({"month": month_str, "status": {"$ne": "draft"}})
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed")
+    # Check if payroll batch already exists for this month
+    existing_batch = await db.hr_payroll_batches.find_one({"month": month_str, "status": {"$ne": "draft"}})
+    if existing_batch:
+        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed (status: {existing_batch['status']})")
     
     # Get all active employees
     emp_query = {"employment_status": {"$in": ["active", "probation"]}}
