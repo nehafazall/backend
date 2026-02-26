@@ -96,6 +96,19 @@ const EmployeeMasterPage = () => {
         setShowModal(true);
     };
 
+    const handleSyncToUsers = async () => {
+        setSyncing(true);
+        try {
+            const res = await api.post('/hr/employees/sync-to-users');
+            toast.success(res.data.message);
+            fetchEmployees();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to sync employees to users');
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const handleSaveEmployee = async (data, mode = 'standard') => {
         try {
             if (mode === 'create-with-user') {
