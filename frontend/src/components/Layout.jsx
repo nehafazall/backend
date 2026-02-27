@@ -49,6 +49,10 @@ import {
     BarChart3,
     Fingerprint,
     CheckSquare,
+    ClipboardCheck,
+    FolderOpen,
+    UserCog,
+    Receipt,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
