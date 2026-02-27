@@ -215,4 +215,305 @@ export const activityApi = {
     getAll: (params) => api.get('/activity-logs', { params }),
 };
 
+// Permission Context
+const PermissionContext = createContext(null);
+
+export const usePermissions = () => {
+    const context = useContext(PermissionContext);
+    if (!context) {
+        throw new Error('usePermissions must be used within PermissionProvider');
+    }
+    return context;
+};
+
+// Module hierarchy for default permission mapping
+const MODULE_HIERARCHY = [
+    {
+        id: 'dashboard',
+        subPages: ['main_dashboard', 'qc_dashboard']
+    },
+    {
+        id: 'sales',
+        subPages: ['sales_crm', 'sales_dashboard', 'today_followups', 'leads_pool', 'approvals']
+    },
+    {
+        id: 'customer_service',
+        subPages: ['cs_kanban', 'cs_dashboard', 'customer_master']
+    },
+    {
+        id: 'mentor',
+        subPages: ['mentor_crm', 'mentor_dashboard', 'leaderboard']
+    },
+    {
+        id: 'hr',
+        subPages: ['hr_dashboard', 'employee_master', 'leave_management', 'attendance', 'biocloud_sync', 'payroll', 'performance', 'hr_assets', 'hr_analytics']
+    },
+    {
+        id: 'finance',
+        subPages: ['finance_dashboard', 'commission_engine', 'payments', 'reconciliation']
+    },
+    {
+        id: 'settings',
+        subPages: ['user_management', 'access_control', 'role_management', 'teams_management', 'departments', 'courses', 'password_resets', 'audit_log', 'admin_settings']
+    },
+];
+
+// Default permissions based on role
+const getDefaultPermissions = (role) => {
+    const permissions = {};
+    
+    // Initialize all to none
+    MODULE_HIERARCHY.forEach(module => {
+        permissions[module.id] = { enabled: false, level: 'none', subPages: {} };
+        module.subPages.forEach(subPage => {
+            permissions[module.id].subPages[subPage] = 'none';
+        });
+    });
+    
+    // Set role-specific defaults
+    if (role === 'admin') {
+        MODULE_HIERARCHY.forEach(module => {
+            permissions[module.id] = { enabled: true, level: 'full', subPages: {} };
+            module.subPages.forEach(subPage => {
+                permissions[module.id].subPages[subPage] = 'full';
+            });
+        });
+        permissions['settings'].subPages['access_control'] = 'view';
+        permissions['settings'].subPages['password_resets'] = 'none';
+    } else if (role === 'sales_manager') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'view' } };
+        permissions['sales'] = { enabled: true, level: 'full', subPages: { 
+            sales_crm: 'full', sales_dashboard: 'full', today_followups: 'full', leads_pool: 'full', approvals: 'full' 
+        }};
+        permissions['customer_service'] = { enabled: true, level: 'view', subPages: { 
+            cs_kanban: 'view', cs_dashboard: 'view', customer_master: 'view' 
+        }};
+    } else if (role === 'team_leader') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['sales'] = { enabled: true, level: 'edit', subPages: { 
+            sales_crm: 'edit', sales_dashboard: 'view', today_followups: 'edit', leads_pool: 'view', approvals: 'view' 
+        }};
+    } else if (role === 'sales_executive') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['sales'] = { enabled: true, level: 'edit', subPages: { 
+            sales_crm: 'edit', sales_dashboard: 'view', today_followups: 'edit', leads_pool: 'none', approvals: 'none' 
+        }};
+    } else if (role === 'cs_head') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'view' } };
+        permissions['customer_service'] = { enabled: true, level: 'full', subPages: { 
+            cs_kanban: 'full', cs_dashboard: 'full', customer_master: 'full' 
+        }};
+    } else if (role === 'cs_agent') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['customer_service'] = { enabled: true, level: 'edit', subPages: { 
+            cs_kanban: 'edit', cs_dashboard: 'view', customer_master: 'view' 
+        }};
+    } else if (role === 'mentor' || role === 'academic_master') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['mentor'] = { enabled: true, level: role === 'academic_master' ? 'full' : 'edit', subPages: { 
+            mentor_crm: role === 'academic_master' ? 'full' : 'edit', 
+            mentor_dashboard: 'view', 
+            leaderboard: 'view' 
+        }};
+    } else if (role === 'hr') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['hr'] = { enabled: true, level: 'full', subPages: { 
+            hr_dashboard: 'full', employee_master: 'full', leave_management: 'full', 
+            attendance: 'full', biocloud_sync: 'full', payroll: 'edit', 
+            performance: 'full', hr_assets: 'full', hr_analytics: 'view' 
+        }};
+        permissions['settings'] = { enabled: true, level: 'view', subPages: { 
+            user_management: 'view', departments: 'edit', courses: 'none',
+            access_control: 'none', role_management: 'none', teams_management: 'none',
+            password_resets: 'none', audit_log: 'none', admin_settings: 'none'
+        }};
+    } else if (role === 'finance' || role === 'finance_manager' || role === 'finance_admin') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['finance'] = { enabled: true, level: 'full', subPages: { 
+            finance_dashboard: 'full', commission_engine: 'edit', payments: 'full', reconciliation: 'full' 
+        }};
+        permissions['customer_service'] = { enabled: true, level: 'view', subPages: { 
+            cs_kanban: 'none', cs_dashboard: 'none', customer_master: 'view' 
+        }};
+    }
+    
+    return permissions;
+};
+
+// Path to subPage ID mapping
+const PATH_TO_SUBPAGE = {
+    '/dashboard': 'main_dashboard',
+    '/qc-dashboard': 'qc_dashboard',
+    '/sales': 'sales_crm',
+    '/sales/dashboard': 'sales_dashboard',
+    '/followups': 'today_followups',
+    '/leads/pool': 'leads_pool',
+    '/approvals': 'approvals',
+    '/cs': 'cs_kanban',
+    '/cs/dashboard': 'cs_dashboard',
+    '/customers': 'customer_master',
+    '/mentor': 'mentor_crm',
+    '/mentor/dashboard': 'mentor_dashboard',
+    '/mentor/leaderboard': 'leaderboard',
+    '/hr/dashboard': 'hr_dashboard',
+    '/hr/employees': 'employee_master',
+    '/hr/leave': 'leave_management',
+    '/hr/attendance': 'attendance',
+    '/hr/biocloud': 'biocloud_sync',
+    '/hr/payroll': 'payroll',
+    '/hr/performance': 'performance',
+    '/hr/assets': 'hr_assets',
+    '/hr/analytics': 'hr_analytics',
+    '/finance': 'finance_dashboard',
+    '/commissions': 'commission_engine',
+    '/users': 'user_management',
+    '/access-control': 'access_control',
+    '/roles': 'role_management',
+    '/teams': 'teams_management',
+    '/departments': 'departments',
+    '/courses': 'courses',
+    '/password-resets': 'password_resets',
+    '/audit-log': 'audit_log',
+    '/admin-settings': 'admin_settings',
+};
+
+// SubPage ID to module mapping
+const SUBPAGE_TO_MODULE = {};
+MODULE_HIERARCHY.forEach(module => {
+    module.subPages.forEach(subPage => {
+        SUBPAGE_TO_MODULE[subPage] = module.id;
+    });
+});
+
+export const PermissionProvider = ({ children }) => {
+    const { user } = useAuth();
+    const [permissions, setPermissions] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchPermissions = async () => {
+            if (!user) {
+                setPermissions(null);
+                setLoading(false);
+                return;
+            }
+
+            // Super admin has full access
+            if (user.role === 'super_admin') {
+                setPermissions({ isSuperAdmin: true, fullAccess: true });
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const res = await api.get('/user/permissions');
+                if (res.data.permissions && Object.keys(res.data.permissions).length > 0) {
+                    setPermissions({
+                        isSuperAdmin: false,
+                        role: user.role,
+                        ...res.data.permissions
+                    });
+                } else {
+                    // Use default permissions for role
+                    setPermissions({
+                        isSuperAdmin: false,
+                        role: user.role,
+                        ...getDefaultPermissions(user.role)
+                    });
+                }
+            } catch (error) {
+                // Use default permissions on error
+                setPermissions({
+                    isSuperAdmin: false,
+                    role: user.role,
+                    ...getDefaultPermissions(user.role)
+                });
+            }
+            setLoading(false);
+        };
+
+        fetchPermissions();
+    }, [user]);
+
+    // Check if user can access a specific path
+    const canAccess = (path) => {
+        if (!permissions) return false;
+        if (permissions.isSuperAdmin || permissions.fullAccess) return true;
+
+        const subPageId = PATH_TO_SUBPAGE[path];
+        if (!subPageId) return true; // Unknown paths are allowed by default
+
+        const moduleId = SUBPAGE_TO_MODULE[subPageId];
+        if (!moduleId) return true;
+
+        const modulePerms = permissions[moduleId];
+        if (!modulePerms || !modulePerms.enabled) return false;
+
+        const subPagePerm = modulePerms.subPages?.[subPageId];
+        return subPagePerm && subPagePerm !== 'none';
+    };
+
+    // Check permission level for a path (none, view, edit, full)
+    const getPermissionLevel = (path) => {
+        if (!permissions) return 'none';
+        if (permissions.isSuperAdmin || permissions.fullAccess) return 'full';
+
+        const subPageId = PATH_TO_SUBPAGE[path];
+        if (!subPageId) return 'full';
+
+        const moduleId = SUBPAGE_TO_MODULE[subPageId];
+        if (!moduleId) return 'full';
+
+        const modulePerms = permissions[moduleId];
+        if (!modulePerms || !modulePerms.enabled) return 'none';
+
+        return modulePerms.subPages?.[subPageId] || 'none';
+    };
+
+    // Check if user can edit on a path
+    const canEdit = (path) => {
+        const level = getPermissionLevel(path);
+        return level === 'edit' || level === 'full';
+    };
+
+    // Check if user has full access on a path
+    const hasFullAccess = (path) => {
+        return getPermissionLevel(path) === 'full';
+    };
+
+    // Check module-level access
+    const canAccessModule = (moduleId) => {
+        if (!permissions) return false;
+        if (permissions.isSuperAdmin || permissions.fullAccess) return true;
+
+        const modulePerms = permissions[moduleId];
+        return modulePerms && modulePerms.enabled;
+    };
+
+    const value = {
+        permissions,
+        loading,
+        canAccess,
+        canEdit,
+        hasFullAccess,
+        getPermissionLevel,
+        canAccessModule,
+        PATH_TO_SUBPAGE,
+        SUBPAGE_TO_MODULE,
+    };
+
+    return (
+        <PermissionContext.Provider value={value}>
+            {children}
+        </PermissionContext.Provider>
+    );
+};
+
+// Permission APIs
+export const permissionApi = {
+    getRolePermissions: (roleId) => api.get(`/roles/${roleId}/permissions`),
+    saveRolePermissions: (roleId, permissions) => api.put(`/roles/${roleId}/permissions`, permissions),
+    getCurrentUserPermissions: () => api.get('/user/permissions'),
+};
+
 export default api;
