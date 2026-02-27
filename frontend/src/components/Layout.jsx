@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useTheme, notificationApi } from '@/lib/api';
+import { useAuth, useTheme, usePermissions, notificationApi } from '@/lib/api';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
