@@ -12910,7 +12910,7 @@ async def delete_company_document(doc_id: str, user = Depends(require_roles(["su
     return {"message": "Document deleted successfully"}
 
 @api_router.get("/hr/company-documents/expiring")
-async def get_expiring_documents(days: int = 30, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+async def get_company_documents_expiring(days: int = 30, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
     """Get documents expiring within the specified days"""
     today = datetime.now(timezone.utc)
     future_date = (today + timedelta(days=days)).strftime("%Y-%m-%d")
