@@ -12619,6 +12619,29 @@ async def create_attendance_regularization(
             "read": False,
             "created_at": now
         })
+        
+        # Send email notification to manager
+        if is_email_configured():
+            manager_user = await db.users.find_one({"id": manager["id"]})
+            if manager_user and manager_user.get("email"):
+                try:
+                    email_html = get_regularization_request_template(
+                        employee_name=employee["full_name"],
+                        date=data.date,
+                        original_in=regularization["original_check_in"],
+                        original_out=regularization["original_check_out"],
+                        requested_in=data.requested_check_in,
+                        requested_out=data.requested_check_out,
+                        reason=data.reason,
+                        approver_name=manager["name"]
+                    )
+                    await send_email_async(
+                        to_email=manager_user["email"],
+                        subject=f"Attendance Regularization Request: {employee['full_name']} - {data.date}",
+                        html_content=email_html
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send regularization request email: {str(e)}")
     
     return {"id": request_id, "message": "Regularization request submitted", "status": "pending_manager"}
 
