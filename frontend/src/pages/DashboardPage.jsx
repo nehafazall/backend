@@ -281,43 +281,44 @@ const DashboardPage = () => {
                 </TabsContent>
                 
                 <TabsContent value="dashboard" className="mt-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {isSalesRole && (
-                    <>
-                        <StatCard
-                            title="Total Leads"
-                            value={stats.total_leads || 0}
-                            icon={Users}
-                            description={`${stats.leads_today || 0} new today`}
-                            trend="up"
-                            loading={loading}
-                        />
-                        <StatCard
-                            title="Hot Leads"
-                            value={stats.hot_leads || 0}
-                            icon={TrendingUp}
-                            description="Ready to convert"
-                            trend="up"
-                            loading={loading}
-                        />
-                        <StatCard
-                            title="Enrolled Today"
-                            value={stats.enrolled_today || 0}
-                            icon={CheckCircle}
-                            description="Successful conversions"
-                            trend="up"
-                            loading={loading}
-                        />
-                        <StatCard
-                            title="SLA Breaches"
-                            value={stats.sla_breaches || 0}
-                            icon={AlertTriangle}
-                            description="Requires attention"
-                            trend={stats.sla_breaches > 0 ? 'down' : 'up'}
-                            loading={loading}
-                        />
-                    </>
-                )}
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {isSalesRole && (
+                            <>
+                                <StatCard
+                                    title="Total Leads"
+                                    value={stats.total_leads || 0}
+                                    icon={Users}
+                                    description={`${stats.leads_today || 0} new today`}
+                                    trend="up"
+                                    loading={loading}
+                                />
+                                <StatCard
+                                    title="Hot Leads"
+                                    value={stats.hot_leads || 0}
+                                    icon={TrendingUp}
+                                    description="Ready to convert"
+                                    trend="up"
+                                    loading={loading}
+                                />
+                                <StatCard
+                                    title="Enrolled Today"
+                                    value={stats.enrolled_today || 0}
+                                    icon={CheckCircle}
+                                    description="Successful conversions"
+                                    trend="up"
+                                    loading={loading}
+                                />
+                                <StatCard
+                                    title="SLA Breaches"
+                                    value={stats.sla_breaches || 0}
+                                    icon={AlertTriangle}
+                                    description="Requires attention"
+                                    trend={stats.sla_breaches > 0 ? 'down' : 'up'}
+                                    loading={loading}
+                                />
+                            </>
+                        )}
                 
                 {isCSRole && (
                     <>
