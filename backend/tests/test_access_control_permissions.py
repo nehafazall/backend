@@ -300,7 +300,7 @@ class TestAccessControlPermissions:
     
     def test_reset_to_defaults_by_clearing(self):
         """Test that sending empty permissions resets to defaults"""
-        test_role = "marketing"
+        test_role = "mentor"  # Use a valid system role
         
         # First save some permissions
         initial_permissions = {
@@ -407,23 +407,24 @@ class TestAccessControlPageData:
         self.session.close()
     
     def test_all_defined_roles_are_accessible(self):
-        """Test that all roles defined in UI can have permissions set"""
-        # Roles defined in AccessControlPage.jsx
-        ui_roles = [
+        """Test that all system roles can have permissions set"""
+        # System roles defined in DEFAULT_SYSTEM_ROLES
+        system_roles = [
             'admin', 'sales_manager', 'team_leader', 'sales_executive',
-            'cs_head', 'cs_agent', 'mentor', 'academic_master',
-            'finance', 'hr', 'marketing', 'operations', 'quality_control'
+            'cs_head', 'cs_agent', 'mentor', 'finance', 'hr',
+            'finance_manager', 'finance_admin', 'finance_treasurer',
+            'finance_verifier', 'financier', 'accounts'
         ]
         
-        for role_id in ui_roles:
+        for role_id in system_roles:
             response = self.session.get(f"{BASE_URL}/api/roles/{role_id}/permissions")
             assert response.status_code == 200, f"Failed for role: {role_id}"
         
-        print(f"✓ All {len(ui_roles)} UI roles are accessible")
+        print(f"✓ All {len(system_roles)} system roles are accessible")
     
     def test_save_complete_permission_structure(self):
         """Test saving a complete permission structure with all modules"""
-        test_role = "operations"
+        test_role = "hr"  # Use a valid system role
         
         # Complete permission structure matching MODULE_HIERARCHY
         complete_permissions = {
