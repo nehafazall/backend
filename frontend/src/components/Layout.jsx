@@ -361,21 +361,30 @@ function Layout() {
     const currentSection = activeSection ? SECTIONS[activeSection] : null;
     const isHomePage = !activeSection || currentPath === '/home';
 
+    // Determine visible sections using permission system
     const visibleSections = [];
     const sectionKeys = Object.keys(SECTIONS);
     for (let i = 0; i < sectionKeys.length; i++) {
         const key = sectionKeys[i];
         const section = SECTIONS[key];
-        if (section.roles.includes(userRole)) {
+        // Super admin sees everything
+        if (userRole === 'super_admin') {
             visibleSections.push(section);
+        } else {
+            // Check if user can access ANY item in the section
+            const hasAccessToAnyItem = section.items.some(item => checkAccess(item.path, item.roles));
+            if (hasAccessToAnyItem) {
+                visibleSections.push(section);
+            }
         }
     }
 
+    // Determine sidebar items using permission system
     const sidebarItems = [];
     if (currentSection) {
         for (let i = 0; i < currentSection.items.length; i++) {
             const item = currentSection.items[i];
-            if (hasRole(item.roles)) {
+            if (checkAccess(item.path, item.roles)) {
                 sidebarItems.push(item);
             }
         }
