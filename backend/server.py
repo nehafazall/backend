@@ -12799,6 +12799,144 @@ async def get_leave_types(user = Depends(get_current_user)):
         for k, v in LEAVE_TYPES.items()
     ]
 
+# ==================== PAYSLIPS ====================
+
+@api_router.get("/ess/payslips")
+async def get_my_payslips(year: Optional[int] = None, user = Depends(get_current_user)):
+    """Get current user's payslips"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        return []
+    
+    query = {"employee_id": employee["employee_id"]}
+    if year:
+        query["month"] = {"$regex": f"^{year}-"}
+    
+    payslips = await db.hr_payslips.find(query, {"_id": 0}).sort("month", -1).to_list(100)
+    return payslips
+
+@api_router.get("/ess/payslips/{payslip_id}")
+async def get_payslip_detail(payslip_id: str, user = Depends(get_current_user)):
+    """Get payslip detail"""
+    payslip = await db.hr_payslips.find_one({"id": payslip_id}, {"_id": 0})
+    if not payslip:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+    
+    # Verify ownership
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee or payslip.get("employee_id") != employee["employee_id"]:
+        if user["role"] not in ["super_admin", "admin", "hr", "finance"]:
+            raise HTTPException(status_code=403, detail="Not authorized to view this payslip")
+    
+    return payslip
+
+# ==================== COMPANY DOCUMENTS ====================
+
+class CompanyDocumentCreate(BaseModel):
+    document_type: str
+    document_name: str
+    description: Optional[str] = None
+    document_number: Optional[str] = None
+    issue_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    issuing_authority: Optional[str] = None
+    document_url: Optional[str] = None
+    reminder_days: Optional[int] = 30
+
+@api_router.get("/hr/company-documents")
+async def get_company_documents(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get all company documents"""
+    documents = await db.hr_company_documents.find({}, {"_id": 0}).sort("expiry_date", 1).to_list(200)
+    return documents
+
+@api_router.post("/hr/company-documents")
+async def create_company_document(data: CompanyDocumentCreate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Create a new company document"""
+    now = datetime.now(timezone.utc).isoformat()
+    doc_id = str(uuid.uuid4())
+    
+    document = {
+        "id": doc_id,
+        **data.model_dump(),
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.hr_company_documents.insert_one(document)
+    await log_audit(user, "create", "company_document", entity_id=doc_id, entity_name=data.document_name)
+    
+    return {"id": doc_id, "message": "Document created successfully"}
+
+@api_router.put("/hr/company-documents/{doc_id}")
+async def update_company_document(doc_id: str, data: CompanyDocumentCreate, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Update a company document"""
+    existing = await db.hr_company_documents.find_one({"id": doc_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.hr_company_documents.update_one(
+        {"id": doc_id},
+        {"$set": {
+            **data.model_dump(),
+            "updated_at": now,
+            "updated_by": user["id"]
+        }}
+    )
+    
+    await log_audit(user, "update", "company_document", entity_id=doc_id, entity_name=data.document_name)
+    
+    return {"message": "Document updated successfully"}
+
+@api_router.delete("/hr/company-documents/{doc_id}")
+async def delete_company_document(doc_id: str, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Delete a company document"""
+    existing = await db.hr_company_documents.find_one({"id": doc_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    await db.hr_company_documents.delete_one({"id": doc_id})
+    await log_audit(user, "delete", "company_document", entity_id=doc_id, entity_name=existing.get("document_name"))
+    
+    return {"message": "Document deleted successfully"}
+
+@api_router.get("/hr/company-documents/expiring")
+async def get_expiring_documents(days: int = 30, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get documents expiring within the specified days"""
+    today = datetime.now(timezone.utc)
+    future_date = (today + timedelta(days=days)).strftime("%Y-%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    
+    # Get documents expiring within the timeframe or already expired
+    documents = await db.hr_company_documents.find({
+        "expiry_date": {"$ne": None, "$lte": future_date}
+    }, {"_id": 0}).sort("expiry_date", 1).to_list(100)
+    
+    # Categorize
+    expired = []
+    expiring_soon = []
+    
+    for doc in documents:
+        if doc.get("expiry_date") and doc["expiry_date"] < today_str:
+            expired.append(doc)
+        else:
+            expiring_soon.append(doc)
+    
+    return {
+        "expired": expired,
+        "expiring_soon": expiring_soon,
+        "total_alerts": len(expired) + len(expiring_soon)
+    }
+
 # ==================== FINANCE SUITE ENDPOINTS ====================
 
 # --- CLT Payables ---
