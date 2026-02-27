@@ -12746,6 +12746,55 @@ async def action_regularization_request(
         "created_at": now
     })
     
+    # Send email notification to employee
+    if is_email_configured() and (new_status == "approved" or new_status == "rejected"):
+        employee_user = await db.users.find_one({"id": request["user_id"]})
+        if employee_user and employee_user.get("email"):
+            try:
+                email_html = get_regularization_status_template(
+                    employee_name=request["employee_name"],
+                    date=request["date"],
+                    status=new_status,
+                    approver_name=user["full_name"],
+                    comments=action_data.comments
+                )
+                status_text = "Approved" if new_status == "approved" else "Rejected"
+                await send_email_async(
+                    to_email=employee_user["email"],
+                    subject=f"Attendance Regularization {status_text}: {request['date']}",
+                    html_content=email_html
+                )
+            except Exception as e:
+                logger.error(f"Failed to send regularization status email: {str(e)}")
+    
+    # If moved to next level (not final), notify next approver
+    if new_status in ["pending_hr", "pending_ceo"] and is_email_configured():
+        if new_status == "pending_hr":
+            next_approvers = await db.users.find({"role": "hr"}, {"_id": 0, "email": 1, "full_name": 1}).to_list(10)
+        else:
+            next_approvers = await db.users.find({"role": "super_admin"}, {"_id": 0, "email": 1, "full_name": 1}).to_list(10)
+        
+        for approver in next_approvers:
+            if approver.get("email"):
+                try:
+                    email_html = get_regularization_request_template(
+                        employee_name=request["employee_name"],
+                        date=request["date"],
+                        original_in=request.get("original_check_in"),
+                        original_out=request.get("original_check_out"),
+                        requested_in=request["requested_check_in"],
+                        requested_out=request["requested_check_out"],
+                        reason=request["reason"],
+                        approver_name=approver.get("full_name", "Approver")
+                    )
+                    await send_email_async(
+                        to_email=approver["email"],
+                        subject=f"Regularization Request Pending Your Approval: {request['employee_name']}",
+                        html_content=email_html
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send regularization request email to next approver: {str(e)}")
+    
     return {"message": f"Request {action_data.action}d successfully", "new_status": new_status}
 
 @api_router.get("/ess/my-assets")
