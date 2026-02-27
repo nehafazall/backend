@@ -328,6 +328,16 @@ function AppRoutes() {
                         <AnalyticsPage />
                     </ProtectedRoute>
                 } />
+                <Route path="hr/documents" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <CompanyDocumentsPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/approvals" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <HRApprovalQueuePage />
+                    </ProtectedRoute>
+                } />
                 
                 {/* User Management */}
                 <Route path="users" element={
