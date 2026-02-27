@@ -324,11 +324,28 @@ function Layout() {
         setActiveSection(sectionId);
         const section = SECTIONS[sectionId];
         if (section && section.items.length > 0) {
-            const firstItem = section.items.find(item => !item.roles || item.roles.includes(userRole));
+            // Find the first accessible item using permissions
+            const firstItem = section.items.find(item => {
+                // Super admin or no specific roles = check via canAccess
+                if (userRole === 'super_admin') return true;
+                // Use canAccess for permission-based check
+                return canAccess(item.path);
+            });
             if (firstItem) {
                 navigate(firstItem.path);
             }
         }
+    }
+
+    // Check if user can access a path using permissions OR fallback to role check
+    function checkAccess(path, roles) {
+        // Super admin always has access
+        if (userRole === 'super_admin') return true;
+        // Use permission-based access if available
+        if (canAccess(path)) return true;
+        // Fallback to role-based check for backward compatibility
+        if (roles && roles.includes(userRole)) return true;
+        return false;
     }
 
     function hasRole(roles) {
