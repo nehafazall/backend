@@ -5,6 +5,72 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 27, 2026 (Continued) - SSHR Module & HR Enhancements
+
+#### P0: SSHR (Self-Service HR) as Separate Module (COMPLETED)
+**Problem:** ESS was embedded in the Operations Dashboard. User wanted it as a separate, dedicated module accessible from the homepage.
+
+**Solution:**
+- Created new "My Self-Service" module with teal color icon on homepage
+- Added dedicated SSHR page at `/sshr` with full ESS functionality
+- Created My Payslips page at `/sshr/payslips` for employees to view salary history
+- Removed ESS tabs from Operations Dashboard (now standalone)
+
+**Key Features:**
+- SSHR Dashboard with:
+  - Quick stats (Days Present, Hours Worked, Annual Leave Left, Pending Requests)
+  - Tabs: Overview, Attendance, Leaves, Requests
+  - Widgets: Leave Balance, Weekly Attendance, Pending Requests, My Assets, Recent Requests
+  - Apply Leave and Regularization buttons
+- My Payslips page with:
+  - Year selector
+  - Summary cards (Total Earned, Payslips Available, Latest Payslip)
+  - Detailed payslip table with view/download actions
+  - Payslip detail modal showing earnings, deductions, net salary breakdown
+
+#### P0: Company Documents Management (COMPLETED)
+**Problem:** No central repository for tracking company licenses, certificates with expiry dates and reminders.
+
+**Solution:**
+- Created Company Documents page at `/hr/documents` in HR module
+- Full CRUD operations for document management
+- Expiry tracking with visual status indicators
+
+**Key Features:**
+- Document types: Trade License, Establishment Card, Immigration Card, Chamber Certificate, Tax Registration, Insurance, Lease Agreement, MOA/AOA, Power of Attorney, Bank Guarantee, Contracts, Other
+- Status indicators: Valid (green), Expiring Soon (amber), Expired (red), No Expiry (gray)
+- Stats dashboard: Total Documents, Expired, Expiring Soon, Valid counts
+- Search and filter by type/status
+- Configurable reminder days before expiry
+- Days remaining/overdue display
+
+**Backend Endpoints:**
+- `GET /api/hr/company-documents` - List all documents
+- `POST /api/hr/company-documents` - Create document
+- `PUT /api/hr/company-documents/{id}` - Update document
+- `DELETE /api/hr/company-documents/{id}` - Delete document
+- `GET /api/hr/company-documents/expiring` - Get expiring/expired documents
+
+#### P0: HR Approval Queue (COMPLETED)
+**Problem:** HR/Managers needed a dedicated queue to review and approve leave and regularization requests.
+
+**Solution:**
+- Created HR Approval Queue page at `/hr/approvals`
+- Separate tabs for Leave Requests and Regularization
+- Detailed request cards with employee info, dates, reason, approval chain
+
+**Key Features:**
+- Stats: Pending Leave Requests, Pending Regularization, Your Role
+- Leave request cards showing: Employee name, Leave type, Date range, Days, Reason, Document attachment status
+- Regularization cards showing: Original vs Requested times, Date, Reason
+- Approval chain visualization (Manager → HR → CEO with status indicators)
+- Approve/Reject buttons with optional comments
+- Real-time refresh
+
+**Email Notifications:** SKIPPED (User will implement SMTP later)
+
+**Test Results:** Backend 100% (11/11 passed), Frontend 100% (All features working)
+
 ### Session Feb 27, 2026 - ESS Portal & Granular Access Control
 
 #### P0: Granular Access Control System (COMPLETED)
