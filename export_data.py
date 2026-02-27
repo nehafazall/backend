@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 # Configuration
-API_URL = "https://synapse-ui-fix.preview.emergentagent.com"
+API_URL = "https://hr-sync-dev.preview.emergentagent.com"
 EMAIL = "aqib@clt-academy.com"
 PASSWORD = "@Aqib1234"
 OUTPUT_DIR = "./exported_data"
