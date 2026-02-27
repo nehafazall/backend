@@ -77,6 +77,12 @@ import PerformancePage from "@/pages/hr/PerformancePage";
 import AssetsPage from "@/pages/hr/AssetsPage";
 import AnalyticsPage from "@/pages/hr/AnalyticsPage";
 import BioCloudSyncPage from "@/pages/hr/BioCloudSyncPage";
+import CompanyDocumentsPage from "@/pages/hr/CompanyDocumentsPage";
+import HRApprovalQueuePage from "@/pages/hr/HRApprovalQueuePage";
+
+// SSHR (Self-Service HR) Module
+import SSHRPage from "@/pages/SSHRPage";
+import PayslipsPage from "@/pages/PayslipsPage";
 
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
