@@ -410,10 +410,12 @@ function App() {
     return (
         <ThemeProvider>
             <AuthProvider>
-                <BrowserRouter>
-                    <AppRoutes />
-                    <Toaster position="top-right" richColors />
-                </BrowserRouter>
+                <PermissionProvider>
+                    <BrowserRouter>
+                        <AppRoutes />
+                        <Toaster position="top-right" richColors />
+                    </BrowserRouter>
+                </PermissionProvider>
             </AuthProvider>
         </ThemeProvider>
     );
