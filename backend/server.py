@@ -12043,6 +12043,762 @@ async def get_payroll_analytics(
         }
     }
 
+# ==================== ESS (EMPLOYEE SELF-SERVICE) MODULE ====================
+
+# Helper function to get employee's manager
+async def get_employee_manager(employee_id: str):
+    """Get the manager for an employee based on team_leader_id or department head"""
+    employee = await db.hr_employees.find_one({"employee_id": employee_id})
+    if not employee:
+        return None
+    
+    # Check if linked user has a team leader
+    if employee.get("user_id"):
+        user = await db.users.find_one({"id": employee["user_id"]})
+        if user and user.get("team_leader_id"):
+            manager = await db.users.find_one({"id": user["team_leader_id"]})
+            if manager:
+                return {"id": manager["id"], "name": manager["full_name"], "role": manager["role"]}
+    
+    # Fallback: Find department head
+    if employee.get("department"):
+        dept = await db.departments.find_one({"name": employee["department"]})
+        if dept and dept.get("head_id"):
+            head = await db.users.find_one({"id": dept["head_id"]})
+            if head:
+                return {"id": head["id"], "name": head["full_name"], "role": head["role"]}
+    
+    return None
+
+# Helper to calculate leave days
+def calculate_leave_days(start_date: str, end_date: str, half_day_type: str = None) -> float:
+    """Calculate number of leave days including weekends check"""
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    if half_day_type:
+        return 0.5
+    
+    total_days = 0
+    current = start
+    while current <= end:
+        # Skip weekends (Saturday=5, Sunday=6)
+        if current.weekday() < 5:
+            total_days += 1
+        current += timedelta(days=1)
+    
+    return float(total_days)
+
+@api_router.get("/ess/my-profile")
+async def get_my_ess_profile(user = Depends(get_current_user)):
+    """Get current user's ESS profile including employee details"""
+    # Find linked employee record
+    employee = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0})
+    
+    if not employee:
+        # Try to find by email match
+        employee = await db.hr_employees.find_one({"email": user["email"]}, {"_id": 0})
+    
+    return {
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "role": user["role"],
+            "department": user.get("department"),
+        },
+        "employee": employee,
+        "has_employee_record": employee is not None
+    }
+
+@api_router.get("/ess/leave-balance")
+async def get_my_leave_balance(user = Depends(get_current_user)):
+    """Get current user's leave balance"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee record found for your account")
+    
+    employment_type = employee.get("employment_type", "full_time")
+    is_full_time = employment_type == "full_time"
+    
+    # Get leave balances from employee record or defaults
+    balances = []
+    
+    for leave_type, config in LEAVE_TYPES.items():
+        # Skip full-time only leaves if not full-time
+        if config["full_time_only"] and not is_full_time:
+            continue
+        
+        total_days = config["days_per_year"]
+        if total_days == -1:
+            total_days = 999  # Unlimited
+        
+        # Get used days from approved leave requests this year
+        year_start = datetime(datetime.now().year, 1, 1).strftime("%Y-%m-%d")
+        used_query = {
+            "employee_id": employee["employee_id"],
+            "leave_type": leave_type,
+            "status": "approved",
+            "start_date": {"$gte": year_start}
+        }
+        used_leaves = await db.ess_leave_requests.find(used_query).to_list(100)
+        used_days = sum(l.get("total_days", 0) for l in used_leaves)
+        
+        # Get pending days
+        pending_query = {
+            "employee_id": employee["employee_id"],
+            "leave_type": leave_type,
+            "status": {"$in": ["pending_manager", "pending_hr", "pending_ceo"]},
+            "start_date": {"$gte": year_start}
+        }
+        pending_leaves = await db.ess_leave_requests.find(pending_query).to_list(100)
+        pending_days = sum(l.get("total_days", 0) for l in pending_leaves)
+        
+        remaining = max(0, total_days - used_days - pending_days) if total_days != 999 else 999
+        
+        balances.append({
+            "leave_type": leave_type,
+            "leave_type_name": config["name"],
+            "total_days": total_days if total_days != 999 else "Unlimited",
+            "used_days": used_days,
+            "pending_days": pending_days,
+            "remaining_days": remaining if remaining != 999 else "Unlimited",
+            "full_time_only": config["full_time_only"],
+            "requires_document": config["requires_document"]
+        })
+    
+    return balances
+
+@api_router.post("/ess/leave-requests")
+async def create_leave_request(data: LeaveRequestCreate, user = Depends(get_current_user)):
+    """Submit a new leave request"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee record found for your account")
+    
+    # Validate leave type
+    if data.leave_type not in LEAVE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid leave type: {data.leave_type}")
+    
+    leave_config = LEAVE_TYPES[data.leave_type]
+    
+    # Check if requires document
+    if leave_config["requires_document"] and not data.document_url:
+        raise HTTPException(status_code=400, detail=f"{leave_config['name']} requires a supporting document")
+    
+    # Calculate total days
+    total_days = calculate_leave_days(data.start_date, data.end_date, data.half_day_type)
+    
+    # Get manager for first approval
+    manager = await get_employee_manager(employee["employee_id"])
+    
+    now = datetime.now(timezone.utc).isoformat()
+    request_id = str(uuid.uuid4())
+    
+    leave_request = {
+        "id": request_id,
+        "employee_id": employee["employee_id"],
+        "employee_name": employee["full_name"],
+        "user_id": user["id"],
+        "leave_type": data.leave_type,
+        "leave_type_name": leave_config["name"],
+        "start_date": data.start_date,
+        "end_date": data.end_date,
+        "total_days": total_days,
+        "reason": data.reason,
+        "half_day_type": data.half_day_type,
+        "document_url": data.document_url,
+        "status": "pending_manager",
+        "approval_chain": [
+            {
+                "level": "manager",
+                "user_id": manager["id"] if manager else None,
+                "user_name": manager["name"] if manager else "N/A",
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            },
+            {
+                "level": "hr",
+                "user_id": None,
+                "user_name": None,
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            },
+            {
+                "level": "ceo",
+                "user_id": None,
+                "user_name": None,
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            }
+        ],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.ess_leave_requests.insert_one(leave_request)
+    
+    # Create notification for manager
+    if manager:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": manager["id"],
+            "title": "New Leave Request",
+            "message": f"{employee['full_name']} has requested {leave_config['name']} from {data.start_date} to {data.end_date}",
+            "entity_type": "leave_request",
+            "entity_id": request_id,
+            "read": False,
+            "created_at": now
+        })
+    
+    return {"id": request_id, "message": "Leave request submitted successfully", "status": "pending_manager"}
+
+@api_router.get("/ess/leave-requests")
+async def get_my_leave_requests(
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get current user's leave requests"""
+    query = {"user_id": user["id"]}
+    if status:
+        if status == "pending":
+            query["status"] = {"$in": ["pending_manager", "pending_hr", "pending_ceo"]}
+        else:
+            query["status"] = status
+    
+    requests = await db.ess_leave_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return requests
+
+@api_router.get("/ess/pending-approvals")
+async def get_pending_approvals_for_me(user = Depends(get_current_user)):
+    """Get leave and regularization requests pending my approval"""
+    user_role = user["role"]
+    user_id = user["id"]
+    
+    pending_leaves = []
+    pending_regularizations = []
+    
+    # Determine which level to check based on role
+    if user_role in ["super_admin"]:
+        # CEO sees pending_ceo
+        leave_query = {"status": "pending_ceo"}
+        reg_query = {"status": "pending_ceo"}
+    elif user_role in ["hr", "admin"]:
+        # HR sees pending_hr
+        leave_query = {"status": "pending_hr"}
+        reg_query = {"status": "pending_hr"}
+    elif user_role in ["sales_manager", "team_leader", "cs_head", "academic_master"]:
+        # Managers see requests from their team members
+        # Check if they are the assigned manager in approval chain
+        leave_query = {
+            "status": "pending_manager",
+            "approval_chain": {"$elemMatch": {"level": "manager", "user_id": user_id}}
+        }
+        reg_query = {
+            "status": "pending_manager",
+            "approval_chain": {"$elemMatch": {"level": "manager", "user_id": user_id}}
+        }
+    else:
+        return {"leave_requests": [], "regularization_requests": []}
+    
+    pending_leaves = await db.ess_leave_requests.find(leave_query, {"_id": 0}).to_list(100)
+    pending_regularizations = await db.ess_attendance_regularization.find(reg_query, {"_id": 0}).to_list(100)
+    
+    return {
+        "leave_requests": pending_leaves,
+        "regularization_requests": pending_regularizations
+    }
+
+@api_router.post("/ess/leave-requests/{request_id}/action")
+async def action_leave_request(
+    request_id: str,
+    action_data: ESSApprovalAction,
+    user = Depends(get_current_user)
+):
+    """Approve or reject a leave request"""
+    request = await db.ess_leave_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    user_role = user["role"]
+    current_status = request["status"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Determine which level this user can act on
+    can_act = False
+    current_level = None
+    
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "admin", "super_admin"]:
+        # Check if user is the assigned manager
+        for chain in request["approval_chain"]:
+            if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
+                can_act = True
+                current_level = "manager"
+                break
+    elif current_status == "pending_hr" and user_role in ["hr", "admin", "super_admin"]:
+        can_act = True
+        current_level = "hr"
+    elif current_status == "pending_ceo" and user_role == "super_admin":
+        can_act = True
+        current_level = "ceo"
+    
+    if not can_act:
+        raise HTTPException(status_code=403, detail="You are not authorized to act on this request")
+    
+    # Update approval chain
+    updated_chain = request["approval_chain"]
+    for chain in updated_chain:
+        if chain["level"] == current_level:
+            chain["status"] = action_data.action + "d"  # approved or rejected
+            chain["user_id"] = user["id"]
+            chain["user_name"] = user["full_name"]
+            chain["action_date"] = now
+            chain["comments"] = action_data.comments
+            break
+    
+    if action_data.action == "reject":
+        new_status = "rejected"
+    else:
+        # Move to next level
+        if current_level == "manager":
+            new_status = "pending_hr"
+        elif current_level == "hr":
+            new_status = "pending_ceo"
+        else:  # CEO approved
+            new_status = "approved"
+            # Update employee leave balance
+            employee = await db.hr_employees.find_one({"employee_id": request["employee_id"]})
+            if employee:
+                leave_field = f"{request['leave_type']}_used"
+                current_used = employee.get(leave_field, 0)
+                await db.hr_employees.update_one(
+                    {"employee_id": request["employee_id"]},
+                    {"$set": {leave_field: current_used + request["total_days"]}}
+                )
+    
+    await db.ess_leave_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": new_status, "approval_chain": updated_chain, "updated_at": now}}
+    )
+    
+    # Notify employee
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": request["user_id"],
+        "title": f"Leave Request {action_data.action.capitalize()}d",
+        "message": f"Your {request['leave_type_name']} request has been {action_data.action}d by {user['full_name']}" + 
+                   (f". Comments: {action_data.comments}" if action_data.comments else ""),
+        "entity_type": "leave_request",
+        "entity_id": request_id,
+        "read": False,
+        "created_at": now
+    })
+    
+    return {"message": f"Request {action_data.action}d successfully", "new_status": new_status}
+
+@api_router.get("/ess/my-attendance")
+async def get_my_attendance(
+    month: Optional[str] = None,  # YYYY-MM
+    user = Depends(get_current_user)
+):
+    """Get current user's attendance records"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee record found for your account")
+    
+    # Default to current month
+    if not month:
+        month = datetime.now().strftime("%Y-%m")
+    
+    # Query attendance for the month
+    start_date = f"{month}-01"
+    end_date = f"{month}-31"
+    
+    attendance = await db.hr_attendance.find({
+        "employee_id": employee["employee_id"],
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).sort("date", 1).to_list(31)
+    
+    # Calculate summary
+    total_present = sum(1 for a in attendance if a.get("status") == "present")
+    total_absent = sum(1 for a in attendance if a.get("status") == "absent")
+    total_late = sum(1 for a in attendance if a.get("late_minutes", 0) > 0)
+    total_hours = sum(a.get("worked_hours", 0) for a in attendance)
+    
+    return {
+        "month": month,
+        "employee_id": employee["employee_id"],
+        "employee_name": employee["full_name"],
+        "records": attendance,
+        "summary": {
+            "total_present": total_present,
+            "total_absent": total_absent,
+            "total_late": total_late,
+            "total_hours_worked": round(total_hours, 2),
+            "avg_hours_per_day": round(total_hours / max(total_present, 1), 2)
+        }
+    }
+
+@api_router.post("/ess/attendance-regularization")
+async def create_attendance_regularization(
+    data: AttendanceRegularizationCreate,
+    user = Depends(get_current_user)
+):
+    """Submit attendance regularization request"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="No employee record found for your account")
+    
+    # Get original attendance record
+    attendance = await db.hr_attendance.find_one({
+        "employee_id": employee["employee_id"],
+        "date": data.date
+    })
+    
+    # Get manager
+    manager = await get_employee_manager(employee["employee_id"])
+    
+    now = datetime.now(timezone.utc).isoformat()
+    request_id = str(uuid.uuid4())
+    
+    regularization = {
+        "id": request_id,
+        "employee_id": employee["employee_id"],
+        "employee_name": employee["full_name"],
+        "user_id": user["id"],
+        "date": data.date,
+        "original_check_in": attendance.get("biometric_in") if attendance else None,
+        "original_check_out": attendance.get("biometric_out") if attendance else None,
+        "requested_check_in": data.requested_check_in,
+        "requested_check_out": data.requested_check_out,
+        "reason": data.reason,
+        "status": "pending_manager",
+        "approval_chain": [
+            {
+                "level": "manager",
+                "user_id": manager["id"] if manager else None,
+                "user_name": manager["name"] if manager else "N/A",
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            },
+            {
+                "level": "hr",
+                "user_id": None,
+                "user_name": None,
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            },
+            {
+                "level": "ceo",
+                "user_id": None,
+                "user_name": None,
+                "status": "pending",
+                "action_date": None,
+                "comments": None
+            }
+        ],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.ess_attendance_regularization.insert_one(regularization)
+    
+    # Notify manager
+    if manager:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": manager["id"],
+            "title": "Attendance Regularization Request",
+            "message": f"{employee['full_name']} has requested attendance regularization for {data.date}",
+            "entity_type": "regularization_request",
+            "entity_id": request_id,
+            "read": False,
+            "created_at": now
+        })
+    
+    return {"id": request_id, "message": "Regularization request submitted", "status": "pending_manager"}
+
+@api_router.get("/ess/attendance-regularization")
+async def get_my_regularization_requests(
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get current user's regularization requests"""
+    query = {"user_id": user["id"]}
+    if status:
+        if status == "pending":
+            query["status"] = {"$in": ["pending_manager", "pending_hr", "pending_ceo"]}
+        else:
+            query["status"] = status
+    
+    requests = await db.ess_attendance_regularization.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return requests
+
+@api_router.post("/ess/attendance-regularization/{request_id}/action")
+async def action_regularization_request(
+    request_id: str,
+    action_data: ESSApprovalAction,
+    user = Depends(get_current_user)
+):
+    """Approve or reject regularization request"""
+    request = await db.ess_attendance_regularization.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Regularization request not found")
+    
+    user_role = user["role"]
+    current_status = request["status"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Determine which level this user can act on
+    can_act = False
+    current_level = None
+    
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "admin", "super_admin"]:
+        for chain in request["approval_chain"]:
+            if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
+                can_act = True
+                current_level = "manager"
+                break
+    elif current_status == "pending_hr" and user_role in ["hr", "admin", "super_admin"]:
+        can_act = True
+        current_level = "hr"
+    elif current_status == "pending_ceo" and user_role == "super_admin":
+        can_act = True
+        current_level = "ceo"
+    
+    if not can_act:
+        raise HTTPException(status_code=403, detail="You are not authorized to act on this request")
+    
+    # Update approval chain
+    updated_chain = request["approval_chain"]
+    for chain in updated_chain:
+        if chain["level"] == current_level:
+            chain["status"] = action_data.action + "d"
+            chain["user_id"] = user["id"]
+            chain["user_name"] = user["full_name"]
+            chain["action_date"] = now
+            chain["comments"] = action_data.comments
+            break
+    
+    if action_data.action == "reject":
+        new_status = "rejected"
+    else:
+        if current_level == "manager":
+            new_status = "pending_hr"
+        elif current_level == "hr":
+            new_status = "pending_ceo"
+        else:  # CEO approved - apply regularization
+            new_status = "approved"
+            # Update attendance record
+            await db.hr_attendance.update_one(
+                {"employee_id": request["employee_id"], "date": request["date"]},
+                {"$set": {
+                    "biometric_in": request["requested_check_in"],
+                    "biometric_out": request["requested_check_out"],
+                    "regularized": True,
+                    "regularization_id": request_id,
+                    "updated_at": now
+                }},
+                upsert=True
+            )
+    
+    await db.ess_attendance_regularization.update_one(
+        {"id": request_id},
+        {"$set": {"status": new_status, "approval_chain": updated_chain, "updated_at": now}}
+    )
+    
+    # Notify employee
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": request["user_id"],
+        "title": f"Regularization {action_data.action.capitalize()}d",
+        "message": f"Your attendance regularization for {request['date']} has been {action_data.action}d by {user['full_name']}",
+        "entity_type": "regularization_request",
+        "entity_id": request_id,
+        "read": False,
+        "created_at": now
+    })
+    
+    return {"message": f"Request {action_data.action}d successfully", "new_status": new_status}
+
+@api_router.get("/ess/my-assets")
+async def get_my_assets(user = Depends(get_current_user)):
+    """Get assets allocated to current user"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    if not employee:
+        return []
+    
+    # Get allocated assets
+    assets = await db.hr_assets.find({
+        "assigned_to": employee["employee_id"],
+        "status": "assigned"
+    }, {"_id": 0}).to_list(100)
+    
+    return assets
+
+@api_router.get("/ess/dashboard")
+async def get_ess_dashboard(user = Depends(get_current_user)):
+    """Get employee self-service dashboard data"""
+    # Find linked employee
+    employee = await db.hr_employees.find_one({"user_id": user["id"]})
+    if not employee:
+        employee = await db.hr_employees.find_one({"email": user["email"]})
+    
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+    month = now.strftime("%Y-%m")
+    
+    result = {
+        "user": {
+            "id": user["id"],
+            "full_name": user["full_name"],
+            "email": user["email"],
+            "role": user.get("role"),
+            "department": user.get("department")
+        },
+        "employee": None,
+        "attendance": {
+            "today": None,
+            "weekly_summary": {"present": 0, "absent": 0, "late": 0, "total_hours": 0},
+            "recent_records": []
+        },
+        "leave_balance": [],
+        "pending_requests": {"leave": 0, "regularization": 0},
+        "assets": [],
+        "request_history": {"leave": [], "regularization": []}
+    }
+    
+    if employee:
+        result["employee"] = {
+            "employee_id": employee["employee_id"],
+            "full_name": employee["full_name"],
+            "designation": employee.get("designation"),
+            "department": employee.get("department"),
+            "employment_type": employee.get("employment_type"),
+            "joining_date": employee.get("joining_date")
+        }
+        
+        emp_id = employee["employee_id"]
+        
+        # Today's attendance
+        today_att = await db.hr_attendance.find_one({"employee_id": emp_id, "date": today}, {"_id": 0})
+        result["attendance"]["today"] = today_att
+        
+        # Weekly attendance
+        weekly_att = await db.hr_attendance.find({
+            "employee_id": emp_id,
+            "date": {"$gte": week_start, "$lte": today}
+        }, {"_id": 0}).to_list(7)
+        
+        result["attendance"]["weekly_summary"] = {
+            "present": sum(1 for a in weekly_att if a.get("status") == "present"),
+            "absent": sum(1 for a in weekly_att if a.get("status") == "absent"),
+            "late": sum(1 for a in weekly_att if a.get("late_minutes", 0) > 0),
+            "total_hours": round(sum(a.get("worked_hours", 0) for a in weekly_att), 2)
+        }
+        
+        # Recent attendance records (last 10)
+        recent_att = await db.hr_attendance.find(
+            {"employee_id": emp_id},
+            {"_id": 0}
+        ).sort("date", -1).limit(10).to_list(10)
+        result["attendance"]["recent_records"] = recent_att
+        
+        # Leave balance (simplified)
+        for leave_type, config in LEAVE_TYPES.items():
+            if config["full_time_only"] and employee.get("employment_type") != "full_time":
+                continue
+            
+            total = config["days_per_year"]
+            year_start = f"{now.year}-01-01"
+            
+            used = await db.ess_leave_requests.count_documents({
+                "employee_id": emp_id,
+                "leave_type": leave_type,
+                "status": "approved",
+                "start_date": {"$gte": year_start}
+            })
+            
+            result["leave_balance"].append({
+                "type": leave_type,
+                "name": config["name"],
+                "total": total if total != -1 else "Unlimited",
+                "used": used,
+                "remaining": max(0, total - used) if total != -1 else "Unlimited"
+            })
+        
+        # Pending requests count
+        result["pending_requests"]["leave"] = await db.ess_leave_requests.count_documents({
+            "user_id": user["id"],
+            "status": {"$in": ["pending_manager", "pending_hr", "pending_ceo"]}
+        })
+        result["pending_requests"]["regularization"] = await db.ess_attendance_regularization.count_documents({
+            "user_id": user["id"],
+            "status": {"$in": ["pending_manager", "pending_hr", "pending_ceo"]}
+        })
+        
+        # Assets
+        assets = await db.hr_assets.find({
+            "assigned_to": emp_id,
+            "status": "assigned"
+        }, {"_id": 0}).to_list(20)
+        result["assets"] = assets
+        
+        # Recent request history
+        recent_leaves = await db.ess_leave_requests.find(
+            {"user_id": user["id"]},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(5).to_list(5)
+        result["request_history"]["leave"] = recent_leaves
+        
+        recent_regs = await db.ess_attendance_regularization.find(
+            {"user_id": user["id"]},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(5).to_list(5)
+        result["request_history"]["regularization"] = recent_regs
+    
+    return result
+
+@api_router.get("/ess/leave-types")
+async def get_leave_types(user = Depends(get_current_user)):
+    """Get available leave types configuration"""
+    return [
+        {
+            "id": k,
+            "name": v["name"],
+            "days_per_year": v["days_per_year"],
+            "full_time_only": v["full_time_only"],
+            "requires_document": v["requires_document"]
+        }
+        for k, v in LEAVE_TYPES.items()
+    ]
+
 # ==================== FINANCE SUITE ENDPOINTS ====================
 
 # --- CLT Payables ---
