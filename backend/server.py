@@ -22,6 +22,16 @@ from biocloud_sync import (
     save_employee_mapping
 )
 
+# Import Email Service
+from email_service import (
+    send_email_async,
+    get_leave_request_template,
+    get_leave_status_template,
+    get_regularization_request_template,
+    get_regularization_status_template,
+    is_email_configured
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
