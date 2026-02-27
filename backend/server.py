@@ -620,6 +620,79 @@ class CallLogResponse(BaseModel):
     agent_extension: Optional[str] = None
     notes: Optional[str] = None
 
+# ==================== ESS (Employee Self-Service) MODELS ====================
+
+# Leave Types Configuration
+LEAVE_TYPES = {
+    "sick_leave": {"name": "Sick Leave", "days_per_year": 12, "full_time_only": True, "requires_document": True},
+    "annual_leave": {"name": "Annual Leave", "days_per_year": 26, "full_time_only": True, "requires_document": False},
+    "maternity_leave": {"name": "Maternity Leave", "days_per_year": 45, "full_time_only": False, "requires_document": True},
+    "umrah_leave": {"name": "Umrah Leave", "days_per_year": 8, "full_time_only": False, "requires_document": False},
+    "half_day": {"name": "Half Day", "days_per_year": -1, "full_time_only": False, "requires_document": False},  # -1 = unlimited
+    "unpaid_leave": {"name": "Unpaid Leave", "days_per_year": -1, "full_time_only": False, "requires_document": False},
+}
+
+ESS_APPROVAL_STATUS = ["pending_manager", "pending_hr", "pending_ceo", "approved", "rejected"]
+
+class LeaveRequestCreate(BaseModel):
+    leave_type: str  # sick_leave, annual_leave, maternity_leave, umrah_leave, half_day, unpaid_leave
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    reason: str
+    half_day_type: Optional[str] = None  # "first_half" or "second_half" if leave_type is half_day
+    document_url: Optional[str] = None  # For sick certificate, etc.
+
+class LeaveRequestResponse(BaseModel):
+    id: str
+    employee_id: str
+    employee_name: str
+    leave_type: str
+    leave_type_name: str
+    start_date: str
+    end_date: str
+    total_days: float
+    reason: str
+    half_day_type: Optional[str] = None
+    document_url: Optional[str] = None
+    status: str  # pending_manager, pending_hr, pending_ceo, approved, rejected
+    approval_chain: List[Dict]  # [{role, user_id, user_name, status, action_date, comments}]
+    created_at: str
+    updated_at: str
+
+class AttendanceRegularizationCreate(BaseModel):
+    date: str  # YYYY-MM-DD
+    requested_check_in: str  # HH:MM
+    requested_check_out: str  # HH:MM
+    reason: str
+
+class AttendanceRegularizationResponse(BaseModel):
+    id: str
+    employee_id: str
+    employee_name: str
+    date: str
+    original_check_in: Optional[str] = None
+    original_check_out: Optional[str] = None
+    requested_check_in: str
+    requested_check_out: str
+    reason: str
+    status: str  # pending_manager, pending_hr, pending_ceo, approved, rejected
+    approval_chain: List[Dict]
+    created_at: str
+    updated_at: str
+
+class LeaveBalanceResponse(BaseModel):
+    leave_type: str
+    leave_type_name: str
+    total_days: float
+    used_days: float
+    pending_days: float
+    remaining_days: float
+    full_time_only: bool
+
+class ESSApprovalAction(BaseModel):
+    action: str  # approve, reject
+    comments: Optional[str] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 def hash_password(password: str) -> str:
