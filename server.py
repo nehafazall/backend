@@ -159,6 +159,7 @@ class UserBase(BaseModel):
     environment_access: Optional[List[str]] = None  # ["development", "testing", "production"]
     entity_access: Optional[List[str]] = None  # ["clt", "miles"] - for finance roles
     threecx_extension: Optional[str] = None  # 3CX PBX extension number for call mapping
+    finance_permissions: Optional[Dict[str, Dict[str, bool]]] = None  # {module: {view: bool, edit: bool, delete: bool}}
 
 class UserCreate(UserBase):
     password: str
@@ -268,6 +269,12 @@ class ApprovalRequest(BaseModel):
     status: str = "pending"
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
+
+class LeadReassignmentRequest(BaseModel):
+    lead_id: str
+    current_agent_id: str
+    new_agent_id: str
+    reason: str
 
 class LeadBase(BaseModel):
     full_name: str
@@ -720,14 +727,27 @@ async def create_notification(
     await db.notifications.insert_one(notification)
 
 async def get_round_robin_agent(role: str, region: str = None, department: str = None) -> Optional[Dict]:
-    """Get next available agent using round-robin"""
+    """Get next available agent using round-robin with fallback to any agent if regional match not found"""
     query = {"role": role, "is_active": True}
+    
+    # First try with region filter if provided
     if region:
         query["region"] = region
-    if department:
-        query["department"] = department
+        agents = await db.users.find(query).to_list(100)
+        
+        # If no regional agents found, fallback to any agent with this role
+        if not agents:
+            del query["region"]
+            agents = await db.users.find(query).to_list(100)
+    else:
+        agents = await db.users.find(query).to_list(100)
     
-    agents = await db.users.find(query).to_list(100)
+    if department:
+        # Filter by department if specified
+        dept_agents = [a for a in agents if a.get("department") == department]
+        if dept_agents:
+            agents = dept_agents
+    
     if not agents:
         return None
     
@@ -1979,8 +1999,23 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Non-super_admin can only update certain fields
-    if user.get("role") != "super_admin":
+    # Permission-based field access
+    user_role = user.get("role")
+    
+    # Super admin and admin can update all fields
+    if user_role in ["super_admin", "admin"]:
+        # All fields allowed
+        pass
+    elif user_role in ["sales_manager", "team_leader"]:
+        # Can update team-related fields for their team members
+        allowed_fields = ["phone", "region", "team_leader_id", "threecx_extension"]
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+    elif user_role == "hr":
+        # HR can update HR-related fields
+        allowed_fields = ["phone", "region", "department", "designation", "is_active"]
+        data = {k: v for k, v in data.items() if k in allowed_fields}
+    else:
+        # Regular users can only update their own basic fields
         allowed_fields = ["phone", "region"]
         data = {k: v for k, v in data.items() if k in allowed_fields}
         
@@ -2751,6 +2786,400 @@ async def delete_lead_reminder(lead_id: str, user = Depends(get_current_user)):
     
     return {"message": "Reminder deleted"}
 
+# =====================
+# LEAD REASSIGNMENT WITH APPROVAL WORKFLOW
+# =====================
+
+@api_router.post("/leads/{lead_id}/reassignment-request")
+async def request_lead_reassignment(
+    lead_id: str, 
+    data: LeadReassignmentRequest,
+    user = Depends(require_roles(["team_leader", "sales_manager", "admin", "super_admin"]))
+):
+    """
+    Request to reassign a lead to a different agent.
+    Team Leaders must get approval from Sales Manager -> CEO
+    Sales Managers must get approval from CEO
+    Admin/Super Admin can reassign directly
+    """
+    lead = await db.leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Get the new agent details
+    new_agent = await db.users.find_one({"id": data.new_agent_id})
+    if not new_agent:
+        raise HTTPException(status_code=404, detail="New agent not found")
+    
+    # Get current agent details
+    current_agent = None
+    if data.current_agent_id:
+        current_agent = await db.users.find_one({"id": data.current_agent_id})
+    
+    now = datetime.now(timezone.utc).isoformat()
+    user_role = user.get("role")
+    
+    # Admin and Super Admin can reassign directly without approval
+    if user_role in ["super_admin", "admin"]:
+        # Direct reassignment
+        await db.leads.update_one(
+            {"id": lead_id},
+            {"$set": {
+                "assigned_to": data.new_agent_id,
+                "assigned_to_name": new_agent["full_name"],
+                "in_pool": False,
+                "assigned_at": now,
+                "updated_at": now
+            }}
+        )
+        await log_activity("lead", lead_id, "reassigned", user, {
+            "from": current_agent["full_name"] if current_agent else "Pool",
+            "to": new_agent["full_name"],
+            "reason": data.reason,
+            "approved_by": "direct_admin"
+        })
+        return {
+            "message": f"Lead reassigned to {new_agent['full_name']}",
+            "status": "completed",
+            "requires_approval": False
+        }
+    
+    # Determine approval workflow
+    # Team Leader -> Sales Manager -> CEO
+    # Sales Manager -> CEO
+    approval_chain = []
+    
+    if user_role == "team_leader":
+        # Check if there's an active Sales Manager
+        sales_manager = await db.users.find_one({"role": "sales_manager", "is_active": True})
+        if sales_manager:
+            approval_chain.append({
+                "role": "sales_manager",
+                "user_id": sales_manager["id"],
+                "user_name": sales_manager["full_name"],
+                "status": "pending"
+            })
+        # CEO is always in the chain
+        ceo = await db.users.find_one({"role": "super_admin", "is_active": True})
+        if ceo:
+            approval_chain.append({
+                "role": "ceo",
+                "user_id": ceo["id"],
+                "user_name": ceo["full_name"],
+                "status": "pending"
+            })
+    elif user_role == "sales_manager":
+        # Sales Manager only needs CEO approval
+        ceo = await db.users.find_one({"role": "super_admin", "is_active": True})
+        if ceo:
+            approval_chain.append({
+                "role": "ceo",
+                "user_id": ceo["id"],
+                "user_name": ceo["full_name"],
+                "status": "pending"
+            })
+    
+    if not approval_chain:
+        raise HTTPException(status_code=400, detail="No approvers found in the system")
+    
+    # Create reassignment request
+    request_id = str(uuid.uuid4())
+    reassignment_request = {
+        "id": request_id,
+        "request_type": "lead_reassignment",
+        "lead_id": lead_id,
+        "lead_name": lead["full_name"],
+        "lead_phone": lead["phone"],
+        "current_agent_id": data.current_agent_id,
+        "current_agent_name": current_agent["full_name"] if current_agent else "Pool",
+        "new_agent_id": data.new_agent_id,
+        "new_agent_name": new_agent["full_name"],
+        "reason": data.reason,
+        "requested_by": user["id"],
+        "requested_by_name": user["full_name"],
+        "requested_by_role": user_role,
+        "approval_chain": approval_chain,
+        "current_approval_step": 0,
+        "status": "pending_approval",
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.lead_reassignment_requests.insert_one(reassignment_request)
+    await log_activity("lead", lead_id, "reassignment_requested", user, {
+        "new_agent": new_agent["full_name"],
+        "reason": data.reason
+    })
+    
+    # Get first approver info
+    first_approver = approval_chain[0]
+    
+    return {
+        "message": f"Reassignment request submitted. Awaiting approval from {first_approver['user_name']} ({first_approver['role'].replace('_', ' ').title()})",
+        "request_id": request_id,
+        "status": "pending_approval",
+        "requires_approval": True,
+        "next_approver": first_approver
+    }
+
+
+@api_router.get("/leads/reassignment-requests")
+async def get_reassignment_requests(
+    status: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get lead reassignment requests based on user role"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    query = {}
+    
+    if user_role in ["super_admin", "admin"]:
+        # Can see all requests
+        pass
+    elif user_role == "sales_manager":
+        # Can see requests where they are in the approval chain
+        query["$or"] = [
+            {"approval_chain.user_id": user_id},
+            {"requested_by": user_id}
+        ]
+    elif user_role == "team_leader":
+        # Can only see their own requests
+        query["requested_by"] = user_id
+    else:
+        return []
+    
+    if status:
+        query["status"] = status
+    
+    requests = await db.lead_reassignment_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return requests
+
+
+@api_router.get("/leads/reassignment-requests/pending")
+async def get_pending_reassignment_approvals(user = Depends(get_current_user)):
+    """Get reassignment requests pending the current user's approval"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    # Find requests where this user is the current approver
+    pipeline = [
+        {"$match": {"status": "pending_approval"}},
+        {"$addFields": {
+            "current_approver": {"$arrayElemAt": ["$approval_chain", "$current_approval_step"]}
+        }},
+        {"$match": {
+            "$or": [
+                {"current_approver.user_id": user_id},
+                # Super admin (CEO) can approve if role is ceo
+                {"$and": [
+                    {"current_approver.role": "ceo"},
+                    {"$expr": {"$eq": [user_role, "super_admin"]}}
+                ]}
+            ]
+        }},
+        {"$project": {"_id": 0}}
+    ]
+    
+    requests = await db.lead_reassignment_requests.aggregate(pipeline).to_list(100)
+    return requests
+
+
+@api_router.post("/leads/reassignment-requests/{request_id}/approve")
+async def approve_reassignment_request(
+    request_id: str,
+    user = Depends(get_current_user)
+):
+    """Approve a lead reassignment request"""
+    request = await db.lead_reassignment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Request is already {request['status']}")
+    
+    user_role = user.get("role")
+    user_id = user["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get current approval step
+    current_step = request["current_approval_step"]
+    approval_chain = request["approval_chain"]
+    
+    if current_step >= len(approval_chain):
+        raise HTTPException(status_code=400, detail="Invalid approval step")
+    
+    current_approver = approval_chain[current_step]
+    
+    # Verify this user can approve
+    can_approve = False
+    if current_approver["user_id"] == user_id:
+        can_approve = True
+    elif current_approver["role"] == "ceo" and user_role == "super_admin":
+        can_approve = True
+    
+    if not can_approve:
+        raise HTTPException(status_code=403, detail="You are not authorized to approve this request")
+    
+    # Update the approval chain
+    approval_chain[current_step]["status"] = "approved"
+    approval_chain[current_step]["approved_by"] = user_id
+    approval_chain[current_step]["approved_by_name"] = user["full_name"]
+    approval_chain[current_step]["approved_at"] = now
+    
+    # Check if this was the last approval
+    next_step = current_step + 1
+    
+    if next_step >= len(approval_chain):
+        # All approvals complete - execute the reassignment
+        lead = await db.leads.find_one({"id": request["lead_id"]})
+        if lead:
+            await db.leads.update_one(
+                {"id": request["lead_id"]},
+                {"$set": {
+                    "assigned_to": request["new_agent_id"],
+                    "assigned_to_name": request["new_agent_name"],
+                    "in_pool": False,
+                    "assigned_at": now,
+                    "updated_at": now
+                }}
+            )
+            await log_activity("lead", request["lead_id"], "reassigned", user, {
+                "from": request["current_agent_name"],
+                "to": request["new_agent_name"],
+                "reason": request["reason"],
+                "approved_via": "approval_workflow"
+            })
+        
+        await db.lead_reassignment_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "approval_chain": approval_chain,
+                "status": "approved",
+                "completed_at": now,
+                "updated_at": now
+            }}
+        )
+        
+        return {
+            "message": f"Reassignment approved and executed. Lead assigned to {request['new_agent_name']}",
+            "status": "approved",
+            "lead_reassigned": True
+        }
+    else:
+        # Move to next approval step
+        next_approver = approval_chain[next_step]
+        
+        await db.lead_reassignment_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "approval_chain": approval_chain,
+                "current_approval_step": next_step,
+                "updated_at": now
+            }}
+        )
+        
+        return {
+            "message": f"Approved. Now pending approval from {next_approver['user_name']} ({next_approver['role'].replace('_', ' ').title()})",
+            "status": "pending_approval",
+            "next_approver": next_approver,
+            "lead_reassigned": False
+        }
+
+
+@api_router.post("/leads/reassignment-requests/{request_id}/reject")
+async def reject_reassignment_request(
+    request_id: str,
+    rejection_reason: str = "",
+    user = Depends(get_current_user)
+):
+    """Reject a lead reassignment request"""
+    request = await db.lead_reassignment_requests.find_one({"id": request_id})
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    if request["status"] != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Request is already {request['status']}")
+    
+    user_role = user.get("role")
+    user_id = user["id"]
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get current approval step
+    current_step = request["current_approval_step"]
+    approval_chain = request["approval_chain"]
+    current_approver = approval_chain[current_step]
+    
+    # Verify this user can reject
+    can_reject = False
+    if current_approver["user_id"] == user_id:
+        can_reject = True
+    elif current_approver["role"] == "ceo" and user_role == "super_admin":
+        can_reject = True
+    
+    if not can_reject:
+        raise HTTPException(status_code=403, detail="You are not authorized to reject this request")
+    
+    # Update the approval chain
+    approval_chain[current_step]["status"] = "rejected"
+    approval_chain[current_step]["rejected_by"] = user_id
+    approval_chain[current_step]["rejected_by_name"] = user["full_name"]
+    approval_chain[current_step]["rejected_at"] = now
+    approval_chain[current_step]["rejection_reason"] = rejection_reason
+    
+    await db.lead_reassignment_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "approval_chain": approval_chain,
+            "status": "rejected",
+            "rejection_reason": rejection_reason,
+            "rejected_by": user_id,
+            "rejected_by_name": user["full_name"],
+            "rejected_at": now,
+            "updated_at": now
+        }}
+    )
+    
+    await log_activity("lead", request["lead_id"], "reassignment_rejected", user, {
+        "reason": rejection_reason
+    })
+    
+    return {
+        "message": "Reassignment request rejected",
+        "status": "rejected"
+    }
+
+
+@api_router.get("/leads/reassignment/available-agents")
+async def get_available_agents_for_reassignment(
+    user = Depends(require_roles(["team_leader", "sales_manager", "admin", "super_admin"]))
+):
+    """Get list of agents available for lead reassignment"""
+    user_role = user.get("role")
+    user_id = user["id"]
+    
+    query = {"is_active": True, "role": {"$in": ["sales_executive", "team_leader"]}}
+    
+    # Team leaders can only reassign to their own team members
+    if user_role == "team_leader":
+        query["$or"] = [
+            {"team_leader_id": user_id},
+            {"id": user_id}  # Can also assign to themselves
+        ]
+    
+    agents = await db.users.find(
+        query,
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+    ).to_list(100)
+    
+    # Add lead count for each agent
+    for agent in agents:
+        lead_count = await db.leads.count_documents({"assigned_to": agent["id"]})
+        agent["current_lead_count"] = lead_count
+    
+    return agents
+
+
 @api_router.post("/students/{student_id}/reminder")
 async def set_student_reminder(student_id: str, reminder_date: str, reminder_time: str, reminder_type: str = "general", reminder_note: str = "", user = Depends(get_current_user)):
     """Set a reminder for a student (upgrade/redeposit)"""
@@ -2798,9 +3227,18 @@ async def complete_student_reminder(student_id: str, user = Depends(get_current_
 @api_router.get("/followups/today")
 async def get_todays_followups(user = Depends(get_current_user)):
     """Get all follow-ups due today for the current user"""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today.replace(hour=23, minute=59, second=59)
+    today_str = today.strftime("%Y-%m-%d")
     
-    query_base = {"reminder_date": today, "reminder_completed": {"$ne": True}}
+    # Query for leads with either reminder_date OR follow_up_date today
+    # reminder_date is stored as string "YYYY-MM-DD", follow_up_date is datetime
+    query_base = {
+        "$or": [
+            {"reminder_date": today_str, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today, "$lte": today_end}}
+        ]
+    }
     
     # Filter by user role
     if user["role"] == "sales_executive":
@@ -2821,26 +3259,44 @@ async def get_todays_followups(user = Depends(get_current_user)):
             leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
     
     # Get students with reminders (CS for upgrades, Mentors for redeposits)
+    student_query_base = {
+        "$or": [
+            {"reminder_date": today_str, "reminder_completed": {"$ne": True}},
+            {"follow_up_date": {"$gte": today, "$lte": today_end}}
+        ]
+    }
     students = []
     if user["role"] in ["cs_agent", "cs_head"]:
         if user["role"] == "cs_agent":
-            students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
+            students = await db.students.find({**student_query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
-            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+            students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     elif user["role"] in ["mentor", "academic_master"]:
         if user["role"] == "mentor":
-            students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
+            students = await db.students.find({**student_query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
-            students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+            students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     elif user["role"] in ["super_admin", "admin"]:
-        students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
+        students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
     
     # Categorize by time
-    def get_time_slot(time_str):
-        if not time_str:
+    def get_time_slot(time_val):
+        if not time_val:
             return "unscheduled"
         try:
-            hour = int(time_str.split(":")[0])
+            # Handle datetime objects
+            if hasattr(time_val, 'hour'):
+                hour = time_val.hour
+            # Handle string formats
+            elif isinstance(time_val, str):
+                if "T" in time_val:
+                    time_val = time_val.split("T")[1][:5]
+                elif " " in time_val:
+                    time_val = time_val.split(" ")[1][:5]
+                hour = int(time_val.split(":")[0])
+            else:
+                return "unscheduled"
+            
             if hour < 12:
                 return "morning"
             elif hour < 17:
@@ -2861,22 +3317,36 @@ async def get_todays_followups(user = Depends(get_current_user)):
     for lead in leads:
         lead["entity_type"] = "lead"
         lead["reminder_type"] = "sales"
-        slot = get_time_slot(lead.get("reminder_time"))
+        # Use follow_up_date if reminder_time not set
+        time_val = lead.get("reminder_time") or lead.get("follow_up_date")
+        slot = get_time_slot(time_val)
         followups[slot].append(lead)
     
     for student in students:
         student["entity_type"] = "student"
-        slot = get_time_slot(student.get("reminder_time"))
+        time_val = student.get("reminder_time") or student.get("follow_up_date")
+        slot = get_time_slot(time_val)
         followups[slot].append(student)
     
     # Sort each slot by time
+    def get_sort_key(x):
+        rt = x.get("reminder_time")
+        fud = x.get("follow_up_date")
+        if rt:
+            return rt
+        if fud:
+            if hasattr(fud, 'strftime'):
+                return fud.strftime("%H:%M")
+            return str(fud)
+        return "99:99"
+    
     for slot in followups:
-        followups[slot].sort(key=lambda x: x.get("reminder_time") or "99:99")
+        followups[slot].sort(key=get_sort_key)
     
     total = len(leads) + len(students)
     
     return {
-        "date": today,
+        "date": today_str,
         "total_followups": total,
         "followups": followups,
         "leads_count": len(leads),
@@ -3275,14 +3745,121 @@ async def get_activity_logs(
 
 # ==================== DASHBOARD ====================
 
+@api_router.get("/dashboard/viewable-users")
+async def get_viewable_users(user = Depends(get_current_user)):
+    """Get list of users whose dashboard the current user can view"""
+    user_role = user["role"]
+    user_id = user["id"]
+    
+    viewable_users = []
+    
+    if user_role == "super_admin":
+        # Super admin can view everyone
+        all_users = await db.users.find(
+            {"is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(500)
+        viewable_users = all_users
+    elif user_role == "admin":
+        # Admin can view everyone except super_admin
+        all_users = await db.users.find(
+            {"is_active": True, "role": {"$ne": "super_admin"}},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(500)
+        viewable_users = all_users
+    elif user_role == "sales_manager":
+        # Sales manager can view team leaders and sales executives
+        team_users = await db.users.find(
+            {"is_active": True, "role": {"$in": ["team_leader", "sales_executive"]}},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(200)
+        viewable_users = team_users
+    elif user_role == "team_leader":
+        # Team leader can view their team members
+        team_members = await db.users.find(
+            {"is_active": True, "team_leader_id": user_id},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = team_members
+    elif user_role == "cs_head":
+        # CS head can view CS agents
+        cs_agents = await db.users.find(
+            {"is_active": True, "role": "cs_agent"},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = cs_agents
+    elif user_role == "academic_master":
+        # Academic master can view mentors
+        mentors = await db.users.find(
+            {"is_active": True, "role": "mentor"},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
+        ).to_list(100)
+        viewable_users = mentors
+    
+    # Group by role for easier frontend display
+    grouped = {}
+    for u in viewable_users:
+        role = u.get("role", "unknown")
+        if role not in grouped:
+            grouped[role] = []
+        grouped[role].append(u)
+    
+    return {
+        "can_view_others": len(viewable_users) > 0,
+        "users": viewable_users,
+        "grouped": grouped,
+        "total": len(viewable_users)
+    }
+
+
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(user = Depends(get_current_user)):
+async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    """Get dashboard stats. Use view_as parameter to view another user's dashboard (if authorized)"""
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     current_month = datetime.now(timezone.utc).strftime("%Y-%m")
     
+    # Determine target user for dashboard
+    target_user = user
+    viewing_as = None
+    
+    if view_as and view_as != user["id"]:
+        # Check if current user can view this user's dashboard
+        can_view = False
+        current_role = user["role"]
+        
+        if current_role == "super_admin":
+            can_view = True
+        elif current_role == "admin":
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            can_view = target and target.get("role") != "super_admin"
+        elif current_role == "sales_manager":
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            can_view = target and target.get("role") in ["team_leader", "sales_executive"]
+        elif current_role == "team_leader":
+            target = await db.users.find_one({"id": view_as, "team_leader_id": user["id"]}, {"_id": 0})
+            can_view = target is not None
+        elif current_role == "cs_head":
+            target = await db.users.find_one({"id": view_as, "role": "cs_agent"}, {"_id": 0})
+            can_view = target is not None
+        elif current_role == "academic_master":
+            target = await db.users.find_one({"id": view_as, "role": "mentor"}, {"_id": 0})
+            can_view = target is not None
+        
+        if can_view:
+            target_user = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target_user:
+                viewing_as = {
+                    "id": target_user["id"],
+                    "full_name": target_user.get("full_name"),
+                    "role": target_user.get("role"),
+                    "email": target_user.get("email")
+                }
+        else:
+            raise HTTPException(status_code=403, detail="Not authorized to view this user's dashboard")
+    
     stats = {}
-    user_id = user["id"]
-    user_role = user["role"]
+    user_id = target_user["id"]
+    user_role = target_user["role"]
     
     # Lead stats for sales roles
     if user_role in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
@@ -3426,13 +4003,29 @@ async def get_dashboard_stats(user = Depends(get_current_user)):
         result = await db.payments.aggregate(pipeline).to_list(1)
         stats["total_verified_revenue"] = result[0]["total"] if result else 0
     
+    # Add viewing_as info if viewing another user's dashboard
+    if viewing_as:
+        stats["viewing_as"] = viewing_as
+    
     return stats
 
 @api_router.get("/dashboard/lead-funnel")
-async def get_lead_funnel(user = Depends(get_current_user)):
+async def get_lead_funnel(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
     query = {}
-    if user["role"] == "sales_executive":
-        query["assigned_to"] = user["id"]
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
     
     pipeline = [
         {"$match": query},
@@ -3448,10 +4041,22 @@ async def get_lead_funnel(user = Depends(get_current_user)):
     return result
 
 @api_router.get("/dashboard/sales-by-course")
-async def get_sales_by_course(user = Depends(get_current_user)):
+async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
     query = {"stage": "enrolled"}
-    if user["role"] == "sales_executive":
-        query["assigned_to"] = user["id"]
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
     
     pipeline = [
         {"$match": query},
@@ -5467,7 +6072,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://synapse-ui-fix.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://hr-sync-dev.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -7611,20 +8216,53 @@ class EmployeeResponse(BaseModel):
     confirmation_date: Optional[str] = None
     notice_period_days: int
     employment_status: str
-    termination_date: Optional[str] = None  # Date when employee was terminated
-    role: Optional[str] = None  # Linked user role for sync
+    termination_date: Optional[str] = None
+    role: Optional[str] = None
     employee_category: Optional[str] = None
     grade: Optional[str] = None
-    visa_details: Optional[Dict] = None
+    # Enhanced Document Tracking
+    passport: Optional[Dict] = None  # number, issue_date, expiry_date, issuing_country
+    visa: Optional[Dict] = None  # type, number, expiry_date, status
+    emirates_id: Optional[Dict] = None  # number, expiry_date
+    labour_card: Optional[Dict] = None  # number, expiry_date
+    work_permit: Optional[Dict] = None  # number, expiry_date
+    health_insurance: Optional[Dict] = None  # provider, card_number, expiry_date
+    driving_license: Optional[Dict] = None  # number, expiry_date, type
+    educational_certificates: Optional[List[Dict]] = None  # list of certificates
+    other_documents: Optional[List[Dict]] = None  # custom documents
+    visa_details: Optional[Dict] = None  # Legacy field
+    # Enhanced Salary Structure
     salary_structure: Optional[Dict] = None
     bank_details: Optional[Dict] = None
     annual_leave_balance: float
     sick_leave_balance: float
     documents: List[Dict] = []
     user_id: Optional[str] = None
-    created_via: Optional[str] = None  # Source: user_management, employee_master
+    created_via: Optional[str] = None
     created_at: str
     updated_at: str
+
+# Salary Structure Model for validation
+class SalaryStructure(BaseModel):
+    basic_salary: float = 0
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    telephone_allowance: float = 0
+    other_allowances: float = 0
+    deductions: float = 0
+    commission: float = 0
+    incentives: float = 0
+    payment_frequency: str = "monthly"
+    currency: str = "AED"
+    
+    @property
+    def gross_salary(self) -> float:
+        return (self.basic_salary + self.housing_allowance + self.transport_allowance + 
+                self.telephone_allowance + self.other_allowances + self.commission + self.incentives)
+    
+    @property
+    def net_salary(self) -> float:
+        return self.gross_salary - self.deductions
 
 @api_router.get("/hr/employees", response_model=List[EmployeeResponse])
 async def get_employees(
@@ -7907,6 +8545,7 @@ async def create_employee_with_user(
                 "full_name": data.full_name,
                 "role": data.role,
                 "department": data.department,
+                "is_active": True,
                 "status": "active",
                 "permissions": permissions,
                 "employee_id": employee_uuid,  # Link to employee
@@ -8002,6 +8641,576 @@ async def create_employee_with_user(
             else f". Linked to existing user account" if user_uuid and existing_user
             else ""
         )
+    }
+
+@api_router.post("/hr/employees/sync-to-users")
+async def sync_employees_to_users(
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """
+    Sync existing employees to user accounts.
+    Creates user accounts for employees that don't have linked users.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get all employees without user_id
+    employees_without_users = await db.hr_employees.find(
+        {"$or": [{"user_id": None}, {"user_id": {"$exists": False}}]},
+        {"_id": 0}
+    ).to_list(500)
+    
+    synced = 0
+    skipped = 0
+    errors = []
+    
+    for emp in employees_without_users:
+        email = emp.get("company_email")
+        if not email:
+            skipped += 1
+            errors.append(f"{emp.get('employee_id')}: No company email")
+            continue
+        
+        # Check if user already exists with this email
+        existing_user = await db.users.find_one({"email": email})
+        
+        if existing_user:
+            # Link existing user to employee
+            await db.hr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"user_id": existing_user["id"], "updated_at": now}}
+            )
+            # Also link employee to user
+            await db.users.update_one(
+                {"id": existing_user["id"]},
+                {"$set": {"employee_id": emp["id"], "updated_at": now}}
+            )
+            synced += 1
+        else:
+            # Create new user
+            user_uuid = str(uuid.uuid4())
+            role = emp.get("role", "staff")
+            
+            # Generate password: First name + @123
+            first_name = emp.get("full_name", "User").split()[0]
+            password = f"{first_name}@123"
+            
+            permissions = get_default_permissions(role)
+            
+            new_user = {
+                "id": user_uuid,
+                "email": email,
+                "password": hash_password(password),
+                "full_name": emp.get("full_name"),
+                "role": role,
+                "department": emp.get("department"),
+                "is_active": True,
+                "status": "active",
+                "permissions": permissions,
+                "employee_id": emp["id"],
+                "created_at": now,
+                "updated_at": now,
+                "created_via": "employee_sync"
+            }
+            
+            await db.users.insert_one(new_user)
+            
+            # Update employee with user_id
+            await db.hr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"user_id": user_uuid, "updated_at": now}}
+            )
+            
+            synced += 1
+    
+    return {
+        "success": True,
+        "synced": synced,
+        "skipped": skipped,
+        "errors": errors,
+        "message": f"Synced {synced} employees to user accounts, skipped {skipped}"
+    }
+
+# ==================== EMPLOYEE DOCUMENT MANAGEMENT ====================
+
+@api_router.put("/hr/employees/{employee_id}/documents")
+async def update_employee_documents(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee documents (passport, visa, Emirates ID, etc.)"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Document fields that can be updated
+    document_fields = [
+        "passport", "visa", "emirates_id", "labour_card", 
+        "work_permit", "health_insurance", "driving_license",
+        "educational_certificates", "other_documents"
+    ]
+    
+    update_data = {"updated_at": now}
+    for field in document_fields:
+        if field in data:
+            update_data[field] = data[field]
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Documents updated successfully", "updated_fields": list(update_data.keys())}
+
+@api_router.put("/hr/employees/{employee_id}/bank-details")
+async def update_employee_bank_details(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Update employee bank details"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    bank_details = {
+        "bank_name": data.get("bank_name", ""),
+        "account_number": data.get("account_number", ""),
+        "iban": data.get("iban", ""),
+        "updated_at": now
+    }
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "bank_details": bank_details,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Bank details updated successfully"}
+
+@api_router.put("/hr/employees/{employee_id}/gender")
+async def update_employee_gender(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee gender"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    gender = data.get("gender")
+    if gender not in ["male", "female", "other"]:
+        raise HTTPException(status_code=400, detail="Gender must be: male, female, or other")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "gender": gender,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Gender updated successfully"}
+
+@api_router.get("/hr/employees/gender-ratio")
+async def get_gender_ratio(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get gender ratio of all active employees"""
+    pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$gender", "count": {"$sum": 1}}}
+    ]
+    
+    results = await db.hr_employees.aggregate(pipeline).to_list(10)
+    
+    ratio = {"male": 0, "female": 0, "other": 0, "unspecified": 0}
+    total = 0
+    for r in results:
+        gender = r["_id"] or "unspecified"
+        ratio[gender] = r["count"]
+        total += r["count"]
+    
+    return {
+        "counts": ratio,
+        "total": total,
+        "percentages": {
+            k: round((v / total * 100), 1) if total > 0 else 0 
+            for k, v in ratio.items()
+        }
+    }
+
+@api_router.put("/hr/employees/{employee_id}/salary")
+async def update_employee_salary(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Update employee salary structure"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Build salary structure
+    salary_structure = {
+        "basic_salary": data.get("basic_salary", 0),
+        "housing_allowance": data.get("housing_allowance", 0),
+        "transport_allowance": data.get("transport_allowance", 0),
+        "telephone_allowance": data.get("telephone_allowance", 0),
+        "other_allowances": data.get("other_allowances", 0),
+        "deductions": data.get("deductions", 0),
+        "commission": data.get("commission", 0),
+        "incentives": data.get("incentives", 0),
+        "payment_frequency": "monthly",
+        "currency": data.get("currency", "AED"),
+        "effective_date": data.get("effective_date", now[:10]),
+        "updated_at": now,
+        "updated_by": user["id"]
+    }
+    
+    # Calculate totals
+    gross = (salary_structure["basic_salary"] + salary_structure["housing_allowance"] + 
+             salary_structure["transport_allowance"] + salary_structure["telephone_allowance"] + 
+             salary_structure["other_allowances"] + salary_structure["commission"] + 
+             salary_structure["incentives"])
+    salary_structure["gross_salary"] = gross
+    salary_structure["net_salary"] = gross - salary_structure["deductions"]
+    
+    # Store salary history
+    salary_history = employee.get("salary_history", [])
+    if employee.get("salary_structure"):
+        salary_history.append({
+            **employee["salary_structure"],
+            "ended_at": now
+        })
+    
+    await db.hr_employees.update_one(
+        {"id": employee["id"]},
+        {"$set": {
+            "salary_structure": salary_structure,
+            "salary_history": salary_history,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Salary updated successfully", "salary_structure": salary_structure}
+
+@api_router.get("/hr/employees/expiring-documents")
+async def get_expiring_documents(
+    days: int = 90,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get documents expiring within specified days"""
+    today = datetime.now(timezone.utc).date()
+    cutoff_date = (today + timedelta(days=days)).isoformat()
+    today_str = today.isoformat()
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    expiring_docs = []
+    document_types = [
+        ("passport", "expiry_date", "Passport"),
+        ("visa", "expiry_date", "Visa"),
+        ("emirates_id", "expiry_date", "Emirates ID"),
+        ("labour_card", "expiry_date", "Labour Card"),
+        ("work_permit", "expiry_date", "Work Permit"),
+        ("health_insurance", "expiry_date", "Health Insurance"),
+        ("driving_license", "expiry_date", "Driving License"),
+    ]
+    
+    for emp in employees:
+        for field, date_key, doc_name in document_types:
+            doc = emp.get(field)
+            if doc and doc.get(date_key):
+                expiry = doc[date_key]
+                if today_str <= expiry <= cutoff_date:
+                    days_until = (datetime.strptime(expiry, "%Y-%m-%d").date() - today).days
+                    expiring_docs.append({
+                        "employee_id": emp["employee_id"],
+                        "employee_name": emp["full_name"],
+                        "company_email": emp.get("company_email"),
+                        "department": emp.get("department"),
+                        "document_type": doc_name,
+                        "expiry_date": expiry,
+                        "days_until_expiry": days_until,
+                        "urgency": "critical" if days_until <= 7 else "high" if days_until <= 15 else "medium" if days_until <= 30 else "low"
+                    })
+        
+        # Check other_documents
+        for doc in emp.get("other_documents", []):
+            if doc.get("expiry_date"):
+                expiry = doc["expiry_date"]
+                if today_str <= expiry <= cutoff_date:
+                    days_until = (datetime.strptime(expiry, "%Y-%m-%d").date() - today).days
+                    expiring_docs.append({
+                        "employee_id": emp["employee_id"],
+                        "employee_name": emp["full_name"],
+                        "company_email": emp.get("company_email"),
+                        "department": emp.get("department"),
+                        "document_type": doc.get("name", "Other Document"),
+                        "expiry_date": expiry,
+                        "days_until_expiry": days_until,
+                        "urgency": "critical" if days_until <= 7 else "high" if days_until <= 15 else "medium" if days_until <= 30 else "low"
+                    })
+    
+    # Sort by days until expiry
+    expiring_docs.sort(key=lambda x: x["days_until_expiry"])
+    
+    return {
+        "total": len(expiring_docs),
+        "critical": len([d for d in expiring_docs if d["urgency"] == "critical"]),
+        "high": len([d for d in expiring_docs if d["urgency"] == "high"]),
+        "medium": len([d for d in expiring_docs if d["urgency"] == "medium"]),
+        "low": len([d for d in expiring_docs if d["urgency"] == "low"]),
+        "documents": expiring_docs
+    }
+
+@api_router.post("/hr/employees/send-expiry-alerts")
+async def send_document_expiry_alerts(
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Send email alerts for expiring documents (90, 60, 30, 15, 7 days)"""
+    alert_days = [90, 60, 30, 15, 7]
+    today = datetime.now(timezone.utc).date()
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Get HR emails for CC
+    hr_users = await db.users.find(
+        {"role": {"$in": ["hr", "admin", "super_admin"]}, "is_active": True},
+        {"_id": 0, "email": 1}
+    ).to_list(50)
+    hr_emails = [u["email"] for u in hr_users]
+    
+    alerts_sent = 0
+    document_types = [
+        ("passport", "expiry_date", "Passport"),
+        ("visa", "expiry_date", "Visa"),
+        ("emirates_id", "expiry_date", "Emirates ID"),
+        ("labour_card", "expiry_date", "Labour Card"),
+        ("work_permit", "expiry_date", "Work Permit"),
+        ("health_insurance", "expiry_date", "Health Insurance"),
+    ]
+    
+    for emp in employees:
+        employee_alerts = []
+        
+        for field, date_key, doc_name in document_types:
+            doc = emp.get(field)
+            if doc and doc.get(date_key):
+                expiry = doc[date_key]
+                try:
+                    expiry_date = datetime.strptime(expiry, "%Y-%m-%d").date()
+                    days_until = (expiry_date - today).days
+                    
+                    if days_until in alert_days:
+                        employee_alerts.append({
+                            "document": doc_name,
+                            "expiry_date": expiry,
+                            "days_until": days_until
+                        })
+                except:
+                    continue
+        
+        # Send email if there are alerts
+        if employee_alerts and emp.get("company_email"):
+            # Log the alert (email sending would be implemented with SendGrid/SMTP)
+            await db.document_expiry_alerts.insert_one({
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_name": emp["full_name"],
+                "email": emp["company_email"],
+                "alerts": employee_alerts,
+                "hr_cc": hr_emails[:3],  # CC first 3 HR emails
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "status": "logged"  # Would be "sent" with actual email integration
+            })
+            alerts_sent += 1
+    
+    return {
+        "message": f"Document expiry alerts processed for {alerts_sent} employees",
+        "alerts_sent": alerts_sent,
+        "note": "Email integration required for actual sending. Alerts have been logged."
+    }
+
+# ==================== PAYSLIP GENERATION ====================
+
+@api_router.get("/hr/employees/{employee_id}/payslip")
+async def generate_payslip(
+    employee_id: str,
+    month: int,
+    year: int,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Generate payslip data for an employee"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    salary = employee.get("salary_structure", {})
+    
+    # Get payroll record if exists
+    payroll = await db.hr_payroll.find_one({
+        "employee_id": employee["id"],
+        "month": month,
+        "year": year
+    }, {"_id": 0})
+    
+    # Calculate components
+    basic = salary.get("basic_salary", 0)
+    housing = salary.get("housing_allowance", 0)
+    transport = salary.get("transport_allowance", 0)
+    telephone = salary.get("telephone_allowance", 0)
+    other_allowances = salary.get("other_allowances", 0)
+    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
+    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
+    
+    gross = basic + housing + transport + telephone + other_allowances + commission + incentives
+    net = gross - deductions
+    
+    # Month name
+    month_names = ["", "January", "February", "March", "April", "May", "June", 
+                   "July", "August", "September", "October", "November", "December"]
+    
+    payslip = {
+        "company": {
+            "name": "CLT Academy",
+            "address": "Dubai, UAE",
+            "logo_url": None
+        },
+        "employee": {
+            "id": employee["employee_id"],
+            "name": employee["full_name"],
+            "email": employee.get("company_email"),
+            "department": employee.get("department"),
+            "designation": employee.get("designation"),
+            "joining_date": employee.get("joining_date"),
+            "bank_name": employee.get("bank_details", {}).get("bank_name"),
+            "account_number": employee.get("bank_details", {}).get("account_number"),
+            "iban": employee.get("bank_details", {}).get("iban")
+        },
+        "pay_period": {
+            "month": month,
+            "month_name": month_names[month],
+            "year": year,
+            "pay_date": f"{year}-{month:02d}-28"
+        },
+        "earnings": {
+            "basic_salary": basic,
+            "housing_allowance": housing,
+            "transport_allowance": transport,
+            "telephone_allowance": telephone,
+            "other_allowances": other_allowances,
+            "commission": commission,
+            "incentives": incentives,
+            "gross_salary": gross
+        },
+        "deductions": {
+            "total_deductions": deductions,
+            "breakdown": payroll.get("deduction_breakdown", []) if payroll else []
+        },
+        "summary": {
+            "gross_salary": gross,
+            "total_deductions": deductions,
+            "net_salary": net,
+            "currency": salary.get("currency", "AED")
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    return payslip
+
+@api_router.post("/hr/employees/{employee_id}/payslip/email")
+async def email_payslip(
+    employee_id: str,
+    month: int,
+    year: int,
+    user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
+):
+    """Email payslip to employee"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    if not employee.get("company_email"):
+        raise HTTPException(status_code=400, detail="Employee has no email address")
+    
+    # Generate payslip
+    salary = employee.get("salary_structure", {})
+    payroll = await db.hr_payroll.find_one({
+        "employee_id": employee["id"],
+        "month": month,
+        "year": year
+    }, {"_id": 0})
+    
+    basic = salary.get("basic_salary", 0)
+    housing = salary.get("housing_allowance", 0)
+    transport = salary.get("transport_allowance", 0)
+    telephone = salary.get("telephone_allowance", 0)
+    other = salary.get("other_allowances", 0)
+    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
+    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
+    gross = basic + housing + transport + telephone + other + commission + incentives
+    net = gross - deductions
+    
+    month_names = ["", "January", "February", "March", "April", "May", "June", 
+                   "July", "August", "September", "October", "November", "December"]
+    
+    # Log the email (actual sending would use SendGrid/SMTP integration)
+    email_log = {
+        "id": str(uuid.uuid4()),
+        "type": "payslip",
+        "recipient": employee["company_email"],
+        "employee_id": employee["id"],
+        "employee_name": employee["full_name"],
+        "subject": f"Payslip for {month_names[month]} {year}",
+        "pay_period": f"{month_names[month]} {year}",
+        "gross_salary": gross,
+        "net_salary": net,
+        "currency": salary.get("currency", "AED"),
+        "sent_by": user["id"],
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "status": "logged"  # Would be "sent" with actual email integration
+    }
+    
+    await db.payslip_emails.insert_one(email_log)
+    
+    return {
+        "message": f"Payslip for {month_names[month]} {year} prepared for {employee['full_name']}",
+        "recipient": employee["company_email"],
+        "net_salary": net,
+        "note": "Email integration required for actual sending. Email has been logged."
     }
 
 @api_router.put("/hr/employees/{employee_id}/status")
@@ -8866,8 +10075,12 @@ async def fetch_biocloud_attendance(
 ):
     """
     Fetch attendance from BioCloud and sync to CLT Synapse
-    Uses web scraping since direct API not available
+    Uses Playwright web scraping since direct API not available for attendance
+    Navigates to Attendance > Daily Attendance and scrapes the layui table
     """
+    import os as os_module
+    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
+    
     from playwright.async_api import async_playwright
     
     target_date = date or datetime.now().strftime("%Y-%m-%d")
@@ -8875,54 +10088,147 @@ async def fetch_biocloud_attendance(
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            context = await browser.new_context(ignore_https_errors=True)
+            page = await context.new_page()
+            
+            biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')
+            biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
+            biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
+            
+            logger.info(f"BioCloud sync: Connecting to {biocloud_url}")
             
             # Login to BioCloud
-            await page.goto(f"{os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')}")
-            await page.wait_for_timeout(3000)
+            await page.goto(biocloud_url, wait_until="networkidle", timeout=30000)
+            await page.wait_for_timeout(2000)
             
-            await page.fill('input[placeholder="Enter Username"]', os.environ.get('BIOCLOUD_USERNAME', 'Admin'))
-            await page.fill('input[placeholder="Enter Password"]', os.environ.get('BIOCLOUD_PASSWORD', '1'))
-            await page.click('button:has-text("Login")')
+            # Fill login form
+            username_input = page.locator('input[type="text"]').first
+            password_input = page.locator('input[type="password"]').first
+            
+            await username_input.fill(biocloud_user)
+            await password_input.fill(biocloud_pass)
+            
+            # Click login button
+            login_btn = page.locator('button').first
+            await login_btn.click()
             await page.wait_for_timeout(5000)
             
-            # Navigate to Attendance > First & Last
-            await page.click('text=Attendance')
-            await page.wait_for_timeout(2000)
-            await page.click('text=First & Last')
-            await page.wait_for_timeout(3000)
+            logger.info("BioCloud sync: Logged in successfully")
             
-            # Set date range
-            date_inputs = await page.locator('input[type="text"]').all()
-            if len(date_inputs) >= 2:
-                await date_inputs[0].fill(target_date)
-                await date_inputs[1].fill(target_date)
-                await page.click('text=Search')
-                await page.wait_for_timeout(3000)
+            # Navigate to Attendance menu
+            attendance_menu = page.locator('a:has-text("Attendance")').first
+            await attendance_menu.click()
+            await page.wait_for_timeout(1500)
             
-            # Parse the table data
-            rows = await page.locator('table tbody tr').all()
+            # Click on Daily Attendance
+            daily_att = page.locator('a:has-text("Daily Attendance")').first
+            await daily_att.click()
+            await page.wait_for_timeout(4000)
+            
+            logger.info("BioCloud sync: Navigated to Daily Attendance")
+            
+            # Find the Daily Attendance table container (layui-table-box)
+            # The Daily Attendance table is the second container with Employee ID, Weekday, Name, etc.
+            layui_containers = await page.locator('.layui-table-box').all()
+            
             attendance_data = []
             
-            for row in rows:
-                cells = await row.locator('td').all()
-                if len(cells) >= 5:
-                    attendance_data.append({
-                        "emp_code": await cells[0].inner_text(),
-                        "name": await cells[1].inner_text(),
-                        "department": await cells[2].inner_text(),
-                        "first_in": await cells[3].inner_text() if len(cells) > 3 else None,
-                        "last_out": await cells[4].inner_text() if len(cells) > 4 else None,
-                    })
+            if len(layui_containers) >= 2:
+                daily_container = layui_containers[1]  # Second container has Daily Attendance
+                
+                # Try to set page size to maximum (50) to get more records
+                try:
+                    page_size_select = page.locator('.layui-laypage-limits select').nth(1)
+                    await page_size_select.select_option(value='50')
+                    await page.wait_for_timeout(2000)
+                except Exception as e:
+                    logger.warning(f"Could not set page size: {e}")
+                
+                # Get total page count
+                total_pages = 1
+                try:
+                    # Look for last page link to determine total pages
+                    last_page_link = page.locator('.layui-laypage-last')
+                    if await last_page_link.count() > 0:
+                        last_page_text = await last_page_link.get_attribute('data-page')
+                        if last_page_text:
+                            total_pages = int(last_page_text)
+                except:
+                    pass
+                
+                logger.info(f"BioCloud sync: Found {total_pages} pages of data")
+                
+                # Loop through all pages
+                current_page = 1
+                while current_page <= total_pages:
+                    # Get body from the container
+                    body_elements = await daily_container.locator('.layui-table-body').all()
+                    
+                    if body_elements:
+                        body = body_elements[0]
+                        rows = await body.locator('tr').all()
+                        
+                        for row in rows:
+                            cells = await row.locator('td').all()
+                            if len(cells) >= 7:
+                                try:
+                                    cell_texts = []
+                                    for cell in cells[:11]:
+                                        try:
+                                            text = await cell.inner_text()
+                                            cell_texts.append(text.strip())
+                                        except:
+                                            cell_texts.append('')
+                                    
+                                    # Columns: Employee ID | Weekday | Employee Name | Department Name | Punch Date | Actual In | Actual Out | Actual BIn | Actual BOut | Day off
+                                    emp_code = cell_texts[0]
+                                    emp_name = cell_texts[2]
+                                    dept = cell_texts[3]
+                                    punch_date = cell_texts[4]
+                                    actual_in = cell_texts[5] if len(cell_texts) > 5 else ""
+                                    actual_out = cell_texts[6] if len(cell_texts) > 6 else ""
+                                    day_off = cell_texts[9] if len(cell_texts) > 9 else ""
+                                    
+                                    # Validate record
+                                    if emp_code.isdigit() and punch_date and '-' in punch_date:
+                                        status = "Absent" if day_off == "Absent" else ("Present" if actual_in else "No Punch")
+                                        
+                                        record = {
+                                            "emp_code": emp_code,
+                                            "name": emp_name,
+                                            "department": dept,
+                                            "punch_date": punch_date,
+                                            "first_in": actual_in if actual_in else None,
+                                            "last_out": actual_out if actual_out else None,
+                                            "status": status
+                                        }
+                                        attendance_data.append(record)
+                                except Exception as e:
+                                    continue
+                    
+                    # Go to next page if not on last page
+                    if current_page < total_pages:
+                        try:
+                            next_page_link = page.locator(f'.layui-laypage a[data-page="{current_page + 1}"]').nth(1)
+                            await next_page_link.click()
+                            await page.wait_for_timeout(2000)
+                        except Exception as e:
+                            logger.warning(f"Could not navigate to page {current_page + 1}: {e}")
+                            break
+                    
+                    current_page += 1
             
             await browser.close()
             
+            logger.info(f"BioCloud sync: Fetched {len(attendance_data)} raw attendance records")
+            
             # Process and save attendance data
             synced = 0
+            skipped = 0
             for att in attendance_data:
-                emp_code = att["emp_code"].strip()
+                emp_code = att["emp_code"]
                 
-                # Find mapped employee
+                # Find mapped employee by biocloud_emp_code
                 employee = await db.hr_employees.find_one(
                     {"biocloud_emp_code": emp_code},
                     {"_id": 0}
@@ -8930,39 +10236,56 @@ async def fetch_biocloud_attendance(
                 
                 if employee:
                     now = datetime.now(timezone.utc).isoformat()
+                    record_date = att["punch_date"]
                     
-                    # Check if attendance already exists
+                    # Check if attendance already exists for this date
                     existing = await db.hr_attendance.find_one({
                         "employee_id": employee["id"],
-                        "date": target_date
+                        "date": record_date
                     })
+                    
+                    # Determine status
+                    if att["status"] == "Absent":
+                        status = "absent"
+                    elif att["first_in"]:
+                        status = "present"
+                    else:
+                        status = "absent"
                     
                     attendance_record = {
                         "employee_id": employee["id"],
                         "employee_code": employee["employee_id"],
                         "employee_name": employee["full_name"],
                         "department": employee.get("department"),
-                        "date": target_date,
+                        "date": record_date,
                         "biometric_in": att["first_in"],
                         "biometric_out": att["last_out"],
+                        "status": status,
                         "source": "biocloud_sync",
                         "synced_at": now
                     }
                     
-                    # Calculate late/early
-                    if att["first_in"] and att["first_in"] > "09:00":
+                    # Calculate late minutes (if check-in after 09:00)
+                    if att["first_in"]:
                         try:
                             in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
                             start_time = datetime.strptime("09:00", "%H:%M")
-                            attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                            if in_time > start_time:
+                                attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
+                            else:
+                                attendance_record["late_minutes"] = 0
                         except:
                             pass
                     
-                    if att["last_out"] and att["last_out"] < "18:00":
+                    # Calculate early exit minutes (if check-out before 18:00)
+                    if att["last_out"]:
                         try:
                             out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
                             end_time = datetime.strptime("18:00", "%H:%M")
-                            attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                            if out_time < end_time:
+                                attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
+                            else:
+                                attendance_record["early_exit_minutes"] = 0
                         except:
                             pass
                     
@@ -8977,16 +10300,20 @@ async def fetch_biocloud_attendance(
                         await db.hr_attendance.insert_one(attendance_record)
                     
                     synced += 1
+                else:
+                    skipped += 1
             
             return {
                 "success": True,
                 "date": target_date,
                 "fetched": len(attendance_data),
                 "synced": synced,
-                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse"
+                "skipped": skipped,
+                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse ({skipped} unmapped employees skipped)"
             }
             
     except Exception as e:
+        logger.error(f"BioCloud attendance fetch error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch attendance: {str(e)}")
 
 @api_router.get("/hr/biocloud/status")
@@ -9423,10 +10750,10 @@ async def run_payroll(
     now = datetime.now(timezone.utc).isoformat()
     month_str = f"{data.year}-{str(data.month).zfill(2)}"
     
-    # Check if payroll already exists for this month
-    existing = await db.hr_payroll.find_one({"month": month_str, "status": {"$ne": "draft"}})
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed")
+    # Check if payroll batch already exists for this month
+    existing_batch = await db.hr_payroll_batches.find_one({"month": month_str, "status": {"$ne": "draft"}})
+    if existing_batch:
+        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed (status: {existing_batch['status']})")
     
     # Get all active employees
     emp_query = {"employment_status": {"$in": ["active", "probation"]}}
@@ -9473,22 +10800,22 @@ async def run_payroll(
         fixed_incentive = salary.get("fixed_incentive", 0)
         
         gross_salary = basic + housing + transport + food + phone + other + fixed_incentive
-        daily_rate = gross_salary / total_days
+        daily_rate = gross_salary / 30  # Fixed 30-day calculation as per requirement
         
-        # Calculate deductions
+        # Calculate deductions based on attendance
         deductions = []
         
-        # Late penalty
-        if total_late_minutes > 0:
-            late_penalty = (total_late_minutes // 15) * 50
-            if late_penalty > 0:
-                deductions.append({
-                    "type": "late",
-                    "description": f"Late penalty ({total_late_minutes} minutes)",
-                    "amount": late_penalty
-                })
+        # Half-day deduction for late arrivals (> 30 mins late = half day)
+        late_days = len([a for a in attendance if a.get("late_minutes", 0) > 30])
+        if late_days > 0:
+            late_deduction = round((late_days * 0.5) * daily_rate, 2)  # Half day per late day
+            deductions.append({
+                "type": "late",
+                "description": f"Late arrivals ({late_days} days > 30 mins = {late_days * 0.5} half days)",
+                "amount": late_deduction
+            })
         
-        # Absence deduction
+        # Full day absence deduction
         if absent_days > 0:
             absence_deduction = round(absent_days * daily_rate, 2)
             deductions.append({
@@ -10903,6 +12230,263 @@ async def get_budget_actuals(year: int, entity: str, user = Depends(get_current_
     # This would aggregate from payables/expenses collections
     # For now, return empty to allow frontend to display
     return []
+
+# ==================== ADMIN: DATA RESET & FEATURE FLAGS ====================
+
+class DataResetRequest(BaseModel):
+    password: str
+    confirm_text: str  # Must be "RESET ALL DATA"
+
+@api_router.post("/admin/reset-data")
+async def reset_all_data(request: DataResetRequest, user = Depends(require_roles(["super_admin"]))):
+    """
+    Reset all data except Super Admin accounts.
+    Requires password confirmation and typing 'RESET ALL DATA'.
+    """
+    # Verify confirmation text
+    if request.confirm_text != "RESET ALL DATA":
+        raise HTTPException(status_code=400, detail="Please type 'RESET ALL DATA' to confirm")
+    
+    # Verify password
+    stored_user = await db.users.find_one({"id": user["id"]})
+    if not stored_user or not verify_password(request.password, stored_user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Collections to clear (everything except system data)
+    collections_to_clear = [
+        "leads", "students", "payments", "payment_verifications",
+        "notifications", "activity_logs", "call_logs", "sms_logs",
+        "email_logs", "tasks", "notes", "follow_ups",
+        "commissions", "approval_requests", "bank_transactions",
+        "bank_statements", "reconciliation_logs",
+        "hr_employees", "hr_attendance", "hr_leave_requests",
+        "hr_payroll", "hr_performance", "hr_assets",
+        "finance_payables", "finance_receivables",
+        "finance_deposits", "finance_withdrawals",
+        "finance_expenses", "finance_operating_profit",
+        "finance_treasury_balances", "finance_settlements",
+        "finance_budgets", "finance_audit_logs",
+        "mentor_activities", "student_activities",
+        "upgrade_pipelines", "redeposit_pipelines"
+    ]
+    
+    # Preserve super_admin users, clear all others
+    non_super_admin_count = await db.users.count_documents({"role": {"$ne": "super_admin"}})
+    await db.users.delete_many({"role": {"$ne": "super_admin"}})
+    
+    # Clear all other collections
+    cleared_counts = {"users (non-super_admin)": non_super_admin_count}
+    for collection_name in collections_to_clear:
+        try:
+            collection = db[collection_name]
+            result = await collection.delete_many({})
+            cleared_counts[collection_name] = result.deleted_count
+        except Exception as e:
+            logger.warning(f"Could not clear {collection_name}: {e}")
+            cleared_counts[collection_name] = f"Error: {str(e)}"
+    
+    # Log the reset action
+    await log_activity("system", "data_reset", "reset", user, {
+        "cleared_collections": list(cleared_counts.keys()),
+        "environment": os.environ.get('APP_ENV', 'production')
+    })
+    
+    return {
+        "success": True,
+        "message": "All data has been reset. Super Admin accounts preserved.",
+        "cleared": cleared_counts
+    }
+
+@api_router.get("/admin/data-stats")
+async def get_data_stats(user = Depends(require_roles(["super_admin"]))):
+    """Get counts of all data that would be affected by reset"""
+    stats = {}
+    
+    # User counts by role
+    stats["users"] = {
+        "super_admin": await db.users.count_documents({"role": "super_admin"}),
+        "other_users": await db.users.count_documents({"role": {"$ne": "super_admin"}}),
+    }
+    
+    # Main collections
+    collections = [
+        ("leads", "leads"),
+        ("students", "students"),
+        ("payments", "payments"),
+        ("employees", "hr_employees"),
+        ("attendance_records", "hr_attendance"),
+        ("tasks", "tasks"),
+        ("call_logs", "call_logs"),
+        ("commissions", "commissions"),
+    ]
+    
+    for name, collection in collections:
+        try:
+            stats[name] = await db[collection].count_documents({})
+        except:
+            stats[name] = 0
+    
+    return stats
+
+# ==================== FEATURE FLAGS ====================
+
+@api_router.get("/admin/feature-flags")
+async def get_feature_flags(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Get all feature flags"""
+    flags = await db.feature_flags.find({}, {"_id": 0}).to_list(100)
+    
+    # If no flags exist, create defaults
+    if not flags:
+        default_flags = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "finance_suite",
+                "display_name": "Finance Suite",
+                "description": "CLT & MILES Finance modules including Treasury, Budgeting, PNL",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "biocloud_sync",
+                "display_name": "BioCloud Attendance Sync",
+                "description": "Automatic attendance sync with ZK BioCloud",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "3cx_integration",
+                "display_name": "3CX Phone Integration",
+                "description": "Click-to-call and call logging with 3CX PBX",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "commission_engine",
+                "display_name": "Commission Engine",
+                "description": "Automatic commission calculation for sales",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "mentor_crm",
+                "display_name": "Mentor CRM",
+                "description": "Mentor student management and redeposit pipeline",
+                "enabled_environments": ["development", "testing", "production"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+        ]
+        await db.feature_flags.insert_many(default_flags)
+        # Re-fetch to avoid _id in response
+        flags = await db.feature_flags.find({}, {"_id": 0}).to_list(100)
+    
+    return flags
+
+@api_router.post("/admin/feature-flags")
+async def create_feature_flag(data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """Create a new feature flag"""
+    flag = {
+        "id": str(uuid.uuid4()),
+        "name": data.get("name"),
+        "display_name": data.get("display_name"),
+        "description": data.get("description", ""),
+        "enabled_environments": data.get("enabled_environments", ["development"]),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"]
+    }
+    await db.feature_flags.insert_one(flag)
+    return {k: v for k, v in flag.items() if k != "_id"}
+
+@api_router.put("/admin/feature-flags/{flag_id}")
+async def update_feature_flag(flag_id: str, data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """Update a feature flag's enabled environments"""
+    update_data = {
+        "enabled_environments": data.get("enabled_environments", []),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": user["id"]
+    }
+    
+    if "display_name" in data:
+        update_data["display_name"] = data["display_name"]
+    if "description" in data:
+        update_data["description"] = data["description"]
+    
+    result = await db.feature_flags.update_one(
+        {"id": flag_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    
+    return {"message": "Feature flag updated"}
+
+@api_router.delete("/admin/feature-flags/{flag_id}")
+async def delete_feature_flag(flag_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Delete a feature flag"""
+    result = await db.feature_flags.delete_one({"id": flag_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    return {"message": "Feature flag deleted"}
+
+@api_router.get("/admin/feature-flags/check/{feature_name}")
+async def check_feature_enabled(feature_name: str, user = Depends(get_current_user)):
+    """Check if a feature is enabled for the current environment"""
+    current_env = os.environ.get('APP_ENV', 'production').lower()
+    
+    flag = await db.feature_flags.find_one({"name": feature_name}, {"_id": 0})
+    if not flag:
+        return {"enabled": True, "environment": current_env}  # Default to enabled if flag doesn't exist
+    
+    enabled = current_env in flag.get("enabled_environments", [])
+    return {
+        "enabled": enabled,
+        "environment": current_env,
+        "flag": flag
+    }
+
+# ==================== ENVIRONMENT MANAGEMENT ====================
+
+@api_router.get("/admin/environment")
+async def get_current_environment(user = Depends(get_current_user)):
+    """Get current environment and database info"""
+    current_env = os.environ.get('APP_ENV', 'production').lower()
+    return {
+        "environment": current_env,
+        "database": CURRENT_DB_NAME,
+        "available_environments": ["development", "testing", "production"]
+    }
+
+@api_router.post("/admin/switch-environment")
+async def switch_environment(data: Dict, user = Depends(require_roles(["super_admin"]))):
+    """
+    Switch the application environment.
+    Note: This requires a server restart to take effect.
+    """
+    new_env = data.get("environment", "").lower()
+    if new_env not in ["development", "testing", "production"]:
+        raise HTTPException(status_code=400, detail="Invalid environment. Use: development, testing, or production")
+    
+    # Update the environment variable (will require restart)
+    os.environ['APP_ENV'] = new_env
+    
+    # Calculate new database name
+    if new_env == 'development':
+        new_db = os.environ.get('DB_NAME_DEV', 'clt_synapse_dev')
+    elif new_env == 'testing':
+        new_db = os.environ.get('DB_NAME_TEST', 'clt_synapse_test')
+    else:
+        new_db = os.environ.get('DB_NAME_PROD', os.environ.get('DB_NAME', 'clt_synapse_prod'))
+    
+    return {
+        "message": f"Environment switched to {new_env}. Server restart required for database switch.",
+        "new_environment": new_env,
+        "new_database": new_db,
+        "restart_required": True
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
