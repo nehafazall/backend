@@ -2,7 +2,7 @@ import React from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider, ThemeProvider, useAuth } from "@/lib/api";
+import { AuthProvider, ThemeProvider, PermissionProvider, useAuth, usePermissions } from "@/lib/api";
 
 // Pages
 import LoginPage from "@/pages/LoginPage";
