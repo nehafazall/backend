@@ -35,6 +35,10 @@ const REJECTION_REASONS = [
 
 const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
     const { user } = useAuth();
+    
+    // Can reassign if user is team_leader, sales_manager, admin, or super_admin
+    const canReassign = user && ['team_leader', 'sales_manager', 'admin', 'super_admin'].includes(user.role);
+    
     const [updateData, setUpdateData] = useState({
         stage: '',
         call_notes: '',
