@@ -55,9 +55,6 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
         reason: ''
     });
     const [reassignLoading, setReassignLoading] = useState(false);
-    
-    // Can reassign if user is team_leader, sales_manager, admin, or super_admin
-    const canReassign = ['team_leader', 'sales_manager', 'admin', 'super_admin'].includes(user?.role);
 
     useEffect(() => {
         if (lead) {
