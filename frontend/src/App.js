@@ -163,6 +163,10 @@ function AppRoutes() {
                 <Route path="home" element={<div />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 
+                {/* SSHR (Self-Service HR) - Available to all logged in users */}
+                <Route path="sshr" element={<SSHRPage />} />
+                <Route path="sshr/payslips" element={<PayslipsPage />} />
+                
                 {/* Today's Follow-ups */}
                 <Route path="followups" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master']}>
