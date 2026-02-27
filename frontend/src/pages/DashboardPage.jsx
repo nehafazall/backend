@@ -191,8 +191,6 @@ const DashboardPage = () => {
     const isMentorRole = ['super_admin', 'admin', 'mentor', 'academic_master'].includes(user?.role);
     const isFinanceRole = ['super_admin', 'admin', 'finance', 'finance_manager'].includes(user?.role);
     const isAdmin = ['super_admin', 'admin'].includes(user?.role);
-    
-    const [activeTab, setActiveTab] = useState('dashboard');
 
     return (
         <div className="space-y-6" data-testid="dashboard-page">
