@@ -10,19 +10,28 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 from datetime import datetime
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables
+load_dotenv(Path(__file__).parent / '.env')
 
 logger = logging.getLogger(__name__)
 
-# SMTP Configuration
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "CLT Synapse")
+def get_smtp_config():
+    """Get SMTP configuration from environment"""
+    return {
+        "host": os.environ.get("SMTP_HOST", "smtp.gmail.com"),
+        "port": int(os.environ.get("SMTP_PORT", "587")),
+        "user": os.environ.get("SMTP_USER", ""),
+        "password": os.environ.get("SMTP_PASSWORD", ""),
+        "from_name": os.environ.get("SMTP_FROM_NAME", "CLT Synapse")
+    }
 
 def is_email_configured() -> bool:
     """Check if email is properly configured"""
-    return bool(SMTP_USER and SMTP_PASSWORD)
+    config = get_smtp_config()
+    return bool(config["user"] and config["password"])
 
 def send_email(
     to_email: str,
