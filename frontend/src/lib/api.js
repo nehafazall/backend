@@ -336,7 +336,9 @@ const getDefaultPermissions = (role) => {
     } else if (role === 'finance' || role === 'finance_manager' || role === 'finance_admin') {
         permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
         permissions['finance'] = { enabled: true, level: 'full', subPages: { 
-            finance_dashboard: 'full', commission_engine: 'edit', payments: 'full', reconciliation: 'full' 
+            finance_selector: 'full', commission_engine: 'edit', clt_dashboard: 'full', clt_payables: 'full', clt_receivables: 'full',
+            miles_dashboard: 'full', miles_deposits: 'full', miles_withdrawals: 'full', miles_expenses: 'full', miles_profit: 'full',
+            treasury_dashboard: 'full', treasury_balances: 'full', treasury_settlements: 'full', budget_sheet: 'edit', data_management: 'view'
         }};
         permissions['customer_service'] = { enabled: true, level: 'view', subPages: { 
             cs_kanban: 'none', cs_dashboard: 'none', customer_master: 'view' 
