@@ -4793,6 +4793,73 @@ async def update_role(role_id: str, data: RoleUpdate, user = Depends(require_rol
     
     return updated
 
+# ==================== GRANULAR PERMISSIONS ====================
+
+@api_router.get("/roles/{role_id}/permissions")
+async def get_role_permissions(role_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Get granular permissions for a role"""
+    # Check in role_permissions collection first
+    permissions = await db.role_permissions.find_one({"role_id": role_id}, {"_id": 0})
+    if permissions:
+        return permissions.get("permissions", {})
+    
+    # Return empty dict if no custom permissions set (frontend will use defaults)
+    return {}
+
+@api_router.put("/roles/{role_id}/permissions")
+async def save_role_permissions(role_id: str, permissions: Dict, user = Depends(require_roles(["super_admin"]))):
+    """Save granular permissions for a role"""
+    # Validate role exists
+    system_role_ids = [r["id"] for r in DEFAULT_SYSTEM_ROLES]
+    custom_role = await db.roles.find_one({"id": role_id})
+    
+    if role_id not in system_role_ids and not custom_role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    # Upsert permissions
+    await db.role_permissions.update_one(
+        {"role_id": role_id},
+        {
+            "$set": {
+                "role_id": role_id,
+                "permissions": permissions,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_by": user["id"]
+            }
+        },
+        upsert=True
+    )
+    
+    await log_audit(user, "update", "role_permissions", entity_id=role_id, 
+                   entity_name=f"Permissions for {role_id}")
+    
+    return {"message": "Permissions saved successfully", "role_id": role_id}
+
+@api_router.get("/user/permissions")
+async def get_current_user_permissions(user = Depends(get_current_user)):
+    """Get permissions for the current logged-in user based on their role"""
+    role = user.get("role", "")
+    
+    # Super admin has full access
+    if role == "super_admin":
+        return {"is_super_admin": True, "full_access": True}
+    
+    # Get role permissions from database
+    permissions = await db.role_permissions.find_one({"role_id": role}, {"_id": 0})
+    if permissions:
+        return {
+            "is_super_admin": False,
+            "role": role,
+            "permissions": permissions.get("permissions", {})
+        }
+    
+    # No custom permissions, return empty (frontend will use defaults)
+    return {
+        "is_super_admin": False,
+        "role": role,
+        "permissions": {}
+    }
+
 @api_router.delete("/roles/{role_id}")
 async def delete_role(role_id: str, user = Depends(require_roles(["super_admin"]))):
     """Delete a custom role"""
