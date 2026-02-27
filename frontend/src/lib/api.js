@@ -250,7 +250,13 @@ const MODULE_HIERARCHY = [
     },
     {
         id: 'finance',
-        subPages: ['finance_dashboard', 'commission_engine', 'payments', 'reconciliation']
+        subPages: ['finance_selector', 'commission_engine', 'clt_dashboard', 'clt_payables', 'clt_receivables', 
+                   'miles_dashboard', 'miles_deposits', 'miles_withdrawals', 'miles_expenses', 'miles_profit',
+                   'treasury_dashboard', 'treasury_balances', 'treasury_settlements', 'budget_sheet', 'data_management']
+    },
+    {
+        id: 'operations',
+        subPages: ['qc_dashboard_ops']
     },
     {
         id: 'settings',
