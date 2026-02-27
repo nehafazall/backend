@@ -5,6 +5,81 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 27, 2026 - ESS Portal & Granular Access Control
+
+#### P0: Granular Access Control System (COMPLETED)
+**Problem:** The existing access control only allowed module-level permissions (e.g., view/edit entire "Sales CRM"). Users needed granular control at the sub-page and feature level.
+
+**Solution:**
+- Created new backend endpoints: `GET/PUT /api/roles/{role_id}/permissions` and `GET /api/user/permissions`
+- Designed hierarchical permission structure: Module → SubPages → Permission Level (none/view/edit/full)
+- Added `role_permissions` MongoDB collection to store granular permissions per role
+- Updated `AccessControlPage.jsx` with collapsible module cards showing sub-page controls
+- Integrated `PermissionProvider` context for app-wide permission enforcement
+- Updated `Layout.jsx` to respect granular permissions for navigation visibility
+
+**Key Features:**
+- 7 main modules: Dashboard, Sales, Customer Service, Mentor, HR, Finance, Settings
+- Each module has multiple sub-pages with individual permission toggles
+- Finance module expanded to 15 sub-pages (CLT, Miles, Treasury, Budgeting)
+- Visual indicators for permission levels (None=Gray, View=Blue, Edit=Amber, Full=Green)
+- Save Changes and Reset to Default buttons
+- "Expand All" / "Collapse All" controls
+
+#### P0: Employee Self-Service (ESS) Portal (COMPLETED)
+**Problem:** Employees had no way to apply for leave or request attendance regularization. HR handled everything manually.
+
+**Solution:**
+Built comprehensive ESS module with multi-level approval workflow (Manager → HR → CEO):
+
+**Leave Application System:**
+- 6 leave types configured:
+  - Sick Leave: 12 days/year (full-time only, requires document)
+  - Annual Leave: 26 days/year (full-time only)
+  - Maternity Leave: 45 days/year (requires document)
+  - Umrah Leave: 8 days/year
+  - Half Day: Unlimited
+  - Unpaid Leave: Unlimited
+- Document upload support for sick certificates
+- Automatic leave day calculation (excludes weekends)
+- Leave balance tracking per employee
+
+**Attendance Regularization System:**
+- Employees can click on any attendance date to request correction
+- Original vs. requested times displayed
+- Mandatory reason field
+- Multi-level approval workflow
+
+**ESS Dashboard on Main Dashboard:**
+- Two tabs: "Work Dashboard" and "My Self-Service"
+- Quick stats: Days Present, Hours Worked, Annual Leave Left, Pending Requests
+- Tabs within ESS: Overview, Attendance, Leaves, Requests
+- Widgets: Leave Balance, Weekly Attendance, Pending Requests, Assets, Request History
+- Proper handling for users without HR employee records
+
+**Backend Endpoints Created:**
+- `GET /api/ess/dashboard` - Complete ESS dashboard data
+- `GET /api/ess/leave-types` - Leave type configurations
+- `GET /api/ess/leave-balance` - User's leave balance
+- `POST /api/ess/leave-requests` - Create leave request
+- `GET /api/ess/leave-requests` - User's leave requests
+- `POST /api/ess/leave-requests/{id}/action` - Approve/reject leave
+- `GET /api/ess/my-attendance` - User's attendance records
+- `POST /api/ess/attendance-regularization` - Create regularization request
+- `GET /api/ess/attendance-regularization` - User's regularization requests
+- `POST /api/ess/attendance-regularization/{id}/action` - Approve/reject regularization
+- `GET /api/ess/my-assets` - User's allocated assets
+- `GET /api/ess/pending-approvals` - Pending approvals for managers/HR/CEO
+- `GET /api/ess/my-profile` - User's ESS profile
+
+**Frontend Components Created:**
+- `/app/frontend/src/components/ess/ESSSection.jsx` - Main ESS dashboard
+- `/app/frontend/src/components/ess/LeaveApplicationModal.jsx` - Leave form
+- `/app/frontend/src/components/ess/AttendanceRegularizationModal.jsx` - Regularization form  
+- `/app/frontend/src/components/ess/ESSWidgets.jsx` - Dashboard widgets
+
+**Test Results:** Backend 100% (13/13 passed), Frontend 100% (All features working)
+
 ### Session Feb 26, 2026 - BioCloud Sync & Payroll P0 Fixes
 
 #### P0: BioCloud Attendance Sync Fix (COMPLETED)
