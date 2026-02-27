@@ -267,47 +267,35 @@ const DashboardPage = () => {
                 </div>
             </div>
 
-            {/* Dashboard/ESS Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="w-full max-w-md">
-                    <TabsTrigger value="dashboard" className="flex-1">Work Dashboard</TabsTrigger>
-                    <TabsTrigger value="ess" className="flex-1">My Self-Service</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="ess" className="mt-6">
-                    <ESSSection />
-                </TabsContent>
-                
-                <TabsContent value="dashboard" className="mt-6 space-y-6">
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {isSalesRole && (
-                            <>
-                                <StatCard
-                                    title="Total Leads"
-                                    value={stats.total_leads || 0}
-                                    icon={Users}
-                                    description={`${stats.leads_today || 0} new today`}
-                                    trend="up"
-                                    loading={loading}
-                                />
-                                <StatCard
-                                    title="Hot Leads"
-                                    value={stats.hot_leads || 0}
-                                    icon={TrendingUp}
-                                    description="Ready to convert"
-                                    trend="up"
-                                    loading={loading}
-                                />
-                                <StatCard
-                                    title="Enrolled Today"
-                                    value={stats.enrolled_today || 0}
-                                    icon={CheckCircle}
-                                    description="Successful conversions"
-                                    trend="up"
-                                    loading={loading}
-                                />
-                                <StatCard
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {isSalesRole && (
+                    <>
+                        <StatCard
+                            title="Total Leads"
+                            value={stats.total_leads || 0}
+                            icon={Users}
+                            description={`${stats.leads_today || 0} new today`}
+                            trend="up"
+                            loading={loading}
+                        />
+                        <StatCard
+                            title="Hot Leads"
+                            value={stats.hot_leads || 0}
+                            icon={TrendingUp}
+                            description="Ready to convert"
+                            trend="up"
+                            loading={loading}
+                        />
+                        <StatCard
+                            title="Enrolled Today"
+                            value={stats.enrolled_today || 0}
+                            icon={CheckCircle}
+                            description="Successful conversions"
+                            trend="up"
+                            loading={loading}
+                        />
+                        <StatCard
                                     title="SLA Breaches"
                                     value={stats.sla_breaches || 0}
                                     icon={AlertTriangle}
