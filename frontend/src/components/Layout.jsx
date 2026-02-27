@@ -266,6 +266,7 @@ function Layout() {
     
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const { canAccess, canAccessModule, loading: permLoading } = usePermissions();
     const navigate = useNavigate();
     const location = useLocation();
     const currentPath = location.pathname;
