@@ -104,10 +104,33 @@ const MODULE_HIERARCHY = [
         label: 'Finance Module',
         icon: DollarSign,
         subPages: [
-            { id: 'finance_dashboard', label: 'Finance Dashboard', path: '/finance' },
+            { id: 'finance_selector', label: 'Entity Selector', path: '/finance' },
             { id: 'commission_engine', label: 'Commission Engine', path: '/commissions' },
-            { id: 'payments', label: 'Payments', path: '/finance/payments' },
-            { id: 'reconciliation', label: 'Reconciliation', path: '/finance/reconciliation' },
+            // CLT Finance
+            { id: 'clt_dashboard', label: 'CLT Dashboard', path: '/finance/clt/dashboard' },
+            { id: 'clt_payables', label: 'CLT Payables', path: '/finance/clt/payables' },
+            { id: 'clt_receivables', label: 'CLT Receivables', path: '/finance/clt/receivables' },
+            // Miles Finance
+            { id: 'miles_dashboard', label: 'Miles Dashboard', path: '/finance/miles/dashboard' },
+            { id: 'miles_deposits', label: 'Miles Deposits', path: '/finance/miles/deposits' },
+            { id: 'miles_withdrawals', label: 'Miles Withdrawals', path: '/finance/miles/withdrawals' },
+            { id: 'miles_expenses', label: 'Miles Expenses', path: '/finance/miles/expense' },
+            { id: 'miles_profit', label: 'Miles Operating Profit', path: '/finance/miles/profit' },
+            // Treasury
+            { id: 'treasury_dashboard', label: 'Treasury Dashboard', path: '/finance/treasury/dashboard' },
+            { id: 'treasury_balances', label: 'Treasury Balances', path: '/finance/treasury/balances' },
+            { id: 'treasury_settlements', label: 'Treasury Settlements', path: '/finance/treasury/settlements' },
+            // Budgeting & Data
+            { id: 'budget_sheet', label: 'Budget Sheet', path: '/finance/budgeting/sheet' },
+            { id: 'data_management', label: 'Data Management', path: '/finance/data/management' },
+        ]
+    },
+    {
+        id: 'operations',
+        label: 'Operations',
+        icon: Briefcase,
+        subPages: [
+            { id: 'qc_dashboard', label: 'QC Dashboard', path: '/qc-dashboard' },
         ]
     },
     {
