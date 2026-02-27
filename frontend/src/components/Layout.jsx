@@ -79,6 +79,17 @@ function getNotificationType(notification) {
 }
 
 const SECTIONS = {
+    sshr: {
+        id: 'sshr',
+        title: 'My Self-Service',
+        icon: UserCog,
+        color: 'bg-teal-500',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control'],
+        items: [
+            { title: 'SSHR Dashboard', icon: UserCog, path: '/sshr' },
+            { title: 'My Payslips', icon: Receipt, path: '/sshr/payslips' },
+        ],
+    },
     sales: {
         id: 'sales',
         title: 'Sales',
@@ -123,8 +134,10 @@ const SECTIONS = {
         items: [
             { title: 'HR Dashboard', icon: LayoutDashboard, path: '/hr/dashboard' },
             { title: 'Employee Master', icon: UserCircle, path: '/hr/employees' },
+            { title: 'Company Documents', icon: FolderOpen, path: '/hr/documents' },
             { title: 'Leave Management', icon: Calendar, path: '/hr/leave' },
             { title: 'Attendance', icon: Clock, path: '/hr/attendance' },
+            { title: 'Approval Queue', icon: ClipboardCheck, path: '/hr/approvals' },
             { title: 'BioCloud Sync', icon: Fingerprint, path: '/hr/biocloud' },
             { title: 'Payroll', icon: DollarSign, path: '/hr/payroll' },
             { title: 'Performance', icon: TrendingUp, path: '/hr/performance' },
