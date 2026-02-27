@@ -647,6 +647,8 @@ const DashboardPage = () => {
                     </CardContent>
                 </Card>
             )}
+                </TabsContent>
+            </Tabs>
         </div>
     );
 };
