@@ -193,6 +193,8 @@ const DashboardPage = () => {
     const isMentorRole = ['super_admin', 'admin', 'mentor', 'academic_master'].includes(user?.role);
     const isFinanceRole = ['super_admin', 'admin', 'finance', 'finance_manager'].includes(user?.role);
     const isAdmin = ['super_admin', 'admin'].includes(user?.role);
+    
+    const [activeTab, setActiveTab] = useState('dashboard');
 
     return (
         <div className="space-y-6" data-testid="dashboard-page">
@@ -267,7 +269,18 @@ const DashboardPage = () => {
                 </div>
             </div>
 
-            {/* Stats Grid */}
+            {/* Dashboard/ESS Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="w-full max-w-md">
+                    <TabsTrigger value="dashboard" className="flex-1">Work Dashboard</TabsTrigger>
+                    <TabsTrigger value="ess" className="flex-1">My Self-Service</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="ess" className="mt-6">
+                    <ESSSection />
+                </TabsContent>
+                
+                <TabsContent value="dashboard" className="mt-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {isSalesRole && (
                     <>
