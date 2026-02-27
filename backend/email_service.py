@@ -57,11 +57,13 @@ def send_email(
         logger.warning("Email not configured. Skipping email send.")
         return False
     
+    config = get_smtp_config()
+    
     try:
         # Create message
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_USER}>"
+        msg["From"] = f"{config['from_name']} <{config['user']}>"
         msg["To"] = to_email
         
         if cc:
@@ -75,15 +77,15 @@ def send_email(
         msg.attach(MIMEText(html_content, "html"))
         
         # Send email
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(config['host'], config['port']) as server:
             server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.login(config['user'], config['password'])
             
             recipients = [to_email]
             if cc:
                 recipients.extend(cc)
             
-            server.sendmail(SMTP_USER, recipients, msg.as_string())
+            server.sendmail(config['user'], recipients, msg.as_string())
         
         logger.info(f"Email sent successfully to {to_email}")
         return True
