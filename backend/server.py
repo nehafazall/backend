@@ -12271,6 +12271,28 @@ async def create_leave_request(data: LeaveRequestCreate, user = Depends(get_curr
             "read": False,
             "created_at": now
         })
+        
+        # Send email notification to manager
+        if is_email_configured():
+            manager_user = await db.users.find_one({"id": manager["id"]})
+            if manager_user and manager_user.get("email"):
+                try:
+                    email_html = get_leave_request_template(
+                        employee_name=employee["full_name"],
+                        leave_type=leave_config["name"],
+                        start_date=data.start_date,
+                        end_date=data.end_date,
+                        total_days=total_days,
+                        reason=data.reason,
+                        approver_name=manager["name"]
+                    )
+                    await send_email_async(
+                        to_email=manager_user["email"],
+                        subject=f"Leave Request: {employee['full_name']} - {leave_config['name']}",
+                        html_content=email_html
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send leave request email: {str(e)}")
     
     return {"id": request_id, "message": "Leave request submitted successfully", "status": "pending_manager"}
 
