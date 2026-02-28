@@ -289,24 +289,30 @@ const ESSSection = () => {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {essData?.leave_balance?.map((leave) => (
-                                        <div key={leave.type} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                            <div>
-                                                <p className="font-medium">{leave.name}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {leave.total === 'Unlimited' ? 'Unlimited' : `${leave.total} days/year`}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xl font-bold">
-                                                    {leave.remaining === 'Unlimited' ? '∞' : leave.remaining}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Used: {leave.used}
-                                                </p>
-                                            </div>
+                                    {/* Limited leaves - show balance */}
+                                    {essData?.leave_balance?.filter(l => !l.is_unlimited).map((leave) => (
+                                        <div key={leave.leave_type} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                            <p className="font-medium">{leave.leave_type_name}</p>
+                                            <p className="text-xl font-bold text-primary">
+                                                {leave.remaining_days} days
+                                            </p>
                                         </div>
                                     ))}
+                                    
+                                    {/* Unlimited leaves - show taken this month */}
+                                    {essData?.leave_balance?.filter(l => l.is_unlimited).length > 0 && (
+                                        <div className="pt-3 border-t">
+                                            <p className="text-sm text-muted-foreground mb-3">Taken This Month</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {essData?.leave_balance?.filter(l => l.is_unlimited).map((leave) => (
+                                                    <div key={leave.leave_type} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                                                        <span className="text-sm">{leave.leave_type_name}</span>
+                                                        <Badge variant="secondary">{leave.taken_this_month || 0}</Badge>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
