@@ -288,9 +288,9 @@ const EmployeeMasterPage = () => {
                         <TableRow>
                             <TableHead>Employee ID</TableHead>
                             <TableHead>Name</TableHead>
+                            <TableHead>Gender</TableHead>
                             <TableHead>Department</TableHead>
                             <TableHead>Designation</TableHead>
-                            <TableHead>Location</TableHead>
                             <TableHead>Joining Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Alerts</TableHead>
@@ -307,14 +307,13 @@ const EmployeeMasterPage = () => {
                                         <p className="text-xs text-muted-foreground">{emp.company_email}</p>
                                     </div>
                                 </TableCell>
+                                <TableCell>
+                                    <span className={`capitalize ${emp.gender === 'male' ? 'text-blue-500' : emp.gender === 'female' ? 'text-pink-500' : 'text-muted-foreground'}`}>
+                                        {emp.gender || '-'}
+                                    </span>
+                                </TableCell>
                                 <TableCell>{emp.department}</TableCell>
                                 <TableCell>{emp.designation}</TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-1">
-                                        <MapPin className="h-3 w-3" />
-                                        {emp.work_location}
-                                    </div>
-                                </TableCell>
                                 <TableCell>{emp.joining_date}</TableCell>
                                 <TableCell>
                                     <Badge className={`${STATUS_COLORS[emp.employment_status] || 'bg-slate-500'} text-white`}>
