@@ -14666,13 +14666,23 @@ async def sheets_oauth_callback(code: str = "", state: str = "", error: str = ""
         """)
     
     connector_id = state_doc["connector_id"]
+    code_verifier = state_doc.get("code_verifier")
     
-    # Clean up state from DB (but keep for PKCE)
+    # Clean up state from DB
     await db.sheets_oauth_states.delete_one({"state": state})
     
+    if not code_verifier:
+        return HTMLResponse("""
+        <html><body>
+        <h2>Authorization Failed</h2>
+        <p>Missing code verifier. Please try connecting again.</p>
+        <script>setTimeout(() => window.close(), 3000);</script>
+        </body></html>
+        """)
+    
     try:
-        # Exchange code for tokens (pass state for PKCE flow retrieval)
-        tokens = await sheets_service.exchange_code(code, state)
+        # Exchange code for tokens with PKCE code_verifier
+        tokens = await sheets_service.exchange_code(code, code_verifier)
         
         # Update connector with tokens
         await db.sheet_connectors.update_one(
