@@ -236,7 +236,8 @@ class TestMarketingWebhook:
         """GET /api/marketing/webhook - Webhook verification with correct token"""
         # The webhook verify token from .env
         verify_token = "clt_synapse_meta_webhook_2024"
-        challenge = "test_challenge_12345"
+        # Meta sends numeric challenge strings
+        challenge = "12345678"
         
         response = requests.get(
             f"{BASE_URL}/api/marketing/webhook",
@@ -249,7 +250,7 @@ class TestMarketingWebhook:
         
         assert response.status_code == 200
         # Meta expects the challenge to be returned as integer
-        assert response.text == challenge or int(response.text) == int(challenge.replace("test_challenge_", ""))
+        assert str(response.json()) == challenge or response.text == challenge
         print("Webhook verification: OK")
     
     def test_webhook_verification_failure(self):
