@@ -5119,8 +5119,10 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "full_name*", "phone*", "email", "country", "city", 
                 "lead_source", "course_of_interest", "campaign_name", "notes"
             ],
-            "required_fields": ["full_name", "phone"],
-            "optional_fields": ["email", "country", "city", "lead_source", "course_of_interest", "campaign_name", "notes"],
+            "fields": {
+                "required": ["full_name", "phone"],
+                "optional": ["email", "country", "city", "lead_source", "course_of_interest", "campaign_name", "notes"]
+            },
             "example_row": {
                 "full_name": "John Doe",
                 "phone": "+971501234567",
@@ -5132,13 +5134,7 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "campaign_name": "Feb2024_UAE",
                 "notes": "Interested in weekend batches"
             },
-            "instructions": [
-                "Fields marked with * are mandatory",
-                "Phone must include country code (e.g., +971501234567)",
-                "Duplicate phone numbers will be skipped",
-                "Lead source options: Meta Ads, Google Ads, Website, Referral, Walk-in, Other",
-                "Leads will be auto-assigned via round-robin to sales executives"
-            ]
+            "instructions": "Fields marked with * are mandatory\nPhone must include country code (e.g., +971501234567)\nDuplicate phone numbers will be skipped\nLead source options: Meta Ads, Google Ads, Website, Referral, Walk-in, Other\nLeads will be auto-assigned via round-robin to sales executives"
         },
         "customers": {
             "filename": "customers_import_template.csv",
@@ -5147,8 +5143,10 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "payment_amount*", "payment_method*", "payment_date*", "closed_by*",
                 "cs_agent_email", "mentor_email", "notes"
             ],
-            "required_fields": ["full_name", "phone", "package_bought", "payment_amount", "payment_method", "payment_date", "closed_by"],
-            "optional_fields": ["email", "country", "cs_agent_email", "mentor_email", "notes"],
+            "fields": {
+                "required": ["full_name", "phone", "package_bought", "payment_amount", "payment_method", "payment_date", "closed_by"],
+                "optional": ["email", "country", "cs_agent_email", "mentor_email", "notes"]
+            },
             "example_row": {
                 "full_name": "Jane Smith",
                 "phone": "+971502345678",
@@ -5163,15 +5161,7 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "mentor_email": "mentor@clt-academy.com",
                 "notes": "VIP customer"
             },
-            "instructions": [
-                "Fields marked with * are mandatory",
-                "Phone must include country code",
-                "closed_by should be the email of the sales person who closed this customer",
-                "payment_method options: stripe, unipay, tabby, tamara, bank_transfer, usdt, cash",
-                "payment_date format: YYYY-MM-DD",
-                "Customers imported here will NOT go through round-robin",
-                "If cs_agent_email or mentor_email provided, they will be auto-assigned"
-            ]
+            "instructions": "Fields marked with * are mandatory\nPhone must include country code\nclosed_by should be the email of the sales person who closed this customer\npayment_method options: stripe, unipay, tabby, tamara, bank_transfer, usdt, cash\npayment_date format: YYYY-MM-DD\nCustomers imported here will NOT go through round-robin\nIf cs_agent_email or mentor_email provided, they will be auto-assigned"
         },
         "students_cs": {
             "filename": "students_cs_import_template.csv",
