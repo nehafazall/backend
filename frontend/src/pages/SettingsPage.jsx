@@ -141,23 +141,38 @@ function IntegrationsCard({ templateData, loading3CX, onFetchTemplate, onDownloa
         <Card>
             <CardHeader>
                 <div className="flex items-center gap-2"><Phone className="h-5 w-5" /><CardTitle>3CX Integration</CardTitle></div>
-                <CardDescription>Connect your phone system for click-to-call</CardDescription>
+                <CardDescription>Connect your phone system for click-to-call and call logging</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={onFetchTemplate} disabled={loading3CX}>
-                        {loading3CX ? 'Loading...' : 'View Setup Template'}
+                        {loading3CX ? 'Loading...' : 'View Setup Instructions'}
                     </Button>
-                    <Button variant="outline" onClick={onDownload}><Download className="h-4 w-4 mr-2" />Download</Button>
+                    <Button variant="default" onClick={onDownload}><Download className="h-4 w-4 mr-2" />Download XML Template</Button>
                 </div>
                 {templateData && (
-                    <div className="space-y-3 p-4 bg-muted rounded-lg">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">Extension:</span>
-                            <code className="bg-background px-2 py-1 rounded">{templateData.extension}</code>
+                    <div className="space-y-4 p-4 bg-muted rounded-lg">
+                        <h4 className="font-medium">Setup Instructions:</h4>
+                        {templateData.instructions && (
+                            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                                <li>{templateData.instructions.step1}</li>
+                                <li>{templateData.instructions.step2}</li>
+                                <li>{templateData.instructions.step3}</li>
+                                <li>{templateData.instructions.step4}</li>
+                                <li>{templateData.instructions.step5}</li>
+                                <li>{templateData.instructions.step6}</li>
+                                <li>{templateData.instructions.step7}</li>
+                            </ol>
+                        )}
+                        <div className="pt-3 border-t">
+                            <p className="text-sm font-medium mb-2">API Endpoints:</p>
+                            <div className="space-y-1 text-xs font-mono bg-background p-2 rounded">
+                                <p>Contact Lookup: {templateData.endpoints?.contact_lookup}</p>
+                                <p>Call Journal: {templateData.endpoints?.call_journal}</p>
+                            </div>
                         </div>
-                        <a href="https://www.3cx.com/docs/pbx-integration/" target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
-                            <ExternalLink className="h-3 w-3" />View 3CX Integration Guide
+                        <a href="https://www.3cx.com/docs/crm-integration/" target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
+                            <ExternalLink className="h-3 w-3" />View 3CX CRM Integration Guide
                         </a>
                     </div>
                 )}
