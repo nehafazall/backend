@@ -12239,6 +12239,12 @@ async def get_my_leave_balance(user = Depends(get_current_user)):
     
     employment_type = employee.get("employment_type", "full_time")
     is_full_time = employment_type == "full_time"
+    gender = employee.get("gender", "").lower()  # male/female
+    
+    # Get current month start for tracking half_day/unpaid usage
+    now = datetime.now(timezone.utc)
+    month_start = datetime(now.year, now.month, 1).strftime("%Y-%m-%d")
+    year_start = datetime(now.year, 1, 1).strftime("%Y-%m-%d")
     
     # Get leave balances from employee record or defaults
     balances = []
@@ -12248,12 +12254,16 @@ async def get_my_leave_balance(user = Depends(get_current_user)):
         if config["full_time_only"] and not is_full_time:
             continue
         
+        # Skip maternity leave for males
+        if leave_type == "maternity_leave" and gender == "male":
+            continue
+        
         total_days = config["days_per_year"]
-        if total_days == -1:
-            total_days = 999  # Unlimited
+        is_unlimited = total_days == -1
+        if is_unlimited:
+            total_days = None  # Will display as unlimited
         
         # Get used days from approved leave requests this year
-        year_start = datetime(datetime.now().year, 1, 1).strftime("%Y-%m-%d")
         used_query = {
             "employee_id": employee["employee_id"],
             "leave_type": leave_type,
@@ -12263,28 +12273,47 @@ async def get_my_leave_balance(user = Depends(get_current_user)):
         used_leaves = await db.ess_leave_requests.find(used_query).to_list(100)
         used_days = sum(l.get("total_days", 0) for l in used_leaves)
         
-        # Get pending days
-        pending_query = {
-            "employee_id": employee["employee_id"],
-            "leave_type": leave_type,
-            "status": {"$in": ["pending_manager", "pending_hr", "pending_ceo"]},
-            "start_date": {"$gte": year_start}
-        }
-        pending_leaves = await db.ess_leave_requests.find(pending_query).to_list(100)
-        pending_days = sum(l.get("total_days", 0) for l in pending_leaves)
+        # For half_day and unpaid_leave, get THIS MONTH's usage
+        taken_this_month = 0
+        if leave_type in ["half_day", "unpaid_leave"]:
+            month_query = {
+                "employee_id": employee["employee_id"],
+                "leave_type": leave_type,
+                "status": "approved",
+                "start_date": {"$gte": month_start}
+            }
+            month_leaves = await db.ess_leave_requests.find(month_query).to_list(100)
+            taken_this_month = sum(l.get("total_days", 0) for l in month_leaves)
         
-        remaining = max(0, total_days - used_days - pending_days) if total_days != 999 else 999
+        # Calculate remaining for limited leave types
+        remaining = None
+        if not is_unlimited:
+            # Get pending days
+            pending_query = {
+                "employee_id": employee["employee_id"],
+                "leave_type": leave_type,
+                "status": {"$in": ["pending_manager", "pending_hr", "pending_ceo"]},
+                "start_date": {"$gte": year_start}
+            }
+            pending_leaves = await db.ess_leave_requests.find(pending_query).to_list(100)
+            pending_days = sum(l.get("total_days", 0) for l in pending_leaves)
+            remaining = max(0, total_days - used_days - pending_days)
         
-        balances.append({
+        balance_entry = {
             "leave_type": leave_type,
             "leave_type_name": config["name"],
-            "total_days": total_days if total_days != 999 else "Unlimited",
+            "is_unlimited": is_unlimited,
+            "total_days": total_days,
             "used_days": used_days,
-            "pending_days": pending_days,
-            "remaining_days": remaining if remaining != 999 else "Unlimited",
-            "full_time_only": config["full_time_only"],
+            "remaining_days": remaining,
             "requires_document": config["requires_document"]
-        })
+        }
+        
+        # Add taken_this_month only for unlimited types
+        if is_unlimited:
+            balance_entry["taken_this_month"] = taken_this_month
+        
+        balances.append(balance_entry)
     
     return balances
 
