@@ -14258,7 +14258,7 @@ async def receive_meta_webhook(request_body: Dict, background_tasks: BackgroundT
     return {"status": "received"}
 
 async def process_meta_webhook(data: dict):
-    """Process Meta webhook data"""
+    """Process Meta webhook data - saves leads directly to main leads collection (Leads Pool)"""
     try:
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
@@ -14288,31 +14288,62 @@ async def process_meta_webhook(data: dict):
                             field_data = lead_details.get("field_data", [])
                             parsed_data = meta_ads_service.parse_lead_field_data(field_data)
                             
-                            # Store lead
+                            # Check for duplicate by phone/email in main leads collection
+                            phone = parsed_data.get("phone_number", "")
+                            email = parsed_data.get("email", "")
+                            
+                            existing_lead = None
+                            if phone:
+                                existing_lead = await db.leads.find_one({"phone": phone})
+                            if not existing_lead and email:
+                                existing_lead = await db.leads.find_one({"email": email})
+                            
+                            if existing_lead:
+                                logger.info(f"Duplicate lead from Meta Ads (phone/email already exists): {leadgen_id}")
+                                continue
+                            
+                            # Get round-robin agent for assignment
+                            assigned_agent = await get_round_robin_agent("sales_executive")
+                            
+                            # Create lead directly in main leads collection (Leads Pool)
+                            now = datetime.now(timezone.utc).isoformat()
                             lead_doc = {
                                 "id": str(uuid.uuid4()),
-                                "account_id": account["id"],
+                                "full_name": parsed_data.get("full_name", f"Meta Lead {leadgen_id[:8]}"),
+                                "phone": phone,
+                                "email": email,
+                                "city": parsed_data.get("city", ""),
+                                "country": parsed_data.get("country", ""),
+                                "lead_source": "meta_ads",
+                                "campaign_name": lead_details.get("campaign_name", ""),
+                                "notes": f"Form: {lead_details.get('form_name', form_id)}\nAd ID: {ad_id}",
+                                "stage": "new_lead",
+                                "assigned_to": assigned_agent["id"] if assigned_agent else None,
+                                "assigned_to_name": assigned_agent.get("full_name") if assigned_agent else None,
+                                "assigned_at": now if assigned_agent else None,
+                                "in_pool": not bool(assigned_agent),
                                 "meta_lead_id": leadgen_id,
-                                "form_id": form_id,
-                                "form_name": lead_details.get("form_name", ""),
-                                "campaign_id": lead_details.get("campaign_id"),
-                                "campaign_name": lead_details.get("campaign_name"),
-                                "ad_id": ad_id,
-                                "lead_data": parsed_data,
-                                "raw_field_data": field_data,
-                                "created_time": lead_details.get("created_time", ""),
-                                "received_at": datetime.now(timezone.utc).isoformat(),
-                                "synced_to_crm": False,
-                                "crm_lead_id": None
+                                "meta_form_id": form_id,
+                                "meta_campaign_id": lead_details.get("campaign_id"),
+                                "created_at": now,
+                                "updated_at": now,
+                                "last_activity": now
                             }
                             
-                            await db.meta_leads.update_one(
-                                {"meta_lead_id": leadgen_id},
-                                {"$set": lead_doc},
-                                upsert=True
-                            )
+                            await db.leads.insert_one(lead_doc)
+                            logger.info(f"Meta lead {leadgen_id} added to Leads Pool, assigned to: {assigned_agent.get('full_name') if assigned_agent else 'Unassigned'}")
                             
-                            logger.info(f"Received lead {leadgen_id} via webhook")
+                            # Notify assigned agent
+                            if assigned_agent:
+                                await create_notification(
+                                    assigned_agent["id"],
+                                    "New Lead Assigned",
+                                    f"New lead from Meta Ads: {lead_doc['full_name']}",
+                                    "info",
+                                    "/sales",
+                                    entity_type="lead",
+                                    entity_id=lead_doc["id"]
+                                )
                             
                         except Exception as e:
                             logger.error(f"Error fetching lead details: {e}")
