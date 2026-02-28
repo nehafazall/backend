@@ -36,6 +36,10 @@ export const LeaveBalanceWidget = ({ leaveBalance, loading }) => {
         );
     }
 
+    // Separate limited and unlimited leaves
+    const limitedLeaves = leaveBalance.filter(l => !l.is_unlimited);
+    const unlimitedLeaves = leaveBalance.filter(l => l.is_unlimited);
+
     return (
         <Card data-testid="leave-balance-widget">
             <CardHeader className="pb-2">
@@ -44,27 +48,50 @@ export const LeaveBalanceWidget = ({ leaveBalance, loading }) => {
                     Leave Balance
                 </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-                {leaveBalance.map((leave) => {
-                    const total = leave.total === 'Unlimited' ? 100 : leave.total;
-                    const remaining = leave.remaining === 'Unlimited' ? 100 : leave.remaining;
-                    const percentage = total > 0 ? (remaining / total) * 100 : 0;
-                    
-                    return (
-                        <div key={leave.type} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                                <span>{leave.name}</span>
-                                <span className="text-muted-foreground">
-                                    {leave.remaining === 'Unlimited' ? '∞' : leave.remaining} / {leave.total === 'Unlimited' ? '∞' : leave.total}
-                                </span>
+            <CardContent className="space-y-4">
+                {/* Limited leaves with balance display */}
+                <div className="space-y-3">
+                    {limitedLeaves.map((leave) => {
+                        const total = leave.total_days || 0;
+                        const remaining = leave.remaining_days || 0;
+                        const percentage = total > 0 ? (remaining / total) * 100 : 0;
+                        
+                        return (
+                            <div key={leave.leave_type} className="space-y-1">
+                                <div className="flex justify-between text-sm">
+                                    <span>{leave.leave_type_name}</span>
+                                    <span className="font-semibold text-primary">
+                                        {remaining} days
+                                    </span>
+                                </div>
+                                <Progress 
+                                    value={percentage} 
+                                    className="h-2"
+                                />
                             </div>
-                            <Progress 
-                                value={percentage} 
-                                className="h-2"
-                            />
+                        );
+                    })}
+                </div>
+
+                {/* Unlimited leaves - show taken this month */}
+                {unlimitedLeaves.length > 0 && (
+                    <div className="pt-2 border-t space-y-2">
+                        <p className="text-xs text-muted-foreground">This Month</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {unlimitedLeaves.map((leave) => (
+                                <div 
+                                    key={leave.leave_type} 
+                                    className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                                >
+                                    <span className="text-sm">{leave.leave_type_name}</span>
+                                    <Badge variant="secondary">
+                                        {leave.taken_this_month || 0}
+                                    </Badge>
+                                </div>
+                            ))}
                         </div>
-                    );
-                })}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
