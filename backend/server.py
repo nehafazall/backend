@@ -14854,7 +14854,6 @@ async def startup_event():
     await db.sheets_oauth_states.create_index("expires_at", expireAfterSeconds=0)
     
     # Start background scheduler for Google Sheets auto-sync
-    import asyncio
     asyncio.create_task(sheets_auto_sync_loop())
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
