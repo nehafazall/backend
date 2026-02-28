@@ -10557,6 +10557,17 @@ async def fetch_biocloud_attendance(
                     synced += 1
                 else:
                     skipped += 1
+                    if emp_code not in unmatched_emp_codes:
+                        unmatched_emp_codes.append(emp_code)
+            
+            # Log unmatched emp_codes
+            if unmatched_emp_codes:
+                logger.warning(f"BioCloud sync: Unmatched emp_codes (not in DB): {unmatched_emp_codes}")
+            
+            # Check which mapped employees didn't have attendance data
+            missing_mapped = [name for code, name in mapped_emp_codes.items() if code not in found_emp_codes]
+            if missing_mapped:
+                logger.warning(f"BioCloud sync: Mapped employees without attendance data: {missing_mapped}")
             
             return {
                 "success": True,
@@ -10564,6 +10575,9 @@ async def fetch_biocloud_attendance(
                 "fetched": len(attendance_data),
                 "synced": synced,
                 "skipped": skipped,
+                "found_emp_codes": list(found_emp_codes),
+                "unmatched_emp_codes": unmatched_emp_codes,
+                "missing_mapped_employees": missing_mapped,
                 "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse ({skipped} unmapped employees skipped)"
             }
             
