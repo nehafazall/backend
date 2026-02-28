@@ -14334,10 +14334,29 @@ async def bulk_import_meta_leads(query: dict, user_id: str):
 
 # Webhook endpoint for real-time lead data
 @api_router.get("/marketing/webhook")
-async def verify_meta_webhook(hub_mode: str = "", hub_challenge: str = "", hub_verify_token: str = ""):
-    """Meta webhook verification endpoint"""
+async def verify_meta_webhook(request: Request):
+    """
+    Meta webhook verification endpoint
+    Meta sends: hub.mode, hub.challenge, hub.verify_token as query params
+    Must return the challenge as plain text (not JSON)
+    """
+    from fastapi.responses import PlainTextResponse
+    
+    # Get query params (Meta uses dots which FastAPI doesn't handle well)
+    params = dict(request.query_params)
+    
+    # Try both formats (with dots and underscores)
+    hub_mode = params.get("hub.mode") or params.get("hub_mode", "")
+    hub_challenge = params.get("hub.challenge") or params.get("hub_challenge", "")
+    hub_verify_token = params.get("hub.verify_token") or params.get("hub_verify_token", "")
+    
+    logger.info(f"Meta webhook verification: mode={hub_mode}, token={hub_verify_token}")
+    
     if hub_mode == "subscribe" and hub_verify_token == META_WEBHOOK_VERIFY_TOKEN:
-        return int(hub_challenge)
+        # Must return challenge as plain text, not JSON
+        return PlainTextResponse(content=hub_challenge, status_code=200)
+    
+    logger.warning(f"Meta webhook verification failed: mode={hub_mode}, token_match={hub_verify_token == META_WEBHOOK_VERIFY_TOKEN}")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 @api_router.post("/marketing/webhook")
