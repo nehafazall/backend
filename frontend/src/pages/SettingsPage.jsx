@@ -213,7 +213,7 @@ const SettingsPage = () => {
     const fetch3CXTemplate = async () => {
         setLoading3CX(true);
         try {
-            const response = await api.get('/integrations/3cx/template');
+            const response = await api.get('/3cx/template');
             setTemplateData(response.data);
         } catch (error) {
             toast.error('Failed to load 3CX template');
@@ -229,18 +229,19 @@ const SettingsPage = () => {
 
     const download3CXTemplate = async () => {
         try {
-            const response = await api.get('/integrations/3cx/template');
+            const response = await api.get('/3cx/template');
             const data = response.data;
-            const blob = new Blob([JSON.stringify(data.template, null, 2)], { type: 'application/json' });
+            // Download as XML file for 3CX
+            const blob = new Blob([data.template], { type: 'application/xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'template.json';
+            a.download = 'CLT_Synapse_3CX_Template.xml';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            toast.success('Template downloaded');
+            toast.success('3CX Template downloaded as XML');
         } catch (error) {
             toast.error('Failed to download template');
         }
