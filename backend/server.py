@@ -14625,16 +14625,18 @@ async def start_sheets_oauth(connector_id: str, user = Depends(require_roles(["s
     # Generate state token
     state = str(uuid.uuid4())
     
-    # Store state for verification
+    # Get auth URL and code verifier (for PKCE)
+    auth_url, code_verifier = await sheets_service.get_auth_url(state)
+    
+    # Store state and code_verifier for verification and token exchange
     await db.sheets_oauth_states.insert_one({
         "state": state,
         "connector_id": connector_id,
         "user_id": user["id"],
+        "code_verifier": code_verifier,  # Store for PKCE
         "created_at": datetime.now(timezone.utc),
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10)
     })
-    
-    auth_url = sheets_service.get_auth_url(state)
     
     return {"auth_url": auth_url}
 
