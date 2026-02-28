@@ -703,6 +703,69 @@ class ESSApprovalAction(BaseModel):
     action: str  # approve, reject
     comments: Optional[str] = None
 
+# ==================== MARKETING MODULE MODELS ====================
+
+class MetaAdAccountCreate(BaseModel):
+    name: str
+    meta_account_id: str  # act_xxxxx format
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_expiry: Optional[datetime] = None
+
+class MetaAdAccountResponse(BaseModel):
+    id: str
+    name: str
+    meta_account_id: str
+    is_active: bool
+    status: str  # connected, expired, error
+    last_synced: Optional[str] = None
+    created_at: str
+    currency: Optional[str] = None
+    timezone: Optional[str] = None
+
+class MetaCampaignResponse(BaseModel):
+    id: str
+    account_id: str
+    meta_campaign_id: str
+    name: str
+    objective: Optional[str] = None
+    status: str
+    daily_budget: Optional[float] = None
+    lifetime_budget: Optional[float] = None
+    created_time: Optional[str] = None
+    start_time: Optional[str] = None
+    stop_time: Optional[str] = None
+
+class MetaLeadResponse(BaseModel):
+    id: str
+    account_id: str
+    campaign_id: Optional[str] = None
+    campaign_name: Optional[str] = None
+    form_id: str
+    form_name: Optional[str] = None
+    lead_data: Dict[str, Any]  # Parsed field data
+    created_time: str
+    received_at: str
+    synced_to_crm: bool = False
+    crm_lead_id: Optional[str] = None
+
+class MarketingMetricsResponse(BaseModel):
+    account_id: str
+    account_name: str
+    period: str  # last_7d, last_30d, etc.
+    total_spend: float
+    total_leads: int
+    total_impressions: int
+    total_clicks: int
+    cpl: float  # Cost per lead
+    cpm: float  # Cost per mille
+    cpc: float  # Cost per click
+    ctr: float  # Click-through rate
+    reach: int
+    frequency: float
+    # Calculated ROAS would need conversion data
+    campaigns: List[Dict[str, Any]] = []
+
 # ==================== HELPER FUNCTIONS ====================
 
 def hash_password(password: str) -> str:
