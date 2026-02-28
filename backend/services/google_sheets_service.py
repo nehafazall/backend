@@ -5,14 +5,16 @@ Handles OAuth, sheet-to-agent mapping, and auto-sync every 5 minutes
 import os
 import logging
 import asyncio
+import hashlib
+import base64
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Any
-import warnings
+import requests as http_requests
 
-from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GoogleRequest
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,6 @@ def get_column_index(col_letter: str) -> int:
 
 def extract_sheet_id(url: str) -> Optional[str]:
     """Extract Google Sheet ID from URL"""
-    # Handle URLs like https://docs.google.com/spreadsheets/d/{sheet_id}/edit...
     import re
     match = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', url)
     if match:
@@ -67,87 +68,83 @@ def extract_gid(url: str) -> Optional[str]:
     return None
 
 
+def generate_code_verifier() -> str:
+    """Generate a code verifier for PKCE (43-128 chars)"""
+    return secrets.token_urlsafe(64)[:96]
+
+
+def generate_code_challenge(verifier: str) -> str:
+    """Generate a code challenge from verifier for PKCE (S256 method)"""
+    digest = hashlib.sha256(verifier.encode('ascii')).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode('ascii')
+
+
 class GoogleSheetsService:
     """Service for Google Sheets integration"""
     
     def __init__(self, db):
         self.db = db
         self.is_configured = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
-        self._flows = {}  # Store flows by state for PKCE
     
-    def get_oauth_flow(self, state: str = None) -> Flow:
-        """Create OAuth flow"""
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            },
-            scopes=SCOPES,
-            redirect_uri=REDIRECT_URI
+    async def get_auth_url(self, state: str) -> tuple:
+        """Get Google OAuth authorization URL with PKCE. Returns (url, code_verifier)"""
+        # Generate PKCE code verifier and challenge
+        code_verifier = generate_code_verifier()
+        code_challenge = generate_code_challenge(code_verifier)
+        
+        # Build authorization URL manually
+        from urllib.parse import urlencode
+        params = {
+            "client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": REDIRECT_URI,
+            "response_type": "code",
+            "scope": " ".join(SCOPES),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256"
+        }
+        
+        base_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        url = f"{base_url}?{urlencode(params)}"
+        
+        return url, code_verifier
+    
+    async def exchange_code(self, code: str, code_verifier: str) -> Dict[str, Any]:
+        """Exchange authorization code for tokens with PKCE"""
+        # Prepare token request
+        token_data = {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "code": code,
+            "code_verifier": code_verifier,
+            "grant_type": "authorization_code",
+            "redirect_uri": REDIRECT_URI
+        }
+        
+        # Exchange code for tokens
+        response = http_requests.post(
+            "https://oauth2.googleapis.com/token",
+            data=token_data,
+            timeout=30
         )
-        return flow
-    
-    def get_auth_url(self, state: str) -> str:
-        """Get Google OAuth authorization URL with PKCE"""
-        flow = self.get_oauth_flow()
         
-        # Generate authorization URL with PKCE
-        url, _ = flow.authorization_url(
-            access_type='offline',
-            prompt='consent',
-            state=state,
-            include_granted_scopes='true'
-        )
+        if response.status_code != 200:
+            error_data = response.json()
+            error_msg = error_data.get('error_description', error_data.get('error', 'Unknown error'))
+            logger.error(f"Token exchange failed: {error_data}")
+            raise ValueError(f"Token exchange failed: {error_msg}")
         
-        # Store the flow object to preserve code_verifier for token exchange
-        self._flows[state] = flow
-        
-        return url
-    
-    def get_stored_flow(self, state: str) -> Optional[Flow]:
-        """Retrieve stored flow for PKCE token exchange"""
-        return self._flows.pop(state, None)
-    
-    async def exchange_code(self, code: str, state: str = None) -> Dict[str, Any]:
-        """Exchange authorization code for tokens"""
-        # Try to get stored flow with PKCE verifier
-        flow = None
-        if state:
-            flow = self.get_stored_flow(state)
-        
-        if not flow:
-            # Create new flow if not found (fallback)
-            flow = self.get_oauth_flow()
-        
-        # Suppress OAuth scope warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            flow.fetch_token(code=code)
-        
-        creds = flow.credentials
-        
-        # Validate required scopes
-        required_scopes = {"https://www.googleapis.com/auth/spreadsheets.readonly"}
-        granted_scopes = set(creds.scopes or [])
-        if not required_scopes.issubset(granted_scopes):
-            missing = required_scopes - granted_scopes
-            raise ValueError(f"Missing required scopes: {', '.join(missing)}")
+        token_response = response.json()
         
         # Calculate expiry
-        expiry = datetime.now(timezone.utc) + timedelta(seconds=3600)
-        if creds.expiry:
-            if creds.expiry.tzinfo is None:
-                expiry = creds.expiry.replace(tzinfo=timezone.utc)
-            else:
-                expiry = creds.expiry
+        expires_in = token_response.get("expires_in", 3600)
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
         
         return {
-            "access_token": creds.token,
-            "refresh_token": creds.refresh_token,
+            "access_token": token_response["access_token"],
+            "refresh_token": token_response.get("refresh_token"),
             "token_uri": "https://oauth2.googleapis.com/token",
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": GOOGLE_CLIENT_SECRET,
@@ -174,7 +171,6 @@ class GoogleSheetsService:
             if datetime.now(timezone.utc) >= expires_at:
                 # Refresh token
                 creds.refresh(GoogleRequest())
-                # Return refreshed token info
                 return creds
         
         return creds
@@ -183,7 +179,6 @@ class GoogleSheetsService:
         """Read data from a Google Sheet"""
         creds = await self.get_credentials(token_data)
         
-        # Use asyncio.to_thread for blocking I/O
         def _read():
             service = build('sheets', 'v4', credentials=creds)
             result = service.spreadsheets().values().get(
@@ -233,18 +228,6 @@ class GoogleSheetsService:
     ) -> Dict[str, Any]:
         """
         Sync leads from a Google Sheet to the leads collection.
-        
-        Args:
-            connector_id: ID of the sheet connector config
-            token_data: Google OAuth tokens
-            spreadsheet_id: Google Sheet ID
-            sheet_name: Name of the sheet tab
-            column_mapping: Map of lead fields to column letters
-            assigned_agents: List of agent IDs to assign leads to (round-robin if multiple)
-            skip_header: Skip the first row (header)
-        
-        Returns:
-            Sync statistics
         """
         stats = {
             "total_rows": 0,
@@ -325,7 +308,6 @@ class GoogleSheetsService:
                         "created_at": now,
                         "updated_at": now,
                         "last_activity": now,
-                        # Store captured time from sheet if available
                         "external_captured_time": parsed.get("captured_time", "")
                     }
                     
