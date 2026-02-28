@@ -344,6 +344,28 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Marketing Module */}
+                <Route path="marketing" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <MarketingDashboardPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <MarketingDashboardPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/settings" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <MarketingSettingsPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/leads" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing', 'sales_manager']}>
+                        <MarketingLeadsPage />
+                    </ProtectedRoute>
+                } />
+                
                 {/* User Management */}
                 <Route path="users" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
