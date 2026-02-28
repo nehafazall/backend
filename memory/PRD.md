@@ -5,6 +5,86 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (February 2026)
 
+### Session Feb 28, 2026 (Part 2) - Google Sheets Lead Connector & Lead Flow Refactoring
+
+#### P0: Google Sheets Lead Connector (COMPLETED)
+**Problem:** User needed to import leads from Google Sheets automatically with:
+- Auto-sync every 5 minutes and manual sync option
+- Sheet-to-agent mapping (single agent = all leads, multiple agents = round-robin)
+- Specific column mapping: N=Full Name, O=City, P=Primary Phone, Q=Secondary Phone, B=Lead Captured Time
+- Duplicate detection (skip leads with same phone/email)
+
+**Solution:**
+Created comprehensive Google Sheets Lead Connector system:
+
+**Backend Implementation:**
+- Created Google Sheets Service (`/app/backend/services/google_sheets_service.py`) with:
+  - Google OAuth2 flow implementation
+  - Sheet reading with configurable column mapping
+  - Duplicate detection by phone/email
+  - Round-robin agent assignment logic
+  - Token refresh handling
+- Added 10+ new API endpoints in `server.py` for connector management
+- Background auto-sync loop (checks every minute, syncs based on configured interval)
+- Database collection: `sheet_connectors`, `sheets_oauth_states`
+
+**Key API Endpoints:**
+- `GET /api/connectors/config` - Configuration status (google_sheets_configured)
+- `GET /api/connectors/google-sheets` - List all sheet connectors
+- `POST /api/connectors/google-sheets` - Create new connector
+- `PUT /api/connectors/google-sheets/{id}` - Update connector settings
+- `DELETE /api/connectors/google-sheets/{id}` - Delete connector
+- `GET /api/connectors/google-sheets/{id}/oauth` - Start OAuth flow
+- `GET /api/connectors/google-sheets/callback` - OAuth callback handler
+- `POST /api/connectors/google-sheets/{id}/sync` - Trigger manual sync
+- `GET /api/connectors/google-sheets/{id}/preview` - Preview sheet data
+- `GET /api/connectors/agents` - List available agents for assignment
+
+**Frontend Implementation:**
+- Created Lead Connectors page (`/marketing/connectors`) with:
+  - Configuration status warning when OAuth not set up
+  - Connector cards showing status, assigned agents, sync info
+  - Add Connector dialog with all fields and agent selection checkboxes
+  - Edit Connector dialog for updating settings
+  - Preview dialog to view sheet data
+  - Delete confirmation dialog
+  - Manual sync button
+  - OAuth connection flow
+
+**Environment Variables Required:**
+```
+GOOGLE_SHEETS_CLIENT_ID=""
+GOOGLE_SHEETS_CLIENT_SECRET=""
+```
+
+**Default Column Mapping:**
+- N = Full Name
+- O = City  
+- P = Primary Phone
+- Q = Secondary Phone
+- B = Lead Captured Time
+
+**Test Results:** Backend 89% (16/18 passed, 2 skipped - OAuth not configured), Frontend 100%
+
+#### P0: Lead Flow Refactoring (COMPLETED)
+**Problem:** Meta Ads leads were going to a separate collection instead of the central Leads Pool. User wanted all leads (from Meta, Google Sheets, and future sources) to go to one central pool for SLA automation and round-robin distribution.
+
+**Solution:**
+1. **Deleted Meta Ads Leads page** (`/marketing/leads`) - removed from routes and navigation
+2. **Updated Meta webhook** to save leads directly to main `leads` collection:
+   - Duplicate detection by phone/email
+   - Automatic round-robin agent assignment
+   - Notification to assigned agent
+   - Lead source marked as `meta_ads`
+3. **Updated Marketing sidebar** - replaced "Meta Ads Leads" with "Lead Connectors"
+4. **All incoming leads now go to Leads Pool** at `/leads/pool` for central management
+
+**Files Modified:**
+- `/app/frontend/src/App.js` - Updated routes
+- `/app/frontend/src/components/Layout.jsx` - Updated sidebar navigation
+- `/app/backend/server.py` - Modified `process_meta_webhook()` function
+- Deleted `/app/frontend/src/pages/marketing/MarketingLeadsPage.jsx`
+
 ### Session Feb 28, 2026 - Marketing Module with Meta Ads Integration
 
 #### P0: Marketing Module (COMPLETED)
