@@ -160,7 +160,7 @@ const ESSSection = () => {
                             </div>
                             <div>
                                 <p className="text-2xl font-bold">
-                                    {essData?.leave_balance?.find(l => l.type === 'annual_leave')?.remaining || '--'}
+                                    {essData?.leave_balance?.find(l => l.leave_type === 'annual_leave')?.remaining_days || '--'}
                                 </p>
                                 <p className="text-xs text-muted-foreground">Annual Leave Left</p>
                             </div>
