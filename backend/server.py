@@ -32,6 +32,9 @@ from email_service import (
     is_email_configured
 )
 
+# Import Meta Ads Service
+from meta_ads_service import MetaAdsService
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
