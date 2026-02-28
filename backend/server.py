@@ -10485,6 +10485,27 @@ async def fetch_biocloud_attendance(
                         "synced_at": now
                     }
                     
+                    # Calculate total worked hours
+                    if att["first_in"] and att["last_out"]:
+                        try:
+                            in_time = datetime.strptime(att["first_in"][:8], "%H:%M:%S")
+                            out_time = datetime.strptime(att["last_out"][:8], "%H:%M:%S")
+                            if out_time > in_time:
+                                total_seconds = (out_time - in_time).total_seconds()
+                                total_hours = round(total_seconds / 3600, 2)
+                                attendance_record["total_hours"] = total_hours
+                        except Exception as e:
+                            # Try with HH:MM format
+                            try:
+                                in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
+                                out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
+                                if out_time > in_time:
+                                    total_seconds = (out_time - in_time).total_seconds()
+                                    total_hours = round(total_seconds / 3600, 2)
+                                    attendance_record["total_hours"] = total_hours
+                            except:
+                                pass
+                    
                     # Calculate late minutes (if check-in after 09:00)
                     if att["first_in"]:
                         try:
