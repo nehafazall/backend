@@ -5170,8 +5170,10 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "cs_agent_email*", "mentor_email", "batch_plan", "preferred_language",
                 "trading_level", "class_timings", "notes"
             ],
-            "required_fields": ["full_name", "phone", "package_bought", "cs_agent_email"],
-            "optional_fields": ["email", "country", "mentor_email", "batch_plan", "preferred_language", "trading_level", "class_timings", "notes"],
+            "fields": {
+                "required": ["full_name", "phone", "package_bought", "cs_agent_email"],
+                "optional": ["email", "country", "mentor_email", "batch_plan", "preferred_language", "trading_level", "class_timings", "notes"]
+            },
             "example_row": {
                 "full_name": "Ahmed Ali",
                 "phone": "+971503456789",
@@ -5186,14 +5188,7 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "class_timings": "10:00 AM - 12:00 PM",
                 "notes": "Prefers online classes"
             },
-            "instructions": [
-                "Fields marked with * are mandatory",
-                "cs_agent_email MUST be a valid CS agent email from the system",
-                "mentor_email is optional but must be valid if provided",
-                "batch_plan options: Weekday Morning, Weekday Evening, Weekend Morning, Weekend Evening",
-                "trading_level options: Beginner, Intermediate, Advanced",
-                "Students imported will be assigned to specified CS agent (NOT round-robin)"
-            ]
+            "instructions": "Fields marked with * are mandatory\ncs_agent_email MUST be a valid CS agent email from the system\nmentor_email is optional but must be valid if provided\nbatch_plan options: Weekday Morning, Weekday Evening, Weekend Morning, Weekend Evening\ntrading_level options: Beginner, Intermediate, Advanced\nStudents imported will be assigned to specified CS agent (NOT round-robin)"
         },
         "students_mentor": {
             "filename": "students_mentor_import_template.csv",
@@ -5201,8 +5196,10 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "full_name*", "phone*", "email", "country", "package_bought*",
                 "mentor_email*", "cs_agent_email", "mentor_stage", "learning_goals", "notes"
             ],
-            "required_fields": ["full_name", "phone", "package_bought", "mentor_email"],
-            "optional_fields": ["email", "country", "cs_agent_email", "mentor_stage", "learning_goals", "notes"],
+            "fields": {
+                "required": ["full_name", "phone", "package_bought", "mentor_email"],
+                "optional": ["email", "country", "cs_agent_email", "mentor_stage", "learning_goals", "notes"]
+            },
             "example_row": {
                 "full_name": "Sara Khan",
                 "phone": "+971504567890",
@@ -5215,19 +5212,18 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "learning_goals": "Master technical analysis",
                 "notes": "Experienced trader"
             },
-            "instructions": [
-                "Fields marked with * are mandatory",
-                "mentor_email MUST be a valid mentor email from the system",
-                "mentor_stage options: new_student, discussion_started, pitched_for_redeposit, interested, closed",
-                "Students imported will be assigned to specified mentor (NOT round-robin)"
-            ]
+            "instructions": "Fields marked with * are mandatory\nmentor_email MUST be a valid mentor email from the system\nmentor_stage options: new_student, discussion_started, pitched_for_redeposit, interested, closed\nStudents imported will be assigned to specified mentor (NOT round-robin)"
         }
     }
     
     if template_type not in templates:
         raise HTTPException(status_code=400, detail=f"Invalid template type. Available: {list(templates.keys())}")
     
-    return templates[template_type]
+    tmpl = templates[template_type]
+    # Generate CSV template string
+    tmpl["template"] = ",".join(tmpl["headers"]) + "\n" + ",".join([str(v) for v in tmpl["example_row"].values()])
+    
+    return tmpl
 
 @api_router.post("/import/leads")
 async def import_leads(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))):
