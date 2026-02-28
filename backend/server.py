@@ -14408,6 +14408,17 @@ async def startup_event():
     await db.hr_performance_reviews.create_index("employee_id")
     await db.hr_performance_reviews.create_index("review_period")
     
+    # Marketing Module indexes
+    await db.meta_ad_accounts.create_index("meta_account_id", unique=True)
+    await db.meta_ad_accounts.create_index("is_active")
+    await db.meta_campaigns.create_index("meta_campaign_id", unique=True)
+    await db.meta_campaigns.create_index("account_id")
+    await db.meta_leads.create_index("meta_lead_id", unique=True)
+    await db.meta_leads.create_index("account_id")
+    await db.meta_leads.create_index("synced_to_crm")
+    await db.meta_oauth_states.create_index("state", unique=True)
+    await db.meta_oauth_states.create_index("expires_at", expireAfterSeconds=0)
+    
     logger.info("CLT Synapse ERP v2.0 started successfully")
 
 @app.on_event("shutdown")
