@@ -166,7 +166,7 @@ function ImportButton({ type, templateType, onSuccess }) {
 
     return (
         <>
-            <Button onClick={loadTemplate} variant="outline" disabled={busy} data-testid={`import-${type}-btn`}>
+            <Button onClick={loadTemplate} variant="outline" disabled={busy} data-testid={`import-${actualType}-btn`}>
                 <Upload className="h-4 w-4 mr-2" />Import
             </Button>
 
@@ -216,8 +216,8 @@ function ImportButton({ type, templateType, onSuccess }) {
                                 </Button>
 
                                 <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                                    <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" id={`csv-file-${type}`} />
-                                    <label htmlFor={`csv-file-${type}`} className="cursor-pointer">
+                                    <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" id={`csv-file-${actualType}`} />
+                                    <label htmlFor={`csv-file-${actualType}`} className="cursor-pointer">
                                         <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                                         <p className="text-sm font-medium">Click to select CSV file</p>
                                         <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>
