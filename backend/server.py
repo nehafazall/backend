@@ -14356,6 +14356,399 @@ async def process_meta_webhook(data: dict):
     except Exception as e:
         logger.error(f"Error processing Meta webhook: {e}")
 
+# ==================== GOOGLE SHEETS CONNECTOR ====================
+
+# Initialize Google Sheets Service
+GOOGLE_SHEETS_CLIENT_ID = os.environ.get('GOOGLE_SHEETS_CLIENT_ID', '')
+GOOGLE_SHEETS_CLIENT_SECRET = os.environ.get('GOOGLE_SHEETS_CLIENT_SECRET', '')
+
+sheets_service = None
+if GOOGLE_SHEETS_CLIENT_ID and GOOGLE_SHEETS_CLIENT_SECRET:
+    sheets_service = GoogleSheetsService(db)
+    logger.info("Google Sheets Service initialized")
+else:
+    logger.warning("Google Sheets credentials not configured - Sheet connectors disabled")
+
+# Pydantic models for Google Sheets
+class SheetConnectorCreate(BaseModel):
+    name: str
+    sheet_url: str
+    sheet_name: str = "Sheet1"
+    assigned_agent_ids: List[str]  # Can be one or multiple agents
+    column_mapping: Optional[Dict[str, str]] = None  # Custom column mapping
+    auto_sync_enabled: bool = True
+    sync_interval_minutes: int = 5
+
+class SheetConnectorResponse(BaseModel):
+    id: str
+    name: str
+    sheet_url: str
+    sheet_id: str
+    sheet_name: str
+    assigned_agent_ids: List[str]
+    assigned_agent_names: List[str]
+    column_mapping: Dict[str, str]
+    auto_sync_enabled: bool
+    sync_interval_minutes: int
+    is_connected: bool
+    last_sync: Optional[Dict] = None
+    last_synced_at: Optional[str] = None
+    created_at: str
+    created_by: str
+    created_by_name: str
+
+@api_router.get("/connectors/config")
+async def get_connectors_config(user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Get connectors configuration status"""
+    return {
+        "google_sheets_configured": bool(GOOGLE_SHEETS_CLIENT_ID and GOOGLE_SHEETS_CLIENT_SECRET),
+        "google_sheets_oauth_url": f"{BACKEND_URL}/api/connectors/google-sheets/oauth" if BACKEND_URL else None
+    }
+
+@api_router.get("/connectors/google-sheets")
+async def get_sheet_connectors(user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Get all Google Sheet connectors"""
+    connectors = await db.sheet_connectors.find({}, {"_id": 0}).to_list(100)
+    
+    # Enrich with agent names
+    for conn in connectors:
+        agent_names = []
+        for agent_id in conn.get("assigned_agent_ids", []):
+            agent = await db.users.find_one({"id": agent_id}, {"full_name": 1})
+            if agent:
+                agent_names.append(agent.get("full_name", "Unknown"))
+        conn["assigned_agent_names"] = agent_names
+    
+    return connectors
+
+@api_router.post("/connectors/google-sheets")
+async def create_sheet_connector(data: SheetConnectorCreate, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Create a new Google Sheet connector"""
+    if not sheets_service:
+        raise HTTPException(status_code=400, detail="Google Sheets not configured. Add GOOGLE_SHEETS_CLIENT_ID and GOOGLE_SHEETS_CLIENT_SECRET to .env")
+    
+    # Extract sheet ID from URL
+    sheet_id = extract_sheet_id(data.sheet_url)
+    if not sheet_id:
+        raise HTTPException(status_code=400, detail="Invalid Google Sheets URL")
+    
+    # Check for duplicate
+    existing = await db.sheet_connectors.find_one({"sheet_id": sheet_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="This sheet is already connected")
+    
+    # Validate agents exist
+    for agent_id in data.assigned_agent_ids:
+        agent = await db.users.find_one({"id": agent_id, "is_active": True})
+        if not agent:
+            raise HTTPException(status_code=400, detail=f"Agent {agent_id} not found or inactive")
+    
+    # Get agent names
+    agent_names = []
+    for agent_id in data.assigned_agent_ids:
+        agent = await db.users.find_one({"id": agent_id}, {"full_name": 1})
+        if agent:
+            agent_names.append(agent.get("full_name", "Unknown"))
+    
+    now = datetime.now(timezone.utc).isoformat()
+    connector = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "sheet_url": data.sheet_url,
+        "sheet_id": sheet_id,
+        "sheet_name": data.sheet_name,
+        "assigned_agent_ids": data.assigned_agent_ids,
+        "assigned_agent_names": agent_names,
+        "column_mapping": data.column_mapping or DEFAULT_COLUMN_MAPPING,
+        "auto_sync_enabled": data.auto_sync_enabled,
+        "sync_interval_minutes": data.sync_interval_minutes,
+        "is_connected": False,  # Need OAuth first
+        "oauth_tokens": None,
+        "last_sync": None,
+        "last_synced_at": None,
+        "created_at": now,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name", ""),
+        "updated_at": now
+    }
+    
+    await db.sheet_connectors.insert_one(connector)
+    
+    # Log audit
+    await log_audit(user, "create", "sheet_connector", connector["id"], data.name, 
+                    {"sheet_url": data.sheet_url, "agents": data.assigned_agent_ids})
+    
+    # Return without sensitive data
+    del connector["oauth_tokens"]
+    return connector
+
+@api_router.put("/connectors/google-sheets/{connector_id}")
+async def update_sheet_connector(connector_id: str, data: Dict, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Update a Google Sheet connector"""
+    connector = await db.sheet_connectors.find_one({"id": connector_id})
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    # Fields that can be updated
+    allowed_fields = ["name", "sheet_name", "assigned_agent_ids", "column_mapping", 
+                      "auto_sync_enabled", "sync_interval_minutes"]
+    
+    update_data = {k: v for k, v in data.items() if k in allowed_fields}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Update agent names if agents changed
+    if "assigned_agent_ids" in update_data:
+        agent_names = []
+        for agent_id in update_data["assigned_agent_ids"]:
+            agent = await db.users.find_one({"id": agent_id}, {"full_name": 1})
+            if agent:
+                agent_names.append(agent.get("full_name", "Unknown"))
+        update_data["assigned_agent_names"] = agent_names
+    
+    await db.sheet_connectors.update_one({"id": connector_id}, {"$set": update_data})
+    
+    await log_audit(user, "update", "sheet_connector", connector_id, connector.get("name"), update_data)
+    
+    updated = await db.sheet_connectors.find_one({"id": connector_id}, {"_id": 0, "oauth_tokens": 0})
+    return updated
+
+@api_router.delete("/connectors/google-sheets/{connector_id}")
+async def delete_sheet_connector(connector_id: str, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Delete a Google Sheet connector"""
+    connector = await db.sheet_connectors.find_one({"id": connector_id})
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    await db.sheet_connectors.delete_one({"id": connector_id})
+    
+    await log_audit(user, "delete", "sheet_connector", connector_id, connector.get("name"))
+    
+    return {"message": "Connector deleted"}
+
+@api_router.get("/connectors/google-sheets/{connector_id}/oauth")
+async def start_sheets_oauth(connector_id: str, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Start Google Sheets OAuth flow for a connector"""
+    if not sheets_service:
+        raise HTTPException(status_code=400, detail="Google Sheets not configured")
+    
+    connector = await db.sheet_connectors.find_one({"id": connector_id})
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    # Generate state token
+    state = str(uuid.uuid4())
+    
+    # Store state for verification
+    await db.sheets_oauth_states.insert_one({
+        "state": state,
+        "connector_id": connector_id,
+        "user_id": user["id"],
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10)
+    })
+    
+    auth_url = sheets_service.get_auth_url(state)
+    
+    return {"auth_url": auth_url}
+
+@api_router.get("/connectors/google-sheets/callback")
+async def sheets_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    """Handle Google OAuth callback"""
+    from fastapi.responses import HTMLResponse
+    
+    if error:
+        return HTMLResponse(f"""
+        <html><body>
+        <h2>Authorization Failed</h2>
+        <p>Error: {error}</p>
+        <script>setTimeout(() => window.close(), 3000);</script>
+        </body></html>
+        """)
+    
+    # Verify state
+    state_doc = await db.sheets_oauth_states.find_one({"state": state})
+    if not state_doc:
+        return HTMLResponse("""
+        <html><body>
+        <h2>Invalid State</h2>
+        <p>The authorization request has expired or is invalid.</p>
+        <script>setTimeout(() => window.close(), 3000);</script>
+        </body></html>
+        """)
+    
+    connector_id = state_doc["connector_id"]
+    
+    # Clean up state
+    await db.sheets_oauth_states.delete_one({"state": state})
+    
+    try:
+        # Exchange code for tokens
+        tokens = await sheets_service.exchange_code(code)
+        
+        # Update connector with tokens
+        await db.sheet_connectors.update_one(
+            {"id": connector_id},
+            {"$set": {
+                "oauth_tokens": tokens,
+                "is_connected": True,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return HTMLResponse("""
+        <html><body>
+        <h2>Success!</h2>
+        <p>Google Sheets connected successfully. You can close this window.</p>
+        <script>
+            setTimeout(() => {
+                if (window.opener) {
+                    window.opener.location.reload();
+                }
+                window.close();
+            }, 2000);
+        </script>
+        </body></html>
+        """)
+        
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        return HTMLResponse(f"""
+        <html><body>
+        <h2>Authorization Failed</h2>
+        <p>Error: {str(e)}</p>
+        <script>setTimeout(() => window.close(), 5000);</script>
+        </body></html>
+        """)
+
+@api_router.post("/connectors/google-sheets/{connector_id}/sync")
+async def trigger_sheet_sync(connector_id: str, background_tasks: BackgroundTasks, user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Manually trigger a sync for a Google Sheet connector"""
+    connector = await db.sheet_connectors.find_one({"id": connector_id})
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    if not connector.get("is_connected") or not connector.get("oauth_tokens"):
+        raise HTTPException(status_code=400, detail="Connector not connected. Please complete OAuth first.")
+    
+    # Run sync in background
+    background_tasks.add_task(
+        run_sheet_sync,
+        connector_id,
+        connector["oauth_tokens"],
+        connector["sheet_id"],
+        connector["sheet_name"],
+        connector["column_mapping"],
+        connector["assigned_agent_ids"]
+    )
+    
+    return {"message": "Sync started", "connector_id": connector_id}
+
+async def run_sheet_sync(connector_id: str, tokens: Dict, sheet_id: str, sheet_name: str, column_mapping: Dict, assigned_agents: List[str]):
+    """Background task to sync leads from Google Sheet"""
+    if not sheets_service:
+        logger.error("Sheets service not initialized")
+        return
+    
+    try:
+        stats = await sheets_service.sync_sheet_leads(
+            connector_id=connector_id,
+            token_data=tokens,
+            spreadsheet_id=sheet_id,
+            sheet_name=sheet_name,
+            column_mapping=column_mapping,
+            assigned_agents=assigned_agents
+        )
+        logger.info(f"Sheet sync complete for {connector_id}: {stats}")
+        
+        # Update tokens if refreshed
+        # (handled inside sync_sheet_leads)
+        
+    except Exception as e:
+        logger.error(f"Sheet sync error for {connector_id}: {e}")
+        await db.sheet_connectors.update_one(
+            {"id": connector_id},
+            {"$set": {
+                "last_sync": {"error": str(e), "synced_at": datetime.now(timezone.utc).isoformat()},
+                "last_synced_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+
+@api_router.get("/connectors/google-sheets/{connector_id}/preview")
+async def preview_sheet_data(connector_id: str, user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Preview data from a connected Google Sheet"""
+    connector = await db.sheet_connectors.find_one({"id": connector_id})
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    
+    if not connector.get("is_connected") or not connector.get("oauth_tokens"):
+        raise HTTPException(status_code=400, detail="Connector not connected")
+    
+    try:
+        # Read first 10 rows
+        range_name = f"'{connector['sheet_name']}'!A1:Z10"
+        rows = await sheets_service.read_sheet(connector["oauth_tokens"], connector["sheet_id"], range_name)
+        
+        return {
+            "rows": rows,
+            "column_mapping": connector["column_mapping"],
+            "sheet_name": connector["sheet_name"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading sheet: {str(e)}")
+
+@api_router.get("/connectors/agents")
+async def get_available_agents(user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Get list of agents available for lead assignment"""
+    agents = await db.users.find(
+        {
+            "is_active": True,
+            "role": {"$in": ["sales_executive", "team_leader", "sales_manager"]}
+        },
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1}
+    ).to_list(500)
+    return agents
+
+# Auto-sync scheduler for Google Sheets
+async def run_auto_sync():
+    """Run auto-sync for all enabled sheet connectors"""
+    if not sheets_service:
+        return
+    
+    try:
+        connectors = await db.sheet_connectors.find({
+            "auto_sync_enabled": True,
+            "is_connected": True,
+            "oauth_tokens": {"$ne": None}
+        }).to_list(100)
+        
+        for conn in connectors:
+            # Check if enough time has passed since last sync
+            last_synced = conn.get("last_synced_at")
+            interval = conn.get("sync_interval_minutes", 5)
+            
+            should_sync = True
+            if last_synced:
+                last_sync_time = datetime.fromisoformat(last_synced.replace('Z', '+00:00'))
+                if last_sync_time.tzinfo is None:
+                    last_sync_time = last_sync_time.replace(tzinfo=timezone.utc)
+                
+                next_sync = last_sync_time + timedelta(minutes=interval)
+                should_sync = datetime.now(timezone.utc) >= next_sync
+            
+            if should_sync:
+                logger.info(f"Auto-syncing sheet connector: {conn['name']}")
+                await run_sheet_sync(
+                    conn["id"],
+                    conn["oauth_tokens"],
+                    conn["sheet_id"],
+                    conn["sheet_name"],
+                    conn["column_mapping"],
+                    conn["assigned_agent_ids"]
+                )
+                
+    except Exception as e:
+        logger.error(f"Auto-sync error: {e}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
