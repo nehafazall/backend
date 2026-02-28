@@ -87,7 +87,7 @@ import PayslipsPage from "@/pages/PayslipsPage";
 // Marketing Module
 import MarketingDashboardPage from "@/pages/marketing/MarketingDashboardPage";
 import MarketingSettingsPage from "@/pages/marketing/MarketingSettingsPage";
-import MarketingLeadsPage from "@/pages/marketing/MarketingLeadsPage";
+import MarketingConnectorsPage from "@/pages/marketing/MarketingConnectorsPage";
 
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
@@ -360,9 +360,9 @@ function AppRoutes() {
                         <MarketingSettingsPage />
                     </ProtectedRoute>
                 } />
-                <Route path="marketing/leads" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing', 'sales_manager']}>
-                        <MarketingLeadsPage />
+                <Route path="marketing/connectors" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <MarketingConnectorsPage />
                     </ProtectedRoute>
                 } />
                 

@@ -196,7 +196,7 @@ const SECTIONS = {
         roles: ['super_admin', 'admin', 'marketing'],
         items: [
             { title: 'Analytics Dashboard', icon: BarChart3, path: '/marketing/dashboard' },
-            { title: 'Meta Ads Leads', icon: Users, path: '/marketing/leads' },
+            { title: 'Lead Connectors', icon: Inbox, path: '/marketing/connectors' },
             { title: 'Settings', icon: Settings, path: '/marketing/settings', roles: ['super_admin', 'admin'] },
         ],
     },
