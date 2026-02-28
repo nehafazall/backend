@@ -1,196 +1,195 @@
 <analysis>**original_problem_statement:**
-The user initially requested to integrate a custom CLT Finance Suite into their existing CLT Synapse application. Following that, the scope expanded significantly to include:
-- A full-featured HR module with employee data management (personal info, visa/passport tracking with expiry alerts), and a comprehensive payroll system.
-- A multi-level approval workflow (HR → CEO → Finance) for processing payroll.
-- A one-click data reset feature and environment separation (dev/test/prod) for better development practices.
-- Granular, role-based access control for finance users.
-- Numerous bug fixes, including a critical finance navigation bug and persistent issues with a BioCloud attendance sync integration.
+The user's initial high-level goal was to build a comprehensive business management application called CLT Synapse, incorporating a CLT Finance Suite, a full-featured HR module, and advanced CRM capabilities.
 
-**PRODUCT REQUIREMENTS:**
-1.  **HR Module (Employee Master):** Collect and manage employee personal information, visa/passport details, Emirates ID, and salary structures. Track document expiry dates and send email alerts.
-2.  **Payroll Module:**
-    *   Create a monthly payroll run that pulls salary data from the Employee Master.
-    *   Incorporate commissions and manually addable incentives/deductions.
-    *   Automatically calculate deductions based on attendance data (absences, late arrivals).
-    *   Implement a three-stage approval workflow: HR initiates, CEO approves, Finance processes payment.
-    *   Generate and email payslips to employees.
-3.  **Company Document Management:** A central place to upload and track the expiry of company-wide documents.
-4.  **Admin & Security:**
-    *   Implement a one-click data reset button for non-production environments.
-    *   Separate development, testing, and production environments using feature flags and distinct databases.
-    *   Fine-grained permissions for finance users with toggles for view, edit, delete, and none.
-5.  **Bug Fixes:**
-    *   Resolve the failing BioCloud attendance sync.
-    *   Fix errors preventing the payroll from running.
-    *   Ensure employees created in the Employee Master are automatically created as users in User Management.
+The project has evolved through several phases. Recent user requests have focused on:
+1.  **Granular Access Control:** Revamping the user permissions system to be hierarchical and feature-specific.
+2.  **Employee Self-Service (ESS / SSHR):** Building a portal for employees to manage their own leave and attendance, with a multi-level approval workflow. This includes a dedicated SSHR module on the homepage, payslip viewing, company document management with expiry alerts, and an HR approval queue.
+3.  **Email Notifications:** Integrating SMTP to send email alerts for ESS requests and approvals.
+4.  **Marketing Module:** The latest request is to build a new marketing module to integrate with multiple Meta (Facebook) Ads accounts. This includes an admin UI for connecting accounts via OAuth and a comprehensive dashboard for tracking key metrics like CPL, CPM, and ROAS per campaign.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack React/FastAPI/MongoDB platform. The agent has successfully fixed several initial bugs and implemented foundational features like environment separation and data reset. A new, detailed Employee Details page () has been created with tabs for personal info, document tracking, and salary. The backend has been updated with corresponding models and endpoints. However, the agent was in the middle of a large, multi-part task involving the HR and Payroll modules, leaving several key features in an incomplete or broken state.
+The application is a mature full-stack platform using React, FastAPI, and MongoDB. The agent has successfully implemented several major features in this session:
+- A completely revamped, granular, and hierarchical Access Control system.
+- A full-featured Employee Self-Service (ESS) module, now housed in a dedicated SSHR (Self-Service HR) section. This includes leave application, attendance regularization, and a dashboard for employees.
+- An HR-facing Company Documents manager with expiry date tracking and alerts.
+- A dedicated Approval Queue page for HR to manage pending leave and regularization requests.
+- SMTP-based email notifications for all ESS request and approval events.
+
+The application's core modules (HR, Sales CRM, Admin, Finance) are functional. The agent was just beginning to lay the groundwork for the new Marketing module.
 
 **Last working item**:
--   **Last item agent was working:** A major refactoring of the HR and Payroll modules. The agent was simultaneously:
-    1.  Updating the  frontend to add editable bank details and a gender field, while simplifying the salary structure as requested.
-    2.  Adding a backend endpoint () to support this.
-    3.  Starting to implement the logic for the payroll approval workflow (HR → CEO → Finance) and the new attendance-based deduction calculations in .
--   **Status:** IN PROGRESS
+-   **Last item agent was working:** The user requested a comprehensive Marketing module to integrate with Meta Ads. The agent was in the initial planning phase, having created a placeholder service file after receiving the integration playbook. The goal is to build an admin UI for connecting multiple Meta accounts and an analytics dashboard.
+-   **Status:** NOT STARTED
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Both.
-    -   **Backend:** Use  to test the payroll run endpoint to verify deduction calculations and the state changes of the approval workflow.
-    -   **Frontend:** Use the screenshot tool to verify the UI of the enhanced Employee Details page and the new Payroll page. Follow up with the frontend testing agent to test the full approval workflow interaction.
+-   **Which testing method agent to use?** both
+    -   **Backend:** Use the backend testing agent to validate the entire Meta Ads OAuth flow, webhook processing, and API endpoints for fetching analytics data.
+    -   **Frontend:** Use the frontend testing agent to verify the account connection UI, the rendering of the analytics dashboard (CPL, ROAS, etc.), and the overall navigation within the new Marketing module.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: BioCloud attendance sync is broken (P0 - BLOCKER)**
-    -   **Description:** The user has repeatedly reported that the Sync Attendance feature in the HR module fails. The agent identified that the target website's UI changed, breaking the Playwright web scraping script. An API-based alternative is not available.
-    -   **Attempted fixes:** The agent installed Playwright browsers and attempted to refactor the scraping script in  to handle a new date picker, but the fix was not completed.
+-   **Issue 1:  in babel-metadata-plugin.js (P2 - LOW PRIORITY)**
+    -   **Description:** A recurring Babel plugin error that crashes the frontend. It is currently disabled as a workaround in .
+    -   **Attempted fixes:** The plugin was disabled to allow the application to run.
     -   **Next debug checklist:**
-        1.  Open  and focus on the  function.
-        2.  The script needs to correctly interact with the new JavaScript-based date picker to set the date before scraping the attendance table.
-        3.  Implement robust interaction logic, potentially by simulating clicks on the date picker elements rather than trying to set the input value directly.
-        4.  Add extensive logging within the Playwright block to trace execution and inspect the page HTML at each step.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a critical blocker for the Payroll module, as attendance data is required for automatic salary deductions.
-    -   **Status:** IN PROGRESS
+        1.  Investigate the plugin's source code at .
+        2.  Research potential version conflicts with Craco or other Babel dependencies.
+        3.  Try updating or replacing the plugin.
+    -   **Why fix this issue and what will be achieved with the fix?** Fixing this would re-enable the platform's visual editing capabilities, which are currently non-functional. It is a low priority.
+    -   **Status:** NOT STARTED
     -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** Backend (the API endpoint).
-    -   **Blocked on other issue:** None. This is a top-level blocker.
-
--   **Issue 2: Run Payroll feature is failing (P1)**
-    -   **Description:** The user reported an error when clicking Run Payroll. This is due to the incomplete refactoring of the payroll logic.
-    -   **Attempted fixes:** The agent started modifying the  endpoint in  to add new deduction logic but did not finish the implementation.
-    -   **Next debug checklist:**
-        1.  Complete the implementation of the  endpoint in .
-        2.  Implement the deduction logic as per the user's formula: absence = (gross salary / 30), late arrival > 30 mins = half-day deduction.
-        3.  Integrate the new multi-level approval workflow into this endpoint.
-    -   **Why fix this issue and what will be achieved with the fix?** This is the core function of the Payroll module. Fixing it will enable the entire payroll processing workflow.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on other issue:** BioCloud attendance sync (Issue 1).
+    -   **Should Test frontend/backend/both after fix?** Frontend
+    -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   **Task 1: Complete the Payroll Approval Workflow (P0)**
+-   **Task 1: Build Marketing Module with Meta Ads Integration (P0 - HIGH PRIORITY)**
     -   **Where to resume:**
-        1.  **Backend ():**
-            *   Create a new MongoDB collection () to track the status of each monthly run (e.g., ).
-            *   Create new endpoints to handle , , and  actions for each role in the workflow.
-        2.  **Frontend ():**
-            *   Completely refactor the page to display all employees with fields for salary, commissions, incentives, and deductions.
-            *   Add input fields for manual entry of incentives and other deductions.
-            *   Conditionally render Approve and Reject buttons based on the logged-in user's role and the current status of the payroll run.
-    -   **What will be achieved with this?** A fully functional, multi-stage payroll processing system as requested by the user.
-    -   **Status:** IN PROGRESS
+        1.  **Backend ():** This file is currently an empty placeholder. The next step is to implement the Meta Ads service based on the integration playbook provided. This includes setting up the OAuth2 flow for account connection, creating a webhook endpoint to receive lead data in real-time, and building API endpoints to serve analytics data (leads per campaign, CPL, ROAS) to the frontend.
+        2.  **Frontend:**
+            -   Create a new Marketing section in  and add the route in .
+            -   Build the Admin UI page () where users can connect their Meta Ads accounts using the backend OAuth flow.
+            -   Build the main analytics dashboard page () to display the marketing KPIs requested by the user.
+    -   **What will be achieved with this?** A powerful, integrated marketing analytics suite that automatically pulls lead data from Meta Ads, enabling the user to track campaign performance directly within the application.
+    -   **Status:** NOT STARTED
     -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on something:** BioCloud attendance sync (Issue 1) and Payroll Run error (Issue 2).
+    -   **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
+
 **Upcoming Tasks:**
--   **P1: Company Document Management:** Create a UI and backend to upload, track, and receive expiry alerts for company-level documents (trade license, etc.).
--   **P2: Payslip Generation & Emailing:** Implement the backend logic to generate a PDF payslip and email it to the employee, then connect the UI button.
--   **P2: Complete Finance User Permissions:** Fix the UI bug in the  dropdown that prevents the finance permissions section from appearing.
+-   **P1: Implement Payslip Generation:** The UI/backend placeholders for payslips exist (, ). The core logic to generate the actual payslip data (calculating deductions, earnings) and potentially render it as a PDF needs to be implemented.
+-   **P2: Google Sheets Lead Connector:** The user initially requested this before prioritizing the direct Meta Ads integration. This could be a future task to allow importing leads from various other sources via Google Sheets.
 
 **Future Tasks:**
+-   Integrate with Google Ads API to expand the Marketing module.
 -   Database migration to a managed service like MongoDB Atlas.
 -   Create a self-hosting package (, ).
--   Integrate with Meta and Google Ads APIs.
 -   Verify that the Mentor Dashboard leaderboard is connected to live data.
 
 **Completed work in this session**
--   **Finance Suite Navigation:** Fixed a critical routing bug, making all finance modules accessible.
--   **Environment Separation & Data Reset:** Implemented a system for development/testing/production environments with separate databases and a one-click data reset feature on a new Admin Settings page.
--   **Employee-to-User Sync:** Created a one-time sync script and fixed the logic to ensure employees created in the HR module automatically appear in User Management.
--   **Dashboard Quick Stats:** Expanded the main dashboard's Quick Stats widget with more role-based metrics.
--   **HR Module Scaffolding:** Created the new  and added backend models/endpoints for managing documents, salary, and bank details.
+-   **Granular Access Control (DONE):**
+    -   Implemented backend endpoints () and a new data structure for hierarchical permissions.
+    -   Completely redesigned  with a collapsible tree-view UI to manage permissions for modules, sub-pages, and features.
+    -   Refactored the frontend to use a  hook, removing all hardcoded role checks from the layout and navigation.
+-   **Employee Self-Service & SSHR Module (DONE):**
+    -   Created a dedicated SSHR module on the homepage with its own set of pages (, ).
+    -   Built backend models and APIs for Leave Requests and Attendance Regularization, both with a multi-level (Manager -> HR -> CEO) approval workflow.
+    -   Developed frontend modals for employees to apply for leave (with file uploads) and request attendance changes.
+    -   Created an HR Approval Queue page for managers/HR to approve or reject requests.
+    -   Implemented a Company Documents management feature for HR with expiry date tracking and dashboard alerts.
+-   **SMTP Email Notifications (DONE):**
+    -   Integrated the  library and configured SMTP credentials in the backend.
+    -   Implemented automated email notifications for all key ESS events: new request submission, request approval, and request rejection.
+-   **Testing:** Used the testing agent to validate the ESS and SSHR features, achieving 100% pass rates on all tests.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: **.
-    -   **Debug checklist:** The issue is in . The plugin is disabled in  as a workaround.
-    -   **Why to solve this issue and what will be achieved with this?** The platform's visual editing feature is likely impaired. It is a low priority.
+-   **Issue 1:  in **.
+    -   **Debug checklist:** The issue originates from . The plugin is currently disabled in  to prevent the app from crashing.
+    -   **Why to solve this issue and what will be achieved with this?** Fixing it would restore the platform's visual editing feature. It remains a low priority.
     -   **Should Test frontend/backend/both after fix:** Frontend
     -   **Is recurring issue?** Y
 
 **Known issue recurrence from previous fork**
--   The  issue from the Babel plugin is a known, recurring problem mitigated by keeping the plugin disabled.
+-   The  from the Babel plugin is a known, persistent issue from previous sessions, mitigated by keeping the plugin disabled.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Multi-Level Approval Workflow:** A state machine managed in the backend to handle a sequential approval process.
--   **Environment Separation:** Using environment variables to switch database connection strings.
--   **Feature Flags:** A system to toggle features on/off per environment.
--   **Web Scraping with Playwright:** Debugging a scraper when the target UI changes.
+-   **Hierarchical RBAC:** The system now uses a nested JSON structure stored against each user role to define fine-grained access rights, which are enforced globally via a React Context.
+-   **Multi-Level Approval Workflow:** Implemented for ESS, where requests are stored in the DB with a status and an approval chain, progressing from one approver to the next.
+-   **Third-Party API Integration (Meta Ads):** The next major task. Will require implementing an OAuth2 flow, managing access tokens, and setting up webhooks.
+-   **SMTP Integration:** A dedicated service module () now centralizes email sending functionality using the  library.
 
 **key DB schema**
--   **:** Modified to include  and .
--   **:** Heavily modified to include nested documents for , , , and . Also includes a  field.
--   **:** New collection to store feature toggle states.
--   ** (Proposed):** New collection to manage the state of the payroll approval workflow.
+-   **:** The  field now stores the granular, hierarchical permission object.
+-   ** (New):** 
+-   ** (New):** 
+-   ** (New):** 
 
 **changes in tech stack**
--   None.
+-   Added  to the backend for SMTP email sending.
 
 **All files of reference**
--   **/app/backend/biocloud_sync.py**: Contains the broken Playwright script that is blocking the payroll feature.
--   **/app/backend/server.py**: Contains the incomplete payroll and approval workflow logic.
--   **/app/frontend/src/pages/hr/PayrollPage.jsx**: Requires a complete rewrite for the approval workflow UI.
--   **/app/frontend/src/pages/hr/EmployeeDetailsPage.jsx**: Contains the new UI for viewing/editing employee details.
--   **/app/frontend/src/pages/admin/UsersPage.jsx**: Contains the incomplete UI for finance permissions.
+-   **/app/backend/services/meta_ads_service.py**: Starting point for the next task.
+-   **/app/backend/integration_playbooks/meta_ads_playbook.md**: The guide for implementing the Meta Ads integration.
+-   **/app/backend/server.py**: Contains all the new backend logic for permissions, ESS, and email.
+-   **/app/frontend/src/pages/admin/AccessControlPage.jsx**: The completed granular permissions UI.
+-   **/app/frontend/src/pages/sshr/SSHRPage.jsx**: The main page for the new employee self-service module.
+-   **/app/frontend/src/pages/hr/HRApprovalQueue.jsx**: The UI for managers to handle requests.
+-   **/app/frontend/src/lib/api.js**: Contains the new  and  hook.
 
 **Areas that need refactoring**:
--   ** is now a monolith.** The payroll, HR, and admin logic should be extracted into separate route files (e.g., ) to improve maintainability.
+-   ** is now critically oversized.** It contains logic for users, roles, permissions, leads, CRM, HR, payroll, ESS, company documents, and email. The next agent should prioritize breaking this file down into smaller, domain-specific route files (e.g., , , ) to improve maintainability.
 
 **key api endpoints**
--   ****: **(BROKEN)** Fetches attendance data.
--   ****: **(BROKEN)** Initiates the payroll run.
--   ****: Wipes application data.
--   ****: Syncs existing employees to user accounts.
--   ****: Endpoints to update specific parts of an employee's profile.
+-   : Fetches granular permissions for a role.
+-   : Saves granular permissions for a role.
+-   : Fetches the logged-in user's employee record and stats.
+-   : Submits a new leave request.
+-   : Submits a new attendance regularization request.
+-   : Fetches pending requests for the current manager/HR.
+-   : Approves/rejects a leave request.
+-   : Approves/rejects a regularization request.
+-   : Fetches all company documents.
+-   : Creates a new company document.
 
 **Critical Info for New Agent**
--   **Your immediate priority is to fix the **. This is a hard blocker for the entire Payroll module, which is the user's main focus. The problem is in the Playwright script in .
--   **Once the blocker is resolved, you must complete the Payroll module.** This involves finishing the backend approval workflow logic (state management, new endpoints) and completely refactoring the frontend  to support the new interactive process.
--   **The codebase has several incomplete features.** The previous agent started multiple tasks in parallel. You will need to carefully review the Last working item and In progress sections to understand where to resume each task.
+-   **Your immediate and highest priority is to build the Marketing module with Meta Ads integration.** This is a direct and detailed user request.
+-   Begin by implementing the backend logic in the placeholder file , following the detailed instructions in . This involves OAuth, webhook setup, and data fetching.
+-   The previous major tasks (Access Control and ESS/SSHR) are fully completed and have been tested by the testing agent. You can focus entirely on the new marketing feature.
+-   Refactoring the monolithic  should be considered a high-priority technical debt item to be addressed alongside new feature development.
 
 **documents and test reports created in this job**
 -   /app/memory/PRD.md
--   Multiple test reports in  from previous successful tests.
+-   /app/test_reports/iteration_2.json
+-   /app/test_reports/iteration_3.json
+-   /app/backend/integration_playbooks/meta_ads_playbook.md
+-   /app/backend/integration_playbooks/google_sheets_playbook.md
+-   /app/backend/integration_playbooks/resend_playbook.md
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Provided detailed requirements for the payroll module, approval workflow, deduction logic, and other HR features. (PENDING)
-2.  **User:** Confirmed the payroll approval workflow and deduction formulas. (PENDING)
-3.  **User:** Requested comprehensive enhancements to the Employee Master page. (IN PROGRESS)
-4.  **User:** Inquired about MongoDB Atlas recommendations. (ADDRESSED)
-5.  **User:** Asked for database environment specifications. (ADDRESSED)
-6.  **User:** Reported that the BioCloud sync and employee-to-user creation were not working. (IN PROGRESS)
-7.  **User:** Requested a one-click data reset feature and environment separation. (COMPLETED)
-8.  **User:** Provided detailed requirements for granular finance user permissions. (IN PROGRESS)
-9.  **User:** Asked to modify finance management features. (IN PROGRESS)
-10. **User:** Set priorities for the agent's work. (ADDRESSED)
+1.  **User:** Initiated the request for a Meta Ads integration, asking for an admin UI to connect multiple accounts and a dashboard for analytics (CPL, ROAS, etc.). (IN PROGRESS)
+2.  **User:** Confirmed they have multiple Meta accounts and need a way to integrate them. (ADDRESSED)
+3.  **User:** Asked for a strategic recommendation: direct Meta integration vs. Google Sheets. (ADDRESSED - Agent recommended direct integration).
+4.  **User:** Confirmed they want to proceed with Google OAuth for the Sheets connector but then pivoted to the Meta integration. (ADDRESSED)
+5.  **User:** Requested a Google Sheets connector to import leads via a sheet link and distribute them via round-robin. (SUPERSEDED by Meta request, now a future task).
+6.  **User:** Provided SMTP credentials to enable email notifications. (COMPLETED)
+7.  **User:** Requested to skip email notifications for now. (ADDRESSED, then user provided credentials later).
+8.  **User:** Requested a separate SSHR icon on the homepage, payslip generation, company document management in HR with expiry reminders, and an HR approval queue page. (COMPLETED)
+9.  **User:** Asked how employees can apply for leave or regularize attendance, kicking off the entire ESS/SSHR feature request. (COMPLETED)
+10. **User:** Confirmed the plan to revamp the Access Control page with collapsible modules. (COMPLETED)
 
 **Project Health Check:**
--   **Working:** Core application, Finance Suite, Admin Settings (Data Reset, Feature Flags), Employee-to-User Sync.
--   **In Progress:** Payroll Module, Employee Master Enhancements, Finance User Permissions UI.
--   **Broken:** **BioCloud Attendance Sync (Critical)**, **Run Payroll feature**.
+-   **Working:** Granular Access Control, Employee Self-Service (ESS/SSHR) with Leave/Attendance/Approvals, Company Document Management, SMTP Email Notifications, Core CRM/HR/Admin modules.
+-   **In Progress:** Marketing Module with Meta Ads Integration (Not Started).
+-   **Broken:** The visual editing feature is disabled due to a recurring Babel plugin error.
 
 **3rd Party Integrations**
--   **3CX:** Integrated for call tracking.
--   **ZK BioCloud:** Integrated for fetching employee lists. **Attendance sync via Playwright is broken.**
--   **MongoDB:** The current database.
+-   **3CX:** Call tracking.
+-   **ZK BioCloud:** Employee data sync.
+-   **MongoDB:** Primary database.
+-   **Resend:** Used for sending SMTP emails for ESS notifications.
+-   **Meta Ads API (To be implemented):** For lead import and marketing analytics.
 
 **Testing status**
--   **Testing agent used after significant changes:** YES
+-   **Testing agent used after significant changes:** YES. The testing agent was used twice to validate the full ESS and SSHR features, with both runs reporting 100% success.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None
--   **Known regressions:** BioCloud attendance sync, Run Payroll functionality.
+-   **Test files created:** None.
+-   **Known regressions:** None.
 
 **Credentials to test flow:**
 -   **Super Admin Login:**
     -   **Email:** 
     -   **Password:** 
+-   **Team Leader Login (Mohammed Sanjeed):**
+    -   **Email:** 
+    -   **Password:** 
+-   **SMTP Credentials (in ):**
+    -   **SMTP_USER:** 
+    -   **SMTP_PASSWORD:** 
 
 **What agent forgot to execute**
--   The agent did not complete the fix for the **BioCloud sync issue**, leaving it in a broken state.
--   The agent did not finish the **payroll module refactoring**, leaving the Run Payroll feature non-functional and the approval workflow unimplemented.
--   The agent did not resolve the UI bug with the **finance permissions dropdown** in User Management.</analysis>
+-   The core logic for **payslip generation** is still missing. While the pages and endpoints exist as placeholders, the functionality to calculate and display payslips needs to be built. This has been noted as a P1 upcoming task.
+-   All other direct user requests from this session were successfully implemented.</analysis>
