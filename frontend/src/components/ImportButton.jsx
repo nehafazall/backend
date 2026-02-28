@@ -46,8 +46,9 @@ function ErrorList({ errors }) {
     return <ul className="text-xs space-y-1">{items}</ul>;
 }
 
-function ImportButton({ type, onSuccess }) {
-    const config = TYPE_CONFIG[type] || { title: type, endpoint: `/import/${type}`, useJson: true };
+function ImportButton({ type, templateType, onSuccess }) {
+    const actualType = type || templateType || 'leads';
+    const config = TYPE_CONFIG[actualType] || { title: actualType, endpoint: `/import/${actualType}`, useJson: true };
     const [open, setOpen] = useState(false);
     const [template, setTemplate] = useState(null);
     const [file, setFile] = useState(null);
@@ -58,7 +59,7 @@ function ImportButton({ type, onSuccess }) {
     async function loadTemplate() {
         setBusy(true);
         try {
-            const r = await apiClient.get(`/import/templates/${type}`);
+            const r = await apiClient.get(`/import/templates/${actualType}`);
             setTemplate(r.data);
             setOpen(true);
         } catch (e) {
