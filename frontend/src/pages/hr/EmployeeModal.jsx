@@ -17,7 +17,7 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
     }, [open]);
 
     useEffect(() => {
-        setF(employee || { employee_id: '', full_name: '', company_email: '', department: '', designation: '', role: '', joining_date: '', employment_status: 'probation', create_user_account: true });
+        setF(employee || { employee_id: '', full_name: '', company_email: '', department: '', designation: '', role: '', joining_date: '', employment_status: 'probation', gender: '', create_user_account: true });
     }, [employee]);
 
     const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -45,7 +45,18 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
                         <div><Label>Employee ID *</Label><Input value={f.employee_id||''} onChange={e => set('employee_id', e.target.value)} /></div>
                         <div><Label>Full Name *</Label><Input value={f.full_name||''} onChange={e => set('full_name', e.target.value)} /></div>
                     </div>
-                    <div><Label>Company Email *</Label><Input type="email" value={f.company_email||''} onChange={e => set('company_email', e.target.value)} /></div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div><Label>Company Email *</Label><Input type="email" value={f.company_email||''} onChange={e => set('company_email', e.target.value)} /></div>
+                        <div><Label>Gender *</Label>
+                            <Select value={f.gender||''} onValueChange={v => set('gender', v)}>
+                                <SelectTrigger><SelectValue placeholder="Select Gender" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="male">Male</SelectItem>
+                                    <SelectItem value="female">Female</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div><Label>Department *</Label>
                             <Select value={f.department||''} onValueChange={v => set('department', v)}>
