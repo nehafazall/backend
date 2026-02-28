@@ -14846,7 +14846,26 @@ async def startup_event():
     await db.meta_oauth_states.create_index("state", unique=True)
     await db.meta_oauth_states.create_index("expires_at", expireAfterSeconds=0)
     
+    # Google Sheets Connector indexes
+    await db.sheet_connectors.create_index("sheet_id", unique=True)
+    await db.sheet_connectors.create_index("auto_sync_enabled")
+    await db.sheets_oauth_states.create_index("state", unique=True)
+    await db.sheets_oauth_states.create_index("expires_at", expireAfterSeconds=0)
+    
+    # Start background scheduler for Google Sheets auto-sync
+    import asyncio
+    asyncio.create_task(sheets_auto_sync_loop())
+    
     logger.info("CLT Synapse ERP v2.0 started successfully")
+
+async def sheets_auto_sync_loop():
+    """Background loop for Google Sheets auto-sync (runs every minute)"""
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every minute
+            await run_auto_sync()
+        except Exception as e:
+            logger.error(f"Sheets auto-sync loop error: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
