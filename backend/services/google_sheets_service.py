@@ -73,10 +73,11 @@ class GoogleSheetsService:
     def __init__(self, db):
         self.db = db
         self.is_configured = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+        self._flows = {}  # Store flows by state for PKCE
     
-    def get_oauth_flow(self) -> Flow:
+    def get_oauth_flow(self, state: str = None) -> Flow:
         """Create OAuth flow"""
-        return Flow.from_client_config(
+        flow = Flow.from_client_config(
             {
                 "web": {
                     "client_id": GOOGLE_CLIENT_ID,
@@ -88,20 +89,39 @@ class GoogleSheetsService:
             scopes=SCOPES,
             redirect_uri=REDIRECT_URI
         )
+        return flow
     
     def get_auth_url(self, state: str) -> str:
-        """Get Google OAuth authorization URL"""
+        """Get Google OAuth authorization URL with PKCE"""
         flow = self.get_oauth_flow()
+        
+        # Generate authorization URL with PKCE
         url, _ = flow.authorization_url(
             access_type='offline',
             prompt='consent',
-            state=state
+            state=state,
+            include_granted_scopes='true'
         )
+        
+        # Store the flow object to preserve code_verifier for token exchange
+        self._flows[state] = flow
+        
         return url
     
-    async def exchange_code(self, code: str) -> Dict[str, Any]:
+    def get_stored_flow(self, state: str) -> Optional[Flow]:
+        """Retrieve stored flow for PKCE token exchange"""
+        return self._flows.pop(state, None)
+    
+    async def exchange_code(self, code: str, state: str = None) -> Dict[str, Any]:
         """Exchange authorization code for tokens"""
-        flow = self.get_oauth_flow()
+        # Try to get stored flow with PKCE verifier
+        flow = None
+        if state:
+            flow = self.get_stored_flow(state)
+        
+        if not flow:
+            # Create new flow if not found (fallback)
+            flow = self.get_oauth_flow()
         
         # Suppress OAuth scope warnings
         with warnings.catch_warnings():
