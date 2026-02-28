@@ -53,6 +53,7 @@ import {
     FolderOpen,
     UserCog,
     Receipt,
+    Megaphone,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
