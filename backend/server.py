@@ -13019,14 +13019,23 @@ async def get_ess_dashboard(user = Depends(get_current_user)):
         ).sort("date", -1).limit(10).to_list(10)
         result["attendance"]["recent_records"] = recent_att
         
-        # Leave balance (simplified)
+        # Leave balance (with gender-based filtering)
+        gender = employee.get("gender", "").lower()
+        month_start = now.replace(day=1).strftime("%Y-%m-%d")
+        
         for leave_type, config in LEAVE_TYPES.items():
             if config["full_time_only"] and employee.get("employment_type") != "full_time":
                 continue
             
+            # Skip maternity leave for males
+            if leave_type == "maternity_leave" and gender == "male":
+                continue
+            
             total = config["days_per_year"]
+            is_unlimited = total == -1
             year_start = f"{now.year}-01-01"
             
+            # Count used leaves this year
             used = await db.ess_leave_requests.count_documents({
                 "employee_id": emp_id,
                 "leave_type": leave_type,
@@ -13034,13 +13043,26 @@ async def get_ess_dashboard(user = Depends(get_current_user)):
                 "start_date": {"$gte": year_start}
             })
             
-            result["leave_balance"].append({
-                "type": leave_type,
-                "name": config["name"],
-                "total": total if total != -1 else "Unlimited",
-                "used": used,
-                "remaining": max(0, total - used) if total != -1 else "Unlimited"
-            })
+            leave_entry = {
+                "leave_type": leave_type,
+                "leave_type_name": config["name"],
+                "is_unlimited": is_unlimited,
+                "total_days": total if not is_unlimited else None,
+                "used_days": used,
+                "remaining_days": max(0, total - used) if not is_unlimited else None
+            }
+            
+            # Add taken this month for unlimited types
+            if is_unlimited:
+                taken_this_month = await db.ess_leave_requests.count_documents({
+                    "employee_id": emp_id,
+                    "leave_type": leave_type,
+                    "status": "approved",
+                    "start_date": {"$gte": month_start}
+                })
+                leave_entry["taken_this_month"] = taken_this_month
+            
+            result["leave_balance"].append(leave_entry)
         
         # Pending requests count
         result["pending_requests"]["leave"] = await db.ess_leave_requests.count_documents({
