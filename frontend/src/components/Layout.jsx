@@ -188,6 +188,18 @@ const SECTIONS = {
             { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
         ],
     },
+    marketing: {
+        id: 'marketing',
+        title: 'Marketing',
+        icon: Megaphone,
+        color: 'bg-pink-500',
+        roles: ['super_admin', 'admin', 'marketing'],
+        items: [
+            { title: 'Analytics Dashboard', icon: BarChart3, path: '/marketing/dashboard' },
+            { title: 'Meta Ads Leads', icon: Users, path: '/marketing/leads' },
+            { title: 'Settings', icon: Settings, path: '/marketing/settings', roles: ['super_admin', 'admin'] },
+        ],
+    },
 };
 
 function SectionIcon({ section, onClick }) {
