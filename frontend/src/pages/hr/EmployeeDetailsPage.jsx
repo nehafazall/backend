@@ -288,6 +288,10 @@ const EmployeeDetailsPage = () => {
                                         <p className="font-medium">{employee.mobile_number || '-'}</p>
                                     </div>
                                     <div>
+                                        <span className="text-muted-foreground">Gender</span>
+                                        <p className="font-medium capitalize">{employee.gender || '-'}</p>
+                                    </div>
+                                    <div>
                                         <span className="text-muted-foreground">Nationality</span>
                                         <p className="font-medium">{employee.nationality || '-'}</p>
                                     </div>
