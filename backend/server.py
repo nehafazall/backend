@@ -14665,12 +14665,12 @@ async def sheets_oauth_callback(code: str = "", state: str = "", error: str = ""
     
     connector_id = state_doc["connector_id"]
     
-    # Clean up state
+    # Clean up state from DB (but keep for PKCE)
     await db.sheets_oauth_states.delete_one({"state": state})
     
     try:
-        # Exchange code for tokens
-        tokens = await sheets_service.exchange_code(code)
+        # Exchange code for tokens (pass state for PKCE flow retrieval)
+        tokens = await sheets_service.exchange_code(code, state)
         
         # Update connector with tokens
         await db.sheet_connectors.update_one(
