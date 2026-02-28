@@ -10442,9 +10442,23 @@ async def fetch_biocloud_attendance(
             
             logger.info(f"BioCloud sync: Fetched {len(attendance_data)} raw attendance records")
             
+            # Log all unique emp_codes found for debugging
+            found_emp_codes = set([att["emp_code"] for att in attendance_data])
+            logger.info(f"BioCloud sync: Found emp_codes: {found_emp_codes}")
+            
+            # Get all mapped emp_codes from DB
+            mapped_employees = await db.hr_employees.find(
+                {"biocloud_emp_code": {"$exists": True, "$ne": None}},
+                {"_id": 0, "full_name": 1, "biocloud_emp_code": 1}
+            ).to_list(100)
+            mapped_emp_codes = {emp["biocloud_emp_code"]: emp["full_name"] for emp in mapped_employees}
+            logger.info(f"BioCloud sync: Mapped emp_codes in DB: {list(mapped_emp_codes.keys())}")
+            
             # Process and save attendance data
             synced = 0
             skipped = 0
+            unmatched_emp_codes = []
+            
             for att in attendance_data:
                 emp_code = att["emp_code"]
                 
