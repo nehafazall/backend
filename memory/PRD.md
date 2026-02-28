@@ -581,10 +581,12 @@ User Management                    Employee Master
 - **Finance Permissions**: Granular View/Edit/Delete per module in User Management
 
 ## Future/Backlog Tasks
-- Meta Ads and Google Ads webhook integration
+- Google Ads API integration (extend Marketing module)
 - WhatsApp/SMS notifications
 - Self-hosting package (Docker, PostgreSQL migration)
 - Mobile app
 - AI-powered lead scoring
 - Direct ZKTeco biometric device API integration (if network access available)
+- Payslip generation logic (placeholder exists at `/sshr/payslips`)
+- Google Sheets Lead Connector
 
