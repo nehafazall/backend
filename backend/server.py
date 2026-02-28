@@ -13743,6 +13743,585 @@ async def switch_environment(data: Dict, user = Depends(require_roles(["super_ad
         "restart_required": True
     }
 
+# ==================== MARKETING MODULE ====================
+# Meta Ads Integration for lead import and analytics
+
+# Initialize Meta Ads Service (only if credentials are configured)
+META_APP_ID = os.environ.get('META_APP_ID', '')
+META_APP_SECRET = os.environ.get('META_APP_SECRET', '')
+META_WEBHOOK_VERIFY_TOKEN = os.environ.get('META_WEBHOOK_VERIFY_TOKEN', 'clt_synapse_meta_webhook_2024')
+BACKEND_URL = os.environ.get('BACKEND_URL', '')
+
+meta_ads_service = None
+if META_APP_ID and META_APP_SECRET:
+    meta_ads_service = MetaAdsService(META_APP_ID, META_APP_SECRET)
+    logger.info("Meta Ads Service initialized")
+else:
+    logger.warning("Meta Ads credentials not configured - Marketing module OAuth disabled")
+
+@api_router.get("/marketing/config")
+async def get_marketing_config(user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Get Marketing module configuration status"""
+    return {
+        "meta_configured": bool(META_APP_ID and META_APP_SECRET),
+        "webhook_configured": bool(META_WEBHOOK_VERIFY_TOKEN),
+        "webhook_url": f"{BACKEND_URL}/api/marketing/webhook" if BACKEND_URL else None
+    }
+
+@api_router.get("/marketing/accounts")
+async def get_meta_accounts(user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Get all connected Meta Ads accounts"""
+    accounts = await db.meta_ad_accounts.find(
+        {}, 
+        {"_id": 0, "access_token": 0, "refresh_token": 0}
+    ).to_list(100)
+    return accounts
+
+@api_router.post("/marketing/oauth/start")
+async def start_meta_oauth(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Initiate Meta OAuth flow - returns URL to redirect user"""
+    if not meta_ads_service:
+        raise HTTPException(status_code=400, detail="Meta Ads credentials not configured. Add META_APP_ID and META_APP_SECRET to .env")
+    
+    # Generate state token for security
+    state = str(uuid.uuid4())
+    
+    # Store state in DB for verification
+    await db.meta_oauth_states.insert_one({
+        "state": state,
+        "user_id": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    })
+    
+    redirect_uri = f"{BACKEND_URL}/api/marketing/oauth/callback"
+    oauth_url = meta_ads_service.get_oauth_url(redirect_uri, state)
+    
+    return {
+        "oauth_url": oauth_url,
+        "state": state
+    }
+
+@api_router.get("/marketing/oauth/callback")
+async def meta_oauth_callback(code: str, state: str):
+    """Handle OAuth callback from Meta"""
+    if not meta_ads_service:
+        raise HTTPException(status_code=400, detail="Meta Ads not configured")
+    
+    # Verify state token
+    state_doc = await db.meta_oauth_states.find_one({"state": state})
+    if not state_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired state token")
+    
+    # Check expiry
+    if datetime.fromisoformat(state_doc["expires_at"]) < datetime.now(timezone.utc):
+        await db.meta_oauth_states.delete_one({"state": state})
+        raise HTTPException(status_code=400, detail="State token expired")
+    
+    user_id = state_doc["user_id"]
+    
+    try:
+        redirect_uri = f"{BACKEND_URL}/api/marketing/oauth/callback"
+        
+        # Exchange code for token
+        token_data = await meta_ads_service.exchange_code_for_token(code, redirect_uri)
+        access_token = token_data.get("access_token")
+        
+        # Get long-lived token
+        long_lived_data = await meta_ads_service.get_long_lived_token(access_token)
+        long_lived_token = long_lived_data.get("access_token")
+        expires_in = long_lived_data.get("expires_in", 5184000)  # Default 60 days
+        
+        # Get user info
+        user_info = await meta_ads_service.get_user_info(long_lived_token)
+        
+        # Get ad accounts
+        ad_accounts = await meta_ads_service.get_ad_accounts(long_lived_token)
+        
+        # Store each ad account
+        for account in ad_accounts:
+            account_doc = {
+                "id": str(uuid.uuid4()),
+                "meta_account_id": account["id"],
+                "name": account.get("name", "Unknown Account"),
+                "access_token": long_lived_token,
+                "token_expiry": (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat(),
+                "currency": account.get("currency"),
+                "timezone": account.get("timezone_name"),
+                "status": "active" if account.get("account_status") == 1 else "disabled",
+                "is_active": True,
+                "connected_by": user_id,
+                "meta_user_id": user_info.get("id"),
+                "meta_user_name": user_info.get("name"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_synced": None
+            }
+            
+            # Upsert - update if exists, insert if not
+            await db.meta_ad_accounts.update_one(
+                {"meta_account_id": account["id"]},
+                {"$set": account_doc},
+                upsert=True
+            )
+        
+        # Clean up state
+        await db.meta_oauth_states.delete_one({"state": state})
+        
+        # Redirect to frontend with success
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+        return {"status": "success", "message": f"Connected {len(ad_accounts)} ad account(s)", "accounts_connected": len(ad_accounts)}
+    
+    except Exception as e:
+        logger.error(f"Meta OAuth error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+
+@api_router.delete("/marketing/accounts/{account_id}")
+async def disconnect_meta_account(account_id: str, user = Depends(require_roles(["super_admin", "admin"]))):
+    """Disconnect a Meta Ads account"""
+    result = await db.meta_ad_accounts.delete_one({"id": account_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Also delete related campaigns and leads
+    await db.meta_campaigns.delete_many({"account_id": account_id})
+    await db.meta_leads.delete_many({"account_id": account_id})
+    
+    return {"message": "Account disconnected"}
+
+@api_router.post("/marketing/accounts/{account_id}/sync")
+async def sync_meta_account(account_id: str, background_tasks: BackgroundTasks, user = Depends(require_roles(["super_admin", "admin", "marketing"]))):
+    """Sync campaigns and leads from a Meta Ads account"""
+    account = await db.meta_ad_accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    if not meta_ads_service:
+        raise HTTPException(status_code=400, detail="Meta Ads not configured")
+    
+    # Run sync in background
+    background_tasks.add_task(sync_meta_account_data, account_id, account["access_token"], account["meta_account_id"])
+    
+    return {"message": "Sync started", "account_id": account_id}
+
+async def sync_meta_account_data(account_id: str, access_token: str, meta_account_id: str):
+    """Background task to sync Meta Ads data"""
+    try:
+        # Sync campaigns
+        campaigns = await meta_ads_service.get_campaigns(meta_account_id, access_token)
+        
+        for campaign in campaigns:
+            campaign_doc = {
+                "id": str(uuid.uuid4()),
+                "account_id": account_id,
+                "meta_campaign_id": campaign["id"],
+                "name": campaign.get("name"),
+                "objective": campaign.get("objective"),
+                "status": campaign.get("status"),
+                "daily_budget": campaign.get("daily_budget"),
+                "lifetime_budget": campaign.get("lifetime_budget"),
+                "created_time": campaign.get("created_time"),
+                "start_time": campaign.get("start_time"),
+                "stop_time": campaign.get("stop_time"),
+                "synced_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            await db.meta_campaigns.update_one(
+                {"meta_campaign_id": campaign["id"]},
+                {"$set": campaign_doc},
+                upsert=True
+            )
+            
+            # Get campaign insights
+            try:
+                insights = await meta_ads_service.get_campaign_insights(campaign["id"], access_token)
+                if insights:
+                    await db.meta_campaigns.update_one(
+                        {"meta_campaign_id": campaign["id"]},
+                        {"$set": {"insights": insights}}
+                    )
+            except Exception as e:
+                logger.warning(f"Could not get insights for campaign {campaign['id']}: {e}")
+        
+        # Update account last_synced
+        await db.meta_ad_accounts.update_one(
+            {"id": account_id},
+            {"$set": {"last_synced": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        logger.info(f"Synced {len(campaigns)} campaigns for account {account_id}")
+        
+    except Exception as e:
+        logger.error(f"Error syncing Meta account {account_id}: {e}")
+        await db.meta_ad_accounts.update_one(
+            {"id": account_id},
+            {"$set": {"status": "error", "error_message": str(e), "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+@api_router.get("/marketing/campaigns")
+async def get_meta_campaigns(
+    account_id: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "marketing"]))
+):
+    """Get all campaigns, optionally filtered by account"""
+    query = {}
+    if account_id:
+        query["account_id"] = account_id
+    
+    campaigns = await db.meta_campaigns.find(query, {"_id": 0}).to_list(500)
+    return campaigns
+
+@api_router.get("/marketing/campaigns/{campaign_id}/insights")
+async def get_campaign_insights(
+    campaign_id: str,
+    date_preset: str = "last_30d",
+    user = Depends(require_roles(["super_admin", "admin", "marketing"]))
+):
+    """Get insights for a specific campaign"""
+    campaign = await db.meta_campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Get account for access token
+    account = await db.meta_ad_accounts.find_one({"id": campaign["account_id"]}, {"_id": 0})
+    if not account or not meta_ads_service:
+        return campaign.get("insights", {})
+    
+    try:
+        insights = await meta_ads_service.get_campaign_insights(
+            campaign["meta_campaign_id"], 
+            account["access_token"],
+            date_preset
+        )
+        return insights
+    except Exception as e:
+        logger.error(f"Error getting insights: {e}")
+        return campaign.get("insights", {})
+
+@api_router.get("/marketing/dashboard")
+async def get_marketing_dashboard(
+    account_id: Optional[str] = None,
+    date_preset: str = "last_30d",
+    user = Depends(require_roles(["super_admin", "admin", "marketing"]))
+):
+    """Get marketing dashboard metrics"""
+    # Get accounts
+    account_query = {}
+    if account_id:
+        account_query["id"] = account_id
+    
+    accounts = await db.meta_ad_accounts.find(account_query, {"_id": 0, "access_token": 0, "refresh_token": 0}).to_list(100)
+    
+    # Get campaigns with insights
+    campaign_query = {}
+    if account_id:
+        campaign_query["account_id"] = account_id
+    
+    campaigns = await db.meta_campaigns.find(campaign_query, {"_id": 0}).to_list(500)
+    
+    # Aggregate metrics
+    total_spend = 0
+    total_impressions = 0
+    total_clicks = 0
+    total_reach = 0
+    total_leads = 0
+    
+    campaign_metrics = []
+    for campaign in campaigns:
+        insights = campaign.get("insights", {})
+        spend = float(insights.get("spend", 0))
+        impressions = int(insights.get("impressions", 0))
+        clicks = int(insights.get("clicks", 0))
+        reach = int(insights.get("reach", 0))
+        
+        # Calculate leads from actions
+        actions = insights.get("actions", [])
+        leads = 0
+        for action in actions if isinstance(actions, list) else []:
+            if action.get("action_type") == "lead":
+                leads += int(action.get("value", 0))
+        
+        total_spend += spend
+        total_impressions += impressions
+        total_clicks += clicks
+        total_reach += reach
+        total_leads += leads
+        
+        # Calculate campaign metrics
+        cpl = spend / leads if leads > 0 else 0
+        cpm = (spend / impressions * 1000) if impressions > 0 else 0
+        cpc = spend / clicks if clicks > 0 else 0
+        ctr = (clicks / impressions * 100) if impressions > 0 else 0
+        
+        campaign_metrics.append({
+            "id": campaign["id"],
+            "name": campaign["name"],
+            "status": campaign["status"],
+            "objective": campaign.get("objective"),
+            "spend": spend,
+            "impressions": impressions,
+            "clicks": clicks,
+            "reach": reach,
+            "leads": leads,
+            "cpl": round(cpl, 2),
+            "cpm": round(cpm, 2),
+            "cpc": round(cpc, 2),
+            "ctr": round(ctr, 2)
+        })
+    
+    # Calculate overall metrics
+    overall_cpl = total_spend / total_leads if total_leads > 0 else 0
+    overall_cpm = (total_spend / total_impressions * 1000) if total_impressions > 0 else 0
+    overall_cpc = total_spend / total_clicks if total_clicks > 0 else 0
+    overall_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
+    frequency = total_impressions / total_reach if total_reach > 0 else 0
+    
+    # Get leads from DB
+    lead_query = {}
+    if account_id:
+        lead_query["account_id"] = account_id
+    db_leads = await db.meta_leads.count_documents(lead_query)
+    
+    return {
+        "period": date_preset,
+        "accounts": accounts,
+        "summary": {
+            "total_spend": round(total_spend, 2),
+            "total_impressions": total_impressions,
+            "total_clicks": total_clicks,
+            "total_reach": total_reach,
+            "total_leads": total_leads,
+            "db_leads": db_leads,
+            "cpl": round(overall_cpl, 2),
+            "cpm": round(overall_cpm, 2),
+            "cpc": round(overall_cpc, 2),
+            "ctr": round(overall_ctr, 2),
+            "frequency": round(frequency, 2)
+        },
+        "campaigns": campaign_metrics
+    }
+
+@api_router.get("/marketing/leads")
+async def get_meta_leads(
+    account_id: Optional[str] = None,
+    synced_to_crm: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 50,
+    user = Depends(require_roles(["super_admin", "admin", "marketing", "sales_manager"]))
+):
+    """Get leads from Meta Ads"""
+    query = {}
+    if account_id:
+        query["account_id"] = account_id
+    if synced_to_crm is not None:
+        query["synced_to_crm"] = synced_to_crm
+    
+    leads = await db.meta_leads.find(query, {"_id": 0}).sort("received_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.meta_leads.count_documents(query)
+    
+    return {
+        "leads": leads,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.post("/marketing/leads/{lead_id}/import")
+async def import_meta_lead_to_crm(lead_id: str, user = Depends(require_roles(["super_admin", "admin", "marketing", "sales_manager"]))):
+    """Import a Meta lead to the CRM"""
+    meta_lead = await db.meta_leads.find_one({"id": lead_id}, {"_id": 0})
+    if not meta_lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if meta_lead.get("synced_to_crm"):
+        raise HTTPException(status_code=400, detail="Lead already imported to CRM")
+    
+    # Parse lead data
+    lead_data = meta_lead.get("lead_data", {})
+    
+    # Create CRM lead
+    now = datetime.now(timezone.utc)
+    crm_lead = {
+        "id": str(uuid.uuid4()),
+        "full_name": lead_data.get("full_name", lead_data.get("name", "Unknown")),
+        "phone": lead_data.get("phone_number", lead_data.get("phone", "")),
+        "email": lead_data.get("email", ""),
+        "country": lead_data.get("country", ""),
+        "city": lead_data.get("city", ""),
+        "lead_source": "meta_ads",
+        "campaign_name": meta_lead.get("campaign_name", ""),
+        "notes": f"Imported from Meta Ads. Form: {meta_lead.get('form_name', 'Unknown')}",
+        "stage": "new_lead",
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "last_activity": now.isoformat(),
+        "assigned_at": None,
+        "first_contact_at": None,
+        "sla_status": "ok",
+        "in_pool": False,
+        "meta_lead_id": lead_id
+    }
+    
+    try:
+        await db.leads.insert_one(crm_lead)
+        
+        # Update meta lead
+        await db.meta_leads.update_one(
+            {"id": lead_id},
+            {"$set": {"synced_to_crm": True, "crm_lead_id": crm_lead["id"]}}
+        )
+        
+        return {"message": "Lead imported to CRM", "crm_lead_id": crm_lead["id"]}
+    except Exception as e:
+        if "duplicate key" in str(e):
+            raise HTTPException(status_code=400, detail="A lead with this phone number already exists in CRM")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/marketing/leads/import-all")
+async def import_all_meta_leads(
+    account_id: Optional[str] = None,
+    background_tasks: BackgroundTasks = None,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Import all unsynced Meta leads to CRM"""
+    query = {"synced_to_crm": False}
+    if account_id:
+        query["account_id"] = account_id
+    
+    unsynced_count = await db.meta_leads.count_documents(query)
+    
+    if unsynced_count == 0:
+        return {"message": "No leads to import", "imported": 0}
+    
+    # Import in background
+    background_tasks.add_task(bulk_import_meta_leads, query, user["id"])
+    
+    return {"message": f"Importing {unsynced_count} leads in background", "queued": unsynced_count}
+
+async def bulk_import_meta_leads(query: dict, user_id: str):
+    """Background task to bulk import leads"""
+    cursor = db.meta_leads.find(query, {"_id": 0})
+    imported = 0
+    errors = 0
+    
+    async for meta_lead in cursor:
+        try:
+            lead_data = meta_lead.get("lead_data", {})
+            now = datetime.now(timezone.utc)
+            
+            crm_lead = {
+                "id": str(uuid.uuid4()),
+                "full_name": lead_data.get("full_name", lead_data.get("name", "Unknown")),
+                "phone": lead_data.get("phone_number", lead_data.get("phone", "")),
+                "email": lead_data.get("email", ""),
+                "country": lead_data.get("country", ""),
+                "city": lead_data.get("city", ""),
+                "lead_source": "meta_ads",
+                "campaign_name": meta_lead.get("campaign_name", ""),
+                "notes": f"Imported from Meta Ads. Form: {meta_lead.get('form_name', 'Unknown')}",
+                "stage": "new_lead",
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "last_activity": now.isoformat(),
+                "assigned_at": None,
+                "first_contact_at": None,
+                "sla_status": "ok",
+                "in_pool": False,
+                "meta_lead_id": meta_lead["id"]
+            }
+            
+            await db.leads.insert_one(crm_lead)
+            await db.meta_leads.update_one(
+                {"id": meta_lead["id"]},
+                {"$set": {"synced_to_crm": True, "crm_lead_id": crm_lead["id"]}}
+            )
+            imported += 1
+        except Exception as e:
+            errors += 1
+            logger.warning(f"Error importing lead {meta_lead.get('id')}: {e}")
+    
+    logger.info(f"Bulk import complete: {imported} imported, {errors} errors")
+
+# Webhook endpoint for real-time lead data
+@api_router.get("/marketing/webhook")
+async def verify_meta_webhook(hub_mode: str = "", hub_challenge: str = "", hub_verify_token: str = ""):
+    """Meta webhook verification endpoint"""
+    if hub_mode == "subscribe" and hub_verify_token == META_WEBHOOK_VERIFY_TOKEN:
+        return int(hub_challenge)
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+@api_router.post("/marketing/webhook")
+async def receive_meta_webhook(request_body: Dict, background_tasks: BackgroundTasks):
+    """Receive webhook notifications from Meta"""
+    # Process in background
+    background_tasks.add_task(process_meta_webhook, request_body)
+    return {"status": "received"}
+
+async def process_meta_webhook(data: dict):
+    """Process Meta webhook data"""
+    try:
+        for entry in data.get("entry", []):
+            for change in entry.get("changes", []):
+                if change.get("field") == "leadgen":
+                    lead_value = change.get("value", {})
+                    leadgen_id = lead_value.get("leadgen_id")
+                    form_id = lead_value.get("form_id")
+                    page_id = lead_value.get("page_id")
+                    ad_id = lead_value.get("ad_id")
+                    created_time = lead_value.get("created_time")
+                    
+                    # Find account by page
+                    account = await db.meta_ad_accounts.find_one(
+                        {"meta_page_id": page_id},
+                        {"_id": 0}
+                    )
+                    
+                    if account and meta_ads_service:
+                        # Get lead details from Meta
+                        try:
+                            lead_details = await meta_ads_service.get_lead_details(
+                                leadgen_id, 
+                                account["access_token"]
+                            )
+                            
+                            # Parse field data
+                            field_data = lead_details.get("field_data", [])
+                            parsed_data = meta_ads_service.parse_lead_field_data(field_data)
+                            
+                            # Store lead
+                            lead_doc = {
+                                "id": str(uuid.uuid4()),
+                                "account_id": account["id"],
+                                "meta_lead_id": leadgen_id,
+                                "form_id": form_id,
+                                "form_name": lead_details.get("form_name", ""),
+                                "campaign_id": lead_details.get("campaign_id"),
+                                "campaign_name": lead_details.get("campaign_name"),
+                                "ad_id": ad_id,
+                                "lead_data": parsed_data,
+                                "raw_field_data": field_data,
+                                "created_time": lead_details.get("created_time", ""),
+                                "received_at": datetime.now(timezone.utc).isoformat(),
+                                "synced_to_crm": False,
+                                "crm_lead_id": None
+                            }
+                            
+                            await db.meta_leads.update_one(
+                                {"meta_lead_id": leadgen_id},
+                                {"$set": lead_doc},
+                                upsert=True
+                            )
+                            
+                            logger.info(f"Received lead {leadgen_id} via webhook")
+                            
+                        except Exception as e:
+                            logger.error(f"Error fetching lead details: {e}")
+                    else:
+                        logger.warning(f"No account found for page {page_id}")
+                        
+    except Exception as e:
+        logger.error(f"Error processing Meta webhook: {e}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
