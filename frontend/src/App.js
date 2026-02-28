@@ -84,6 +84,11 @@ import HRApprovalQueuePage from "@/pages/hr/HRApprovalQueuePage";
 import SSHRPage from "@/pages/SSHRPage";
 import PayslipsPage from "@/pages/PayslipsPage";
 
+// Marketing Module
+import MarketingDashboardPage from "@/pages/marketing/MarketingDashboardPage";
+import MarketingSettingsPage from "@/pages/marketing/MarketingSettingsPage";
+import MarketingLeadsPage from "@/pages/marketing/MarketingLeadsPage";
+
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
 
