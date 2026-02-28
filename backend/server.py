@@ -35,6 +35,9 @@ from email_service import (
 # Import Meta Ads Service
 from meta_ads_service import MetaAdsService
 
+# Import Google Sheets Service
+from services.google_sheets_service import GoogleSheetsService, extract_sheet_id, extract_gid, DEFAULT_COLUMN_MAPPING
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
