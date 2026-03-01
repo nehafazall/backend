@@ -32,6 +32,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
+import EnrollmentPaymentModal from '@/components/EnrollmentPaymentModal';
+import RejectionReasonModal from '@/components/RejectionReasonModal';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import { COUNTRIES, LEAD_SOURCES, detectCountryFromPhone } from '@/lib/phoneCountry';
 import {
