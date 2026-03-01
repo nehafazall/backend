@@ -2871,6 +2871,17 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
             await db.finance_verifications.insert_one(verification_record)
             
             # Notify finance team
+            payment_method_label = {
+                "bank_transfer": "Bank Transfer",
+                "credit_card": "Credit Card",
+                "cash": "Cash",
+                "tabby": "Tabby (BNPL)",
+                "tamara": "Tamara (BNPL)",
+                "network": "Network International",
+                "upi": "UPI/Mobile",
+                "cheque": "Cheque"
+            }.get(update_data.get("payment_method", "").lower(), update_data.get("payment_method", "N/A"))
+            
             finance_users = await db.users.find(
                 {"role": {"$in": ["finance", "admin", "super_admin"]}, "is_active": True},
                 {"id": 1}
@@ -2879,7 +2890,7 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 await create_notification(
                     finance_user["id"],
                     "New Enrollment - Payment Verification Required",
-                    f"New enrollment from {existing['full_name']} for AED {sale_amount:.2f}. Please verify payment.",
+                    f"Student: {existing['full_name']} | Course: {update_data.get('interested_course_name') or 'N/A'} | Amount: AED {sale_amount:.2f} | Payment: {payment_method_label}. Verify payment in Finance queue.",
                     "warning",
                     f"/finance/verifications"
                 )
