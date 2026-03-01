@@ -258,6 +258,12 @@ const SalesDashboard = () => {
                 </Card>
             </div>
 
+            {/* Pipeline Revenue & Commission Widgets */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <PipelineRevenueWidget />
+                <ExpectedCommissionWidget />
+            </div>
+
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Lead Funnel */}
