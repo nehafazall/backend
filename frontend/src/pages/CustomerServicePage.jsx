@@ -26,6 +26,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
+import ActivationQuestionnaireModal from '@/components/ActivationQuestionnaireModal';
 import {
     DropdownMenu,
     DropdownMenuContent,
