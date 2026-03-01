@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { PipelineRevenueWidget } from '@/components/PipelineRevenueWidget';
+import { ExpectedCommissionWidget } from '@/components/ExpectedCommissionWidget';
 import {
     BarChart,
     Bar,
