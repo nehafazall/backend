@@ -4373,6 +4373,173 @@ async def get_pipeline_revenue(view_as: Optional[str] = None, user = Depends(get
         }
     }
 
+@api_router.get("/dashboard/expected-commission")
+async def get_expected_commission(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    """
+    Calculate expected commission for leads expected to close this month.
+    Shows:
+    - Expected commission from pipeline (warm, hot, in_progress leads)
+    - Earned commission this month (from enrolled leads)
+    - Total receivable commission
+    """
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
+    # Build query based on role
+    query = {}
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
+    
+    # Get active commission rules
+    rules = await db.commission_rules.find({"is_active": True}).to_list(100)
+    default_commission_rate = 5  # Default 5% if no rules
+    
+    # Helper to calculate commission for a lead
+    def calc_commission(lead_value, course_id=None, role="sales_executive"):
+        if not lead_value or lead_value <= 0:
+            return 0
+        # Find applicable rule
+        for rule in rules:
+            if rule.get("role") == role:
+                if rule.get("course_id") == course_id or (not rule.get("course_id") and not course_id):
+                    if rule.get("commission_type") == "percentage":
+                        return lead_value * (rule.get("commission_value", default_commission_rate) / 100)
+                    else:
+                        return rule.get("commission_value", 0)
+        # Default percentage
+        return lead_value * (default_commission_rate / 100)
+    
+    # Get pipeline leads (warm, hot, in_progress) - expected to close this month
+    pipeline_stages = ["warm_lead", "hot_lead", "in_progress"]
+    pipeline_leads = await db.leads.find(
+        {**query, "stage": {"$in": pipeline_stages}},
+        {"_id": 0, "id": 1, "full_name": 1, "stage": 1, "estimated_value": 1, 
+         "interested_course_id": 1, "interested_course_name": 1, "assigned_to": 1,
+         "follow_up_date": 1}
+    ).to_list(1000)
+    
+    # Get enrolled leads this month
+    enrolled_leads = await db.leads.find(
+        {**query, "stage": "enrolled", "updated_at": {"$gte": month_start.isoformat()}},
+        {"_id": 0, "id": 1, "full_name": 1, "sale_amount": 1, "course_id": 1, 
+         "course_name": 1, "assigned_to": 1, "updated_at": 1}
+    ).to_list(1000)
+    
+    # Get courses for lookup
+    courses = await db.courses.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    course_map = {c["id"]: c.get("name", "Unknown") for c in courses}
+    
+    # Calculate expected commission from pipeline
+    expected_by_stage = {}
+    pipeline_details = []
+    for lead in pipeline_leads:
+        stage = lead.get("stage")
+        value = lead.get("estimated_value", 0) or 0
+        course_id = lead.get("interested_course_id")
+        commission = calc_commission(value, course_id)
+        
+        if stage not in expected_by_stage:
+            expected_by_stage[stage] = {"count": 0, "value": 0, "commission": 0}
+        expected_by_stage[stage]["count"] += 1
+        expected_by_stage[stage]["value"] += value
+        expected_by_stage[stage]["commission"] += commission
+        
+        pipeline_details.append({
+            "id": lead.get("id"),
+            "name": lead.get("full_name"),
+            "stage": stage,
+            "course": lead.get("interested_course_name") or course_map.get(course_id, "Not specified"),
+            "value": value,
+            "expected_commission": round(commission, 2),
+            "follow_up": lead.get("follow_up_date")
+        })
+    
+    # Calculate earned commission this month from enrolled leads
+    earned_details = []
+    total_earned = 0
+    for lead in enrolled_leads:
+        value = lead.get("sale_amount", 0) or 0
+        course_id = lead.get("course_id")
+        commission = calc_commission(value, course_id)
+        total_earned += commission
+        
+        earned_details.append({
+            "id": lead.get("id"),
+            "name": lead.get("full_name"),
+            "course": lead.get("course_name") or course_map.get(course_id, "Unknown"),
+            "sale_value": value,
+            "commission": round(commission, 2),
+            "closed_at": lead.get("updated_at")
+        })
+    
+    # Get actual paid/pending commissions from commissions collection
+    comm_pipeline = [
+        {"$match": {"user_id": target_user["id"], "month": current_month}},
+        {"$group": {
+            "_id": "$status",
+            "total": {"$sum": "$commission_amount"},
+            "count": {"$sum": 1}
+        }}
+    ]
+    comm_result = await db.commissions.aggregate(comm_pipeline).to_list(10)
+    
+    actual_pending = 0
+    actual_paid = 0
+    for r in comm_result:
+        if r["_id"] == "pending":
+            actual_pending = r["total"]
+        elif r["_id"] == "paid":
+            actual_paid = r["total"]
+    
+    # Calculate totals
+    total_expected = sum(s["commission"] for s in expected_by_stage.values())
+    total_pipeline_value = sum(s["value"] for s in expected_by_stage.values())
+    
+    # Format stage breakdown
+    stage_labels = {
+        "warm_lead": "Warm Leads",
+        "hot_lead": "Hot Leads",
+        "in_progress": "In Progress"
+    }
+    
+    stage_breakdown = []
+    for stage in ["warm_lead", "hot_lead", "in_progress"]:
+        data = expected_by_stage.get(stage, {"count": 0, "value": 0, "commission": 0})
+        stage_breakdown.append({
+            "stage": stage,
+            "label": stage_labels.get(stage, stage),
+            "count": data["count"],
+            "pipeline_value": round(data["value"], 2),
+            "expected_commission": round(data["commission"], 2)
+        })
+    
+    return {
+        "summary": {
+            "total_pipeline_value": round(total_pipeline_value, 2),
+            "expected_commission": round(total_expected, 2),
+            "earned_this_month": round(total_earned, 2),
+            "actual_pending": round(actual_pending, 2),
+            "actual_paid": round(actual_paid, 2),
+            "total_receivable": round(total_expected + actual_pending, 2)
+        },
+        "stage_breakdown": stage_breakdown,
+        "pipeline_leads": sorted(pipeline_details, key=lambda x: x.get("value", 0), reverse=True)[:20],
+        "earned_leads": sorted(earned_details, key=lambda x: x.get("sale_value", 0), reverse=True)[:10],
+        "month": current_month
+    }
+
 @api_router.get("/dashboard/sales-by-course")
 async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_current_user)):
     # Handle view_as
