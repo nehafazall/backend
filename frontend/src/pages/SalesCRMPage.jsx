@@ -918,6 +918,58 @@ const SalesCRMPage = () => {
                                         )}
                                     </div>
                                     
+                                    {/* Course Interest - Required for pipeline stages */}
+                                    {PIPELINE_STAGES.includes(updateData.stage) && (
+                                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-4">
+                                            <div className="flex items-center gap-2 text-amber-600">
+                                                <Target className="h-4 w-4" />
+                                                <span className="text-sm font-medium">Course Interest Required</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label>Course/Package Interested *</Label>
+                                                    <Select
+                                                        value={updateData.interested_course_id}
+                                                        onValueChange={(value) => {
+                                                            const course = courses.find(c => c.id === value);
+                                                            setUpdateData({ 
+                                                                ...updateData, 
+                                                                interested_course_id: value,
+                                                                estimated_value: course?.base_price || ''
+                                                            });
+                                                        }}
+                                                    >
+                                                        <SelectTrigger data-testid="course-interest-select">
+                                                            <SelectValue placeholder="Select course" />
+                                                        </SelectTrigger>
+                                                        <SelectContent position="popper" className="z-[9999]">
+                                                            {courses.map((course) => (
+                                                                <SelectItem key={course.id} value={course.id}>
+                                                                    {course.name} - AED {course.base_price?.toLocaleString()}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Estimated Value (AED)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        value={updateData.estimated_value}
+                                                        onChange={(e) => setUpdateData({ ...updateData, estimated_value: e.target.value })}
+                                                        placeholder="Auto-filled from course"
+                                                        data-testid="estimated-value-input"
+                                                    />
+                                                </div>
+                                            </div>
+                                            {selectedLead?.interested_course_name && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Currently interested in: <span className="font-medium">{selectedLead.interested_course_name}</span>
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                    
                                     <div className="space-y-2">
                                         <Label>Call Notes</Label>
                                         <Textarea
