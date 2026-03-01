@@ -1093,6 +1093,23 @@ const SalesCRMPage = () => {
                 entityName={reminderLead?.full_name}
                 onSuccess={handleReminderSuccess}
             />
+
+            {/* Enrollment Payment Modal */}
+            <EnrollmentPaymentModal
+                open={showEnrollmentModal}
+                onClose={() => { setShowEnrollmentModal(false); setPendingEnrollmentLead(null); }}
+                lead={pendingEnrollmentLead}
+                course={courses.find(c => c.id === pendingEnrollmentLead?.interested_course_id)}
+                onComplete={handleEnrollmentComplete}
+            />
+
+            {/* Rejection Reason Modal */}
+            <RejectionReasonModal
+                open={showRejectionModal}
+                onClose={() => { setShowRejectionModal(false); setPendingRejectionLead(null); }}
+                lead={pendingRejectionLead}
+                onComplete={handleRejectionComplete}
+            />
         </div>
     );
 };
