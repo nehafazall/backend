@@ -108,13 +108,44 @@ export default function FinanceVerificationsPage() {
     const handleVerify = async () => {
         if (!selectedVerification) return;
         
+        // Validate transaction references
+        const errors = {};
+        if (selectedVerification.is_split_payment && selectedVerification.payment_splits?.length > 0) {
+            // For split payments, require a reference for each split
+            const splitRefs = verifyData.split_references || [];
+            selectedVerification.payment_splits.forEach((split, idx) => {
+                if (!splitRefs[idx]?.reference) {
+                    errors[`split_${idx}`] = `Transaction reference required for ${split.method?.replace('_', ' ')}`;
+                }
+            });
+        } else {
+            // For single payment, require one reference
+            if (!verifyData.payment_reference?.trim()) {
+                errors.payment_reference = 'Transaction reference is required to verify payment';
+            }
+        }
+        
+        if (!verifyData.payment_date) {
+            errors.payment_date = 'Payment date is required';
+        }
+        
+        if (Object.keys(errors).length > 0) {
+            setVerifyErrors(errors);
+            toast.error('Please fill in all required transaction details');
+            return;
+        }
+        
         try {
             setProcessing(true);
-            await api.post(`/finance/verifications/${selectedVerification.id}/verify`, verifyData);
-            toast.success('Payment verified and transaction recorded');
+            await api.post(`/finance/verifications/${selectedVerification.id}/verify`, {
+                ...verifyData,
+                is_split_payment: selectedVerification.is_split_payment,
+            });
+            toast.success('Payment verified! Transaction recorded and sent to settlements.');
             setShowVerifyDialog(false);
             setSelectedVerification(null);
-            setVerifyData({ payment_reference: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+            setVerifyData({ payment_reference: '', payment_date: new Date().toISOString().split('T')[0], notes: '', split_references: [] });
+            setVerifyErrors({});
             fetchData();
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Failed to verify payment');
