@@ -157,6 +157,22 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
             updates.follow_up_date = updateData.follow_up_date;
         }
         
+        // Add course interest for pipeline stages
+        if (updateData.interested_course_id) {
+            updates.interested_course_id = updateData.interested_course_id;
+            const selectedCourse = courses.find(c => c.id === updateData.interested_course_id);
+            if (selectedCourse) {
+                updates.interested_course_name = selectedCourse.name;
+                // Auto-set estimated value if not manually specified
+                if (!updateData.estimated_value) {
+                    updates.estimated_value = selectedCourse.base_price || 0;
+                }
+            }
+        }
+        if (updateData.estimated_value) {
+            updates.estimated_value = parseFloat(updateData.estimated_value);
+        }
+        
         if (Object.keys(updates).length === 0) {
             toast.error('No changes to update');
             return;
@@ -165,6 +181,15 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
         if (updates.stage === 'rejected' && !updates.rejection_reason) {
             toast.error('Please select a rejection reason');
             return;
+        }
+        
+        // Validate course selection for pipeline stages
+        if (PIPELINE_STAGES.includes(updates.stage)) {
+            const courseId = updates.interested_course_id || lead.interested_course_id;
+            if (!courseId) {
+                toast.error('Please select which course/package the client is interested in');
+                return;
+            }
         }
         
         try {
