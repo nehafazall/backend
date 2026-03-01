@@ -312,10 +312,14 @@ class LeadUpdate(BaseModel):
     notes: Optional[str] = None
     call_notes: Optional[str] = None
     rejection_reason: Optional[str] = None
+    rejection_reason_label: Optional[str] = None  # Human-readable rejection reason
+    rejection_notes: Optional[str] = None  # Additional rejection notes
     follow_up_date: Optional[datetime] = None
     assigned_to: Optional[str] = None
     course_id: Optional[str] = None
+    course_name: Optional[str] = None  # Course name for enrolled students
     interested_course_id: Optional[str] = None  # Course client is interested in (for pipeline tracking)
+    interested_course_name: Optional[str] = None  # Course name for interested course
     estimated_value: Optional[float] = None  # Estimated deal value
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
@@ -324,6 +328,20 @@ class LeadUpdate(BaseModel):
     reminder_date: Optional[datetime] = None
     reminder_time: Optional[str] = None  # HH:MM format
     reminder_note: Optional[str] = None
+    # Payment fields for enrollment
+    payment_method: Optional[str] = None
+    payment_amount: Optional[float] = None
+    payment_date: Optional[str] = None
+    payment_proof: Optional[str] = None  # Base64 encoded image
+    payment_proof_filename: Optional[str] = None
+    payment_notes: Optional[str] = None
+    transaction_id: Optional[str] = None
+    # Split payment support
+    is_split_payment: Optional[bool] = False
+    payment_splits: Optional[List[dict]] = None  # Array of {method, amount, transaction_id, phone_number, is_same_number, proof}
+    # BNPL phone verification
+    bnpl_phone: Optional[str] = None
+    bnpl_same_number: Optional[bool] = True
 
 class LeadResponse(LeadBase):
     id: str
