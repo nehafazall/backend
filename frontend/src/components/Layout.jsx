@@ -182,9 +182,10 @@ const SECTIONS = {
         title: 'Finance',
         icon: DollarSign,
         color: 'bg-cyan-500',
-        roles: ['super_admin', 'admin', 'finance'],
+        roles: ['super_admin', 'admin', 'finance', 'ceo'],
         items: [
             { title: 'Finance', icon: DollarSign, path: '/finance' },
+            { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications' },
             { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
         ],
     },
