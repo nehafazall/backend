@@ -246,6 +246,8 @@ const CustomerServicePage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
+    const [showActivationModal, setShowActivationModal] = useState(false);
+    const [pendingActivationStudent, setPendingActivationStudent] = useState(null);
     const [reminderStudent, setReminderStudent] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [activeId, setActiveId] = useState(null);
