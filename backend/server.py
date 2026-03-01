@@ -2748,6 +2748,46 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
             # Create/update customer master record
             await create_or_update_customer(existing, student_data)
             
+            # Create Finance Verification record for payment confirmation
+            verification_record = {
+                "id": str(uuid.uuid4()),
+                "type": "enrollment_payment",
+                "lead_id": lead_id,
+                "student_id": student_data["id"],
+                "customer_name": existing["full_name"],
+                "phone": existing.get("phone"),
+                "email": existing.get("email"),
+                "course_id": course_id,
+                "course_name": update_data.get("interested_course_name") or existing.get("interested_course_name"),
+                "sale_amount": sale_amount,
+                "payment_method": update_data.get("payment_method") or existing.get("payment_method"),
+                "sales_executive_id": existing.get("assigned_to"),
+                "sales_executive_name": existing.get("assigned_to_name"),
+                "status": "pending_verification",  # pending_verification, verified, rejected
+                "submitted_at": now.isoformat(),
+                "verified_at": None,
+                "verified_by": None,
+                "verified_by_name": None,
+                "rejection_reason": None,
+                "transaction_id": None,
+                "notes": update_data.get("notes") or ""
+            }
+            await db.finance_verifications.insert_one(verification_record)
+            
+            # Notify finance team
+            finance_users = await db.users.find(
+                {"role": {"$in": ["finance", "admin", "super_admin"]}, "is_active": True},
+                {"id": 1}
+            ).to_list(100)
+            for finance_user in finance_users:
+                await create_notification(
+                    finance_user["id"],
+                    "New Enrollment - Payment Verification Required",
+                    f"New enrollment from {existing['full_name']} for AED {sale_amount:.2f}. Please verify payment.",
+                    "warning",
+                    f"/finance/verifications"
+                )
+            
             # Create automatic journal entry for the sale (accounting integration)
             payment_method = update_data.get("payment_method") or existing.get("payment_method", "bank_transfer")
             try:
