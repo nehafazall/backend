@@ -591,6 +591,227 @@ export default function FinanceVerificationsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Detail View Dialog */}
+            <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Receipt className="h-5 w-5 text-primary" />
+                            Payment Verification Details
+                        </DialogTitle>
+                        <DialogDescription>
+                            Review payment details before approving or rejecting
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {detailVerification && (
+                        <div className="space-y-4">
+                            {/* Customer & Course Info */}
+                            <div className="p-4 bg-muted rounded-lg space-y-2">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Customer:</span>
+                                    <span className="font-medium">{detailVerification.customer_name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Phone:</span>
+                                    <span className="flex items-center gap-1">
+                                        <Phone className="h-3 w-3" />
+                                        {detailVerification.phone}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Email:</span>
+                                    <span>{detailVerification.email || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Course:</span>
+                                    <span>{detailVerification.course_name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Sales Executive:</span>
+                                    <span>{detailVerification.sales_executive_name || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Submitted:</span>
+                                    <span>{new Date(detailVerification.submitted_at).toLocaleString()}</span>
+                                </div>
+                            </div>
+                            
+                            {/* Payment Details */}
+                            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-3">
+                                <h4 className="font-medium text-emerald-600 flex items-center gap-2">
+                                    <DollarSign className="h-4 w-4" />
+                                    Payment Information
+                                </h4>
+                                
+                                {/* Check for multiple payments */}
+                                {detailVerification.payment_splits && detailVerification.payment_splits.length > 0 ? (
+                                    <div className="space-y-3">
+                                        <p className="text-sm text-muted-foreground">Split Payment ({detailVerification.payment_splits.length} methods)</p>
+                                        {detailVerification.payment_splits.map((split, idx) => (
+                                            <div key={idx} className="p-3 bg-background rounded border space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-medium capitalize">{split.method?.replace('_', ' ')}</span>
+                                                    <span className="font-bold text-emerald-600">AED {split.amount?.toLocaleString()}</span>
+                                                </div>
+                                                {split.phone_number && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                        Phone: {split.phone_number}
+                                                        {split.is_same_number === false && (
+                                                            <Badge variant="secondary" className="ml-2">Different Number</Badge>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {split.transaction_id && (
+                                                    <div className="text-xs text-muted-foreground font-mono">
+                                                        Txn: {split.transaction_id}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-between pt-2 border-t">
+                                            <span className="font-medium">Total Amount:</span>
+                                            <span className="font-bold text-lg text-emerald-600">
+                                                AED {detailVerification.sale_amount?.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Payment Method:</span>
+                                            <span className="capitalize font-medium">
+                                                {detailVerification.payment_method?.replace('_', ' ') || 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Amount:</span>
+                                            <span className="font-bold text-lg text-emerald-600">
+                                                AED {detailVerification.sale_amount?.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        {detailVerification.transaction_id && (
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Transaction ID:</span>
+                                                <span className="font-mono">{detailVerification.transaction_id}</span>
+                                            </div>
+                                        )}
+                                        {detailVerification.payment_date && (
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Payment Date:</span>
+                                                <span>{new Date(detailVerification.payment_date).toLocaleDateString()}</span>
+                                            </div>
+                                        )}
+                                        {/* BNPL Phone Verification */}
+                                        {['tabby', 'tamara'].includes(detailVerification.payment_method?.toLowerCase()) && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-muted-foreground">BNPL Phone:</span>
+                                                <span className="flex items-center gap-2">
+                                                    {detailVerification.bnpl_phone || detailVerification.phone}
+                                                    {detailVerification.bnpl_same_number === false && (
+                                                        <Badge variant="secondary">Different Number</Badge>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {detailVerification.payment_notes && (
+                                    <div className="pt-2 border-t">
+                                        <span className="text-sm text-muted-foreground">Notes:</span>
+                                        <p className="text-sm mt-1">{detailVerification.payment_notes}</p>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Payment Proof */}
+                            {detailVerification.payment_proof && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <ImageIcon className="h-4 w-4" />
+                                        Payment Proof Screenshot
+                                    </Label>
+                                    <div className="border rounded-lg p-2 bg-muted/50">
+                                        <img 
+                                            src={detailVerification.payment_proof} 
+                                            alt="Payment proof" 
+                                            className="max-h-64 mx-auto rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={() => window.open(detailVerification.payment_proof, '_blank')}
+                                        />
+                                        {detailVerification.payment_proof_filename && (
+                                            <p className="text-xs text-muted-foreground text-center mt-2">
+                                                {detailVerification.payment_proof_filename}
+                                            </p>
+                                        )}
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="w-full mt-2"
+                                            onClick={() => window.open(detailVerification.payment_proof, '_blank')}
+                                        >
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            Open Full Size
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Multiple Payment Proofs */}
+                            {detailVerification.payment_splits?.some(s => s.proof) && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <ImageIcon className="h-4 w-4" />
+                                        Payment Proofs ({detailVerification.payment_splits.filter(s => s.proof).length})
+                                    </Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {detailVerification.payment_splits.filter(s => s.proof).map((split, idx) => (
+                                            <div key={idx} className="border rounded-lg p-2 bg-muted/50">
+                                                <p className="text-xs text-center mb-1 capitalize">{split.method?.replace('_', ' ')}</p>
+                                                <img 
+                                                    src={split.proof} 
+                                                    alt={`Payment proof ${idx + 1}`} 
+                                                    className="max-h-32 mx-auto rounded cursor-pointer hover:opacity-80"
+                                                    onClick={() => window.open(split.proof, '_blank')}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    <DialogFooter className="flex gap-2 border-t pt-4">
+                        <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+                            Close
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                setShowDetailDialog(false);
+                                setSelectedVerification(detailVerification);
+                                setShowRejectDialog(true);
+                            }}
+                        >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Reject
+                        </Button>
+                        <Button
+                            className="bg-green-500 hover:bg-green-600"
+                            onClick={() => {
+                                setShowDetailDialog(false);
+                                setSelectedVerification(detailVerification);
+                                setShowVerifyDialog(true);
+                            }}
+                        >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Approve Payment
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
