@@ -281,6 +281,8 @@ function AppRoutes() {
                     <Route path="sheet" element={<BudgetSheetPage />} />
                     {/* Data Management */}
                     <Route path="management" element={<DataManagementPage />} />
+                    {/* Payment Verifications */}
+                    <Route path="verifications" element={<FinanceVerificationsPage />} />
                 </Route>
                 
                 {/* HR Module */}
