@@ -80,6 +80,8 @@ export default function FinanceVerificationsPage() {
     });
     
     const [rejectReason, setRejectReason] = useState('');
+    const [showDetailDialog, setShowDetailDialog] = useState(false);
+    const [detailVerification, setDetailVerification] = useState(null);
 
     const fetchData = useCallback(async () => {
         try {
