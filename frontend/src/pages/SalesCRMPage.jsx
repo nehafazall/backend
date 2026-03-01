@@ -438,6 +438,25 @@ const SalesCRMPage = () => {
 
         // If dropped in a different stage, update the lead
         if (targetStage && targetStage !== activeLead.stage) {
+            // Check if moving to enrolled - show payment modal
+            if (targetStage === 'enrolled') {
+                // Check if course is selected
+                if (!activeLead.interested_course_id) {
+                    toast.error('Please select a course of interest before enrolling');
+                    return;
+                }
+                setPendingEnrollmentLead(activeLead);
+                setShowEnrollmentModal(true);
+                return;
+            }
+            
+            // Check if moving to rejected - show rejection modal
+            if (targetStage === 'rejected') {
+                setPendingRejectionLead(activeLead);
+                setShowRejectionModal(true);
+                return;
+            }
+            
             try {
                 await leadApi.update(activeLeadId, { stage: targetStage });
                 toast.success(`Lead moved to ${LEAD_STAGES.find(s => s.id === targetStage)?.label}`);
@@ -446,6 +465,53 @@ const SalesCRMPage = () => {
                 toast.error('Failed to move lead');
                 console.error(error);
             }
+        }
+    };
+
+    // Handle enrollment with payment details
+    const handleEnrollmentComplete = async (paymentData) => {
+        if (!pendingEnrollmentLead) return;
+        
+        try {
+            const updatePayload = {
+                stage: 'enrolled',
+                payment_method: paymentData.payment_method,
+                payment_amount: paymentData.payment_amount,
+                payment_date: paymentData.payment_date,
+                payment_proof: paymentData.payment_proof,
+                payment_proof_filename: paymentData.payment_proof_filename,
+                transaction_id: paymentData.transaction_id,
+                payment_notes: paymentData.payment_notes,
+                sale_amount: paymentData.payment_amount,
+            };
+            
+            await leadApi.update(pendingEnrollmentLead.id, updatePayload);
+            toast.success('Lead enrolled successfully! Sent to Finance for verification.');
+            setShowEnrollmentModal(false);
+            setPendingEnrollmentLead(null);
+            fetchLeads();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to enroll lead');
+        }
+    };
+
+    // Handle rejection with reason
+    const handleRejectionComplete = async (rejectionData) => {
+        if (!pendingRejectionLead) return;
+        
+        try {
+            await leadApi.update(pendingRejectionLead.id, {
+                stage: 'rejected',
+                rejection_reason: rejectionData.rejection_reason,
+                rejection_reason_label: rejectionData.rejection_reason_label,
+                rejection_notes: rejectionData.rejection_notes,
+            });
+            toast.success('Lead marked as rejected');
+            setShowRejectionModal(false);
+            setPendingRejectionLead(null);
+            fetchLeads();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to reject lead');
         }
     };
 
