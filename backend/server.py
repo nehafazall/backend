@@ -15541,20 +15541,41 @@ async def reject_verification(
             }}
         )
     
+    # Get sales executive details for team leader lookup
+    sales_exec = None
+    team_leader = None
+    if verification.get("sales_executive_id"):
+        sales_exec = await db.users.find_one({"id": verification["sales_executive_id"]}, {"_id": 0})
+        if sales_exec and sales_exec.get("team_leader_id"):
+            team_leader = await db.users.find_one({"id": sales_exec["team_leader_id"]}, {"_id": 0})
+    
+    notification_message = f"Payment for {verification['customer_name']} (AED {verification.get('sale_amount', 0):,.2f}) was REJECTED by Finance.\n\nReason: {rejection_reason}\n\nPlease contact the customer to resolve this issue and resubmit the payment."
+    
     # Notify sales executive
     if verification.get("sales_executive_id"):
         await create_notification(
             verification["sales_executive_id"],
-            "Payment Verification Rejected",
-            f"Payment for {verification['customer_name']} was rejected: {rejection_reason}",
+            "Payment Verification REJECTED - Action Required",
+            notification_message,
             "error",
             f"/sales"
         )
     
-    await log_audit(user, "reject", "finance_verification", verification_id, verification["customer_name"],
-                    {"reason": rejection_reason})
+    # Notify team leader
+    if team_leader:
+        team_leader_message = f"Payment rejection for {verification['customer_name']} (handled by {verification.get('sales_executive_name', 'Unknown')}).\n\nAmount: AED {verification.get('sale_amount', 0):,.2f}\nReason: {rejection_reason}\n\nPlease follow up with your team member."
+        await create_notification(
+            team_leader["id"],
+            "Team Payment Rejected - Follow Up Required",
+            team_leader_message,
+            "warning",
+            f"/sales"
+        )
     
-    return {"success": True, "message": "Verification rejected"}
+    await log_audit(user, "reject", "finance_verification", verification_id, verification["customer_name"],
+                    {"reason": rejection_reason, "sales_exec": verification.get("sales_executive_name"), "team_leader": team_leader.get("full_name") if team_leader else None})
+    
+    return {"success": True, "message": "Verification rejected. Agent and team leader have been notified."}
 
 @api_router.get("/finance/transactions")
 async def get_transactions(
