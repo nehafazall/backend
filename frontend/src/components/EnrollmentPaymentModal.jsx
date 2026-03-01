@@ -21,11 +21,14 @@ import {
 } from 'lucide-react';
 
 const PAYMENT_METHODS = [
-    { id: 'bank_transfer', label: 'Bank Transfer', icon: Building2, description: 'Direct bank transfer or wire' },
-    { id: 'credit_card', label: 'Credit/Debit Card', icon: CreditCard, description: 'Visa, Mastercard, etc.' },
-    { id: 'cash', label: 'Cash', icon: Wallet, description: 'In-person cash payment' },
-    { id: 'upi', label: 'UPI / Mobile Payment', icon: Smartphone, description: 'Google Pay, PhonePe, etc.' },
-    { id: 'cheque', label: 'Cheque', icon: DollarSign, description: 'Post-dated or current cheque' },
+    { id: 'bank_transfer', label: 'Bank Transfer', icon: Building2, description: 'Direct bank transfer or wire', settlement: 'immediate' },
+    { id: 'credit_card', label: 'Credit/Debit Card', icon: CreditCard, description: 'Visa, Mastercard, etc.', settlement: 'immediate' },
+    { id: 'cash', label: 'Cash', icon: Wallet, description: 'In-person cash payment', settlement: 'immediate' },
+    { id: 'tabby', label: 'Tabby', icon: Smartphone, description: 'Buy Now Pay Later - Tabby', settlement: 'weekly_monday' },
+    { id: 'tamara', label: 'Tamara', icon: Smartphone, description: 'Buy Now Pay Later - Tamara', settlement: '7_days' },
+    { id: 'network', label: 'Network', icon: CreditCard, description: 'Network International', settlement: 't_plus_1' },
+    { id: 'upi', label: 'UPI / Mobile Payment', icon: Smartphone, description: 'Google Pay, PhonePe, etc.', settlement: 'immediate' },
+    { id: 'cheque', label: 'Cheque', icon: DollarSign, description: 'Post-dated or current cheque', settlement: 'manual' },
 ];
 
 const EnrollmentPaymentModal = ({ 
