@@ -673,6 +673,14 @@ const CustomerServicePage = () => {
                 entityName={reminderStudent?.full_name}
                 onSuccess={handleReminderSuccess}
             />
+
+            {/* Activation Questionnaire Modal */}
+            <ActivationQuestionnaireModal
+                open={showActivationModal}
+                onClose={() => { setShowActivationModal(false); setPendingActivationStudent(null); }}
+                student={pendingActivationStudent}
+                onComplete={handleActivationComplete}
+            />
         </div>
     );
 };
