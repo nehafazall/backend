@@ -388,6 +388,14 @@ const CustomerServicePage = () => {
     const handleUpdateStudent = async () => {
         if (!selectedStudent) return;
         
+        // Check if changing to "activated" stage from "new_student"
+        if (updateData.stage === 'activated' && selectedStudent.stage === 'new_student') {
+            setShowDetailModal(false);
+            setPendingActivationStudent(selectedStudent);
+            setShowActivationModal(true);
+            return;
+        }
+        
         try {
             await studentApi.update(selectedStudent.id, updateData);
             toast.success('Student updated successfully');
