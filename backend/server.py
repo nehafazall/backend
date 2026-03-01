@@ -2868,9 +2868,9 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "phone": existing.get("phone"),
                 "email": existing.get("email"),
                 "course_id": course_id,
-                "course_name": update_data.get("interested_course_name") or existing.get("interested_course_name"),
+                "course_name": update_data.get("course_name") or update_data.get("interested_course_name") or existing.get("interested_course_name"),
                 "sale_amount": sale_amount,
-                "payment_method": update_data.get("payment_method") or existing.get("payment_method"),
+                "payment_method": update_data.get("payment_method"),
                 "payment_date": update_data.get("payment_date"),
                 "payment_proof": update_data.get("payment_proof"),  # Base64 encoded image
                 "payment_proof_filename": update_data.get("payment_proof_filename"),
