@@ -197,7 +197,7 @@ META_APP_SECRET=""
 META_WEBHOOK_VERIFY_TOKEN="clt_synapse_meta_webhook_2024"
 ```
 
-**Webhook URL:** `https://pipeline-finance.preview.emergentagent.com/api/marketing/webhook`
+**Webhook URL:** `https://payment-verification-9.preview.emergentagent.com/api/marketing/webhook`
 
 **Test Results:** Backend 100% (12/12 passed), Frontend 100% (All features working)
 
