@@ -54,6 +54,7 @@ import {
     UserCog,
     Receipt,
     Megaphone,
+    FileCheck,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
