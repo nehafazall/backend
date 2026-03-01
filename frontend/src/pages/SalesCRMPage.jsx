@@ -64,6 +64,7 @@ import {
     Bell,
     PhoneCall,
     GripVertical,
+    Target,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
