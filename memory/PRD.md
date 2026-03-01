@@ -3,6 +3,59 @@
 ## Original Problem Statement
 Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform with role-based access, end-to-end automation, auditability, and real-time dashboards.
 
+## Latest Updates (March 2026)
+
+### Session Mar 1, 2026 - Sales Pipeline & Commission Tracking
+
+#### P0: Sales Pipeline Revenue & Commission Tracking (COMPLETED)
+**Problem:** User needed to track interested course and estimated value in the sales pipeline, with commission calculations for leads expected to close this month.
+
+**Solution:**
+Built comprehensive sales pipeline tracking with commission projections:
+
+**Backend Implementation:**
+- Created `GET /api/dashboard/expected-commission` endpoint that calculates:
+  - Expected commission from pipeline leads (warm, hot, in_progress)
+  - Earned commission this month from enrolled leads
+  - Stage-by-stage breakdown with lead counts and values
+  - Top expected deals list
+  - Actual pending/paid commission from commissions collection
+- Enhanced `GET /api/dashboard/pipeline-revenue` with course breakdown per stage
+
+**Key API Endpoints:**
+- `GET /api/dashboard/expected-commission` - Commission projections
+- `GET /api/dashboard/pipeline-revenue` - Pipeline value by stage
+
+**Frontend Implementation:**
+- **PipelineRevenueWidget** (`/app/frontend/src/components/PipelineRevenueWidget.jsx`):
+  - Active Pipeline, Won (Enrolled), Lost (Rejected) summary cards
+  - Pipeline funnel visualization with stage bars
+  - Course breakdown badges per stage
+  
+- **ExpectedCommissionWidget** (`/app/frontend/src/components/ExpectedCommissionWidget.jsx`):
+  - Expected (Pipeline) and Earned This Month cards
+  - Total Receivable highlight
+  - Stage-by-stage commission breakdown with progress bars
+  - Top Expected Deals list
+
+- **SalesCRMPage Enhancements**:
+  - Lead cards now display course interest and estimated value
+  - "Course Interest Required" section appears when moving leads to warm_lead, hot_lead, or in_progress
+  - Course/Package selection dropdown with auto-fill of estimated value
+  - Validation prevents stage change without course selection
+
+- **SalesDashboard Integration**:
+  - Both widgets added to Sales Dashboard page
+
+**Database Fields:**
+- `leads.interested_course_id` - ObjectId reference to course
+- `leads.interested_course_name` - Cached course name
+- `leads.estimated_value` - Estimated deal value in AED
+
+**Test Results:** Backend 100% (14/14 passed), Frontend 100%
+
+---
+
 ## Latest Updates (February 2026)
 
 ### Session Feb 28, 2026 (Part 2) - Google Sheets Lead Connector & Lead Flow Refactoring
