@@ -315,6 +315,8 @@ class LeadUpdate(BaseModel):
     follow_up_date: Optional[datetime] = None
     assigned_to: Optional[str] = None
     course_id: Optional[str] = None
+    interested_course_id: Optional[str] = None  # Course client is interested in (for pipeline tracking)
+    estimated_value: Optional[float] = None  # Estimated deal value
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
