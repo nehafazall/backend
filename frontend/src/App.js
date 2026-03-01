@@ -284,6 +284,8 @@ function AppRoutes() {
                     <Route path="management" element={<DataManagementPage />} />
                     {/* Payment Verifications */}
                     <Route path="verifications" element={<FinanceVerificationsPage />} />
+                    {/* Pending Settlements */}
+                    <Route path="pending-settlements" element={<PendingSettlementsPage />} />
                 </Route>
                 
                 {/* HR Module */}
