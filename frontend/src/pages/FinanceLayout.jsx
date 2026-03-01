@@ -43,7 +43,9 @@ const entityNavConfig = {
                 title: 'Transactions',
                 items: [
                     { path: 'payables', label: 'Payables', icon: ArrowRightLeft },
-                    { path: 'receivables', label: 'Receivables', icon: Receipt }
+                    { path: 'receivables', label: 'Receivables', icon: Receipt },
+                    { path: 'verifications', label: 'Payment Verifications', icon: FileSpreadsheet },
+                    { path: 'pending-settlements', label: 'Pending Settlements', icon: Wallet }
                 ]
             },
             {
