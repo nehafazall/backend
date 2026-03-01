@@ -15047,6 +15047,196 @@ async def run_auto_sync():
     except Exception as e:
         logger.error(f"Auto-sync error: {e}")
 
+# ==================== FINANCE VERIFICATION ====================
+
+@api_router.get("/finance/verifications")
+async def get_finance_verifications(
+    status: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get all pending payment verifications for Finance team"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    verifications = await db.finance_verifications.find(query, {"_id": 0}).sort("submitted_at", -1).to_list(500)
+    return verifications
+
+@api_router.get("/finance/verifications/{verification_id}")
+async def get_verification_detail(
+    verification_id: str,
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get verification detail"""
+    verification = await db.finance_verifications.find_one({"id": verification_id}, {"_id": 0})
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verification not found")
+    return verification
+
+@api_router.post("/finance/verifications/{verification_id}/verify")
+async def verify_payment(
+    verification_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Finance team verifies payment and creates transaction"""
+    verification = await db.finance_verifications.find_one({"id": verification_id})
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verification not found")
+    
+    if verification["status"] != "pending_verification":
+        raise HTTPException(status_code=400, detail="Verification already processed")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Create transaction record
+    transaction = {
+        "id": str(uuid.uuid4()),
+        "type": "enrollment_payment",
+        "verification_id": verification_id,
+        "lead_id": verification.get("lead_id"),
+        "student_id": verification.get("student_id"),
+        "customer_name": verification["customer_name"],
+        "course_id": verification.get("course_id"),
+        "course_name": verification.get("course_name"),
+        "amount": verification["sale_amount"],
+        "currency": "AED",
+        "payment_method": verification.get("payment_method"),
+        "payment_reference": data.get("payment_reference", ""),
+        "payment_date": data.get("payment_date", now.strftime("%Y-%m-%d")),
+        "sales_executive_id": verification.get("sales_executive_id"),
+        "sales_executive_name": verification.get("sales_executive_name"),
+        "verified_by": user["id"],
+        "verified_by_name": user["full_name"],
+        "status": "completed",
+        "notes": data.get("notes", ""),
+        "created_at": now.isoformat()
+    }
+    await db.transactions.insert_one(transaction)
+    
+    # Update verification record
+    await db.finance_verifications.update_one(
+        {"id": verification_id},
+        {"$set": {
+            "status": "verified",
+            "verified_at": now.isoformat(),
+            "verified_by": user["id"],
+            "verified_by_name": user["full_name"],
+            "transaction_id": transaction["id"]
+        }}
+    )
+    
+    # Update student record to mark payment verified
+    if verification.get("student_id"):
+        await db.students.update_one(
+            {"id": verification["student_id"]},
+            {"$set": {"payment_verified": True, "payment_verified_at": now.isoformat()}}
+        )
+    
+    # Notify sales executive
+    if verification.get("sales_executive_id"):
+        await create_notification(
+            verification["sales_executive_id"],
+            "Payment Verified",
+            f"Payment for {verification['customer_name']} (AED {verification['sale_amount']:.2f}) has been verified by Finance.",
+            "success",
+            f"/sales"
+        )
+    
+    await log_audit(user, "verify", "finance_verification", verification_id, verification["customer_name"],
+                    {"amount": verification["sale_amount"], "transaction_id": transaction["id"]})
+    
+    return {"success": True, "transaction_id": transaction["id"], "message": "Payment verified and transaction recorded"}
+
+@api_router.post("/finance/verifications/{verification_id}/reject")
+async def reject_verification(
+    verification_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Finance team rejects payment verification"""
+    verification = await db.finance_verifications.find_one({"id": verification_id})
+    if not verification:
+        raise HTTPException(status_code=404, detail="Verification not found")
+    
+    if verification["status"] != "pending_verification":
+        raise HTTPException(status_code=400, detail="Verification already processed")
+    
+    rejection_reason = data.get("rejection_reason")
+    if not rejection_reason:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Update verification record
+    await db.finance_verifications.update_one(
+        {"id": verification_id},
+        {"$set": {
+            "status": "rejected",
+            "verified_at": now.isoformat(),
+            "verified_by": user["id"],
+            "verified_by_name": user["full_name"],
+            "rejection_reason": rejection_reason
+        }}
+    )
+    
+    # Revert lead stage back to in_progress (they need to resolve payment)
+    if verification.get("lead_id"):
+        await db.leads.update_one(
+            {"id": verification["lead_id"]},
+            {"$set": {
+                "stage": "in_progress",
+                "payment_verification_failed": True,
+                "payment_rejection_reason": rejection_reason,
+                "updated_at": now.isoformat()
+            }}
+        )
+    
+    # Notify sales executive
+    if verification.get("sales_executive_id"):
+        await create_notification(
+            verification["sales_executive_id"],
+            "Payment Verification Rejected",
+            f"Payment for {verification['customer_name']} was rejected: {rejection_reason}",
+            "error",
+            f"/sales"
+        )
+    
+    await log_audit(user, "reject", "finance_verification", verification_id, verification["customer_name"],
+                    {"reason": rejection_reason})
+    
+    return {"success": True, "message": "Verification rejected"}
+
+@api_router.get("/finance/transactions")
+async def get_transactions(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get all verified transactions"""
+    query = {"status": "completed"}
+    
+    if start_date:
+        query["payment_date"] = {"$gte": start_date}
+    if end_date:
+        if "payment_date" in query:
+            query["payment_date"]["$lte"] = end_date
+        else:
+            query["payment_date"] = {"$lte": end_date}
+    
+    transactions = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # Calculate totals
+    total_amount = sum(t.get("amount", 0) for t in transactions)
+    
+    return {
+        "transactions": transactions,
+        "summary": {
+            "count": len(transactions),
+            "total_amount": total_amount
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
