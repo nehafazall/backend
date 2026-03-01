@@ -44,8 +44,14 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
         call_notes: '',
         rejection_reason: '',
         follow_up_date: '',
+        interested_course_id: '',
+        estimated_value: '',
     });
     const [loading, setLoading] = useState(false);
+    const [courses, setCourses] = useState([]);
+    
+    // Stages that require course selection
+    const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
     
     // Reassignment state
     const [showReassign, setShowReassign] = useState(false);
@@ -63,11 +69,26 @@ const LeadDetailModal = ({ open, onClose, lead, onUpdate }) => {
                 call_notes: '',
                 rejection_reason: lead.rejection_reason || '',
                 follow_up_date: '',
+                interested_course_id: lead.interested_course_id || '',
+                estimated_value: lead.estimated_value || '',
             });
             setShowReassign(false);
             setReassignData({ new_agent_id: '', reason: '' });
         }
     }, [lead]);
+    
+    // Fetch courses on mount
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const res = await apiClient.get('/courses');
+                setCourses(res.data || []);
+            } catch (error) {
+                console.error('Failed to fetch courses:', error);
+            }
+        };
+        fetchCourses();
+    }, []);
 
     useEffect(() => {
         if (showReassign && canReassign) {
