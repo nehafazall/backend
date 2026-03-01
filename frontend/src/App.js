@@ -43,6 +43,7 @@ import AccountsPage from "@/pages/finance/AccountsPage";
 import FinanceCommissionEnginePage from "@/pages/finance/CommissionEnginePage";
 import CommissionSettlementsPage from "@/pages/finance/CommissionSettlementsPage";
 import ReconciliationPage from "@/pages/finance/ReconciliationPage";
+import FinanceVerificationsPage from "@/pages/finance/FinanceVerificationsPage";
 // Finance Suite - CLT
 import CltFinanceDashboard from "@/pages/finance/CltFinanceDashboard";
 import CltPayablesPage from "@/pages/finance/CltPayablesPage";
