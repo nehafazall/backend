@@ -54,6 +54,8 @@ import {
     RefreshCw,
     Receipt,
     CreditCard,
+    ImageIcon,
+    ExternalLink,
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
