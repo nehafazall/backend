@@ -457,7 +457,61 @@ export default function FinanceVerificationsPage() {
                                         AED {selectedVerification.sale_amount?.toLocaleString()}
                                     </span>
                                 </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Payment Method:</span>
+                                    <span className="capitalize">{selectedVerification.payment_method?.replace('_', ' ') || 'N/A'}</span>
+                                </div>
+                                {selectedVerification.transaction_id && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Transaction ID:</span>
+                                        <span className="font-mono">{selectedVerification.transaction_id}</span>
+                                    </div>
+                                )}
+                                {selectedVerification.payment_date && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Payment Date:</span>
+                                        <span>{new Date(selectedVerification.payment_date).toLocaleDateString()}</span>
+                                    </div>
+                                )}
+                                {selectedVerification.payment_notes && (
+                                    <div className="pt-2 border-t">
+                                        <span className="text-muted-foreground text-sm">Sales Notes:</span>
+                                        <p className="text-sm mt-1">{selectedVerification.payment_notes}</p>
+                                    </div>
+                                )}
                             </div>
+                            
+                            {/* Payment Proof Image */}
+                            {selectedVerification.payment_proof && (
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <ImageIcon className="h-4 w-4" />
+                                        Payment Proof Screenshot
+                                    </Label>
+                                    <div className="border rounded-lg p-2 bg-muted/50">
+                                        <img 
+                                            src={selectedVerification.payment_proof} 
+                                            alt="Payment proof" 
+                                            className="max-h-64 mx-auto rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={() => window.open(selectedVerification.payment_proof, '_blank')}
+                                        />
+                                        {selectedVerification.payment_proof_filename && (
+                                            <p className="text-xs text-muted-foreground text-center mt-2">
+                                                {selectedVerification.payment_proof_filename}
+                                            </p>
+                                        )}
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="w-full mt-2"
+                                            onClick={() => window.open(selectedVerification.payment_proof, '_blank')}
+                                        >
+                                            <ExternalLink className="h-4 w-4 mr-2" />
+                                            Open Full Size
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                             
                             <div className="space-y-2">
                                 <Label>Payment Reference / Receipt No.</Label>
