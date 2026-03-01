@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '@/lib/api';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,7 +29,7 @@ export function PipelineRevenueWidget({ viewAs }) {
         try {
             setLoading(true);
             const params = viewAs ? { view_as: viewAs } : {};
-            const res = await api.get('/dashboard/pipeline-revenue', { params });
+            const res = await apiClient.get('/dashboard/pipeline-revenue', { params });
             setData(res.data);
         } catch (error) {
             console.error('Failed to fetch pipeline revenue:', error);
