@@ -551,22 +551,87 @@ export default function FinanceVerificationsPage() {
                                 </div>
                             )}
                             
-                            <div className="space-y-2">
-                                <Label>Payment Reference / Receipt No.</Label>
-                                <Input
-                                    value={verifyData.payment_reference}
-                                    onChange={(e) => setVerifyData({ ...verifyData, payment_reference: e.target.value })}
-                                    placeholder="e.g., TXN123456"
-                                />
+                            {/* Transaction Reference Entry - Required */}
+                            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <Receipt className="h-5 w-5 text-amber-600" />
+                                    <span className="font-medium text-amber-600">Transaction Verification Required</span>
+                                </div>
+                                
+                                {selectedVerification.is_split_payment && selectedVerification.payment_splits?.length > 0 ? (
+                                    /* Split Payment References */
+                                    <div className="space-y-3">
+                                        <p className="text-sm text-muted-foreground">
+                                            Enter transaction reference for each payment method:
+                                        </p>
+                                        {selectedVerification.payment_splits.map((split, idx) => (
+                                            <div key={idx} className="p-3 bg-background rounded border space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-medium capitalize">{split.method?.replace('_', ' ')}</span>
+                                                    <span className="font-bold text-emerald-600">AED {split.amount?.toLocaleString()}</span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-sm">Transaction Reference *</Label>
+                                                    <Input
+                                                        value={verifyData.split_references?.[idx]?.reference || ''}
+                                                        onChange={(e) => {
+                                                            const newRefs = [...(verifyData.split_references || [])];
+                                                            newRefs[idx] = { ...newRefs[idx], reference: e.target.value, method: split.method };
+                                                            setVerifyData({ ...verifyData, split_references: newRefs });
+                                                            if (verifyErrors[`split_${idx}`]) {
+                                                                setVerifyErrors({ ...verifyErrors, [`split_${idx}`]: null });
+                                                            }
+                                                        }}
+                                                        placeholder={`Enter ${split.method?.replace('_', ' ')} reference`}
+                                                        className={verifyErrors[`split_${idx}`] ? 'border-red-500' : ''}
+                                                    />
+                                                    {verifyErrors[`split_${idx}`] && (
+                                                        <p className="text-xs text-red-500">{verifyErrors[`split_${idx}`]}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    /* Single Payment Reference */
+                                    <div className="space-y-2">
+                                        <Label>Payment Reference / Transaction ID *</Label>
+                                        <Input
+                                            value={verifyData.payment_reference}
+                                            onChange={(e) => {
+                                                setVerifyData({ ...verifyData, payment_reference: e.target.value });
+                                                if (verifyErrors.payment_reference) {
+                                                    setVerifyErrors({ ...verifyErrors, payment_reference: null });
+                                                }
+                                            }}
+                                            placeholder="Enter bank/gateway transaction reference"
+                                            className={verifyErrors.payment_reference ? 'border-red-500' : ''}
+                                        />
+                                        {verifyErrors.payment_reference && (
+                                            <p className="text-xs text-red-500">{verifyErrors.payment_reference}</p>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                <div className="space-y-2">
+                                    <Label>Payment Date *</Label>
+                                    <Input
+                                        type="date"
+                                        value={verifyData.payment_date}
+                                        onChange={(e) => {
+                                            setVerifyData({ ...verifyData, payment_date: e.target.value });
+                                            if (verifyErrors.payment_date) {
+                                                setVerifyErrors({ ...verifyErrors, payment_date: null });
+                                            }
+                                        }}
+                                        className={verifyErrors.payment_date ? 'border-red-500' : ''}
+                                    />
+                                    {verifyErrors.payment_date && (
+                                        <p className="text-xs text-red-500">{verifyErrors.payment_date}</p>
+                                    )}
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label>Payment Date</Label>
-                                <Input
-                                    type="date"
-                                    value={verifyData.payment_date}
-                                    onChange={(e) => setVerifyData({ ...verifyData, payment_date: e.target.value })}
-                                />
-                            </div>
+                            
                             <div className="space-y-2">
                                 <Label>Notes (Optional)</Label>
                                 <Textarea
