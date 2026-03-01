@@ -97,7 +97,17 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
         });
     };
 
+    const formatCurrency = (amount) => {
+        if (!amount) return null;
+        return new Intl.NumberFormat('en-AE', {
+            style: 'currency',
+            currency: 'AED',
+            minimumFractionDigits: 0,
+        }).format(amount);
+    };
+
     const hasReminder = lead.reminder_date && !lead.reminder_completed;
+    const isPipelineStage = ['warm_lead', 'hot_lead', 'in_progress'].includes(lead.stage);
 
     return (
         <div
@@ -168,6 +178,32 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
                     </p>
                 )}
             </div>
+            
+            {/* Course Interest & Estimated Value - Show for pipeline stages */}
+            {(lead.interested_course_name || lead.estimated_value) && (
+                <div className="mt-2 p-2 bg-primary/5 rounded-md border border-primary/10">
+                    {lead.interested_course_name && (
+                        <p className="text-xs font-medium text-primary truncate" title={lead.interested_course_name}>
+                            {lead.interested_course_name}
+                        </p>
+                    )}
+                    {lead.estimated_value > 0 && (
+                        <p className="text-sm font-bold text-emerald-600 mt-0.5">
+                            {formatCurrency(lead.estimated_value)}
+                        </p>
+                    )}
+                </div>
+            )}
+            
+            {/* Show sale amount for enrolled leads */}
+            {lead.stage === 'enrolled' && lead.sale_amount > 0 && (
+                <div className="mt-2 p-2 bg-emerald-500/10 rounded-md border border-emerald-500/20">
+                    <p className="text-xs text-emerald-600">Enrolled</p>
+                    <p className="text-sm font-bold text-emerald-600">
+                        {formatCurrency(lead.sale_amount)}
+                    </p>
+                </div>
+            )}
             
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
