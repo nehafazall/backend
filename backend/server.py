@@ -2761,6 +2761,10 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "course_name": update_data.get("interested_course_name") or existing.get("interested_course_name"),
                 "sale_amount": sale_amount,
                 "payment_method": update_data.get("payment_method") or existing.get("payment_method"),
+                "payment_date": update_data.get("payment_date"),
+                "payment_proof": update_data.get("payment_proof"),  # Base64 encoded image
+                "payment_proof_filename": update_data.get("payment_proof_filename"),
+                "payment_notes": update_data.get("payment_notes"),
                 "sales_executive_id": existing.get("assigned_to"),
                 "sales_executive_name": existing.get("assigned_to_name"),
                 "status": "pending_verification",  # pending_verification, verified, rejected
@@ -2769,7 +2773,7 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "verified_by": None,
                 "verified_by_name": None,
                 "rejection_reason": None,
-                "transaction_id": None,
+                "transaction_id": update_data.get("transaction_id"),
                 "notes": update_data.get("notes") or ""
             }
             await db.finance_verifications.insert_one(verification_record)
