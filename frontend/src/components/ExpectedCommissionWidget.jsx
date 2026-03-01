@@ -30,7 +30,7 @@ export function ExpectedCommissionWidget({ viewAs }) {
         try {
             setLoading(true);
             const params = viewAs ? { view_as: viewAs } : {};
-            const res = await api.get('/dashboard/expected-commission', { params });
+            const res = await apiClient.get('/dashboard/expected-commission', { params });
             setData(res.data);
         } catch (error) {
             console.error('Failed to fetch expected commission:', error);
