@@ -5,6 +5,58 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
+### Session Mar 1, 2026 (Part 2) - Finance Verification Flow Fix & Meta API Configuration
+
+#### P0: Finance Verification Data Pipeline Fix (COMPLETED)
+**Problem:** When a lead was enrolled, the finance verification record was being created without crucial payment details (payment method, course name, payment screenshot, split payment details, BNPL phone verification). This was blocking the finance team from verifying payments.
+
+**Root Cause:** The `LeadUpdate` Pydantic model in `server.py` was missing the payment-related fields, causing them to be filtered out before reaching the finance verification creation logic.
+
+**Solution:**
+Extended the `LeadUpdate` model to include all payment fields:
+
+```python
+class LeadUpdate(BaseModel):
+    # ... existing fields ...
+    # Payment fields for enrollment
+    payment_method: Optional[str] = None
+    payment_amount: Optional[float] = None
+    payment_date: Optional[str] = None
+    payment_proof: Optional[str] = None  # Base64 encoded image
+    payment_proof_filename: Optional[str] = None
+    payment_notes: Optional[str] = None
+    transaction_id: Optional[str] = None
+    # Split payment support
+    is_split_payment: Optional[bool] = False
+    payment_splits: Optional[List[dict]] = None
+    # BNPL phone verification
+    bnpl_phone: Optional[str] = None
+    bnpl_same_number: Optional[bool] = True
+```
+
+**Key Changes:**
+- Backend: `/app/backend/server.py` - Added 12 new fields to LeadUpdate model (lines 310-343)
+- Backend: Updated finance verification record creation to properly capture course_name (line 2871)
+- The complete data flow now works: `EnrollmentPaymentModal` → `leadApi.update()` → `finance_verifications` collection
+
+**Test Results:** Backend 100% (11/11 passed), Frontend 100%
+
+#### P1: Meta Ads API Configuration (COMPLETED)
+**Problem:** Meta Ads API credentials were not configured.
+
+**Solution:**
+Added Meta API credentials to backend `.env`:
+- `META_APP_ID="755078850771503"`
+- `META_APP_SECRET="742a5810f5fa474427d2ce843a67283b"`
+
+**Result:**
+- Meta Ads Service now initialized on server startup
+- Marketing Settings page shows "Meta API: Configured" and "Webhook: Ready"
+- Webhook URL: `https://payment-verification-9.preview.emergentagent.com/api/marketing/webhook`
+- Users can now connect their Meta Ad accounts via OAuth flow
+
+---
+
 ### Session Mar 1, 2026 - Sales Pipeline & Commission Tracking
 
 #### P0: Sales Pipeline Revenue & Commission Tracking (COMPLETED)
