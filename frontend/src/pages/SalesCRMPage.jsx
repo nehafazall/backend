@@ -354,6 +354,19 @@ const SalesCRMPage = () => {
         fetchLeads();
     }, []);
 
+    // Fetch courses for course selection
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const res = await leadApi.getCourses();
+                setCourses(res.data || []);
+            } catch (error) {
+                console.error('Failed to fetch courses:', error);
+            }
+        };
+        fetchCourses();
+    }, []);
+
     // Auto-detect country when phone number changes
     const handlePhoneChange = (phone) => {
         setFormData(prev => {
