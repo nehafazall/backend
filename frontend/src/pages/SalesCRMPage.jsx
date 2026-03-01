@@ -332,7 +332,13 @@ const SalesCRMPage = () => {
         call_notes: '',
         rejection_reason: '',
         follow_up_date: '',
+        interested_course_id: '',
+        estimated_value: '',
     });
+    const [courses, setCourses] = useState([]);
+
+    // Pipeline stages that require course selection
+    const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
 
     // Drag and drop sensors
     const sensors = useSensors(
