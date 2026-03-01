@@ -2903,8 +2903,8 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                     payment_method=payment_method,
                     customer_name=existing["full_name"],
                     lead_id=lead_id,
-                    user_id=current_user["id"],
-                    user_name=current_user["full_name"]
+                    user_id=user["id"],
+                    user_name=user["full_name"]
                 )
             except Exception as e:
                 print(f"Warning: Failed to create sales journal entry: {e}")
