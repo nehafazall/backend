@@ -239,6 +239,7 @@ export default function FinanceVerificationsPage() {
                                     <TableHead>Customer</TableHead>
                                     <TableHead>Course</TableHead>
                                     <TableHead>Amount</TableHead>
+                                    <TableHead>Payment Method</TableHead>
                                     <TableHead>Sales Executive</TableHead>
                                     <TableHead>Submitted</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -247,7 +248,7 @@ export default function FinanceVerificationsPage() {
                             <TableBody>
                                 {verifications.filter(v => v.status === 'pending_verification').length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                             No pending verifications
                                         </TableCell>
                                     </TableRow>
@@ -268,12 +269,29 @@ export default function FinanceVerificationsPage() {
                                                     AED {v.sale_amount?.toLocaleString()}
                                                 </span>
                                             </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    <CreditCard className="h-3 w-3" />
+                                                    <span className="capitalize">{v.payment_method?.replace('_', ' ') || '-'}</span>
+                                                    {v.payment_proof && (
+                                                        <Badge variant="secondary" className="ml-1 text-xs">Proof</Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell>{v.sales_executive_name || '-'}</TableCell>
                                             <TableCell>
                                                 {new Date(v.submitted_at).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => setSelectedVerification(v)}
+                                                        data-testid={`view-verification-${v.id}`}
+                                                    >
+                                                        View Details
+                                                    </Button>
                                                     <Button
                                                         size="sm"
                                                         variant="default"
