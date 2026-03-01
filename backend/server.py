@@ -2857,6 +2857,12 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "payment_proof": update_data.get("payment_proof"),  # Base64 encoded image
                 "payment_proof_filename": update_data.get("payment_proof_filename"),
                 "payment_notes": update_data.get("payment_notes"),
+                # Split payment support
+                "is_split_payment": update_data.get("is_split_payment", False),
+                "payment_splits": update_data.get("payment_splits"),  # Array of {method, amount, transaction_id, phone_number, is_same_number, proof}
+                # BNPL phone verification
+                "bnpl_phone": update_data.get("bnpl_phone"),
+                "bnpl_same_number": update_data.get("bnpl_same_number", True),
                 "sales_executive_id": existing.get("assigned_to"),
                 "sales_executive_name": existing.get("assigned_to_name"),
                 "status": "pending_verification",  # pending_verification, verified, rejected
