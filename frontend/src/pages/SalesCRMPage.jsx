@@ -358,7 +358,7 @@ const SalesCRMPage = () => {
     useEffect(() => {
         const fetchCourses = async () => {
             try {
-                const res = await leadApi.getCourses();
+                const res = await apiClient.get('/courses');
                 setCourses(res.data || []);
             } catch (error) {
                 console.error('Failed to fetch courses:', error);
