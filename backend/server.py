@@ -15575,6 +15575,202 @@ async def get_transactions(
         }
     }
 
+# ==================== PENDING SETTLEMENTS ====================
+
+@api_router.get("/finance/pending-settlements")
+async def get_pending_settlements(
+    status: Optional[str] = None,
+    payment_gateway: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get all pending settlements from payment gateways"""
+    query = {}
+    
+    if status:
+        query["status"] = status
+    else:
+        query["status"] = "pending"
+    
+    if payment_gateway:
+        query["payment_gateway"] = payment_gateway.lower()
+    
+    settlements = await db.pending_settlements.find(query, {"_id": 0}).sort("expected_settlement_date", 1).to_list(1000)
+    
+    # Group by payment gateway
+    by_gateway = {}
+    for s in settlements:
+        gateway = s.get("payment_gateway", "unknown")
+        if gateway not in by_gateway:
+            by_gateway[gateway] = {"count": 0, "total": 0, "settlements": []}
+        by_gateway[gateway]["count"] += 1
+        by_gateway[gateway]["total"] += s.get("amount", 0)
+        by_gateway[gateway]["settlements"].append(s)
+    
+    # Calculate totals
+    total_pending = sum(s.get("amount", 0) for s in settlements if s.get("status") == "pending")
+    
+    # Get overdue settlements
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    overdue = [s for s in settlements if s.get("expected_settlement_date") and s.get("expected_settlement_date") < today]
+    
+    return {
+        "settlements": settlements,
+        "by_gateway": by_gateway,
+        "summary": {
+            "total_pending": total_pending,
+            "total_count": len(settlements),
+            "overdue_count": len(overdue),
+            "overdue_amount": sum(s.get("amount", 0) for s in overdue)
+        }
+    }
+
+@api_router.post("/finance/pending-settlements/{settlement_id}/mark-settled")
+async def mark_settlement_settled(
+    settlement_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """Mark a pending settlement as settled"""
+    settlement = await db.pending_settlements.find_one({"id": settlement_id})
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Settlement already processed")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Update settlement record
+    await db.pending_settlements.update_one(
+        {"id": settlement_id},
+        {"$set": {
+            "status": "settled",
+            "settled_at": now.isoformat(),
+            "settled_by": user["id"],
+            "settled_by_name": user["full_name"],
+            "actual_settlement_date": data.get("settlement_date", now.strftime("%Y-%m-%d")),
+            "settlement_reference": data.get("reference", ""),
+            "notes": data.get("notes", "")
+        }}
+    )
+    
+    # Update the original transaction
+    if settlement.get("transaction_id"):
+        await db.transactions.update_one(
+            {"id": settlement["transaction_id"]},
+            {"$set": {"settlement_status": "settled", "settlement_date": now.strftime("%Y-%m-%d")}}
+        )
+    
+    # Create journal entry for settlement (move from A/R to Bank)
+    journal_entry = {
+        "id": str(uuid.uuid4()),
+        "type": "settlement",
+        "settlement_id": settlement_id,
+        "transaction_id": settlement.get("transaction_id"),
+        "customer_name": settlement["customer_name"],
+        "description": f"Settlement received - {settlement.get('payment_gateway', 'Gateway').upper()} - {settlement['customer_name']}",
+        "debit_account": "bank",
+        "credit_account": "accounts_receivable",
+        "amount": settlement["amount"],
+        "currency": "AED",
+        "payment_method": settlement.get("payment_method"),
+        "reference": data.get("reference", ""),
+        "date": data.get("settlement_date", now.strftime("%Y-%m-%d")),
+        "status": "posted",
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now.isoformat()
+    }
+    await db.journal_entries.insert_one(journal_entry)
+    
+    await log_audit(user, "settle", "pending_settlement", settlement_id, settlement["customer_name"],
+                    {"amount": settlement["amount"], "gateway": settlement.get("payment_gateway")})
+    
+    return {"success": True, "message": "Settlement marked as received"}
+
+@api_router.get("/finance/journal-entries")
+async def get_journal_entries(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    entry_type: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get all journal entries"""
+    query = {}
+    
+    if entry_type:
+        query["type"] = entry_type
+    
+    if start_date:
+        query["date"] = {"$gte": start_date}
+    if end_date:
+        if "date" in query:
+            query["date"]["$lte"] = end_date
+        else:
+            query["date"] = {"$lte": end_date}
+    
+    entries = await db.journal_entries.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # Calculate totals by type
+    total_revenue = sum(e.get("amount", 0) for e in entries if e.get("type") == "revenue")
+    total_settlements = sum(e.get("amount", 0) for e in entries if e.get("type") == "settlement")
+    
+    return {
+        "entries": entries,
+        "summary": {
+            "count": len(entries),
+            "total_revenue": total_revenue,
+            "total_settlements": total_settlements
+        }
+    }
+
+@api_router.get("/finance/payment-receivables")
+async def get_payment_receivables(
+    user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))
+):
+    """Get all pending payment receivables (unsettled payments)"""
+    # Get pending settlements
+    pending = await db.pending_settlements.find({"status": "pending"}, {"_id": 0}).to_list(1000)
+    
+    # Group by payment gateway
+    by_gateway = {}
+    gateway_settlement_info = {
+        "tabby": "Every Monday",
+        "tamara": "7 days from payment",
+        "network": "T+1 (Next business day)",
+        "cheque": "Manual processing"
+    }
+    
+    for p in pending:
+        gateway = p.get("payment_gateway", "other")
+        if gateway not in by_gateway:
+            by_gateway[gateway] = {
+                "gateway": gateway,
+                "settlement_rule": gateway_settlement_info.get(gateway, "Varies"),
+                "count": 0,
+                "total_amount": 0,
+                "receivables": []
+            }
+        by_gateway[gateway]["count"] += 1
+        by_gateway[gateway]["total_amount"] += p.get("amount", 0)
+        by_gateway[gateway]["receivables"].append(p)
+    
+    # Calculate overdue
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    overdue = [p for p in pending if p.get("expected_settlement_date") and p.get("expected_settlement_date") < today]
+    
+    return {
+        "receivables": pending,
+        "by_gateway": list(by_gateway.values()),
+        "summary": {
+            "total_receivable": sum(p.get("amount", 0) for p in pending),
+            "total_count": len(pending),
+            "overdue_count": len(overdue),
+            "overdue_amount": sum(p.get("amount", 0) for p in overdue)
+        },
+        "settlement_rules": gateway_settlement_info
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
