@@ -67,11 +67,14 @@ class TestFinanceVerificationFlow:
         if not TestFinanceVerificationFlow.test_course_id:
             pytest.skip("No course available")
         
+        import random
+        unique_phone = f"+97150{random.randint(1000000, 9999999)}"
+        
         # Create a lead
         lead_data = {
             "full_name": "TEST_Finance_Verify_Lead",
-            "phone": "+971501234567",
-            "email": "test.finance.verify@example.com",
+            "phone": unique_phone,
+            "email": f"test.finance.verify.{random.randint(1000,9999)}@example.com",
             "country": "UAE",
             "lead_source": "test"
         }
@@ -276,11 +279,14 @@ class TestFinanceVerificationFlow:
         if not TestFinanceVerificationFlow.test_course_id:
             pytest.skip("No course available")
         
+        import random
+        unique_phone = f"+97150{random.randint(1000000, 9999999)}"
+        
         # Create another lead
         lead_data = {
             "full_name": "TEST_Split_Payment_Lead",
-            "phone": "+971502223333",
-            "email": "test.split@example.com",
+            "phone": unique_phone,
+            "email": f"test.split.{random.randint(1000,9999)}@example.com",
             "country": "UAE"
         }
         
