@@ -15259,6 +15259,10 @@ async def verify_payment(
         raise HTTPException(status_code=400, detail="Verification already processed")
     
     now = datetime.now(timezone.utc)
+    payment_method = verification.get("payment_method", "").lower()
+    
+    # Settlement calculation based on payment method
+    settlement_info = calculate_settlement_date(payment_method, now)
     
     # Create transaction record
     transaction = {
@@ -15272,18 +15276,69 @@ async def verify_payment(
         "course_name": verification.get("course_name"),
         "amount": verification["sale_amount"],
         "currency": "AED",
-        "payment_method": verification.get("payment_method"),
-        "payment_reference": data.get("payment_reference", ""),
+        "payment_method": payment_method,
+        "payment_reference": data.get("payment_reference", "") or verification.get("transaction_id", ""),
         "payment_date": data.get("payment_date", now.strftime("%Y-%m-%d")),
         "sales_executive_id": verification.get("sales_executive_id"),
         "sales_executive_name": verification.get("sales_executive_name"),
         "verified_by": user["id"],
         "verified_by_name": user["full_name"],
         "status": "completed",
+        "settlement_status": settlement_info["status"],
+        "settlement_date": settlement_info["settlement_date"],
+        "settlement_type": settlement_info["type"],
         "notes": data.get("notes", ""),
         "created_at": now.isoformat()
     }
     await db.transactions.insert_one(transaction)
+    
+    # If payment requires settlement tracking, create pending settlement record
+    if settlement_info["status"] == "pending_settlement":
+        settlement_record = {
+            "id": str(uuid.uuid4()),
+            "transaction_id": transaction["id"],
+            "verification_id": verification_id,
+            "student_id": verification.get("student_id"),
+            "customer_name": verification["customer_name"],
+            "course_name": verification.get("course_name"),
+            "amount": verification["sale_amount"],
+            "currency": "AED",
+            "payment_method": payment_method,
+            "payment_gateway": payment_method,
+            "payment_date": data.get("payment_date", now.strftime("%Y-%m-%d")),
+            "expected_settlement_date": settlement_info["settlement_date"],
+            "settlement_type": settlement_info["type"],
+            "status": "pending",  # pending, settled, failed
+            "sales_executive_id": verification.get("sales_executive_id"),
+            "sales_executive_name": verification.get("sales_executive_name"),
+            "created_at": now.isoformat(),
+            "settled_at": None,
+            "settled_by": None,
+            "notes": ""
+        }
+        await db.pending_settlements.insert_one(settlement_record)
+    
+    # Create journal entry for accounting
+    journal_entry = {
+        "id": str(uuid.uuid4()),
+        "type": "revenue",
+        "transaction_id": transaction["id"],
+        "student_id": verification.get("student_id"),
+        "customer_name": verification["customer_name"],
+        "description": f"Course enrollment - {verification.get('course_name', 'N/A')} - {verification['customer_name']}",
+        "debit_account": "accounts_receivable" if settlement_info["status"] == "pending_settlement" else "bank",
+        "credit_account": "revenue",
+        "amount": verification["sale_amount"],
+        "currency": "AED",
+        "payment_method": payment_method,
+        "reference": data.get("payment_reference", "") or verification.get("transaction_id", ""),
+        "date": data.get("payment_date", now.strftime("%Y-%m-%d")),
+        "status": "posted",
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now.isoformat()
+    }
+    await db.journal_entries.insert_one(journal_entry)
     
     # Update verification record
     await db.finance_verifications.update_one(
@@ -15293,7 +15348,10 @@ async def verify_payment(
             "verified_at": now.isoformat(),
             "verified_by": user["id"],
             "verified_by_name": user["full_name"],
-            "transaction_id": transaction["id"]
+            "transaction_id": transaction["id"],
+            "journal_entry_id": journal_entry["id"],
+            "settlement_status": settlement_info["status"],
+            "expected_settlement_date": settlement_info["settlement_date"]
         }}
     )
     
@@ -15304,20 +15362,37 @@ async def verify_payment(
             {"$set": {"payment_verified": True, "payment_verified_at": now.isoformat()}}
         )
     
+    # Update lead to mark as payment verified
+    if verification.get("lead_id"):
+        await db.leads.update_one(
+            {"id": verification["lead_id"]},
+            {"$set": {"payment_verified": True, "payment_verified_at": now.isoformat()}}
+        )
+    
     # Notify sales executive
     if verification.get("sales_executive_id"):
+        settlement_msg = ""
+        if settlement_info["status"] == "pending_settlement":
+            settlement_msg = f" Settlement expected: {settlement_info['settlement_date']}"
         await create_notification(
             verification["sales_executive_id"],
             "Payment Verified",
-            f"Payment for {verification['customer_name']} (AED {verification['sale_amount']:.2f}) has been verified by Finance.",
+            f"Payment for {verification['customer_name']} (AED {verification['sale_amount']:.2f}) has been verified by Finance.{settlement_msg}",
             "success",
             f"/sales"
         )
     
     await log_audit(user, "verify", "finance_verification", verification_id, verification["customer_name"],
-                    {"amount": verification["sale_amount"], "transaction_id": transaction["id"]})
+                    {"amount": verification["sale_amount"], "transaction_id": transaction["id"], "settlement_status": settlement_info["status"]})
     
-    return {"success": True, "transaction_id": transaction["id"], "message": "Payment verified and transaction recorded"}
+    return {
+        "success": True, 
+        "transaction_id": transaction["id"], 
+        "journal_entry_id": journal_entry["id"],
+        "settlement_status": settlement_info["status"],
+        "expected_settlement_date": settlement_info["settlement_date"],
+        "message": "Payment verified and transaction recorded"
+    }
 
 @api_router.post("/finance/verifications/{verification_id}/reject")
 async def reject_verification(
