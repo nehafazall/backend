@@ -1,0 +1,97 @@
+{
+  "summary": "Sales Pipeline Feature testing completed successfully. Backend: 14/14 tests passed (100%). Frontend: All widgets and course selection modal working correctly. Pipeline Revenue and Expected Commission widgets display on Sales Dashboard. Course selection modal appears when moving leads to pipeline stages (warm_lead, hot_lead, in_progress).",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Login successful with super admin credentials",
+    "Backend: GET /api/dashboard/pipeline-revenue requires authentication (401/403)",
+    "Backend: GET /api/dashboard/pipeline-revenue returns correct structure with stages and summary",
+    "Backend: Pipeline revenue values are numeric",
+    "Backend: Pipeline revenue works with view_as parameter for managers",
+    "Backend: GET /api/dashboard/expected-commission requires authentication (401/403)",
+    "Backend: GET /api/dashboard/expected-commission returns correct structure with summary, stage_breakdown, pipeline_leads",
+    "Backend: Expected commission values are numeric",
+    "Backend: Expected commission month format is YYYY-MM",
+    "Backend: GET /api/leads endpoint accessible with course fields",
+    "Backend: GET /api/courses endpoint returns courses with id, name, base_price",
+    "Backend: GET /api/dashboard/stats endpoint working",
+    "Backend: GET /api/dashboard/lead-funnel endpoint working",
+    "Backend: GET /api/dashboard/leaderboard endpoint working",
+    "Frontend: Sales Dashboard loads with Pipeline Revenue Widget (data-testid='pipeline-revenue-widget')",
+    "Frontend: Sales Dashboard loads with Expected Commission Widget (data-testid='expected-commission-widget')",
+    "Frontend: Pipeline Revenue shows Active Pipeline, Won (Enrolled), Lost (Rejected) values",
+    "Frontend: Pipeline Revenue shows stage breakdown (Warm Lead, Hot Lead, In Progress, Enrolled)",
+    "Frontend: Expected Commission shows Expected (Pipeline), Earned This Month, Total Receivable",
+    "Frontend: Expected Commission shows Pipeline Breakdown by stage",
+    "Frontend: Sales CRM Kanban board loads with 8 columns",
+    "Frontend: Lead cards display with name, phone, email, country, SLA badges",
+    "Frontend: Lead Detail modal opens on card click",
+    "Frontend: Lead Detail modal shows 'Move to Stage' dropdown with all stages",
+    "Frontend: Course Interest Required section appears when selecting Warm Lead stage",
+    "Frontend: Course Interest Required section appears when selecting Hot Lead stage",
+    "Frontend: Course Interest Required section appears when selecting In Progress stage",
+    "Frontend: Course/Package Interested dropdown present with 'Select course' placeholder",
+    "Frontend: Estimated Value (AED) input present with 'Auto-filled from course' placeholder",
+    "Frontend: Follow-up Date picker appears for pipeline stages"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_sales_pipeline.py",
+    "/app/test_reports/pytest/pytest_sales_pipeline.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Pipeline Revenue API correctly aggregates lead values by stage with course breakdown",
+    "Expected Commission API calculates commission based on commission rules or default 5%",
+    "Lead model properly includes interested_course_id and estimated_value fields",
+    "SalesCRMPage correctly validates course selection before allowing pipeline stage changes",
+    "PipelineRevenueWidget and ExpectedCommissionWidget properly fetch and display data",
+    "All data-testid attributes present for critical UI elements"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_sales_pipeline.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (14/14 passed)",
+    "frontend": "100% (All UI flows working)"
+  },
+
+  "test_credentials": {
+    "super_admin": {
+      "email": "aqib@clt-academy.com",
+      "password": "@Aqib1234"
+    }
+  },
+
+  "seed_data_creation": "No seed data created - tested with existing data",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Sales Pipeline feature is complete and working. Key components: 1) Pipeline Revenue Widget shows revenue by stage (warm_lead, hot_lead, in_progress, enrolled, rejected) with course breakdown; 2) Expected Commission Widget shows expected, earned, and total receivable commission; 3) When moving a lead to warm_lead/hot_lead/in_progress stages, a 'Course Interest Required' section appears with mandatory course selection and estimated value fields; 4) Lead cards in pipeline stages show interested course and estimated value. All APIs tested: /api/dashboard/pipeline-revenue, /api/dashboard/expected-commission. Note: Most leads don't have course interest set yet, so commission values show AED 0.",
+
+  "feature_verification": {
+    "GET /api/dashboard/pipeline-revenue": "WORKING - Returns stages array with count, total_value, course_breakdown; summary with active_pipeline_value, enrolled_value, rejected_value, total_potential",
+    "GET /api/dashboard/expected-commission": "WORKING - Returns summary with total_pipeline_value, expected_commission, earned_this_month, actual_pending, actual_paid, total_receivable; stage_breakdown; pipeline_leads; month",
+    "PipelineRevenueWidget": "WORKING - Renders on Sales Dashboard with stage funnel visualization",
+    "ExpectedCommissionWidget": "WORKING - Renders on Sales Dashboard with commission projections",
+    "Course Selection Modal": "WORKING - Appears when selecting warm_lead/hot_lead/in_progress stages",
+    "Lead Card with Course/Value": "WORKING - Structure in place, displays when lead has interested_course_id set"
+  },
+
+  "testing_method": "Backend pytest + Playwright browser automation"
+}
