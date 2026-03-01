@@ -335,6 +335,9 @@ class LeadResponse(LeadBase):
     call_notes: Optional[str] = None
     course_id: Optional[str] = None
     course_name: Optional[str] = None
+    interested_course_id: Optional[str] = None
+    interested_course_name: Optional[str] = None
+    estimated_value: Optional[float] = None
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
