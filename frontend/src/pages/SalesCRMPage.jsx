@@ -317,6 +317,10 @@ const SalesCRMPage = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
+    const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
+    const [showRejectionModal, setShowRejectionModal] = useState(false);
+    const [pendingEnrollmentLead, setPendingEnrollmentLead] = useState(null);
+    const [pendingRejectionLead, setPendingRejectionLead] = useState(null);
     const [reminderLead, setReminderLead] = useState(null);
     const [selectedLead, setSelectedLead] = useState(null);
     const [activeId, setActiveId] = useState(null);
