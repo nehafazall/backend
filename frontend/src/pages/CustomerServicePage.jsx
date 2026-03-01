@@ -345,6 +345,13 @@ const CustomerServicePage = () => {
 
         // If dropped in a different stage, update the student
         if (targetStage && targetStage !== activeStudent.stage) {
+            // Check if moving to "activated" stage - show questionnaire
+            if (targetStage === 'activated' && activeStudent.stage === 'new_student') {
+                setPendingActivationStudent(activeStudent);
+                setShowActivationModal(true);
+                return;
+            }
+            
             try {
                 await studentApi.update(activeStudentId, { stage: targetStage });
                 toast.success(`Student moved to ${CS_STAGES.find(s => s.id === targetStage)?.label}`);
@@ -353,6 +360,28 @@ const CustomerServicePage = () => {
                 toast.error('Failed to move student');
                 console.error(error);
             }
+        }
+    };
+
+    // Handle activation questionnaire completion
+    const handleActivationComplete = async (questionnaireData) => {
+        if (!pendingActivationStudent) return;
+        
+        try {
+            await studentApi.update(pendingActivationStudent.id, { 
+                stage: 'activated',
+                activation_questionnaire: questionnaireData,
+                onboarding_complete: true,
+                activated_at: new Date().toISOString(),
+                activated_by: user?.id,
+            });
+            toast.success('Student activated successfully!');
+            setShowActivationModal(false);
+            setPendingActivationStudent(null);
+            fetchStudents();
+        } catch (error) {
+            toast.error('Failed to activate student');
+            console.error(error);
         }
     };
 
