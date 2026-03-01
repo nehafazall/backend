@@ -830,6 +830,98 @@ def check_permission(user: Dict, module: str, required_level: str) -> bool:
     level_hierarchy = {"none": 0, "view": 1, "edit": 2, "full": 3}
     return level_hierarchy.get(user_level, 0) >= level_hierarchy.get(required_level, 0)
 
+def calculate_settlement_date(payment_method: str, payment_date: datetime) -> Dict:
+    """
+    Calculate expected settlement date based on payment method.
+    
+    Settlement Rules:
+    - Tabby: Every Monday (weekly settlement)
+    - Tamara: 7 days from payment date
+    - Network: T+1 (next business day, skip weekends)
+    - Bank Transfer: Immediate
+    - Credit Card: Immediate
+    - Cash: Immediate
+    - UPI: Immediate
+    - Cheque: Manual settlement
+    """
+    payment_method = payment_method.lower() if payment_method else ""
+    
+    # UAE holidays (add more as needed)
+    uae_holidays = [
+        datetime(2026, 1, 1),   # New Year
+        datetime(2026, 12, 2),  # UAE National Day
+        datetime(2026, 12, 3),  # UAE National Day
+    ]
+    
+    def is_business_day(dt):
+        # Friday and Saturday are weekends in UAE
+        if dt.weekday() in [4, 5]:  # Friday=4, Saturday=5
+            return False
+        # Check holidays
+        if dt.date() in [h.date() for h in uae_holidays]:
+            return False
+        return True
+    
+    def next_business_day(dt):
+        next_day = dt + timedelta(days=1)
+        while not is_business_day(next_day):
+            next_day += timedelta(days=1)
+        return next_day
+    
+    def next_monday(dt):
+        days_ahead = 0 - dt.weekday()  # Monday = 0
+        if days_ahead <= 0:
+            days_ahead += 7
+        return dt + timedelta(days=days_ahead)
+    
+    if payment_method == "tabby":
+        # Settlement every Monday
+        settlement_date = next_monday(payment_date)
+        return {
+            "status": "pending_settlement",
+            "type": "weekly_monday",
+            "settlement_date": settlement_date.strftime("%Y-%m-%d"),
+            "description": "Tabby - Settlement every Monday"
+        }
+    
+    elif payment_method == "tamara":
+        # 7 days from payment
+        settlement_date = payment_date + timedelta(days=7)
+        return {
+            "status": "pending_settlement",
+            "type": "7_days",
+            "settlement_date": settlement_date.strftime("%Y-%m-%d"),
+            "description": "Tamara - 7 days settlement"
+        }
+    
+    elif payment_method == "network":
+        # T+1 (next business day)
+        settlement_date = next_business_day(payment_date)
+        return {
+            "status": "pending_settlement",
+            "type": "t_plus_1",
+            "settlement_date": settlement_date.strftime("%Y-%m-%d"),
+            "description": "Network - T+1 settlement"
+        }
+    
+    elif payment_method == "cheque":
+        # Manual settlement - date TBD
+        return {
+            "status": "pending_settlement",
+            "type": "manual",
+            "settlement_date": None,
+            "description": "Cheque - Manual settlement"
+        }
+    
+    else:
+        # Immediate settlement (bank_transfer, credit_card, cash, upi)
+        return {
+            "status": "settled",
+            "type": "immediate",
+            "settlement_date": payment_date.strftime("%Y-%m-%d"),
+            "description": "Immediate settlement"
+        }
+
 async def log_activity(entity_type: str, entity_id: str, action: str, user: Dict, details: Dict = None):
     activity = {
         "id": str(uuid.uuid4()),
