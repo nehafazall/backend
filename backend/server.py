@@ -2662,6 +2662,23 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
         if update_data["stage"] == "rejected" and not update_data.get("rejection_reason"):
             raise HTTPException(status_code=400, detail="Rejection reason is required")
         
+        # Require course interest for pipeline stages (warm_lead onwards)
+        pipeline_stages_requiring_course = ["warm_lead", "hot_lead", "in_progress"]
+        if update_data["stage"] in pipeline_stages_requiring_course:
+            interested_course = update_data.get("interested_course_id") or existing.get("interested_course_id")
+            if not interested_course:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Please select the course/package the client is interested in when moving to {update_data['stage'].replace('_', ' ').title()}"
+                )
+            
+            # Auto-set estimated value from course price if not provided
+            if not update_data.get("estimated_value") and not existing.get("estimated_value"):
+                course = await db.courses.find_one({"id": interested_course}, {"_id": 0, "base_price": 1, "name": 1})
+                if course:
+                    update_data["estimated_value"] = course.get("base_price", 0)
+                    update_data["interested_course_name"] = course.get("name")
+        
         if update_data["stage"] == "enrolled":
             # Calculate commission for sales executive
             sale_amount = update_data.get("sale_amount") or existing.get("sale_amount", 0)
