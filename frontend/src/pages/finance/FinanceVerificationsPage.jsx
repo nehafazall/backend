@@ -291,7 +291,10 @@ export default function FinanceVerificationsPage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => setSelectedVerification(v)}
+                                                        onClick={() => {
+                                                            setDetailVerification(v);
+                                                            setShowDetailDialog(true);
+                                                        }}
                                                         data-testid={`view-verification-${v.id}`}
                                                     >
                                                         View Details
