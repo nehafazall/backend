@@ -473,8 +473,18 @@ const SalesCRMPage = () => {
         if (!pendingEnrollmentLead) return;
         
         try {
+            // Get course details
+            const courseId = pendingEnrollmentLead.interested_course_id;
+            const selectedCourse = courses.find(c => c.id === courseId);
+            
             const updatePayload = {
                 stage: 'enrolled',
+                // Course info
+                interested_course_id: courseId,
+                interested_course_name: pendingEnrollmentLead.interested_course_name || selectedCourse?.name,
+                course_id: courseId,
+                course_name: pendingEnrollmentLead.interested_course_name || selectedCourse?.name,
+                // Payment info
                 payment_method: paymentData.payment_method,
                 payment_amount: paymentData.payment_amount,
                 payment_date: paymentData.payment_date,
@@ -483,6 +493,12 @@ const SalesCRMPage = () => {
                 transaction_id: paymentData.transaction_id,
                 payment_notes: paymentData.payment_notes,
                 sale_amount: paymentData.payment_amount,
+                // Split payment support
+                is_split_payment: paymentData.is_split_payment,
+                payment_splits: paymentData.payment_splits,
+                // BNPL phone verification
+                bnpl_phone: paymentData.bnpl_phone,
+                bnpl_same_number: paymentData.bnpl_same_number,
             };
             
             await leadApi.update(pendingEnrollmentLead.id, updatePayload);
