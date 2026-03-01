@@ -480,9 +480,33 @@ const SalesCRMPage = () => {
         if (updateData.rejection_reason) updates.rejection_reason = updateData.rejection_reason;
         if (updateData.follow_up_date) updates.follow_up_date = updateData.follow_up_date;
         
+        // Add course interest for pipeline stages
+        if (updateData.interested_course_id) {
+            updates.interested_course_id = updateData.interested_course_id;
+            const selectedCourse = courses.find(c => c.id === updateData.interested_course_id);
+            if (selectedCourse) {
+                updates.interested_course_name = selectedCourse.name;
+                if (!updateData.estimated_value) {
+                    updates.estimated_value = selectedCourse.base_price || 0;
+                }
+            }
+        }
+        if (updateData.estimated_value) {
+            updates.estimated_value = parseFloat(updateData.estimated_value);
+        }
+        
         if (updates.stage === 'rejected' && !updates.rejection_reason) {
             toast.error('Please select a rejection reason');
             return;
+        }
+        
+        // Validate course selection for pipeline stages
+        if (PIPELINE_STAGES.includes(updates.stage)) {
+            const courseId = updates.interested_course_id || selectedLead.interested_course_id;
+            if (!courseId) {
+                toast.error('Please select which course/package the client is interested in');
+                return;
+            }
         }
         
         try {
@@ -490,7 +514,7 @@ const SalesCRMPage = () => {
             toast.success('Lead updated successfully');
             setShowDetailModal(false);
             setSelectedLead(null);
-            setUpdateData({ stage: '', call_notes: '', rejection_reason: '', follow_up_date: '' });
+            setUpdateData({ stage: '', call_notes: '', rejection_reason: '', follow_up_date: '', interested_course_id: '', estimated_value: '' });
             fetchLeads();
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Failed to update lead');
@@ -504,6 +528,8 @@ const SalesCRMPage = () => {
             call_notes: '',
             rejection_reason: lead.rejection_reason || '',
             follow_up_date: '',
+            interested_course_id: lead.interested_course_id || '',
+            estimated_value: lead.estimated_value || '',
         });
         setShowDetailModal(true);
     };
