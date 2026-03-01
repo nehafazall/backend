@@ -567,8 +567,24 @@ const SalesCRMPage = () => {
             updates.estimated_value = parseFloat(updateData.estimated_value);
         }
         
-        if (updates.stage === 'rejected' && !updates.rejection_reason) {
-            toast.error('Please select a rejection reason');
+        // Check if changing to enrolled - show payment modal
+        if (updates.stage === 'enrolled' && selectedLead.stage !== 'enrolled') {
+            const courseId = updates.interested_course_id || selectedLead.interested_course_id;
+            if (!courseId) {
+                toast.error('Please select a course of interest before enrolling');
+                return;
+            }
+            setShowDetailModal(false);
+            setPendingEnrollmentLead({...selectedLead, ...updates});
+            setShowEnrollmentModal(true);
+            return;
+        }
+        
+        // Check if changing to rejected - show rejection modal
+        if (updates.stage === 'rejected' && selectedLead.stage !== 'rejected') {
+            setShowDetailModal(false);
+            setPendingRejectionLead(selectedLead);
+            setShowRejectionModal(true);
             return;
         }
         
