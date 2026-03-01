@@ -76,12 +76,14 @@ export default function FinanceVerificationsPage() {
     const [verifyData, setVerifyData] = useState({
         payment_reference: '',
         payment_date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        split_references: [], // For split payments
     });
     
     const [rejectReason, setRejectReason] = useState('');
     const [showDetailDialog, setShowDetailDialog] = useState(false);
     const [detailVerification, setDetailVerification] = useState(null);
+    const [verifyErrors, setVerifyErrors] = useState({});
 
     const fetchData = useCallback(async () => {
         try {
