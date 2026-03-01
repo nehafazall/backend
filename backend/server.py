@@ -4198,6 +4198,124 @@ async def get_lead_funnel(view_as: Optional[str] = None, user = Depends(get_curr
     
     return result
 
+@api_router.get("/dashboard/pipeline-revenue")
+async def get_pipeline_revenue(view_as: Optional[str] = None, user = Depends(get_current_user)):
+    """
+    Get pipeline revenue by stage with course breakdown.
+    Shows estimated value at each stage: warm_lead, hot_lead, in_progress, rejected, enrolled
+    """
+    # Handle view_as
+    target_user = user
+    if view_as and view_as != user["id"]:
+        if user["role"] in ["super_admin", "admin", "sales_manager", "team_leader"]:
+            target = await db.users.find_one({"id": view_as}, {"_id": 0})
+            if target:
+                target_user = target
+    
+    query = {}
+    if target_user["role"] == "sales_executive":
+        query["assigned_to"] = target_user["id"]
+    elif target_user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": target_user["id"]}).to_list(100)
+        team_ids = [t["id"] for t in team] + [target_user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
+    
+    # Stages we want to track for pipeline
+    pipeline_stages = ["warm_lead", "hot_lead", "in_progress", "enrolled", "rejected"]
+    
+    # Get leads with their estimated values
+    pipeline = [
+        {"$match": {**query, "stage": {"$in": pipeline_stages}}},
+        {"$group": {
+            "_id": "$stage",
+            "count": {"$sum": 1},
+            "total_value": {"$sum": {"$ifNull": ["$estimated_value", 0]}},
+            "leads": {"$push": {
+                "id": "$id",
+                "full_name": "$full_name",
+                "interested_course_id": "$interested_course_id",
+                "estimated_value": {"$ifNull": ["$estimated_value", 0]},
+                "sale_amount": {"$ifNull": ["$sale_amount", 0]}
+            }}
+        }}
+    ]
+    
+    result = await db.leads.aggregate(pipeline).to_list(100)
+    
+    # Get all courses for lookup
+    courses = await db.courses.find({}, {"_id": 0, "id": 1, "name": 1, "base_price": 1}).to_list(100)
+    course_map = {c["id"]: c for c in courses}
+    
+    # Format response with stage order
+    stage_order = {s: i for i, s in enumerate(pipeline_stages)}
+    formatted = []
+    
+    for stage in pipeline_stages:
+        stage_data = next((r for r in result if r["_id"] == stage), None)
+        if stage_data:
+            # Calculate actual value for enrolled (use sale_amount)
+            if stage == "enrolled":
+                total_value = sum(l.get("sale_amount", 0) for l in stage_data.get("leads", []))
+            else:
+                total_value = stage_data.get("total_value", 0)
+            
+            # Group by course
+            course_breakdown = {}
+            for lead in stage_data.get("leads", []):
+                course_id = lead.get("interested_course_id")
+                if course_id:
+                    if course_id not in course_breakdown:
+                        course_info = course_map.get(course_id, {})
+                        course_breakdown[course_id] = {
+                            "course_id": course_id,
+                            "course_name": course_info.get("name", "Unknown"),
+                            "count": 0,
+                            "value": 0
+                        }
+                    course_breakdown[course_id]["count"] += 1
+                    if stage == "enrolled":
+                        course_breakdown[course_id]["value"] += lead.get("sale_amount", 0)
+                    else:
+                        course_breakdown[course_id]["value"] += lead.get("estimated_value", 0)
+            
+            formatted.append({
+                "stage": stage,
+                "stage_label": stage.replace("_", " ").title(),
+                "count": stage_data.get("count", 0),
+                "total_value": total_value,
+                "course_breakdown": list(course_breakdown.values())
+            })
+        else:
+            formatted.append({
+                "stage": stage,
+                "stage_label": stage.replace("_", " ").title(),
+                "count": 0,
+                "total_value": 0,
+                "course_breakdown": []
+            })
+    
+    # Calculate total pipeline value (excluding rejected and enrolled)
+    active_pipeline_value = sum(
+        s["total_value"] for s in formatted 
+        if s["stage"] not in ["rejected", "enrolled"]
+    )
+    
+    # Get enrolled (won) value
+    enrolled_value = next((s["total_value"] for s in formatted if s["stage"] == "enrolled"), 0)
+    
+    # Get rejected (lost) value
+    rejected_value = next((s["total_value"] for s in formatted if s["stage"] == "rejected"), 0)
+    
+    return {
+        "stages": formatted,
+        "summary": {
+            "active_pipeline_value": active_pipeline_value,
+            "enrolled_value": enrolled_value,
+            "rejected_value": rejected_value,
+            "total_potential": active_pipeline_value + enrolled_value
+        }
+    }
+
 @api_router.get("/dashboard/sales-by-course")
 async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_current_user)):
     # Handle view_as
