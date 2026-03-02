@@ -137,6 +137,7 @@ const entityNavConfig = {
                 title: 'Master Data',
                 items: [
                     { path: 'chart-of-accounts', label: 'Chart of Accounts', icon: Building2 },
+                    { path: 'bank-accounts', label: 'Bank Accounts', icon: Wallet },
                     { path: 'cost-centers', label: 'Cost Centers', icon: Target },
                     { path: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
                     { path: 'payment-gateways', label: 'Payment Gateways', icon: Wallet },

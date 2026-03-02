@@ -16166,6 +16166,90 @@ async def delete_psp_bank_mapping(mapping_id: str, user = Depends(require_roles(
         raise HTTPException(status_code=404, detail="PSP bank mapping not found")
     return {"status": "success"}
 
+# Bank Accounts CRUD
+@api_router.get("/finance/settings/bank-accounts")
+async def get_bank_accounts(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all bank accounts"""
+    accounts = await db.bank_accounts.find({}, {"_id": 0}).to_list(1000)
+    return accounts
+
+@api_router.post("/finance/settings/bank-accounts")
+async def create_bank_account(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new bank account"""
+    existing = await db.bank_accounts.find_one({"account_number": data.get("account_number"), "bank_name": data.get("bank_name")})
+    if existing:
+        raise HTTPException(status_code=400, detail="Bank account already exists")
+    
+    account = {
+        "id": str(uuid.uuid4()),
+        "account_name": data.get("account_name"),
+        "bank_name": data.get("bank_name"),
+        "account_number": data.get("account_number"),
+        "iban": data.get("iban"),
+        "swift_code": data.get("swift_code"),
+        "branch": data.get("branch"),
+        "currency": data.get("currency", "AED"),
+        "account_type": data.get("account_type", "current"),
+        "opening_balance": data.get("opening_balance", 0),
+        "opening_balance_date": data.get("opening_balance_date"),
+        "current_balance": data.get("opening_balance", 0),  # Initialize with opening balance
+        "description": data.get("description"),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.bank_accounts.insert_one(account)
+    
+    # Also create an opening balance entry in treasury if balance > 0
+    if account.get("opening_balance", 0) != 0:
+        treasury_entry = {
+            "id": str(uuid.uuid4()),
+            "bank_account_id": account["id"],
+            "account": account["account_name"],
+            "opening_balance": account["opening_balance"],
+            "currency": account["currency"],
+            "date": account["opening_balance_date"] or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": user.get("id")
+        }
+        await db.treasury_balances.insert_one(treasury_entry)
+    
+    return account
+
+@api_router.put("/finance/settings/bank-accounts/{account_id}")
+async def update_bank_account(account_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a bank account"""
+    result = await db.bank_accounts.update_one(
+        {"id": account_id},
+        {"$set": {
+            "account_name": data.get("account_name"),
+            "bank_name": data.get("bank_name"),
+            "account_number": data.get("account_number"),
+            "iban": data.get("iban"),
+            "swift_code": data.get("swift_code"),
+            "branch": data.get("branch"),
+            "currency": data.get("currency"),
+            "account_type": data.get("account_type"),
+            "opening_balance": data.get("opening_balance"),
+            "opening_balance_date": data.get("opening_balance_date"),
+            "description": data.get("description"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/bank-accounts/{account_id}")
+async def delete_bank_account(account_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a bank account"""
+    result = await db.bank_accounts.delete_one({"id": account_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    return {"status": "success"}
+
 # Include the router in the main app
 app.include_router(api_router)
 

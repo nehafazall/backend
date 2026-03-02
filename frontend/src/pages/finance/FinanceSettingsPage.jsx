@@ -1221,6 +1221,327 @@ const PSPBankMappingSection = () => {
     );
 };
 
+// ==================== BANK ACCOUNTS ====================
+const BankAccountsSection = () => {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showDialog, setShowDialog] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [editingItem, setEditingItem] = useState(null);
+    const [formData, setFormData] = useState({
+        account_name: '',
+        bank_name: '',
+        account_number: '',
+        iban: '',
+        swift_code: '',
+        branch: '',
+        currency: 'AED',
+        account_type: 'current',
+        opening_balance: 0,
+        opening_balance_date: new Date().toISOString().split('T')[0],
+        description: '',
+        is_active: true,
+    });
+
+    const ACCOUNT_TYPES = [
+        { id: 'current', label: 'Current Account' },
+        { id: 'savings', label: 'Savings Account' },
+        { id: 'petty_cash', label: 'Petty Cash' },
+        { id: 'credit_card', label: 'Credit Card' },
+        { id: 'escrow', label: 'Escrow Account' },
+        { id: 'merchant', label: 'Merchant Account' },
+    ];
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const res = await api.get('/finance/settings/bank-accounts');
+            setItems(res.data || []);
+        } catch (error) {
+            console.error('Failed to fetch bank accounts:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchData(); }, []);
+
+    const handleSubmit = async () => {
+        if (!formData.account_name || !formData.bank_name || !formData.account_number) {
+            toast.error('Account Name, Bank Name and Account Number are required');
+            return;
+        }
+        try {
+            if (editingItem) {
+                await api.put(`/finance/settings/bank-accounts/${editingItem.id}`, formData);
+                toast.success('Bank account updated');
+            } else {
+                await api.post('/finance/settings/bank-accounts', formData);
+                toast.success('Bank account created');
+            }
+            setShowDialog(false);
+            resetForm();
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to save');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await api.delete(`/finance/settings/bank-accounts/${editingItem.id}`);
+            toast.success('Bank account deleted');
+            setShowDeleteDialog(false);
+            setEditingItem(null);
+            fetchData();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to delete');
+        }
+    };
+
+    const resetForm = () => {
+        setFormData({ 
+            account_name: '', 
+            bank_name: '', 
+            account_number: '', 
+            iban: '', 
+            swift_code: '', 
+            branch: '', 
+            currency: 'AED', 
+            account_type: 'current', 
+            opening_balance: 0, 
+            opening_balance_date: new Date().toISOString().split('T')[0],
+            description: '', 
+            is_active: true 
+        });
+        setEditingItem(null);
+    };
+
+    const openEdit = (item) => {
+        setEditingItem(item);
+        setFormData({
+            account_name: item.account_name,
+            bank_name: item.bank_name,
+            account_number: item.account_number,
+            iban: item.iban || '',
+            swift_code: item.swift_code || '',
+            branch: item.branch || '',
+            currency: item.currency || 'AED',
+            account_type: item.account_type || 'current',
+            opening_balance: item.opening_balance || 0,
+            opening_balance_date: item.opening_balance_date || new Date().toISOString().split('T')[0],
+            description: item.description || '',
+            is_active: item.is_active !== false,
+        });
+        setShowDialog(true);
+    };
+
+    const formatCurrency = (amount, currency = 'AED') => {
+        return `${currency} ${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl font-bold">Bank Accounts</h2>
+                    <p className="text-sm text-muted-foreground">Manage company bank accounts for Treasury tracking</p>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={fetchData} disabled={loading}>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                    <Button onClick={() => { resetForm(); setShowDialog(true); }}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Bank Account
+                    </Button>
+                </div>
+            </div>
+
+            <Card>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Account Name</TableHead>
+                            <TableHead>Bank</TableHead>
+                            <TableHead>Account Number</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Currency</TableHead>
+                            <TableHead className="text-right">Opening Balance</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {items.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                    No bank accounts found. Click "Add Bank Account" to create one.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            items.map((item) => (
+                                <TableRow key={item.id}>
+                                    <TableCell className="font-medium">{item.account_name}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Landmark className="h-4 w-4 text-muted-foreground" />
+                                            {item.bank_name}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="font-mono">{item.account_number}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="capitalize">
+                                            {item.account_type?.replace('_', ' ')}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>{item.currency}</TableCell>
+                                    <TableCell className="text-right font-mono">
+                                        {formatCurrency(item.opening_balance, item.currency)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge className={item.is_active !== false ? 'bg-green-500' : 'bg-gray-500'}>
+                                            {item.is_active !== false ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { setEditingItem(item); setShowDeleteDialog(true); }}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </Card>
+
+            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Edit Bank Account' : 'Add Bank Account'}</DialogTitle>
+                        <DialogDescription>Configure bank account details for Treasury tracking</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Account Name *</Label>
+                                <Input value={formData.account_name} onChange={(e) => setFormData({ ...formData, account_name: e.target.value })} placeholder="e.g., Main Operating Account" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Account Type *</Label>
+                                <Select value={formData.account_type} onValueChange={(v) => setFormData({ ...formData, account_type: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {ACCOUNT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Bank Name *</Label>
+                                <Input value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })} placeholder="e.g., Mashreq Bank" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Branch</Label>
+                                <Input value={formData.branch} onChange={(e) => setFormData({ ...formData, branch: e.target.value })} placeholder="e.g., Dubai Main Branch" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Account Number *</Label>
+                                <Input value={formData.account_number} onChange={(e) => setFormData({ ...formData, account_number: e.target.value })} placeholder="Account number" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>IBAN</Label>
+                                <Input value={formData.iban} onChange={(e) => setFormData({ ...formData, iban: e.target.value })} placeholder="AE..." />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>SWIFT/BIC Code</Label>
+                                <Input value={formData.swift_code} onChange={(e) => setFormData({ ...formData, swift_code: e.target.value })} placeholder="e.g., BOMLAEAD" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Currency</Label>
+                                <Select value={formData.currency} onValueChange={(v) => setFormData({ ...formData, currency: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="AED">AED - UAE Dirham</SelectItem>
+                                        <SelectItem value="USD">USD - US Dollar</SelectItem>
+                                        <SelectItem value="EUR">EUR - Euro</SelectItem>
+                                        <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                                        <SelectItem value="SAR">SAR - Saudi Riyal</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-muted rounded-lg space-y-4">
+                            <h4 className="font-medium flex items-center gap-2"><Wallet className="h-4 w-4" /> Opening Balance</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Amount</Label>
+                                    <Input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.opening_balance} 
+                                        onChange={(e) => setFormData({ ...formData, opening_balance: parseFloat(e.target.value) || 0 })} 
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>As of Date</Label>
+                                    <Input 
+                                        type="date" 
+                                        value={formData.opening_balance_date} 
+                                        onChange={(e) => setFormData({ ...formData, opening_balance_date: e.target.value })} 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Description / Notes</Label>
+                            <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Additional notes about this account..." />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Switch checked={formData.is_active} onCheckedChange={(v) => setFormData({ ...formData, is_active: v })} />
+                            <Label>Active</Label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+                        <Button onClick={handleSubmit}>{editingItem ? 'Update' : 'Create'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Bank Account?</AlertDialogTitle>
+                        <AlertDialogDescription>This will permanently delete "{editingItem?.account_name}". This action cannot be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
+};
+
 // ==================== MAIN COMPONENT ====================
 const FinanceSettingsPage = ({ section = 'accounts' }) => {
     const [activeTab, setActiveTab] = useState(section);
@@ -1232,10 +1553,14 @@ const FinanceSettingsPage = ({ section = 'accounts' }) => {
     return (
         <div className="space-y-6" data-testid="finance-settings-page">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="grid w-full grid-cols-6">
                     <TabsTrigger value="accounts" className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         Chart of Accounts
+                    </TabsTrigger>
+                    <TabsTrigger value="bank-accounts" className="flex items-center gap-2">
+                        <Landmark className="h-4 w-4" />
+                        Bank Accounts
                     </TabsTrigger>
                     <TabsTrigger value="cost-centers" className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
@@ -1251,12 +1576,15 @@ const FinanceSettingsPage = ({ section = 'accounts' }) => {
                     </TabsTrigger>
                     <TabsTrigger value="psp-mapping" className="flex items-center gap-2">
                         <ArrowRightLeft className="h-4 w-4" />
-                        PSP Bank Mapping
+                        PSP Mapping
                     </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="accounts">
                     <ChartOfAccountsSection />
+                </TabsContent>
+                <TabsContent value="bank-accounts">
+                    <BankAccountsSection />
                 </TabsContent>
                 <TabsContent value="cost-centers">
                     <CostCentersSection />
