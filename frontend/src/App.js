@@ -49,12 +49,6 @@ import PendingSettlementsPage from "@/pages/finance/PendingSettlementsPage";
 import CltFinanceDashboard from "@/pages/finance/CltFinanceDashboard";
 import CltPayablesPage from "@/pages/finance/CltPayablesPage";
 import CltReceivablesPage from "@/pages/finance/CltReceivablesPage";
-// Finance Suite - Miles
-import MilesDashboard from "@/pages/finance/MilesDashboard";
-import MilesDepositsPage from "@/pages/finance/MilesDepositsPage";
-import MilesWithdrawalsPage from "@/pages/finance/MilesWithdrawalsPage";
-import MilesExpensePage from "@/pages/finance/MilesExpensePage";
-import MilesOperatingProfitPage from "@/pages/finance/MilesOperatingProfitPage";
 // Finance Suite - Treasury
 import TreasuryDashboard from "@/pages/finance/TreasuryDashboard";
 import TreasuryBalancesPage from "@/pages/finance/TreasuryBalancesPage";
@@ -65,6 +59,8 @@ import BudgetDashboard from "@/pages/finance/BudgetDashboard";
 // Finance Suite - PNL & Data
 import OverallPNLDashboard from "@/pages/finance/OverallPNLDashboard";
 import DataManagementPage from "@/pages/finance/DataManagementPage";
+// Finance Suite - Settings
+import FinanceSettingsPage from "@/pages/finance/FinanceSettingsPage";
 // Finance Dashboard Router
 import FinanceDashboardRouter from "@/pages/FinanceDashboardRouter";
 
@@ -270,14 +266,8 @@ function AppRoutes() {
                     <Route path="commission-engine" element={<FinanceCommissionEnginePage />} />
                     <Route path="commission-settlements" element={<CommissionSettlementsPage />} />
                     <Route path="reconciliation" element={<ReconciliationPage />} />
-                    {/* Miles Routes */}
-                    <Route path="deposits" element={<MilesDepositsPage />} />
-                    <Route path="withdrawals" element={<MilesWithdrawalsPage />} />
-                    <Route path="expense" element={<MilesExpensePage />} />
-                    <Route path="profit" element={<MilesOperatingProfitPage />} />
                     {/* Treasury Routes */}
                     <Route path="balances" element={<TreasuryBalancesPage />} />
-                    <Route path="settlements" element={<TreasurySettlementsPage />} />
                     {/* Budgeting Routes */}
                     <Route path="sheet" element={<BudgetSheetPage />} />
                     {/* Data Management */}
@@ -286,6 +276,12 @@ function AppRoutes() {
                     <Route path="verifications" element={<FinanceVerificationsPage />} />
                     {/* Pending Settlements */}
                     <Route path="pending-settlements" element={<PendingSettlementsPage />} />
+                    {/* Finance Settings Routes */}
+                    <Route path="cost-centers" element={<FinanceSettingsPage section="cost-centers" />} />
+                    <Route path="payment-methods" element={<FinanceSettingsPage section="payment-methods" />} />
+                    <Route path="payment-gateways" element={<FinanceSettingsPage section="payment-gateways" />} />
+                    <Route path="psp-mapping" element={<FinanceSettingsPage section="psp-mapping" />} />
+                    <Route path="chart-of-accounts" element={<FinanceSettingsPage section="accounts" />} />
                 </Route>
                 
                 {/* HR Module */}

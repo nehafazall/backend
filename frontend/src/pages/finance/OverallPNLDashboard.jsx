@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, TrendingUp, TrendingDown, DollarSign, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Wallet, Receipt, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -17,8 +17,7 @@ const formatNumber = (v) => {
 
 const OverallPNLDashboard = () => {
     const [period, setPeriod] = useState('ytd');
-    const [cltData, setCltData] = useState({ payables: [], receivables: [] });
-    const [milesData, setMilesData] = useState({ deposits: [], withdrawals: [], expenses: [], profit: [] });
+    const [cltData, setCltData] = useState({ payables: [], receivables: [], expenses: [] });
     const [loading, setLoading] = useState(true);
 
     const token = localStorage.getItem('token');
@@ -26,24 +25,16 @@ const OverallPNLDashboard = () => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const [cltPay, cltRec, milesDep, milesWit, milesExp, milesProf] = await Promise.all([
+            const [cltPay, cltRec, cltExp] = await Promise.all([
                 fetch(`${API_URL}/api/finance/clt/payables`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${API_URL}/api/finance/clt/receivables`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_URL}/api/finance/miles/deposits`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_URL}/api/finance/miles/withdrawals`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_URL}/api/finance/miles/expenses`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${API_URL}/api/finance/miles/operating-profit`, { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${API_URL}/api/expenses`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             setCltData({
                 payables: cltPay.ok ? await cltPay.json() : [],
-                receivables: cltRec.ok ? await cltRec.json() : []
-            });
-            setMilesData({
-                deposits: milesDep.ok ? await milesDep.json() : [],
-                withdrawals: milesWit.ok ? await milesWit.json() : [],
-                expenses: milesExp.ok ? await milesExp.json() : [],
-                profit: milesProf.ok ? await milesProf.json() : []
+                receivables: cltRec.ok ? await cltRec.json() : [],
+                expenses: cltExp.ok ? await cltExp.json() : []
             });
         } catch (error) {
             toast.error('Failed to fetch PNL data');
@@ -61,7 +52,7 @@ const OverallPNLDashboard = () => {
         const currentMonth = now.getMonth();
         
         return data.filter(item => {
-            const itemDate = new Date(item.date);
+            const itemDate = new Date(item.date || item.created_at);
             if (period === 'ytd') {
                 return itemDate.getFullYear() === currentYear;
             } else if (period === 'mtd') {
@@ -80,45 +71,36 @@ const OverallPNLDashboard = () => {
     }, [period]);
 
     const pnlSummary = useMemo(() => {
-        // CLT
+        // CLT Revenue (Receivables)
         const cltReceivables = filterByPeriod(cltData.receivables).reduce((sum, r) => sum + (r.amount_in_aed || 0), 0);
+        
+        // CLT Expenses (Payables + Expenses)
         const cltPayables = filterByPeriod(cltData.payables).reduce((sum, p) => sum + (p.amount_in_aed || 0), 0);
-        const cltNetIncome = cltReceivables - cltPayables;
+        const cltExpenses = filterByPeriod(cltData.expenses).reduce((sum, e) => sum + (e.amount || 0), 0);
+        const totalExpenses = cltPayables + cltExpenses;
+        
+        // Net Income
+        const netIncome = cltReceivables - totalExpenses;
 
-        // Miles
-        const milesDeposits = filterByPeriod(milesData.deposits).reduce((sum, d) => sum + (d.amount_in_aed || 0), 0);
-        const milesWithdrawals = filterByPeriod(milesData.withdrawals).reduce((sum, w) => sum + (w.amount_in_aed || 0), 0);
-        const milesExpenses = filterByPeriod(milesData.expenses).reduce((sum, e) => sum + (e.amount_in_aed || 0), 0);
-        const milesProfit = filterByPeriod(milesData.profit).reduce((sum, p) => sum + (p.operating_profit_aed || 0), 0);
-        const milesNetCapital = milesDeposits - milesWithdrawals - milesExpenses;
-        const milesNetIncome = milesProfit - milesExpenses;
-
-        // Consolidated
-        const totalRevenue = cltReceivables + milesProfit;
-        const totalExpenses = cltPayables + milesExpenses;
-        const consolidatedPnl = totalRevenue - totalExpenses;
+        // Breakdown by category
+        const expensesByCategory = filterByPeriod(cltData.expenses).reduce((acc, e) => {
+            const cat = e.category || 'Other';
+            acc[cat] = (acc[cat] || 0) + (e.amount || 0);
+            return acc;
+        }, {});
 
         return {
-            clt: {
-                revenue: cltReceivables,
-                expenses: cltPayables,
-                netIncome: cltNetIncome
-            },
-            miles: {
-                deposits: milesDeposits,
-                withdrawals: milesWithdrawals,
-                expenses: milesExpenses,
-                operatingProfit: milesProfit,
-                netCapital: milesNetCapital,
-                netIncome: milesNetIncome
-            },
-            consolidated: {
-                totalRevenue,
-                totalExpenses,
-                netPnl: consolidatedPnl
-            }
+            revenue: cltReceivables,
+            payables: cltPayables,
+            operationalExpenses: cltExpenses,
+            totalExpenses,
+            netIncome,
+            expensesByCategory,
+            receivablesCount: filterByPeriod(cltData.receivables).length,
+            payablesCount: filterByPeriod(cltData.payables).length,
+            expensesCount: filterByPeriod(cltData.expenses).length
         };
-    }, [cltData, milesData, filterByPeriod]);
+    }, [cltData, filterByPeriod]);
 
     if (loading) {
         return (
@@ -135,8 +117,8 @@ const OverallPNLDashboard = () => {
         <div className="space-y-6" data-testid="overall-pnl-dashboard">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-amber-500">Overall P&L Dashboard</h1>
-                    <p className="text-muted-foreground">Consolidated financial performance</p>
+                    <h1 className="text-2xl font-bold text-amber-500">CLT Academy P&L Dashboard</h1>
+                    <p className="text-muted-foreground">Financial performance overview</p>
                 </div>
                 <div className="flex gap-2">
                     <Select value={period} onValueChange={setPeriod}>
@@ -159,69 +141,104 @@ const OverallPNLDashboard = () => {
                 </div>
             </div>
 
-            {/* Consolidated Summary */}
-            <div className="grid gap-4 md:grid-cols-3">
+            {/* Summary Cards */}
+            <div className="grid gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
                         <ArrowDownCircle className="h-5 w-5 text-green-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-500">AED {formatNumber(pnlSummary.consolidated.totalRevenue)}</div>
+                        <div className="text-2xl font-bold text-green-500">AED {formatNumber(pnlSummary.revenue)}</div>
+                        <p className="text-xs text-muted-foreground">{pnlSummary.receivablesCount} transactions</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-                        <ArrowUpCircle className="h-5 w-5 text-red-500" />
+                        <CardTitle className="text-sm font-medium">Payables</CardTitle>
+                        <CreditCard className="h-5 w-5 text-orange-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-red-500">AED {formatNumber(pnlSummary.consolidated.totalExpenses)}</div>
+                        <div className="text-2xl font-bold text-orange-500">AED {formatNumber(pnlSummary.payables)}</div>
+                        <p className="text-xs text-muted-foreground">{pnlSummary.payablesCount} invoices</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Operational Expenses</CardTitle>
+                        <Receipt className="h-5 w-5 text-red-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-red-500">AED {formatNumber(pnlSummary.operationalExpenses)}</div>
+                        <p className="text-xs text-muted-foreground">{pnlSummary.expensesCount} entries</p>
                     </CardContent>
                 </Card>
                 <Card className="border-2 border-amber-500/30">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Net P&L</CardTitle>
-                        {pnlSummary.consolidated.netPnl >= 0 
+                        {pnlSummary.netIncome >= 0 
                             ? <TrendingUp className="h-5 w-5 text-green-500" />
                             : <TrendingDown className="h-5 w-5 text-red-500" />
                         }
                     </CardHeader>
                     <CardContent>
-                        <div className={`text-2xl font-bold ${pnlSummary.consolidated.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            AED {formatNumber(pnlSummary.consolidated.netPnl)}
+                        <div className={`text-2xl font-bold ${pnlSummary.netIncome >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            AED {formatNumber(pnlSummary.netIncome)}
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                            {pnlSummary.netIncome >= 0 ? 'Profit' : 'Loss'}
+                        </p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Entity Breakdown */}
+            {/* Detailed Breakdown */}
             <div className="grid gap-6 lg:grid-cols-2">
-                {/* CLT P&L */}
+                {/* P&L Statement */}
                 <Card className="border-red-500/30">
                     <CardHeader>
-                        <CardTitle className="text-red-500">CLT Academy P&L</CardTitle>
+                        <CardTitle className="text-red-500">Profit & Loss Statement</CardTitle>
                         <CardDescription>Revenue and expenses breakdown</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
                             <TableBody>
+                                <TableRow className="bg-green-500/5">
+                                    <TableCell className="font-bold text-green-600">Revenue</TableCell>
+                                    <TableCell className="text-right font-mono"></TableCell>
+                                </TableRow>
                                 <TableRow>
-                                    <TableCell className="font-medium">Receivables (Revenue)</TableCell>
+                                    <TableCell className="pl-8">Receivables</TableCell>
                                     <TableCell className="text-right font-mono text-green-500">
-                                        +{formatNumber(pnlSummary.clt.revenue)}
+                                        +{formatNumber(pnlSummary.revenue)}
+                                    </TableCell>
+                                </TableRow>
+                                <TableRow className="bg-red-500/5">
+                                    <TableCell className="font-bold text-red-600">Expenses</TableCell>
+                                    <TableCell className="text-right font-mono"></TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="pl-8">Payables</TableCell>
+                                    <TableCell className="text-right font-mono text-red-500">
+                                        -{formatNumber(pnlSummary.payables)}
                                     </TableCell>
                                 </TableRow>
                                 <TableRow>
-                                    <TableCell className="font-medium">Payables (Expenses)</TableCell>
+                                    <TableCell className="pl-8">Operational Expenses</TableCell>
                                     <TableCell className="text-right font-mono text-red-500">
-                                        -{formatNumber(pnlSummary.clt.expenses)}
+                                        -{formatNumber(pnlSummary.operationalExpenses)}
                                     </TableCell>
                                 </TableRow>
-                                <TableRow className="bg-muted/50">
-                                    <TableCell className="font-bold">Net Income</TableCell>
-                                    <TableCell className={`text-right font-mono font-bold ${pnlSummary.clt.netIncome >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                        {formatNumber(pnlSummary.clt.netIncome)}
+                                <TableRow className="border-t-2">
+                                    <TableCell className="font-bold">Total Expenses</TableCell>
+                                    <TableCell className="text-right font-mono font-bold text-red-500">
+                                        -{formatNumber(pnlSummary.totalExpenses)}
+                                    </TableCell>
+                                </TableRow>
+                                <TableRow className="bg-muted/50 border-t-2">
+                                    <TableCell className="font-bold text-lg">Net Income</TableCell>
+                                    <TableCell className={`text-right font-mono font-bold text-lg ${pnlSummary.netIncome >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        AED {formatNumber(pnlSummary.netIncome)}
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -229,50 +246,45 @@ const OverallPNLDashboard = () => {
                     </CardContent>
                 </Card>
 
-                {/* Miles P&L */}
-                <Card className="border-blue-500/30">
+                {/* Expenses by Category */}
+                <Card>
                     <CardHeader>
-                        <CardTitle className="text-blue-500">Miles Capitals P&L</CardTitle>
-                        <CardDescription>Capital and trading performance</CardDescription>
+                        <CardTitle>Expenses by Category</CardTitle>
+                        <CardDescription>Breakdown of operational expenses</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Category</TableHead>
+                                    <TableHead className="text-right">Amount (AED)</TableHead>
+                                    <TableHead className="text-right">%</TableHead>
+                                </TableRow>
+                            </TableHeader>
                             <TableBody>
-                                <TableRow>
-                                    <TableCell className="font-medium">Operating Profit</TableCell>
-                                    <TableCell className="text-right font-mono text-green-500">
-                                        +{formatNumber(pnlSummary.miles.operatingProfit)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow>
-                                    <TableCell className="font-medium">Expenses</TableCell>
-                                    <TableCell className="text-right font-mono text-red-500">
-                                        -{formatNumber(pnlSummary.miles.expenses)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow className="bg-muted/50">
-                                    <TableCell className="font-bold">Net Income</TableCell>
-                                    <TableCell className={`text-right font-mono font-bold ${pnlSummary.miles.netIncome >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                        {formatNumber(pnlSummary.miles.netIncome)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow>
-                                    <TableCell colSpan={2} className="pt-4">
-                                        <div className="text-xs text-muted-foreground">Capital Movement</div>
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow>
-                                    <TableCell className="text-sm">Deposits</TableCell>
-                                    <TableCell className="text-right font-mono text-sm text-green-500">
-                                        +{formatNumber(pnlSummary.miles.deposits)}
-                                    </TableCell>
-                                </TableRow>
-                                <TableRow>
-                                    <TableCell className="text-sm">Withdrawals</TableCell>
-                                    <TableCell className="text-right font-mono text-sm text-red-500">
-                                        -{formatNumber(pnlSummary.miles.withdrawals)}
-                                    </TableCell>
-                                </TableRow>
+                                {Object.entries(pnlSummary.expensesByCategory).length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                                            No expenses recorded for this period
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    Object.entries(pnlSummary.expensesByCategory)
+                                        .sort(([, a], [, b]) => b - a)
+                                        .map(([category, amount]) => (
+                                            <TableRow key={category}>
+                                                <TableCell className="font-medium">{category}</TableCell>
+                                                <TableCell className="text-right font-mono">
+                                                    {formatNumber(amount)}
+                                                </TableCell>
+                                                <TableCell className="text-right text-muted-foreground">
+                                                    {pnlSummary.operationalExpenses > 0 
+                                                        ? ((amount / pnlSummary.operationalExpenses) * 100).toFixed(1)
+                                                        : 0}%
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>

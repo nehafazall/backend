@@ -5,7 +5,57 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
-### Session Mar 1, 2026 (Part 2) - Finance Verification Flow Fix & Meta API Configuration
+### Session Mar 2, 2026 - Finance Module Cleanup & Settings Enhancement
+
+#### Miles Capitals Removal (COMPLETED)
+**Changes Made:**
+- Removed Miles Capitals entity from Finance Entity Selector
+- Removed Miles routes from App.js (deposits, withdrawals, expenses, profit)
+- Removed Miles imports from App.js
+- Updated OverallPNLDashboard to show only CLT Academy P&L
+- Updated DataManagementPage to remove Miles data import/export options
+- Added new Finance Settings entity
+
+#### Finance Settings Module (NEW - COMPLETED)
+Created comprehensive Finance Settings page (`/app/frontend/src/pages/finance/FinanceSettingsPage.jsx`) with CRUD functionality for:
+
+1. **Chart of Accounts**
+   - Code, Name, Type (Asset/Liability/Equity/Revenue/Expense)
+   - Parent account support for hierarchical structure
+   - Active/Inactive status
+
+2. **Cost Centers**
+   - Code, Name, Department assignment
+   - Description and status management
+
+3. **Payment Methods**
+   - Code, Name, Type (Card/Bank Transfer/Cash/BNPL/Mobile/Cheque)
+   - "Requires Proof" flag for documentation requirements
+
+4. **Payment Gateways**
+   - Settlement configuration (T+n days OR specific day of week)
+   - Processing fees (percentage + fixed amount)
+   - Currency support (AED/USD/EUR)
+   - Examples: Tabby (Monday), Tamara (7 days), Network (T+1)
+
+5. **PSP Bank Mapping**
+   - Links payment gateways to bank accounts
+   - Enables easy reconciliation
+   - Bank name, account number, account name
+
+**Backend Endpoints Added:**
+- GET/POST/PUT/DELETE `/api/finance/settings/chart-of-accounts`
+- GET/POST/PUT/DELETE `/api/finance/settings/cost-centers`
+- GET/POST/PUT/DELETE `/api/finance/settings/payment-methods`
+- GET/POST/PUT/DELETE `/api/finance/settings/payment-gateways`
+- GET/POST/PUT/DELETE `/api/finance/settings/psp-bank-mapping`
+
+#### Meta Ads API Configuration (COMPLETED)
+- Added META_APP_ID and META_APP_SECRET to backend .env
+- Marketing Settings shows "Meta API: Configured" and "Webhook: Ready"
+- User needs to configure production domain for OAuth
+
+### Session Mar 1, 2026 (Part 2) - Finance Verification Flow Fix
 
 #### P0: Finance Verification Data Pipeline Fix (COMPLETED)
 **Problem:** When a lead was enrolled, the finance verification record was being created without crucial payment details (payment method, course name, payment screenshot, split payment details, BNPL phone verification). This was blocking the finance team from verifying payments.

@@ -15877,6 +15877,295 @@ async def get_payment_receivables(
         "settlement_rules": gateway_settlement_info
     }
 
+# ==================== FINANCE SETTINGS ENDPOINTS ====================
+
+# Chart of Accounts CRUD
+@api_router.get("/finance/settings/chart-of-accounts")
+async def get_chart_of_accounts(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all chart of accounts entries"""
+    accounts = await db.chart_of_accounts.find({}, {"_id": 0}).to_list(1000)
+    return accounts
+
+@api_router.post("/finance/settings/chart-of-accounts")
+async def create_chart_of_account(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new chart of accounts entry"""
+    # Check if code already exists
+    existing = await db.chart_of_accounts.find_one({"code": data.get("code")})
+    if existing:
+        raise HTTPException(status_code=400, detail="Account code already exists")
+    
+    account = {
+        "id": str(uuid.uuid4()),
+        "code": data.get("code"),
+        "name": data.get("name"),
+        "type": data.get("type", "asset"),
+        "parent_code": data.get("parent_code"),
+        "description": data.get("description"),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.chart_of_accounts.insert_one(account)
+    return account
+
+@api_router.put("/finance/settings/chart-of-accounts/{account_id}")
+async def update_chart_of_account(account_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a chart of accounts entry"""
+    result = await db.chart_of_accounts.update_one(
+        {"id": account_id},
+        {"$set": {
+            "code": data.get("code"),
+            "name": data.get("name"),
+            "type": data.get("type"),
+            "parent_code": data.get("parent_code"),
+            "description": data.get("description"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/chart-of-accounts/{account_id}")
+async def delete_chart_of_account(account_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a chart of accounts entry"""
+    result = await db.chart_of_accounts.delete_one({"id": account_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"status": "success"}
+
+# Cost Centers CRUD
+@api_router.get("/finance/settings/cost-centers")
+async def get_cost_centers(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all cost centers"""
+    centers = await db.cost_centers.find({}, {"_id": 0}).to_list(1000)
+    return centers
+
+@api_router.post("/finance/settings/cost-centers")
+async def create_cost_center(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new cost center"""
+    existing = await db.cost_centers.find_one({"code": data.get("code")})
+    if existing:
+        raise HTTPException(status_code=400, detail="Cost center code already exists")
+    
+    center = {
+        "id": str(uuid.uuid4()),
+        "code": data.get("code"),
+        "name": data.get("name"),
+        "department": data.get("department"),
+        "description": data.get("description"),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.cost_centers.insert_one(center)
+    return center
+
+@api_router.put("/finance/settings/cost-centers/{center_id}")
+async def update_cost_center(center_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a cost center"""
+    result = await db.cost_centers.update_one(
+        {"id": center_id},
+        {"$set": {
+            "code": data.get("code"),
+            "name": data.get("name"),
+            "department": data.get("department"),
+            "description": data.get("description"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Cost center not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/cost-centers/{center_id}")
+async def delete_cost_center(center_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a cost center"""
+    result = await db.cost_centers.delete_one({"id": center_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Cost center not found")
+    return {"status": "success"}
+
+# Payment Methods CRUD
+@api_router.get("/finance/settings/payment-methods")
+async def get_payment_methods(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo", "sales", "team_leader"]))):
+    """Get all payment methods"""
+    methods = await db.payment_methods.find({}, {"_id": 0}).to_list(1000)
+    return methods
+
+@api_router.post("/finance/settings/payment-methods")
+async def create_payment_method(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new payment method"""
+    existing = await db.payment_methods.find_one({"code": data.get("code")})
+    if existing:
+        raise HTTPException(status_code=400, detail="Payment method code already exists")
+    
+    method = {
+        "id": str(uuid.uuid4()),
+        "code": data.get("code"),
+        "name": data.get("name"),
+        "type": data.get("type", "card"),
+        "description": data.get("description"),
+        "requires_proof": data.get("requires_proof", True),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.payment_methods.insert_one(method)
+    return method
+
+@api_router.put("/finance/settings/payment-methods/{method_id}")
+async def update_payment_method(method_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a payment method"""
+    result = await db.payment_methods.update_one(
+        {"id": method_id},
+        {"$set": {
+            "code": data.get("code"),
+            "name": data.get("name"),
+            "type": data.get("type"),
+            "description": data.get("description"),
+            "requires_proof": data.get("requires_proof"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/payment-methods/{method_id}")
+async def delete_payment_method(method_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a payment method"""
+    result = await db.payment_methods.delete_one({"id": method_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    return {"status": "success"}
+
+# Payment Gateways CRUD
+@api_router.get("/finance/settings/payment-gateways")
+async def get_payment_gateways(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo", "sales", "team_leader"]))):
+    """Get all payment gateways"""
+    gateways = await db.payment_gateways.find({}, {"_id": 0}).to_list(1000)
+    return gateways
+
+@api_router.post("/finance/settings/payment-gateways")
+async def create_payment_gateway(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new payment gateway"""
+    existing = await db.payment_gateways.find_one({"code": data.get("code")})
+    if existing:
+        raise HTTPException(status_code=400, detail="Payment gateway code already exists")
+    
+    gateway = {
+        "id": str(uuid.uuid4()),
+        "code": data.get("code"),
+        "name": data.get("name"),
+        "provider_type": data.get("provider_type", "card_processor"),
+        "settlement_days": data.get("settlement_days", 1),
+        "settlement_day_of_week": data.get("settlement_day_of_week"),
+        "processing_fee_percent": data.get("processing_fee_percent", 0),
+        "processing_fee_fixed": data.get("processing_fee_fixed", 0),
+        "currency": data.get("currency", "AED"),
+        "description": data.get("description"),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.payment_gateways.insert_one(gateway)
+    return gateway
+
+@api_router.put("/finance/settings/payment-gateways/{gateway_id}")
+async def update_payment_gateway(gateway_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a payment gateway"""
+    result = await db.payment_gateways.update_one(
+        {"id": gateway_id},
+        {"$set": {
+            "code": data.get("code"),
+            "name": data.get("name"),
+            "provider_type": data.get("provider_type"),
+            "settlement_days": data.get("settlement_days"),
+            "settlement_day_of_week": data.get("settlement_day_of_week"),
+            "processing_fee_percent": data.get("processing_fee_percent"),
+            "processing_fee_fixed": data.get("processing_fee_fixed"),
+            "currency": data.get("currency"),
+            "description": data.get("description"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Payment gateway not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/payment-gateways/{gateway_id}")
+async def delete_payment_gateway(gateway_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a payment gateway"""
+    result = await db.payment_gateways.delete_one({"id": gateway_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payment gateway not found")
+    return {"status": "success"}
+
+# PSP Bank Mapping CRUD
+@api_router.get("/finance/settings/psp-bank-mapping")
+async def get_psp_bank_mappings(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all PSP bank mappings"""
+    mappings = await db.psp_bank_mappings.find({}, {"_id": 0}).to_list(1000)
+    return mappings
+
+@api_router.post("/finance/settings/psp-bank-mapping")
+async def create_psp_bank_mapping(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new PSP bank mapping"""
+    mapping = {
+        "id": str(uuid.uuid4()),
+        "gateway_id": data.get("gateway_id"),
+        "gateway_name": data.get("gateway_name"),
+        "bank_name": data.get("bank_name"),
+        "bank_account_number": data.get("bank_account_number"),
+        "bank_account_name": data.get("bank_account_name"),
+        "currency": data.get("currency", "AED"),
+        "description": data.get("description"),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.psp_bank_mappings.insert_one(mapping)
+    return mapping
+
+@api_router.put("/finance/settings/psp-bank-mapping/{mapping_id}")
+async def update_psp_bank_mapping(mapping_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a PSP bank mapping"""
+    result = await db.psp_bank_mappings.update_one(
+        {"id": mapping_id},
+        {"$set": {
+            "gateway_id": data.get("gateway_id"),
+            "gateway_name": data.get("gateway_name"),
+            "bank_name": data.get("bank_name"),
+            "bank_account_number": data.get("bank_account_number"),
+            "bank_account_name": data.get("bank_account_name"),
+            "currency": data.get("currency"),
+            "description": data.get("description"),
+            "is_active": data.get("is_active"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="PSP bank mapping not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/settings/psp-bank-mapping/{mapping_id}")
+async def delete_psp_bank_mapping(mapping_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a PSP bank mapping"""
+    result = await db.psp_bank_mappings.delete_one({"id": mapping_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="PSP bank mapping not found")
+    return {"status": "success"}
+
 # Include the router in the main app
 app.include_router(api_router)
 

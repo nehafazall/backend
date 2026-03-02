@@ -3,7 +3,7 @@ import { NavLink, Outlet, useParams, Navigate } from 'react-router-dom';
 import { 
     LayoutDashboard, FileText, CreditCard, Receipt, ArrowRightLeft, 
     Building2, Calculator, Coins, ChevronLeft, FileSpreadsheet,
-    PlusCircle, MinusCircle, Target, Wallet, PiggyBank, BarChart3
+    Target, Wallet, BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -68,33 +68,6 @@ const entityNavConfig = {
             }
         ]
     },
-    miles: {
-        title: 'Miles Capitals',
-        subtitle: 'Investment Management',
-        color: 'text-blue-500',
-        sections: [
-            {
-                title: 'Overview',
-                items: [
-                    { path: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }
-                ]
-            },
-            {
-                title: 'Capital Flow',
-                items: [
-                    { path: 'deposits', label: 'Deposits', icon: PlusCircle },
-                    { path: 'withdrawals', label: 'Withdrawals', icon: MinusCircle }
-                ]
-            },
-            {
-                title: 'Operations',
-                items: [
-                    { path: 'expense', label: 'Expenses', icon: Receipt },
-                    { path: 'profit', label: 'Operating Profit', icon: Target }
-                ]
-            }
-        ]
-    },
     treasury: {
         title: 'Treasury',
         subtitle: 'Cash Management',
@@ -151,6 +124,23 @@ const entityNavConfig = {
                 title: 'Data',
                 items: [
                     { path: 'management', label: 'Data Management', icon: FileSpreadsheet }
+                ]
+            }
+        ]
+    },
+    settings: {
+        title: 'Finance Settings',
+        subtitle: 'Configuration',
+        color: 'text-gray-500',
+        sections: [
+            {
+                title: 'Master Data',
+                items: [
+                    { path: 'chart-of-accounts', label: 'Chart of Accounts', icon: Building2 },
+                    { path: 'cost-centers', label: 'Cost Centers', icon: Target },
+                    { path: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
+                    { path: 'payment-gateways', label: 'Payment Gateways', icon: Wallet },
+                    { path: 'psp-mapping', label: 'PSP Bank Mapping', icon: ArrowRightLeft }
                 ]
             }
         ]

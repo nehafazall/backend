@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, TrendingUp, Wallet, PieChart, PiggyBank, Database } from 'lucide-react';
+import { Building2, TrendingUp, Wallet, PieChart, PiggyBank, Database, Settings } from 'lucide-react';
 
 const FinanceEntitySelector = () => {
     const navigate = useNavigate();
@@ -16,15 +16,6 @@ const FinanceEntitySelector = () => {
             status: 'active',
             route: '/finance/clt/dashboard',
             color: 'bg-red-500/10 text-red-500'
-        },
-        {
-            id: 'miles',
-            name: 'Miles Capitals',
-            description: 'Deposits, Withdrawals & Operating Profit',
-            icon: TrendingUp,
-            status: 'active',
-            route: '/finance/miles/dashboard',
-            color: 'bg-blue-500/10 text-blue-500'
         },
         {
             id: 'treasury',
@@ -61,6 +52,15 @@ const FinanceEntitySelector = () => {
             status: 'active',
             route: '/finance/data/management',
             color: 'bg-slate-500/10 text-slate-500'
+        },
+        {
+            id: 'settings',
+            name: 'Finance Settings',
+            description: 'Chart of Accounts, Cost Centers, Payment Gateways',
+            icon: TrendingUp,
+            status: 'active',
+            route: '/finance/settings/chart-of-accounts',
+            color: 'bg-gray-500/10 text-gray-500'
         }
     ];
 

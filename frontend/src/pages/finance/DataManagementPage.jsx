@@ -12,23 +12,25 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const DATA_TYPES = [
     { id: 'clt_payables', name: 'CLT Payables', entity: 'CLT' },
     { id: 'clt_receivables', name: 'CLT Receivables', entity: 'CLT' },
-    { id: 'miles_deposits', name: 'Miles Deposits', entity: 'Miles' },
-    { id: 'miles_withdrawals', name: 'Miles Withdrawals', entity: 'Miles' },
-    { id: 'miles_expenses', name: 'Miles Expenses', entity: 'Miles' },
-    { id: 'miles_profit', name: 'Miles Operating Profit', entity: 'Miles' },
+    { id: 'expenses', name: 'Operational Expenses', entity: 'CLT' },
     { id: 'treasury_balances', name: 'Treasury Balances', entity: 'Treasury' },
-    { id: 'budget', name: 'Budget Data', entity: 'Budgeting' }
+    { id: 'budget', name: 'Budget Data', entity: 'Budgeting' },
+    { id: 'chart_of_accounts', name: 'Chart of Accounts', entity: 'Settings' },
+    { id: 'cost_centers', name: 'Cost Centers', entity: 'Settings' },
+    { id: 'payment_methods', name: 'Payment Methods', entity: 'Settings' },
+    { id: 'payment_gateways', name: 'Payment Gateways', entity: 'Settings' }
 ];
 
 const TEMPLATES = {
     clt_payables: ['date', 'amount', 'currency', 'account_name', 'cost_center', 'sub_cost_center', 'source'],
     clt_receivables: ['date', 'account_name', 'amount', 'currency', 'payment_method', 'payment_for'],
-    miles_deposits: ['date', 'name', 'payment_method', 'amount', 'currency'],
-    miles_withdrawals: ['date', 'name', 'payment_method', 'amount', 'currency'],
-    miles_expenses: ['date', 'account_name', 'cost_center', 'sub_cost_center', 'source', 'amount', 'currency'],
-    miles_profit: ['date', 'lp_booked_amount', 'lp_floating_amount', 'miles_booked_amount', 'miles_floating_amount'],
+    expenses: ['date', 'category', 'description', 'amount', 'currency', 'vendor', 'cost_center'],
     treasury_balances: ['date', 'account', 'opening_balance', 'currency'],
-    budget: ['cost_center', 'year', 'entity', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    budget: ['cost_center', 'year', 'entity', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    chart_of_accounts: ['code', 'name', 'type', 'parent_code', 'description'],
+    cost_centers: ['code', 'name', 'department', 'description'],
+    payment_methods: ['code', 'name', 'type', 'requires_proof', 'description'],
+    payment_gateways: ['code', 'name', 'provider_type', 'settlement_days', 'settlement_day_of_week', 'processing_fee_percent', 'processing_fee_fixed', 'currency']
 };
 
 const DataManagementPage = () => {
