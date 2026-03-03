@@ -15906,6 +15906,7 @@ async def create_chart_of_account(data: dict, user = Depends(require_roles(["sup
         "created_by": user.get("id")
     }
     await db.chart_of_accounts.insert_one(account)
+    account.pop("_id", None)
     return account
 
 @api_router.put("/finance/settings/chart-of-accounts/{account_id}")
@@ -15961,6 +15962,7 @@ async def create_cost_center(data: dict, user = Depends(require_roles(["super_ad
         "created_by": user.get("id")
     }
     await db.cost_centers.insert_one(center)
+    center.pop("_id", None)  # Remove MongoDB _id before returning
     return center
 
 @api_router.put("/finance/settings/cost-centers/{center_id}")
@@ -16016,6 +16018,7 @@ async def create_payment_method(data: dict, user = Depends(require_roles(["super
         "created_by": user.get("id")
     }
     await db.payment_methods.insert_one(method)
+    method.pop("_id", None)
     return method
 
 @api_router.put("/finance/settings/payment-methods/{method_id}")
@@ -16076,6 +16079,7 @@ async def create_payment_gateway(data: dict, user = Depends(require_roles(["supe
         "created_by": user.get("id")
     }
     await db.payment_gateways.insert_one(gateway)
+    gateway.pop("_id", None)
     return gateway
 
 @api_router.put("/finance/settings/payment-gateways/{gateway_id}")
@@ -16134,6 +16138,7 @@ async def create_psp_bank_mapping(data: dict, user = Depends(require_roles(["sup
         "created_by": user.get("id")
     }
     await db.psp_bank_mappings.insert_one(mapping)
+    mapping.pop("_id", None)
     return mapping
 
 @api_router.put("/finance/settings/psp-bank-mapping/{mapping_id}")
