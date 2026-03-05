@@ -110,19 +110,33 @@ const MODULE_HIERARCHY = [
             { id: 'clt_dashboard', label: 'CLT Dashboard', path: '/finance/clt/dashboard' },
             { id: 'clt_payables', label: 'CLT Payables', path: '/finance/clt/payables' },
             { id: 'clt_receivables', label: 'CLT Receivables', path: '/finance/clt/receivables' },
-            // Miles Finance
-            { id: 'miles_dashboard', label: 'Miles Dashboard', path: '/finance/miles/dashboard' },
-            { id: 'miles_deposits', label: 'Miles Deposits', path: '/finance/miles/deposits' },
-            { id: 'miles_withdrawals', label: 'Miles Withdrawals', path: '/finance/miles/withdrawals' },
-            { id: 'miles_expenses', label: 'Miles Expenses', path: '/finance/miles/expense' },
-            { id: 'miles_profit', label: 'Miles Operating Profit', path: '/finance/miles/profit' },
+            { id: 'finance_verifications', label: 'Payment Verifications', path: '/finance/clt/verifications' },
+            { id: 'pending_settlements', label: 'Pending Settlements', path: '/finance/clt/pending-settlements' },
+            { id: 'journal_entries', label: 'Journal Entries', path: '/finance/clt/journal' },
             // Treasury
             { id: 'treasury_dashboard', label: 'Treasury Dashboard', path: '/finance/treasury/dashboard' },
             { id: 'treasury_balances', label: 'Treasury Balances', path: '/finance/treasury/balances' },
-            { id: 'treasury_settlements', label: 'Treasury Settlements', path: '/finance/treasury/settlements' },
-            // Budgeting & Data
+            // Budgeting & PNL
             { id: 'budget_sheet', label: 'Budget Sheet', path: '/finance/budgeting/sheet' },
+            { id: 'pnl_dashboard', label: 'PNL Dashboard', path: '/finance/pnl/dashboard' },
             { id: 'data_management', label: 'Data Management', path: '/finance/data/management' },
+            // Finance Settings
+            { id: 'chart_of_accounts', label: 'Chart of Accounts', path: '/finance/settings/chart-of-accounts' },
+            { id: 'bank_accounts', label: 'Bank Accounts', path: '/finance/settings/bank-accounts' },
+            { id: 'cost_centers', label: 'Cost Centers', path: '/finance/settings/cost-centers' },
+            { id: 'payment_methods', label: 'Payment Methods', path: '/finance/settings/payment-methods' },
+            { id: 'payment_gateways', label: 'Payment Gateways', path: '/finance/settings/payment-gateways' },
+            { id: 'psp_mapping', label: 'PSP Bank Mapping', path: '/finance/settings/psp-mapping' },
+        ]
+    },
+    {
+        id: 'marketing',
+        label: 'Marketing Module',
+        icon: BarChart3,
+        subPages: [
+            { id: 'marketing_dashboard', label: 'Analytics Dashboard', path: '/marketing/dashboard' },
+            { id: 'lead_connectors', label: 'Lead Connectors', path: '/marketing/connectors' },
+            { id: 'marketing_settings', label: 'Marketing Settings', path: '/marketing/settings' },
         ]
     },
     {

@@ -403,8 +403,17 @@ function Layout() {
         if (userRole === 'super_admin') {
             visibleSections.push(section);
         } else {
-            // Check if user can access ANY item in the section
-            const hasAccessToAnyItem = section.items.some(item => checkAccess(item.path, item.roles));
+            // First check if user's role is in the section's allowed roles
+            if (!section.roles || !section.roles.includes(userRole)) {
+                continue; // Skip this section if role not allowed
+            }
+            // Then check if user can access ANY item in the section via permissions
+            const hasAccessToAnyItem = section.items.some(item => {
+                // If item has specific roles, check those first
+                if (item.roles && !item.roles.includes(userRole)) return false;
+                // Then check permission-based access
+                return canAccess(item.path);
+            });
             if (hasAccessToAnyItem) {
                 visibleSections.push(section);
             }

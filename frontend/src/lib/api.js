@@ -251,8 +251,13 @@ const MODULE_HIERARCHY = [
     {
         id: 'finance',
         subPages: ['finance_selector', 'commission_engine', 'clt_dashboard', 'clt_payables', 'clt_receivables', 
-                   'miles_dashboard', 'miles_deposits', 'miles_withdrawals', 'miles_expenses', 'miles_profit',
-                   'treasury_dashboard', 'treasury_balances', 'treasury_settlements', 'budget_sheet', 'data_management']
+                   'finance_verifications', 'pending_settlements', 'journal_entries',
+                   'treasury_dashboard', 'treasury_balances', 'budget_sheet', 'pnl_dashboard', 'data_management',
+                   'chart_of_accounts', 'bank_accounts', 'cost_centers', 'payment_methods', 'payment_gateways', 'psp_mapping']
+    },
+    {
+        id: 'marketing',
+        subPages: ['marketing_dashboard', 'lead_connectors', 'marketing_settings']
     },
     {
         id: 'operations',
@@ -337,11 +342,21 @@ const getDefaultPermissions = (role) => {
         permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
         permissions['finance'] = { enabled: true, level: 'full', subPages: { 
             finance_selector: 'full', commission_engine: 'edit', clt_dashboard: 'full', clt_payables: 'full', clt_receivables: 'full',
-            miles_dashboard: 'full', miles_deposits: 'full', miles_withdrawals: 'full', miles_expenses: 'full', miles_profit: 'full',
-            treasury_dashboard: 'full', treasury_balances: 'full', treasury_settlements: 'full', budget_sheet: 'edit', data_management: 'view'
+            finance_verifications: 'full', pending_settlements: 'full', journal_entries: 'full',
+            treasury_dashboard: 'full', treasury_balances: 'full', budget_sheet: 'edit', pnl_dashboard: 'view', data_management: 'view',
+            chart_of_accounts: 'full', bank_accounts: 'full', cost_centers: 'full', 
+            payment_methods: 'full', payment_gateways: 'full', psp_mapping: 'full'
         }};
         permissions['customer_service'] = { enabled: true, level: 'view', subPages: { 
             cs_kanban: 'none', cs_dashboard: 'none', customer_master: 'view' 
+        }};
+    } else if (role === 'marketing') {
+        permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
+        permissions['marketing'] = { enabled: true, level: 'full', subPages: { 
+            marketing_dashboard: 'full', lead_connectors: 'full', marketing_settings: 'full'
+        }};
+        permissions['sales'] = { enabled: true, level: 'view', subPages: { 
+            sales_crm: 'none', sales_dashboard: 'view', today_followups: 'none', leads_pool: 'view', approvals: 'none' 
         }};
     }
     
@@ -378,16 +393,25 @@ const PATH_TO_SUBPAGE = {
     '/finance/clt/dashboard': 'clt_dashboard',
     '/finance/clt/payables': 'clt_payables',
     '/finance/clt/receivables': 'clt_receivables',
-    '/finance/miles/dashboard': 'miles_dashboard',
-    '/finance/miles/deposits': 'miles_deposits',
-    '/finance/miles/withdrawals': 'miles_withdrawals',
-    '/finance/miles/expense': 'miles_expenses',
-    '/finance/miles/profit': 'miles_profit',
+    '/finance/clt/verifications': 'finance_verifications',
+    '/finance/clt/pending-settlements': 'pending_settlements',
+    '/finance/clt/journal': 'journal_entries',
     '/finance/treasury/dashboard': 'treasury_dashboard',
     '/finance/treasury/balances': 'treasury_balances',
-    '/finance/treasury/settlements': 'treasury_settlements',
     '/finance/budgeting/sheet': 'budget_sheet',
+    '/finance/pnl/dashboard': 'pnl_dashboard',
     '/finance/data/management': 'data_management',
+    // Finance Settings
+    '/finance/settings/chart-of-accounts': 'chart_of_accounts',
+    '/finance/settings/bank-accounts': 'bank_accounts',
+    '/finance/settings/cost-centers': 'cost_centers',
+    '/finance/settings/payment-methods': 'payment_methods',
+    '/finance/settings/payment-gateways': 'payment_gateways',
+    '/finance/settings/psp-mapping': 'psp_mapping',
+    // Marketing module paths
+    '/marketing/dashboard': 'marketing_dashboard',
+    '/marketing/connectors': 'lead_connectors',
+    '/marketing/settings': 'marketing_settings',
     // Settings paths
     '/users': 'user_management',
     '/access-control': 'access_control',
