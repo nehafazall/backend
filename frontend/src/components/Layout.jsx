@@ -369,14 +369,22 @@ function Layout() {
         }
     }
 
-    // Check if user can access a path using permissions OR fallback to role check
+    // Check if user can access a path using roles AND permissions
     function checkAccess(path, roles) {
         // Super admin always has access
         if (userRole === 'super_admin') return true;
-        // Use permission-based access if available
+        
+        // First check item-level role restriction (most specific)
+        if (roles && roles.length > 0 && !roles.includes(userRole)) {
+            return false; // Item explicitly excludes this role
+        }
+        
+        // Then check permission-based access
         if (canAccess(path)) return true;
-        // Fallback to role-based check for backward compatibility
+        
+        // If roles are defined and user's role is included, allow access
         if (roles && roles.includes(userRole)) return true;
+        
         return false;
     }
 
