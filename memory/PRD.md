@@ -51,6 +51,25 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Result:** Approved payments now appear in Finance > CLT > Receivables page.
 
+#### P0: Bird's Eye View Dashboard (COMPLETED)
+**Requirement:** Create a comprehensive company overview dashboard with charts, growth comparisons, and clickable widgets that navigate to respective modules.
+
+**Implementation:**
+- Created `/app/frontend/src/pages/BirdsEyeDashboard.jsx` as the new main dashboard
+- **No-scroll design** - everything fits in one viewport
+- **Clickable widgets** - all metrics navigate to their respective pages:
+  - Attendance → HR Attendance
+  - Absent/Employees → HR Employees  
+  - Docs Expiring → HR Documents
+  - Revenue/Expenses → Finance CLT modules
+  - Leads → Sales Leads
+- **Interactive Charts:**
+  - Revenue Trend (Area chart)
+  - Monthly Enrollments (Bar chart)
+  - Department Breakdown (Pie chart)
+- **Real-time Data:** Fetches from dashboard stats, HR, and finance APIs
+- **Previous dashboard available at:** `/dashboard/detailed`
+
 ### Session Mar 2, 2026 - Finance Module Cleanup & Settings Enhancement
 
 #### Miles Capitals Removal (COMPLETED)

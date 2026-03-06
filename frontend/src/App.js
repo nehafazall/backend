@@ -7,6 +7,7 @@ import { AuthProvider, ThemeProvider, PermissionProvider, useAuth, usePermission
 // Pages
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
+import BirdsEyeDashboard from "@/pages/BirdsEyeDashboard";
 import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import CustomerServicePage from "@/pages/CustomerServicePage";
@@ -166,7 +167,8 @@ function AppRoutes() {
             }>
                 <Route index element={<Navigate to="/home" replace />} />
                 <Route path="home" element={<div />} />
-                <Route path="dashboard" element={<DashboardPage />} />
+                <Route path="dashboard" element={<BirdsEyeDashboard />} />
+                <Route path="dashboard/detailed" element={<DashboardPage />} />
                 
                 {/* SSHR (Self-Service HR) - Available to all logged in users */}
                 <Route path="sshr" element={<SSHRPage />} />
