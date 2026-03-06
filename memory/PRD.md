@@ -5,6 +5,41 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
+### Session Mar 6, 2026 - P0 Finance & BioCloud Fixes
+
+#### P0: ObjectId Serialization Fix (COMPLETED)
+**Problem:** Finance Settings CRUD endpoints were crashing due to MongoDB `ObjectId` not being JSON serializable when creating new entries.
+
+**Solution:** Fixed the Bank Accounts POST endpoint (`/api/finance/settings/bank-accounts`) that was missing `account.pop("_id", None)` before returning. All Finance Settings POST endpoints now properly remove the `_id` field.
+
+**Verification:** Testing agent confirmed all 7 CRUD endpoints working without ObjectId errors:
+- POST /api/finance/settings/chart-of-accounts ✅
+- POST /api/finance/settings/cost-centers ✅  
+- POST /api/finance/settings/payment-methods ✅
+- POST /api/finance/settings/payment-gateways ✅
+- POST /api/finance/settings/psp-bank-mapping ✅
+- POST /api/finance/settings/bank-accounts ✅
+- POST /api/finance/vendors ✅
+
+#### P0: BioCloud Attendance Sync Reliability Improvement (COMPLETED)
+**Problem:** BioCloud web scraping was unreliable, failing intermittently without proper error handling.
+
+**Solution:** Enhanced the sync mechanism with:
+1. **Retry Logic**: Configurable retry count (default 3 attempts) with 2-second delays
+2. **Robust Element Selection**: Multiple fallback selectors for login form, menus, and tables
+3. **Better Error Handling**: Detailed logging and informative error messages
+4. **Date Filter Support**: Can sync specific dates if BioCloud supports filtering
+5. **Sync History Logging**: All syncs logged to `biocloud_sync_log` collection
+
+**New Endpoints Added:**
+- `POST /api/hr/biocloud/bulk-sync` - Sync attendance for a date range (max 31 days) in background
+- `GET /api/hr/biocloud/sync-job/{job_id}` - Check bulk sync job status
+- `GET /api/hr/biocloud/sync-history` - View sync history for audit/troubleshooting
+
+**Enhanced Status Endpoint:** `/api/hr/biocloud/status` now includes last successful sync information.
+
+**Test Results:** Backend 100% (17/17 tests), Frontend 100%
+
 ### Session Mar 2, 2026 - Finance Module Cleanup & Settings Enhancement
 
 #### Miles Capitals Removal (COMPLETED)
@@ -808,6 +843,7 @@ User Management                    Employee Master
 - `/app/test_reports/iteration_21.json` - BioCloud Sync & Payroll P0 fixes (100% pass)
 - `/app/test_reports/iteration_22.json` - Comprehensive testing: BioCloud, Payroll, Round Robin, Follow-ups, View As, Reassignment, Approvals (Backend 83%, Frontend 95%)
 - `/app/test_reports/iteration_26.json` - Marketing Module with Meta Ads Integration (Backend 100%, Frontend 100%)
+- `/app/test_reports/iteration_30.json` - P0 Finance ObjectId Fix & BioCloud Sync Improvements (Backend 100% - 17/17, Frontend 100%)
 
 ## New Admin Features
 - **Admin Settings Page**: `/admin-settings` (Super Admin only)
@@ -817,6 +853,11 @@ User Management                    Employee Master
 - **Finance Permissions**: Granular View/Edit/Delete per module in User Management
 
 ## Future/Backlog Tasks
+- Complete Finance Architecture Refactor:
+  - Unified Transactions View (all money-in/money-out)
+  - 2-step approval flow (Sales creates → Finance approves → Journal post)
+  - Customer transaction history for LTV calculation
+- Course and Commission Configuration (awaiting user's course details and commission rates)
 - Google Ads API integration (extend Marketing module)
 - WhatsApp/SMS notifications
 - Self-hosting package (Docker, PostgreSQL migration)
@@ -824,5 +865,5 @@ User Management                    Employee Master
 - AI-powered lead scoring
 - Direct ZKTeco biometric device API integration (if network access available)
 - Payslip generation logic (placeholder exists at `/sshr/payslips`)
-- Google Sheets Lead Connector
+- Refactor `server.py` into modular route files
 
