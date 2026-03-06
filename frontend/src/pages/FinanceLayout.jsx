@@ -3,7 +3,7 @@ import { NavLink, Outlet, useParams, Navigate } from 'react-router-dom';
 import { 
     LayoutDashboard, FileText, CreditCard, Receipt, ArrowRightLeft, 
     Building2, Calculator, Coins, ChevronLeft, FileSpreadsheet,
-    Target, Wallet, BarChart3
+    Target, Wallet, BarChart3, Users, List
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -142,6 +142,13 @@ const entityNavConfig = {
                     { path: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
                     { path: 'payment-gateways', label: 'Payment Gateways', icon: Wallet },
                     { path: 'psp-mapping', label: 'PSP Bank Mapping', icon: ArrowRightLeft }
+                ]
+            },
+            {
+                title: 'Operations',
+                items: [
+                    { path: 'vendors', label: 'Vendor Management', icon: Users },
+                    { path: 'transactions', label: 'Unified Transactions', icon: List }
                 ]
             }
         ]

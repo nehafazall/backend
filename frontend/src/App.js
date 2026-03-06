@@ -285,6 +285,10 @@ function AppRoutes() {
                     <Route path="psp-mapping" element={<FinanceSettingsPage section="psp-mapping" />} />
                     <Route path="chart-of-accounts" element={<FinanceSettingsPage section="accounts" />} />
                     <Route path="bank-accounts" element={<FinanceSettingsPage section="bank-accounts" />} />
+                    {/* Vendor Management */}
+                    <Route path="vendors" element={<VendorManagementPage />} />
+                    {/* Unified Transactions */}
+                    <Route path="transactions" element={<UnifiedTransactionsPage />} />
                 </Route>
                 
                 {/* HR Module */}
