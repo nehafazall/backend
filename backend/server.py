@@ -6756,7 +6756,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://payment-verification-9.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://finance-hub-803.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -10755,65 +10755,191 @@ async def save_biocloud_mapping(
 @api_router.post("/hr/biocloud/fetch-attendance")
 async def fetch_biocloud_attendance(
     date: Optional[str] = None,
+    retry_count: int = 3,
     user = Depends(require_roles(["super_admin", "admin", "hr"]))
 ):
     """
     Fetch attendance from BioCloud and sync to CLT Synapse
     Uses Playwright web scraping since direct API not available for attendance
     Navigates to Attendance > Daily Attendance and scrapes the layui table
+    
+    Improvements:
+    - Retry logic with configurable retry count
+    - Better error handling and recovery
+    - More robust element selection with fallbacks
+    - Date filter support
+    - Detailed logging for debugging
     """
     import os as os_module
     os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
     
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
     
     target_date = date or datetime.now().strftime("%Y-%m-%d")
+    last_error = None
     
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(ignore_https_errors=True)
-            page = await context.new_page()
+    for attempt in range(retry_count):
+        try:
+            logger.info(f"BioCloud sync: Attempt {attempt + 1}/{retry_count} for date {target_date}")
             
-            biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')
-            biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
-            biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
-            
-            logger.info(f"BioCloud sync: Connecting to {biocloud_url}")
-            
-            # Login to BioCloud
-            await page.goto(biocloud_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(2000)
-            
-            # Fill login form
-            username_input = page.locator('input[type="text"]').first
-            password_input = page.locator('input[type="password"]').first
-            
-            await username_input.fill(biocloud_user)
-            await password_input.fill(biocloud_pass)
-            
-            # Click login button
-            login_btn = page.locator('button').first
-            await login_btn.click()
-            await page.wait_for_timeout(5000)
-            
-            logger.info("BioCloud sync: Logged in successfully")
-            
-            # Navigate to Attendance menu
-            attendance_menu = page.locator('a:has-text("Attendance")').first
-            await attendance_menu.click()
-            await page.wait_for_timeout(1500)
-            
-            # Click on Daily Attendance
-            daily_att = page.locator('a:has-text("Daily Attendance")').first
-            await daily_att.click()
-            await page.wait_for_timeout(4000)
-            
-            logger.info("BioCloud sync: Navigated to Daily Attendance")
-            
-            # Find the Daily Attendance table container (layui-table-box)
-            # The Daily Attendance table is the second container with Employee ID, Weekday, Name, etc.
-            layui_containers = await page.locator('.layui-table-box').all()
+            async with async_playwright() as p:
+                # Launch browser with more stable settings
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+                )
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                )
+                page = await context.new_page()
+                page.set_default_timeout(30000)  # 30 second default timeout
+                
+                biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')
+                biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
+                biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
+                
+                logger.info(f"BioCloud sync: Connecting to {biocloud_url}")
+                
+                # Login to BioCloud with retry on page load
+                try:
+                    await page.goto(biocloud_url, wait_until="domcontentloaded", timeout=45000)
+                    await page.wait_for_timeout(3000)  # Wait for JS to fully load
+                except PlaywrightTimeout:
+                    logger.warning(f"BioCloud sync: Page load timeout, waiting for fallback...")
+                    await page.wait_for_timeout(5000)
+                
+                # Try multiple selectors for login form (more robust)
+                username_input = None
+                password_input = None
+                
+                # Try different selector strategies
+                login_selectors = [
+                    {'user': 'input[type="text"]', 'pass': 'input[type="password"]'},
+                    {'user': 'input[name="username"]', 'pass': 'input[name="password"]'},
+                    {'user': '#username', 'pass': '#password'},
+                    {'user': 'input.form-control', 'pass': 'input[type="password"]'},
+                ]
+                
+                for selectors in login_selectors:
+                    try:
+                        username_input = page.locator(selectors['user']).first
+                        password_input = page.locator(selectors['pass']).first
+                        if await username_input.count() > 0 and await password_input.count() > 0:
+                            break
+                    except:
+                        continue
+                
+                if not username_input or not password_input:
+                    raise Exception("Could not find login form elements")
+                
+                await username_input.fill(biocloud_user)
+                await password_input.fill(biocloud_pass)
+                
+                # Click login button with fallback selectors
+                login_clicked = False
+                login_btn_selectors = [
+                    'button[type="submit"]',
+                    'button:has-text("Login")',
+                    'button:has-text("Sign")',
+                    'input[type="submit"]',
+                    'button.btn-primary',
+                    'button'
+                ]
+                
+                for selector in login_btn_selectors:
+                    try:
+                        login_btn = page.locator(selector).first
+                        if await login_btn.count() > 0:
+                            await login_btn.click()
+                            login_clicked = True
+                            break
+                    except:
+                        continue
+                
+                if not login_clicked:
+                    # Try pressing Enter as fallback
+                    await password_input.press('Enter')
+                
+                await page.wait_for_timeout(5000)
+                
+                # Verify login success by checking for menu items
+                try:
+                    await page.wait_for_selector('a:has-text("Attendance")', timeout=10000)
+                    logger.info("BioCloud sync: Logged in successfully")
+                except PlaywrightTimeout:
+                    # Check if still on login page (login failed)
+                    if await page.locator('input[type="password"]').count() > 0:
+                        raise Exception("Login failed - check credentials")
+                    logger.info("BioCloud sync: Login page changed, assuming success")
+                
+                # Navigate to Attendance menu with retry
+                attendance_menu = None
+                menu_selectors = [
+                    'a:has-text("Attendance")',
+                    'li:has-text("Attendance") a',
+                    '[data-menu="attendance"]',
+                    '.nav-item:has-text("Attendance")'
+                ]
+                
+                for selector in menu_selectors:
+                    try:
+                        attendance_menu = page.locator(selector).first
+                        if await attendance_menu.count() > 0:
+                            await attendance_menu.click()
+                            break
+                    except:
+                        continue
+                
+                if not attendance_menu:
+                    raise Exception("Could not find Attendance menu")
+                
+                await page.wait_for_timeout(2000)
+                
+                # Click on Daily Attendance with fallback
+                daily_att_selectors = [
+                    'a:has-text("Daily Attendance")',
+                    'a:has-text("Daily")',
+                    '[href*="daily"]',
+                    '.submenu a:has-text("Daily")'
+                ]
+                
+                daily_att_clicked = False
+                for selector in daily_att_selectors:
+                    try:
+                        daily_att = page.locator(selector).first
+                        if await daily_att.count() > 0:
+                            await daily_att.click()
+                            daily_att_clicked = True
+                            break
+                    except:
+                        continue
+                
+                if not daily_att_clicked:
+                    raise Exception("Could not find Daily Attendance link")
+                
+                await page.wait_for_timeout(4000)
+                logger.info("BioCloud sync: Navigated to Daily Attendance")
+                
+                # Try to set date filter if needed (for specific date sync)
+                try:
+                    date_input = page.locator('input[type="date"], input.date-picker, input[name="date"]').first
+                    if await date_input.count() > 0:
+                        await date_input.fill(target_date)
+                        await page.wait_for_timeout(1000)
+                        # Try to trigger search/filter
+                        search_btn = page.locator('button:has-text("Search"), button:has-text("Filter"), button.btn-search').first
+                        if await search_btn.count() > 0:
+                            await search_btn.click()
+                            await page.wait_for_timeout(2000)
+                except Exception as e:
+                    logger.info(f"BioCloud sync: Date filter not available or not needed: {e}")
+                
+                # Find the Daily Attendance table container (layui-table-box)
+                # The Daily Attendance table is the second container with Employee ID, Weekday, Name, etc.
+                await page.wait_for_selector('.layui-table-box, .table, table', timeout=15000)
+                layui_containers = await page.locator('.layui-table-box').all()
             
             attendance_data = []
             
@@ -11033,6 +11159,19 @@ async def fetch_biocloud_attendance(
             if missing_mapped:
                 logger.warning(f"BioCloud sync: Mapped employees without attendance data: {missing_mapped}")
             
+            # Log successful sync to history
+            await db.biocloud_sync_log.insert_one({
+                "id": str(uuid.uuid4()),
+                "date": target_date,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "fetched": len(attendance_data),
+                "synced": synced,
+                "skipped": skipped,
+                "success": True,
+                "attempt": attempt + 1,
+                "user_id": user.get("id")
+            })
+            
             return {
                 "success": True,
                 "date": target_date,
@@ -11042,12 +11181,20 @@ async def fetch_biocloud_attendance(
                 "found_emp_codes": list(found_emp_codes),
                 "unmatched_emp_codes": unmatched_emp_codes,
                 "missing_mapped_employees": missing_mapped,
+                "attempt": attempt + 1,
                 "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse ({skipped} unmapped employees skipped)"
             }
             
-    except Exception as e:
-        logger.error(f"BioCloud attendance fetch error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch attendance: {str(e)}")
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"BioCloud sync attempt {attempt + 1} failed: {last_error}")
+            if attempt < retry_count - 1:
+                await asyncio.sleep(2)  # Wait before retry
+                continue
+    
+    # All retries failed
+    logger.error(f"BioCloud attendance fetch failed after {retry_count} attempts: {last_error}")
+    raise HTTPException(status_code=500, detail=f"Failed to fetch attendance after {retry_count} attempts: {last_error}")
 
 @api_router.get("/hr/biocloud/status")
 async def get_biocloud_status(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
@@ -11061,18 +11208,285 @@ async def get_biocloud_status(user = Depends(require_roles(["super_admin", "admi
         total_employees = await db.hr_employees.count_documents({})
         mapped_employees = await db.hr_employees.count_documents({"biocloud_emp_code": {"$exists": True, "$ne": None}})
         
+        # Get last sync info
+        last_sync = await db.biocloud_sync_log.find_one(
+            {"success": True},
+            sort=[("timestamp", -1)]
+        )
+        
         return {
             "connected": connected,
             "biocloud_url": os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085'),
             "total_clt_employees": total_employees,
             "mapped_employees": mapped_employees,
-            "unmapped_employees": total_employees - mapped_employees
+            "unmapped_employees": total_employees - mapped_employees,
+            "last_sync": {
+                "date": last_sync.get("date") if last_sync else None,
+                "timestamp": last_sync.get("timestamp") if last_sync else None,
+                "records_synced": last_sync.get("synced") if last_sync else 0
+            } if last_sync else None
         }
     except Exception as e:
         return {
             "connected": False,
             "error": str(e)
         }
+
+@api_router.post("/hr/biocloud/bulk-sync")
+async def bulk_sync_biocloud_attendance(
+    start_date: str,
+    end_date: str,
+    background_tasks: BackgroundTasks,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Sync attendance for a date range in the background.
+    Useful for initial setup or catching up on missed syncs.
+    """
+    from datetime import datetime as dt
+    
+    try:
+        start = dt.strptime(start_date, "%Y-%m-%d")
+        end = dt.strptime(end_date, "%Y-%m-%d")
+        
+        if start > end:
+            raise HTTPException(status_code=400, detail="Start date must be before end date")
+        
+        # Calculate number of days
+        delta = (end - start).days + 1
+        if delta > 31:
+            raise HTTPException(status_code=400, detail="Maximum date range is 31 days")
+        
+        # Generate list of dates
+        dates_to_sync = []
+        current = start
+        while current <= end:
+            dates_to_sync.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+        
+        # Create a bulk sync job record
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "type": "bulk_sync",
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_dates": len(dates_to_sync),
+            "completed_dates": 0,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": user.get("id"),
+            "results": []
+        }
+        await db.biocloud_sync_jobs.insert_one(job)
+        
+        # Run sync in background
+        async def run_bulk_sync():
+            try:
+                for i, sync_date in enumerate(dates_to_sync):
+                    try:
+                        # Import the function reference
+                        result = await _sync_single_date(sync_date, user)
+                        
+                        await db.biocloud_sync_jobs.update_one(
+                            {"id": job_id},
+                            {
+                                "$inc": {"completed_dates": 1},
+                                "$push": {"results": {"date": sync_date, "success": True, "synced": result.get("synced", 0)}},
+                                "$set": {"status": "in_progress"}
+                            }
+                        )
+                    except Exception as e:
+                        await db.biocloud_sync_jobs.update_one(
+                            {"id": job_id},
+                            {
+                                "$inc": {"completed_dates": 1},
+                                "$push": {"results": {"date": sync_date, "success": False, "error": str(e)}},
+                            }
+                        )
+                    
+                    # Small delay between syncs to avoid overwhelming the server
+                    await asyncio.sleep(2)
+                
+                # Mark job as complete
+                await db.biocloud_sync_jobs.update_one(
+                    {"id": job_id},
+                    {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}}
+                )
+            except Exception as e:
+                await db.biocloud_sync_jobs.update_one(
+                    {"id": job_id},
+                    {"$set": {"status": "failed", "error": str(e)}}
+                )
+        
+        background_tasks.add_task(run_bulk_sync)
+        
+        return {
+            "success": True,
+            "job_id": job_id,
+            "dates_to_sync": len(dates_to_sync),
+            "message": f"Bulk sync started for {len(dates_to_sync)} dates. Check job status with job_id."
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format. Use YYYY-MM-DD: {str(e)}")
+
+@api_router.get("/hr/biocloud/sync-job/{job_id}")
+async def get_biocloud_sync_job(job_id: str, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get status of a bulk sync job"""
+    job = await db.biocloud_sync_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    return job
+
+@api_router.get("/hr/biocloud/sync-history")
+async def get_biocloud_sync_history(
+    limit: int = 20,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Get history of BioCloud sync operations"""
+    history = await db.biocloud_sync_log.find(
+        {},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    return {
+        "history": history,
+        "total": len(history)
+    }
+
+async def _sync_single_date(sync_date: str, user: dict) -> dict:
+    """Internal helper for syncing a single date (used by bulk sync)"""
+    import os as os_module
+    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
+    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+    
+    # Similar logic to fetch_biocloud_attendance but simplified for internal use
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        )
+        context = await browser.new_context(
+            ignore_https_errors=True,
+            viewport={'width': 1920, 'height': 1080}
+        )
+        page = await context.new_page()
+        
+        biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')
+        biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
+        biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
+        
+        await page.goto(biocloud_url, wait_until="domcontentloaded", timeout=45000)
+        await page.wait_for_timeout(3000)
+        
+        # Login
+        username_input = page.locator('input[type="text"]').first
+        password_input = page.locator('input[type="password"]').first
+        await username_input.fill(biocloud_user)
+        await password_input.fill(biocloud_pass)
+        
+        login_btn = page.locator('button').first
+        await login_btn.click()
+        await page.wait_for_timeout(5000)
+        
+        # Navigate to Daily Attendance
+        attendance_menu = page.locator('a:has-text("Attendance")').first
+        await attendance_menu.click()
+        await page.wait_for_timeout(1500)
+        
+        daily_att = page.locator('a:has-text("Daily Attendance")').first
+        await daily_att.click()
+        await page.wait_for_timeout(4000)
+        
+        # Scrape data (simplified)
+        layui_containers = await page.locator('.layui-table-box').all()
+        attendance_data = []
+        
+        if len(layui_containers) >= 2:
+            daily_container = layui_containers[1]
+            body_elements = await daily_container.locator('.layui-table-body').all()
+            
+            if body_elements:
+                body = body_elements[0]
+                rows = await body.locator('tr').all()
+                
+                for row in rows:
+                    cells = await row.locator('td').all()
+                    if len(cells) >= 7:
+                        try:
+                            cell_texts = []
+                            for cell in cells[:11]:
+                                text = await cell.inner_text()
+                                cell_texts.append(text.strip())
+                            
+                            emp_code = cell_texts[0]
+                            punch_date = cell_texts[4]
+                            actual_in = cell_texts[5] if len(cell_texts) > 5 else ""
+                            actual_out = cell_texts[6] if len(cell_texts) > 6 else ""
+                            
+                            if emp_code.isdigit() and punch_date and '-' in punch_date:
+                                attendance_data.append({
+                                    "emp_code": emp_code,
+                                    "name": cell_texts[2],
+                                    "punch_date": punch_date,
+                                    "first_in": actual_in if actual_in else None,
+                                    "last_out": actual_out if actual_out else None
+                                })
+                        except:
+                            continue
+        
+        await browser.close()
+        
+        # Sync to DB
+        synced = 0
+        for att in attendance_data:
+            employee = await db.hr_employees.find_one(
+                {"biocloud_emp_code": att["emp_code"]},
+                {"_id": 0}
+            )
+            
+            if employee:
+                existing = await db.hr_attendance.find_one({
+                    "employee_id": employee["id"],
+                    "date": att["punch_date"]
+                })
+                
+                attendance_record = {
+                    "employee_id": employee["id"],
+                    "employee_code": employee["employee_id"],
+                    "employee_name": employee["full_name"],
+                    "date": att["punch_date"],
+                    "biometric_in": att["first_in"],
+                    "biometric_out": att["last_out"],
+                    "status": "present" if att["first_in"] else "absent",
+                    "source": "biocloud_sync",
+                    "synced_at": datetime.now(timezone.utc).isoformat()
+                }
+                
+                if existing:
+                    await db.hr_attendance.update_one(
+                        {"id": existing["id"]},
+                        {"$set": attendance_record}
+                    )
+                else:
+                    attendance_record["id"] = str(uuid.uuid4())
+                    await db.hr_attendance.insert_one(attendance_record)
+                
+                synced += 1
+        
+        # Log the sync
+        await db.biocloud_sync_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "date": sync_date,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "fetched": len(attendance_data),
+            "synced": synced,
+            "success": True,
+            "user_id": user.get("id")
+        })
+        
+        return {"synced": synced, "fetched": len(attendance_data)}
 
 # ==================== HR MODULE - ATTENDANCE REGULARIZATION ====================
 
@@ -16219,6 +16633,7 @@ async def create_bank_account(data: dict, user = Depends(require_roles(["super_a
         }
         await db.treasury_balances.insert_one(treasury_entry)
     
+    account.pop("_id", None)  # Remove MongoDB _id before returning
     return account
 
 @api_router.put("/finance/settings/bank-accounts/{account_id}")
@@ -16254,6 +16669,282 @@ async def delete_bank_account(account_id: str, user = Depends(require_roles(["su
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Bank account not found")
     return {"status": "success"}
+
+# ==================== VENDOR MANAGEMENT ====================
+
+@api_router.get("/finance/vendors")
+async def get_vendors(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all vendors"""
+    vendors = await db.vendors.find({}, {"_id": 0}).to_list(1000)
+    return vendors
+
+@api_router.post("/finance/vendors")
+async def create_vendor(data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Create a new vendor"""
+    vendor = {
+        "id": str(uuid.uuid4()),
+        "name": data.get("name"),
+        "trading_name": data.get("trading_name"),
+        "category": data.get("category"),
+        "items_supplied": data.get("items_supplied"),
+        "contact_person": data.get("contact_person"),
+        "email": data.get("email"),
+        "phone": data.get("phone"),
+        "address": data.get("address"),
+        "city": data.get("city"),
+        "country": data.get("country", "UAE"),
+        "bank_name": data.get("bank_name"),
+        "bank_account_number": data.get("bank_account_number"),
+        "bank_iban": data.get("bank_iban"),
+        "bank_swift": data.get("bank_swift"),
+        "bank_branch": data.get("bank_branch"),
+        "trn": data.get("trn"),
+        "payment_terms": data.get("payment_terms", "net_30"),
+        "custom_payment_days": data.get("custom_payment_days"),
+        "credit_limit": data.get("credit_limit", 0),
+        "currency": data.get("currency", "AED"),
+        "is_active": data.get("is_active", True),
+        "notes": data.get("notes"),
+        "total_paid": 0,
+        "outstanding_balance": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("id")
+    }
+    await db.vendors.insert_one(vendor)
+    vendor.pop("_id", None)
+    return vendor
+
+@api_router.put("/finance/vendors/{vendor_id}")
+async def update_vendor(vendor_id: str, data: dict, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Update a vendor"""
+    result = await db.vendors.update_one(
+        {"id": vendor_id},
+        {"$set": {
+            "name": data.get("name"),
+            "trading_name": data.get("trading_name"),
+            "category": data.get("category"),
+            "items_supplied": data.get("items_supplied"),
+            "contact_person": data.get("contact_person"),
+            "email": data.get("email"),
+            "phone": data.get("phone"),
+            "address": data.get("address"),
+            "city": data.get("city"),
+            "country": data.get("country"),
+            "bank_name": data.get("bank_name"),
+            "bank_account_number": data.get("bank_account_number"),
+            "bank_iban": data.get("bank_iban"),
+            "bank_swift": data.get("bank_swift"),
+            "bank_branch": data.get("bank_branch"),
+            "trn": data.get("trn"),
+            "payment_terms": data.get("payment_terms"),
+            "custom_payment_days": data.get("custom_payment_days"),
+            "credit_limit": data.get("credit_limit"),
+            "currency": data.get("currency"),
+            "is_active": data.get("is_active"),
+            "notes": data.get("notes"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("id")
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return {"status": "success"}
+
+@api_router.delete("/finance/vendors/{vendor_id}")
+async def delete_vendor(vendor_id: str, user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Delete a vendor"""
+    result = await db.vendors.delete_one({"id": vendor_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return {"status": "success"}
+
+# ==================== UNIFIED TRANSACTIONS ====================
+
+@api_router.get("/finance/unified-transactions")
+async def get_unified_transactions(user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all unified transactions from various sources"""
+    transactions = []
+    
+    # Get bank accounts for reference
+    bank_accounts = {ba["id"]: ba for ba in await db.bank_accounts.find({}, {"_id": 0}).to_list(100)}
+    
+    # 1. Get Receivables (Money In)
+    receivables = await db.clt_receivables.find({}, {"_id": 0}).to_list(5000)
+    for r in receivables:
+        bank_name = bank_accounts.get(r.get("bank_account_id"), {}).get("account_name", r.get("destination_bank", ""))
+        transactions.append({
+            "id": f"rcv_{r.get('id')}",
+            "date": r.get("date"),
+            "type": "credit",
+            "party_name": r.get("account_name"),
+            "description": f"{r.get('payment_for', '')} - {r.get('payment_method', '')}",
+            "source": "Sales",
+            "bank_account_id": r.get("bank_account_id"),
+            "bank_account_name": bank_name,
+            "reference": r.get("transaction_id"),
+            "amount": r.get("amount_in_aed", 0),
+            "original_record_id": r.get("id"),
+            "original_collection": "clt_receivables"
+        })
+    
+    # 2. Get Payables (Money Out)
+    payables = await db.clt_payables.find({}, {"_id": 0}).to_list(5000)
+    for p in payables:
+        bank_name = bank_accounts.get(p.get("bank_account_id"), {}).get("account_name", p.get("source", ""))
+        transactions.append({
+            "id": f"pay_{p.get('id')}",
+            "date": p.get("date"),
+            "type": "debit",
+            "party_name": p.get("account_name"),
+            "description": f"{p.get('cost_center', '')} - {p.get('sub_cost_center', '')}",
+            "source": "Payables",
+            "bank_account_id": p.get("bank_account_id"),
+            "bank_account_name": bank_name,
+            "reference": p.get("reference"),
+            "amount": p.get("amount_in_aed", 0),
+            "original_record_id": p.get("id"),
+            "original_collection": "clt_payables"
+        })
+    
+    # 3. Get Expenses (Money Out)
+    expenses = await db.expenses.find({}, {"_id": 0}).to_list(5000)
+    for e in expenses:
+        transactions.append({
+            "id": f"exp_{e.get('id')}",
+            "date": e.get("date"),
+            "type": "debit",
+            "party_name": e.get("vendor"),
+            "description": f"{e.get('category', '')} - {e.get('description', '')}",
+            "source": "Expenses",
+            "bank_account_id": e.get("bank_account_id"),
+            "bank_account_name": e.get("bank_account_name", ""),
+            "reference": e.get("reference"),
+            "amount": e.get("amount", 0),
+            "original_record_id": e.get("id"),
+            "original_collection": "expenses"
+        })
+    
+    # 4. Get Commission Payouts (Money Out)
+    commissions = await db.commission_settlements.find({"status": "paid"}, {"_id": 0}).to_list(5000)
+    for c in commissions:
+        transactions.append({
+            "id": f"com_{c.get('id')}",
+            "date": c.get("paid_at") or c.get("created_at"),
+            "type": "debit",
+            "party_name": c.get("employee_name"),
+            "description": f"Commission payout - {c.get('period', '')}",
+            "source": "Commissions",
+            "bank_account_id": None,
+            "bank_account_name": "",
+            "reference": c.get("reference"),
+            "amount": c.get("amount", 0),
+            "original_record_id": c.get("id"),
+            "original_collection": "commission_settlements"
+        })
+    
+    # 5. Get Verified Finance Payments (Money In from student enrollments)
+    verifications = await db.finance_verifications.find({"status": "approved"}, {"_id": 0}).to_list(5000)
+    for v in verifications:
+        # Skip if already captured in receivables
+        if not v.get("posted_to_receivables"):
+            transactions.append({
+                "id": f"ver_{v.get('id')}",
+                "date": v.get("verified_at") or v.get("created_at"),
+                "type": "credit",
+                "party_name": v.get("customer_name"),
+                "description": f"Enrollment - {v.get('course_name', '')}",
+                "source": "Enrollments",
+                "bank_account_id": None,
+                "bank_account_name": v.get("payment_method", ""),
+                "reference": v.get("transaction_reference"),
+                "amount": v.get("sale_amount", 0),
+                "original_record_id": v.get("id"),
+                "original_collection": "finance_verifications"
+            })
+    
+    # Sort by date descending
+    transactions.sort(key=lambda x: x.get("date") or "", reverse=True)
+    
+    return transactions
+
+# ==================== BANK ACCOUNT TRANSACTIONS ====================
+
+@api_router.get("/finance/bank-account-transactions/{account_id}")
+async def get_bank_account_transactions(account_id: str, user = Depends(require_roles(["super_admin", "admin", "finance", "ceo"]))):
+    """Get all transactions for a specific bank account"""
+    # Verify account exists
+    account = await db.bank_accounts.find_one({"id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    transactions = []
+    
+    # Get receivables for this bank account
+    receivables = await db.clt_receivables.find({"bank_account_id": account_id}, {"_id": 0}).to_list(1000)
+    for r in receivables:
+        transactions.append({
+            "id": f"rcv_{r.get('id')}",
+            "date": r.get("date"),
+            "type": "credit",
+            "party_name": r.get("account_name"),
+            "description": f"Receivable: {r.get('payment_for', '')}",
+            "reference": r.get("transaction_id"),
+            "amount": r.get("amount_in_aed", 0),
+            "source": "Receivables"
+        })
+    
+    # Get payables from this bank account
+    payables = await db.clt_payables.find({"bank_account_id": account_id}, {"_id": 0}).to_list(1000)
+    for p in payables:
+        transactions.append({
+            "id": f"pay_{p.get('id')}",
+            "date": p.get("date"),
+            "type": "debit",
+            "party_name": p.get("account_name"),
+            "description": f"Payable: {p.get('cost_center', '')}",
+            "reference": p.get("reference"),
+            "amount": p.get("amount_in_aed", 0),
+            "source": "Payables"
+        })
+    
+    # Get expenses from this bank account
+    expenses = await db.expenses.find({"bank_account_id": account_id}, {"_id": 0}).to_list(1000)
+    for e in expenses:
+        transactions.append({
+            "id": f"exp_{e.get('id')}",
+            "date": e.get("date"),
+            "type": "debit",
+            "party_name": e.get("vendor"),
+            "description": f"Expense: {e.get('category', '')}",
+            "reference": e.get("reference"),
+            "amount": e.get("amount", 0),
+            "source": "Expenses"
+        })
+    
+    # Sort by date descending
+    transactions.sort(key=lambda x: x.get("date") or "", reverse=True)
+    
+    # Calculate running balance
+    opening_balance = account.get("opening_balance", 0)
+    transactions_sorted = sorted(transactions, key=lambda x: x.get("date") or "")
+    running_balance = opening_balance
+    
+    for txn in transactions_sorted:
+        if txn["type"] == "credit":
+            running_balance += txn["amount"]
+        else:
+            running_balance -= txn["amount"]
+        txn["running_balance"] = running_balance
+    
+    # Re-sort descending for display
+    transactions_sorted.reverse()
+    
+    return {
+        "account": account,
+        "opening_balance": opening_balance,
+        "current_balance": running_balance,
+        "transactions": transactions_sorted
+    }
 
 # Include the router in the main app
 app.include_router(api_router)

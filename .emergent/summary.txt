@@ -1,118 +1,98 @@
 <analysis>**original_problem_statement:**
-The user has requested a series of features and fixes for their internal business management platform.
+The user's goal is to transform their internal platform into a robust, integrated business management system. Key requirements include:
 
-**Initial Requests (from previous session):**
-1.  **Sales Pipeline & Finance Verification:** Track potential revenue, display it on a dashboard, and create a finance verification queue for enrolled leads.
-2.  **BioCloud Attendance Sync:** Fix unreliable web-scraping sync.
-3.  **Sales CRM Lead Import:** Fix broken CSV import button. (Completed)
-4.  **Leave Balance Display:** Change display logic for different leave types. (Completed)
-5.  **Google/Meta Integrations:** Fix auth/webhook errors. (Completed/Addressed)
-6.  **Employee Gender:** Add a field to record employee gender. (Completed)
-7.  **Access Control Prompt:** Provide documentation for the existing system. (Completed)
+1.  **Finance Architecture Overhaul:**
+    *   Create a centralized Finance Settings module to manage master data: Chart of Accounts, Cost Centers, Payment Methods, Payment Gateways (with settlement rules), Bank Accounts, and PSP-to-Bank mapping.
+    *   Integrate all financial modules (Treasury, Payables, Receivables) to use this centralized data.
+    *   Implement a full Vendor Management system (registration, tracking).
+    *   Create a Unified Transactions View to see all money-in/money-out activities across the company.
+    *   Implement a two-step approval process for financial entries before they are posted to the journal.
+    *   Link all relevant modules (Sales, CS, HR Payroll) to the new finance system for seamless data flow.
+    *   Track customer transaction history accurately to calculate Customer Lifetime Value (LTV).
 
-**New Requests (this session):**
-1.  **Commission Tracking:** Enhance the sales dashboard to show expected and total receivable commissions for closers.
-2.  **Student Activation SLA:** When a customer service agent activates a new student, a detailed questionnaire modal must appear and be completed within a 30-minute SLA.
-3.  **Enhanced Sales-to-Finance Workflow:**
-    *   Make rejection reasons mandatory when a lead is lost.
-    *   When enrolling a student, a modal must capture payment details (method, amount, screenshot).
-    *   Support for split payments (multiple payment methods for a single sale).
-    *   For BNPL (Tabby/Tamara), verify the phone number used.
-    *   The finance team must receive a notification upon enrollment.
-4.  **Settlement Tracking:**
-    *   Create a Pending Settlements page for finance.
-    *   Implement logic to calculate settlement dates based on the payment gateway (Tabby, Tamara, Network, etc.).
-    *   Journal entries should only be created *after* a settlement is marked as complete.
-5.  **Finance Verification Fixes:**
-    *   The View Details button on the Finance Verification page is not working.
-    *   Verification details are missing crucial information: payment method, course details, payment screenshot(s), and transaction IDs for split payments.
-    *   Finance users must be able to input transaction reference numbers before approving a payment.
-    *   Rejections from finance must trigger a notification to the sales agent and their team leader with the reason for rejection.
+2.  **Role-Based Access Control (RBAC):**
+    *   Ensure users can only see the modules and navigation items (e.g., Finance, Marketing, HR, QC Dashboard) relevant to their role.
+    *   The Access Control management page must be comprehensive and include all new features.
+
+3.  **Course & Commission Management:**
+    *   Programmatically configure all company courses and set up a multi-level commission structure for Sales Executives, Team Leaders, and Sales Managers.
+
+4.  **Bug Fixes & Integrations:**
+    *   Fix the broken Finance Verification flow where payment data was not being saved (Completed).
+    *   Configure the Meta Ads API integration.
+    *   Address the unreliable BioCloud attendance sync and the recurring Babel plugin error.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a comprehensive business management tool with modules for Sales, HR, Finance, and Customer Service. In this session, the agent significantly enhanced the sales and finance modules by adding commission tracking, a detailed student activation questionnaire, and a sophisticated sales-to-finance workflow with payment verification, split payment support, and a new settlement tracking system.
+The application is a full-stack business management platform. In this session, the agent successfully resolved a critical P0 bug in the finance verification flow, ensuring all payment data is now captured correctly. A major effort was made to refactor the finance module by removing a defunct entity (Miles Capitals) and creating a comprehensive, centralized Finance Settings page with full CRUD capabilities for master data like bank accounts, cost centers, and payment gateways. This new settings module has been integrated with the Treasury, Payables, and Receivables pages. The agent also significantly improved the Role-Based Access Control (RBAC) system, ensuring module icons and sidebar navigation links are correctly hidden based on user roles. The initial groundwork for a larger finance architecture overhaul, including vendor management, has been laid out.
 
 **Last working item**:
--   **Last item agent was working:** The agent was fixing a critical bug in the Finance Verification flow. The user reported that when a lead is enrolled, the associated data (course, payment method, screenshot, split payment details) is not being passed correctly to the finance verification record. The agent was in the process of updating the backend  endpoint and frontend components (, ) to ensure all data is captured, stored, and displayed correctly for the finance team.
+-   **Last item agent was working:** The agent was beginning a major refactoring of the entire finance architecture based on detailed user requirements. This involved creating a vendor management system, a unified transaction view, and ensuring all financial modules are interconnected. The agent created placeholder files and initial backend API stubs for  and  and updated the application's routing.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
 -   **Which testing method agent to use?** both
-    -   Backend: Test the  endpoint in  to ensure all payment details (single and split) are correctly saved to the  collection. Test the  endpoint to confirm notifications are sent to both the agent and team leader.
-    -   Frontend: Test the entire E2E flow:
-        1.  Enroll a lead with a split payment (e.g., Tabby + Cash).
-        2.  Go to the Finance Verification page.
-        3.  Click View Details and confirm all information (course, both payment methods, screenshots, amounts) is visible.
-        4.  Confirm the Approve button is disabled until transaction references are entered.
-        5.  Reject a different verification and check for the rejection reason modal.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Finance Verification Data is Missing or Incorrect (P0 - HIGHEST PRIORITY)**
-    -   **Description:** When a lead is enrolled, the finance verification record is created without key details like the payment method, course name, and payment screenshot. The system also fails to properly handle and display split payment information. Finance users cannot approve transactions because they can't see the proof or add necessary references.
-    -   **Attempted fixes:** The agent identified that the  function in  was not passing the full data payload. The agent started updating this function and the corresponding backend endpoints.
+-   **Issue 1: ObjectId Serialization Error in Finance Settings (P0 - HIGHEST PRIORITY)**
+    -   **Description:** When creating new entries in the Finance Settings module (e.g., Cost Centers), the backend API was crashing due to a BSON  not being JSON serializable.
+    -   **Attempted fixes:** The agent fixed this for the Cost Center endpoint and several others by manually removing the  field from the dictionary before returning the response. However, this fix was applied inconsistently across all new CRUD endpoints.
     -   **Next debug checklist:**
-        1.  Verify the  function in  correctly gathers all data from the , including the  array for split transactions.
-        2.  Inspect the  endpoint in  to ensure it correctly receives and saves this data into the  collection.
-        3.  Update the  dialog in  to correctly render all fields, especially looping through the  array to show split payments, screenshots, and transaction IDs.
-        4.  Implement the logic to require transaction reference input before enabling the Approve Payment button in the same dialog.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a critical blocker for the core sales-to-revenue workflow. Fixing it will make the entire process functional, allowing sales to be properly recorded and verified by finance.
+        1.  Review all  and  endpoints related to Finance Settings in  (Chart of Accounts, Bank Accounts, Payment Methods, Payment Gateways, PSP Mapping).
+        2.  Ensure every endpoint that returns a newly created or updated document has logic to remove the  field (e.g., ) before sending the JSON response.
+        3.  Create a small test script to call the  endpoint for each of the 5 remaining settings types to confirm the fix.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a blocker for using the new Finance Settings feature. Fixing it will make the entire module stable and usable.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** both
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** backend
     -   **Blocked on other issue:** None
 
 -   **Issue 2:  in  (P2 - LOW PRIORITY)**
-    -   **Description:** A recurring Babel plugin error crashes the frontend. It is currently disabled as a workaround in .
+    -   **Description:** A recurring Babel plugin error that crashes the frontend. It is currently disabled as a workaround in .
     -   **Status:** NOT STARTED
     -   **Is recurring issue?** Y
     -   **Should Test frontend/backend/both after fix?** Frontend
 
 **In progress Task List**:
--   **Task 1: Complete the Finance Verification Flow Fix (P0 - HIGHEST PRIORITY)**
-    -   **Where to resume:** Continue debugging and implementing the fixes outlined in Issue 1 above. The focus is on the data pipeline from sales enrollment to finance approval.
-    -   **What will be achieved with this?** A fully functional, end-to-end sales and finance workflow that supports complex payment scenarios and provides a clear audit trail.
+-   **Task 1: Complete the Finance Architecture Refactor (P0 - HIGHEST PRIORITY)**
+    -   **Where to resume:** Resume implementation based on the user's detailed plan. The placeholder files and API stubs for Vendor Management and the Unified Transaction View are ready.
+        1.  Build the UI for  with all required fields (Name, Items, Contact, Bank, TRN, terms, credit limit).
+        2.  Implement the full backend CRUD APIs for vendors in .
+        3.  Build the  UI.
+        4.  Implement backend logic to populate a unified  collection from Sales, Payables, and Receivables.
+        5.  Update the finance approval flow to be a 2-step process.
+        6.  Fix the customer transaction history display in the Customer Pool to track LTV.
+    -   **What will be achieved with this?** A fully integrated and robust finance system providing clear visibility into all company financial operations.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on something:** None.
+    -   **Blocked on something:** Issue 1 (ObjectId Serialization Error) should be fixed first to ensure a stable base.
 
 **Upcoming and Future Tasks**
 
 **Upcoming Tasks:**
--   **P1: User Verification for Completed Features:** The user needs to test the Google Sheets connector fix from the previous session.
--   **P1: Resolve BioCloud Attendance Sync Reliability:** The current web scraper is unreliable. Propose improving it to handle pagination as an interim fix, while advising the user to request API access from their provider for a long-term solution.
--   **P1: Resolve Meta Ads Integration Block:** The OAuth flow is blocked. The agent should guide the user to test the webhook and manual access token workaround.
+-   **P1: Course and Commission Configuration:** The user has requested a feature to programmatically set up courses and a multi-level commission structure. The agent is blocked waiting for the user to provide the specific course details and commission rates.
+-   **P1: Resolve BioCloud Attendance Sync Reliability:** The current web scraper is unreliable. An improved scraper or a switch to an official API is needed.
+-   **P1: User Verification for Completed Features:** The user still needs to test the Google Sheets connector fix from a previous session.
 
 **Future Tasks:**
--   **Refactor :** This monolithic file is now over 13,000 lines and is a major source of technical debt. It must be broken down into modular route files (e.g., , , ).
+-   **Refactor :** This monolithic file is a major source of technical debt and must be broken down into modular route files.
 -   Implement Payslip Generation.
 -   Integrate with Google Ads API.
--   Migrate the database to a managed service (e.g., MongoDB Atlas).
 -   Verify that the Mentor Dashboard leaderboard is connected to live data.
 
 **Completed work in this session**
--   **Sales Pipeline & Commission Dashboard (DONE):**
-    -   Added  and  to .
-    -   Created backend endpoints (, ) in  to power the widgets.
-    -   Updated lead cards to display the course of interest and estimated value.
--   **Student Activation Questionnaire (DONE):**
-    -   Created  with all required fields and logic.
-    -   Modified  to trigger this modal when a student is moved to the Activated stage.
-    -   Updated the backend to store the questionnaire response.
--   **Enhanced Sales & Rejection Flow (DONE):**
-    -   Created  and .
-    -   Integrated these modals into  to appear when a lead is moved to Enrolled or a rejected stage.
--   **Payment Settlement System (DONE):**
-    -   Created the  for the finance module.
-    -   Added backend logic in  to calculate settlement dates for Tabby, Tamara, and Network gateways.
-    -   Created API endpoints () to manage settlements.
--   **Split Payments & BNPL Verification (DONE):**
-    -   Modified  to support splitting payments across multiple methods.
-    -   Added UI for BNPL phone number verification.
-    -   Updated the backend  schema to store an array of .
--   **Finance Rejection Notifications (DONE):**
-    -   Updated the  endpoint in  to send a notification to both the responsible sales agent and their team leader.
+-   **P0 Finance Verification Flow (RESOLVED):** Fixed the critical bug preventing payment details (single and split) from being saved during lead enrollment. Verified with the testing agent.
+-   **Finance Module Refactor (DONE):**
+    -   Removed all references to Miles Capitals from the finance module.
+    -   Created  with full CRUD for Chart of Accounts, Cost Centers, Payment Methods, Gateways, and Bank Accounts.
+-   **Financial Integration (DONE):**
+    -   The Treasury dashboard now dynamically displays data from Bank Accounts managed in Finance Settings.
+    -   Payables and Receivables pages now use dropdowns populated by Cost Centers and Bank Accounts from Finance Settings.
+-   **Role-Based Access Control (RBAC) Enhancement (DONE):**
+    -   Fixed logic to correctly hide module icons (Finance, HR, Marketing) and sidebar navigation links (QC Dashboard) from users based on their roles.
+    -   Updated the central  to include all new Finance Settings and Marketing module pages, making them configurable.
+-   **Meta Ads Integration Setup (DONE):** Configured backend with user's App ID/Secret and provided the user with the correct production callback URLs and setup instructions for the Meta Developer Portal.
 
 **Earlier issues found/mentioned but not fixed**
 -   The  in  remains unresolved but is mitigated by disabling the plugin.
@@ -124,96 +104,104 @@ The application is a comprehensive business management tool with modules for Sal
 
 
 **Key Technical Concepts**
--   **Split Payments:** The finance model now supports multiple payment entries for a single transaction, stored in a  array within the  collection.
--   **Settlement Date Calculation:** A new helper function in  calculates the expected settlement date based on predefined rules for different payment gateways (e.g., Tabby settles on Mondays, Tamara in 7 days).
--   **Conditional UI Rendering:** Frontend components like  and  now use state to conditionally render modals (, ) based on user actions (e.g., changing a lead's stage).
+-   **Centralized Configuration:** A new Finance Settings page acts as a single source of truth for all financial master data (bank accounts, cost centers), which other modules consume via API. This promotes consistency and simplifies management.
+-   **Comprehensive RBAC:** Refined the access control logic in  and  to enforce permissions not just on page routes but also on UI components like dashboard icons and sidebar links, providing a more secure and tailored user experience.
+-   **ObjectId Serialization Fix:** Identified and partially fixed a critical backend bug where MongoDB's  was not being converted to a string before being sent in JSON responses, causing API failures.
 
 **key DB schema**
--   : Heavily modified. Now includes:
-    -   :  (Array to support split payments)
-    -   : String
-    -   : Date
-    -   : String (, )
--   : A field (e.g., ) has been added to store the questionnaire data upon activation.
--    (New logical collection/view): A new collection to track pending and completed settlements, derived from approved .
+-   **New Collections for Finance Settings:**
+    -   : 
+    -   : 
+    -   : 
+    -   : 
+    -   : 
+-   **New Collections for Finance Refactor (Pending Implementation):**
+    -   : 
+    -   : A unified ledger for all money-in/money-out transactions.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : Contains all backend logic for new features, bug fixes, and data model changes.
--   : The core page for managing leads, now with complex modal logic for enrollment and rejection.
--   : The page for the finance team, which needs fixes to its View Details functionality.
--   : The new page for tracking payment settlements.
--   : Modified to include the student activation questionnaire flow.
--   : The new modal for capturing single or split payment details.
+-   
+-   
+-   
+-   
+-   
+-   
+-   
+-   
+-   
+-   
 
 **Areas that need refactoring**:
--   **:** The file has grown even larger and is now a critical point of failure. Refactoring it into domain-specific route files is more urgent than ever.
--   **:** This component has accumulated significant state and logic for handling multiple modals. It could be broken down into smaller, more manageable sub-components.
+-   **:** This file's size and complexity are critical risks. It must be broken down into domain-specific route files (, , etc.).
+-   **Finance Data Fetching:** The finance pages (, ) now contain redundant data-fetching logic. This should be consolidated into a reusable custom hook (e.g., ).
 
 **key api endpoints**
--   : (New) Gets data for the commission widget.
--   : (New or Modified) Endpoint to handle student activation and save questionnaire data.
--   : Heavily modified to trigger modals and handle complex payloads with payment details.
--   : Modified to notify both the agent and their team leader.
--   : Modified to handle settlement creation and eventually trigger journal entries.
--   : (New) Fetches all transactions awaiting settlement.
--   : (New) Endpoint for the finance team to confirm settlement.
+-   **New Finance Settings CRUD:**
+    -   
+    -   
+    -   
+    -   
+    -   
+-   **New Finance Refactor Stubs:**
+    -   
+    -   
+-   **Marketing:**
+    -   
+    -   
 
 **Critical Info for New Agent**
--   **Your immediate and only priority is to fix the broken Finance Verification flow.** The user cannot complete their core business process until this is resolved.
--   Focus on the data flow:  (on ) ->  API () ->  DB collection ->  detail view.
--   The user explicitly stated that finance cannot approve a transaction until they can see all the details (especially screenshots) and add their own transaction references. This is a hard requirement for the fix.
--   The logic for creating journal entries should only execute *after* a payment is marked as settled via the new Pending Settlements page, not immediately upon finance approval.
+-   Your first action should be to fix the **ObjectId Serialization Error (Issue #1)**. This bug affects the stability of the entire Finance Settings module, which is foundational for the next set of tasks. Review and patch all new CRUD endpoints in .
+-   Once the foundation is stable, proceed with the **Finance Architecture Refactor (Task #1)**. Follow the user's detailed plan, starting with Vendor Management. Break this large task into smaller, verifiable steps.
+-   Be prepared to implement the **Course and Commission Configuration** task. The user may provide the required details at any time.
+-   The  file is extremely large and fragile. When adding new endpoints, group them logically with comments and be careful not to introduce breaking changes.
 
 **documents and test reports created in this job**
 -   
--   
--   
--    (Updated)
+-    (Updated with Finance Refactor and RBAC enhancements)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Asks for fixes to the finance verification flow: payment method, course, and screenshot are not being recorded.
-2.  **User:** States they cannot approve a transaction without adding transaction details, and split payments need to support multiple references.
-3.  **User:** Clarifies that approval should lead to settlement tracking, and journal entries should only be created after settlement is complete.
-4.  **User:** Reports the View Details button in the finance section is not working.
-5.  **User:** Requests support for split payments (e.g., Tabby + Tamara) and multiple payment methods.
-6.  **User:** Asks for a verification step for the phone number used in BNPL transactions (Tabby/Tamara).
-7.  **User:** Specifies that if finance rejects a payment, a notification must go to the agent and team leader with a reason.
-8.  **User:** Requests settlement time rules for Tabby (Monday), Tamara (7 days), and Network (T+1).
-9.  **User:** Asks for a finance notification when a student is enrolled, including payment details.
-10. **User:** Requests a questionnaire to be filled out by customer service when activating a new student, with a 30-minute SLA.
+1.  **User:** Asks agent to set up courses and commissions if details are provided. **(PENDING USER INPUT)**
+2.  **User:** Reports that Team Leaders can see module icons (Finance, HR) they shouldn't have access to.
+3.  **User:** Reports Team Leaders can see the QC Dashboard navigation link even without access.
+4.  **User:** Requests a major finance refactoring: settlements are duplicated, modules aren't connected, and vendor management is needed.
+5.  **User:** Provides detailed requirements for vendor registration (Name, Items, Contact, Bank, TRN, etc.).
+6.  **User:** Specifies the finance approval flow: sales create an entry, finance approves it, and a second approval posts it to the journal/receivables.
+7.  **User:** Clarifies that Sales, CS, HR, and Commissions should all feed into the new unified finance system.
+8.  **User:** Requests two transaction views: a unified one for all money flow, and a per-bank view in Treasury.
+9.  **User:** Reports that customer transaction history isn't being displayed correctly, preventing LTV calculation.
+10. **Agent:** Acknowledges the comprehensive request and proposes a step-by-step implementation plan, starting with creating the necessary files.
 
 **Project Health Check:**
--   **Working:** Sales Dashboard (Revenue/Commission), Student Activation Questionnaire, Sales Lead Rejection Flow, Pending Settlements Page UI.
--   **In Progress:** The complete Sales-to-Finance-to-Settlement workflow.
+-   **Working:** Sales-to-Finance verification flow, Centralized Finance Settings UI, Treasury Dashboard integration, Role-Based Access Control for modules and sidebar navigation.
+-   **In Progress:** The full Finance Architecture refactor. The backend for Finance Settings is buggy due to the ObjectId serialization issue.
 -   **Broken / Needs Attention:**
-    -   **Finance Verification Flow:** This is the highest priority. Key data is not being saved or displayed, blocking approvals.
+    -   Finance Settings CRUD APIs are partially broken due to the ObjectId serialization error.
     -   BioCloud attendance sync remains unreliable.
-    -   Meta Ads OAuth flow is blocked; workaround needs user testing.
-    -   Google Sheets connector awaits user testing.
     -    error is bypassed but not fixed.
 
 **3rd Party Integrations**
--   **Meta Ads API:** Awaiting user action to test the webhook/manual token workaround.
--   **Google Sheets API:** Awaiting user to re-attempt the connection to verify the fix.
--   **ZK BioCloud:** Unreliable; API access is recommended.
--   **Tabby/Tamara/Network:** Not true API integrations, but their settlement rules are now hardcoded into the backend logic for the new settlement tracking feature.
+-   **Meta Ads API:** Configured. Awaiting user to test the connection on their production domain.
+-   **Google Sheets API:** Awaiting user verification of a previous fix.
+-   **ZK BioCloud:** Unreliable; API access is recommended as a long-term solution.
+-   **Tabby/Tamara/Network:** Settlement rules are hardcoded in the backend for settlement tracking.
 
 **Testing status**
--   **Testing agent used after significant changes:** YES, the agent ran the testing agent multiple times after implementing major features like the sales dashboard, activation questionnaire, and the initial finance workflow.
+-   **Testing agent used after significant changes:** YES, successfully verified the fix for the P0 Finance Verification data flow issue.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None.
--   **Known regressions:** The finance verification details view is now broken as a result of recent changes to support split payments.
+-   **Test files created:** None
+-   **Known regressions:** The new Finance Settings CRUD endpoints are unstable due to the incomplete fix for the ObjectId serialization issue.
 
 **Credentials to test flow:**
--   **Super Admin Login:**
-    -   **Email:** 
-    -   **Password:** 
--   **Team Leader Login (Mohammed Sanjeed):**
-    -   **Email:** 
-    -   **Password:** 
+-   **Super Admin:**
+    -   Email: 
+    -   Password: 
+-   **Team Leader:**
+    -   Email: 
+    -   Password:  (Password was reset and confirmed working during the session)
 
 **What agent forgot to execute**
--   The agent correctly implemented the UI and backend structure for most requests but missed connecting the data pipeline properly for the most complex feature: the split-payment enrollment flow. The data from the frontend modal isn't fully making it to the backend collection, which is the root cause of the current P0 issue. The agent was in the process of fixing this when the session ended.</analysis>
+-   The agent did not consistently apply the  serialization fix across all new CRUD endpoints in  for the Finance Settings module, leaving some of them in a broken state.
+-   The agent acknowledged the user's request to fix the Customer LTV / transaction history tracking but did not include it in the immediate implementation plan for the finance refactor, effectively deferring it.</analysis>
