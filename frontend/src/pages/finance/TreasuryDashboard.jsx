@@ -4,7 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, TrendingUp, TrendingDown, RefreshCw, ArrowDownCircle, ArrowUpCircle, Landmark, Building2, Settings } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Wallet, TrendingUp, TrendingDown, RefreshCw, ArrowDownCircle, ArrowUpCircle, Landmark, Building2, Settings, Clock, CheckCircle, AlertTriangle, Filter, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
@@ -15,12 +16,22 @@ const formatNumber = (v) => {
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const formatDate = (dateStr) => {
+    if (!dateStr) return "-";
+    try {
+        return new Date(dateStr).toLocaleDateString('en-CA');
+    } catch {
+        return "-";
+    }
+};
+
 const TreasuryDashboard = () => {
     const [bankAccounts, setBankAccounts] = useState([]);
     const [cltPayables, setCltPayables] = useState([]);
     const [cltReceivables, setCltReceivables] = useState([]);
     const [pendingSettlements, setPendingSettlements] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedBank, setSelectedBank] = useState('all');
     const navigate = useNavigate();
 
     const fetchData = useCallback(async () => {
@@ -53,35 +64,73 @@ const TreasuryDashboard = () => {
         const totalOpeningBalance = activeAccounts.reduce((sum, a) => sum + (a.opening_balance || 0), 0);
         const totalCurrentBalance = activeAccounts.reduce((sum, a) => sum + (a.current_balance || a.opening_balance || 0), 0);
         
-        // Calculate inflows and outflows from CLT transactions
-        const totalCltInflows = cltReceivables.reduce((sum, r) => sum + (r.amount_in_aed || 0), 0);
-        const totalCltOutflows = cltPayables.reduce((sum, p) => sum + (p.amount_in_aed || 0), 0);
+        // Filter by selected bank if not 'all'
+        const filteredReceivables = selectedBank === 'all' 
+            ? cltReceivables 
+            : cltReceivables.filter(r => r.bank_account_id === selectedBank || r.destination_bank?.includes(bankAccounts.find(b => b.id === selectedBank)?.bank_name));
+        const filteredPayables = selectedBank === 'all'
+            ? cltPayables
+            : cltPayables.filter(p => p.bank_account_id === selectedBank);
         
-        // Calculate pending settlements
+        // Calculate inflows and outflows from CLT transactions
+        const totalCltInflows = filteredReceivables.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+        const totalCltOutflows = filteredPayables.reduce((sum, p) => sum + (p.amount_in_aed || p.amount || 0), 0);
+        
+        // Calculate settled vs pending receivables
+        const settledReceivables = filteredReceivables.filter(r => r.settlement_status === 'settled');
+        const pendingReceivables = filteredReceivables.filter(r => r.settlement_status !== 'settled');
+        const settledAmount = settledReceivables.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+        const pendingAmount = pendingReceivables.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+        
+        // Calculate pending settlements from dedicated endpoint
         const pendingSettlementAmount = pendingSettlements.reduce((sum, s) => sum + (s.amount || 0), 0);
         
+        // Calculate amounts by bank account
+        const amountsByBank = activeAccounts.map(bank => {
+            const bankReceivables = cltReceivables.filter(r => 
+                r.bank_account_id === bank.id || 
+                r.destination_bank?.toLowerCase().includes(bank.bank_name?.toLowerCase())
+            );
+            const bankPayables = cltPayables.filter(p => p.bank_account_id === bank.id);
+            
+            const inflows = bankReceivables.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+            const outflows = bankPayables.reduce((sum, p) => sum + (p.amount_in_aed || p.amount || 0), 0);
+            const pendingInflows = bankReceivables.filter(r => r.settlement_status !== 'settled')
+                .reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+            
+            return {
+                ...bank,
+                inflows,
+                outflows,
+                pendingInflows,
+                settledInflows: inflows - pendingInflows,
+                projectedBalance: (bank.current_balance || bank.opening_balance || 0) + inflows - outflows,
+                currentActualBalance: (bank.current_balance || bank.opening_balance || 0) + (inflows - pendingInflows) - outflows
+            };
+        });
+        
         const netCashFlow = totalCltInflows - totalCltOutflows;
-
-        // Group bank accounts by type
-        const accountsByType = activeAccounts.reduce((acc, a) => {
-            const type = a.account_type || 'current';
-            if (!acc[type]) acc[type] = [];
-            acc[type].push(a);
-            return acc;
-        }, {});
+        const preSettlementBalance = totalCurrentBalance + settledAmount - totalCltOutflows;
+        const postSettlementBalance = totalCurrentBalance + totalCltInflows - totalCltOutflows;
 
         return {
             totalOpeningBalance,
             totalCurrentBalance,
             totalCltInflows,
             totalCltOutflows,
-            pendingSettlementAmount,
+            settledAmount,
+            pendingAmount,
+            pendingSettlementAmount: pendingSettlementAmount || pendingAmount,
             netCashFlow,
+            preSettlementBalance,
+            postSettlementBalance,
             bankAccounts: activeAccounts,
-            accountsByType,
-            accountCount: activeAccounts.length
+            amountsByBank,
+            accountCount: activeAccounts.length,
+            receivablesCount: filteredReceivables.length,
+            payablesCount: filteredPayables.length
         };
-    }, [bankAccounts, cltPayables, cltReceivables, pendingSettlements]);
+    }, [bankAccounts, cltPayables, cltReceivables, pendingSettlements, selectedBank]);
 
     if (loading) {
         return (
@@ -102,9 +151,23 @@ const TreasuryDashboard = () => {
                     <p className="text-muted-foreground">Bank accounts & cash flow overview</p>
                 </div>
                 <div className="flex gap-2">
+                    <Select value={selectedBank} onValueChange={setSelectedBank}>
+                        <SelectTrigger className="w-[200px]">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="Filter by Bank" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Bank Accounts</SelectItem>
+                            {bankAccounts.filter(b => b.is_active !== false).map(bank => (
+                                <SelectItem key={bank.id} value={bank.id}>
+                                    {bank.bank_name} - {bank.account_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Button variant="outline" onClick={() => navigate('/finance/settings/bank-accounts')}>
                         <Settings className="h-4 w-4 mr-2" />
-                        Manage Bank Accounts
+                        Manage Banks
                     </Button>
                     <Button variant="outline" onClick={fetchData}>
                         <RefreshCw className="h-4 w-4 mr-2" />
@@ -113,61 +176,65 @@ const TreasuryDashboard = () => {
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card>
+            {/* Cash Flow Summary Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-l-4 border-l-emerald-500">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Bank Balance</CardTitle>
-                        <Wallet className="h-5 w-5 text-emerald-500" />
+                        <CardTitle className="text-sm font-medium">Pre-Settlement Balance</CardTitle>
+                        <CheckCircle className="h-5 w-5 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-emerald-500">AED {formatNumber(summary.totalCurrentBalance)}</div>
-                        <p className="text-xs text-muted-foreground">{summary.accountCount} active accounts</p>
+                        <div className="text-2xl font-bold text-emerald-500">AED {formatNumber(summary.preSettlementBalance)}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Settled: AED {formatNumber(summary.settledAmount)}
+                        </p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-l-4 border-l-amber-500">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Post-Settlement Balance</CardTitle>
+                        <Clock className="h-5 w-5 text-amber-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-amber-500">AED {formatNumber(summary.postSettlementBalance)}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Pending: AED {formatNumber(summary.pendingAmount)}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-green-500">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Inflows</CardTitle>
                         <ArrowDownCircle className="h-5 w-5 text-green-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-green-500">AED {formatNumber(summary.totalCltInflows)}</div>
-                        <p className="text-xs text-muted-foreground">Receivables collected</p>
+                        <p className="text-xs text-muted-foreground">{summary.receivablesCount} receivables</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-l-4 border-l-red-500">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Outflows</CardTitle>
                         <ArrowUpCircle className="h-5 w-5 text-red-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-red-500">AED {formatNumber(summary.totalCltOutflows)}</div>
-                        <p className="text-xs text-muted-foreground">Payables disbursed</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Pending Settlements</CardTitle>
-                        <TrendingUp className="h-5 w-5 text-amber-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-amber-500">AED {formatNumber(summary.pendingSettlementAmount)}</div>
-                        <p className="text-xs text-muted-foreground">{pendingSettlements.length} pending</p>
+                        <p className="text-xs text-muted-foreground">{summary.payablesCount} payables</p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Bank Accounts List */}
+            {/* Bank Account Cash Flow Breakdown */}
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Landmark className="h-5 w-5" />
-                        Bank Account Balances
+                        Cash Flow by Bank Account
                     </CardTitle>
-                    <CardDescription>Current balance across all accounts</CardDescription>
+                    <CardDescription>Pre vs Post settlement breakdown per bank</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {summary.bankAccounts.length === 0 ? (
+                    {summary.amountsByBank.length === 0 ? (
                         <div className="text-center py-8">
                             <Landmark className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                             <p className="text-muted-foreground mb-4">No bank accounts configured</p>
@@ -179,48 +246,52 @@ const TreasuryDashboard = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Account Name</TableHead>
-                                    <TableHead>Bank</TableHead>
-                                    <TableHead>Account Number</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Currency</TableHead>
+                                    <TableHead>Bank Account</TableHead>
                                     <TableHead className="text-right">Opening Balance</TableHead>
+                                    <TableHead className="text-right text-green-500">Settled Inflows</TableHead>
+                                    <TableHead className="text-right text-amber-500">Pending Inflows</TableHead>
+                                    <TableHead className="text-right text-red-500">Outflows</TableHead>
                                     <TableHead className="text-right">Current Balance</TableHead>
+                                    <TableHead className="text-right text-blue-500">Projected Balance</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {summary.bankAccounts.map(account => (
-                                    <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.account_name}</TableCell>
+                                {summary.amountsByBank.map(bank => (
+                                    <TableRow key={bank.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedBank(bank.id)}>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                                                {account.bank_name}
+                                                <div>
+                                                    <p className="font-medium">{bank.bank_name}</p>
+                                                    <p className="text-xs text-muted-foreground">{bank.account_name}</p>
+                                                </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-mono text-sm">{account.account_number}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="capitalize">
-                                                {account.account_type?.replace('_', ' ')}
-                                            </Badge>
+                                        <TableCell className="text-right">AED {formatNumber(bank.opening_balance)}</TableCell>
+                                        <TableCell className="text-right text-green-500">+{formatNumber(bank.settledInflows)}</TableCell>
+                                        <TableCell className="text-right text-amber-500">
+                                            {bank.pendingInflows > 0 && (
+                                                <Badge variant="outline" className="text-amber-500 border-amber-500">
+                                                    <Clock className="h-3 w-3 mr-1" />
+                                                    +{formatNumber(bank.pendingInflows)}
+                                                </Badge>
+                                            )}
+                                            {bank.pendingInflows === 0 && '-'}
                                         </TableCell>
-                                        <TableCell>{account.currency}</TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            {formatNumber(account.opening_balance)}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-emerald-500 font-medium">
-                                            {formatNumber(account.current_balance || account.opening_balance)}
-                                        </TableCell>
+                                        <TableCell className="text-right text-red-500">-{formatNumber(bank.outflows)}</TableCell>
+                                        <TableCell className="text-right font-medium">AED {formatNumber(bank.currentActualBalance)}</TableCell>
+                                        <TableCell className="text-right text-blue-500 font-medium">AED {formatNumber(bank.projectedBalance)}</TableCell>
                                     </TableRow>
                                 ))}
-                                <TableRow className="bg-muted/50 font-bold">
-                                    <TableCell colSpan={5}>Total</TableCell>
-                                    <TableCell className="text-right font-mono">
-                                        {formatNumber(summary.totalOpeningBalance)}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-emerald-500">
-                                        {formatNumber(summary.totalCurrentBalance)}
-                                    </TableCell>
+                                {/* Totals Row */}
+                                <TableRow className="bg-muted/30 font-bold">
+                                    <TableCell>Total</TableCell>
+                                    <TableCell className="text-right">AED {formatNumber(summary.totalOpeningBalance)}</TableCell>
+                                    <TableCell className="text-right text-green-500">+{formatNumber(summary.settledAmount)}</TableCell>
+                                    <TableCell className="text-right text-amber-500">+{formatNumber(summary.pendingAmount)}</TableCell>
+                                    <TableCell className="text-right text-red-500">-{formatNumber(summary.totalCltOutflows)}</TableCell>
+                                    <TableCell className="text-right">AED {formatNumber(summary.preSettlementBalance)}</TableCell>
+                                    <TableCell className="text-right text-blue-500">AED {formatNumber(summary.postSettlementBalance)}</TableCell>
                                 </TableRow>
                             </TableBody>
                         </Table>
@@ -228,78 +299,37 @@ const TreasuryDashboard = () => {
                 </CardContent>
             </Card>
 
-            {/* Cash Flow Summary */}
-            <div className="grid gap-6 lg:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Cash Flow Summary</CardTitle>
-                        <CardDescription>CLT Academy transactions</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <h4 className="font-medium text-green-500">Inflows (Receivables)</h4>
-                                        <p className="text-xs text-muted-foreground">{cltReceivables.length} transactions</p>
-                                    </div>
-                                    <div className="text-2xl font-bold text-green-500">
-                                        +AED {formatNumber(summary.totalCltInflows)}
-                                    </div>
+            {/* Quick Links */}
+            <div className="grid gap-4 md:grid-cols-2">
+                <Card className="cursor-pointer hover:bg-muted/50" onClick={() => navigate('/finance/clt/receivables')}>
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <ArrowDownCircle className="h-8 w-8 text-green-500" />
+                                <div>
+                                    <h4 className="font-medium">View All Receivables</h4>
+                                    <p className="text-sm text-muted-foreground">{summary.receivablesCount} transactions</p>
                                 </div>
                             </div>
-                            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <h4 className="font-medium text-red-500">Outflows (Payables)</h4>
-                                        <p className="text-xs text-muted-foreground">{cltPayables.length} transactions</p>
-                                    </div>
-                                    <div className="text-2xl font-bold text-red-500">
-                                        -AED {formatNumber(summary.totalCltOutflows)}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <h4 className="font-medium text-emerald-500">Net Cash Flow</h4>
-                                    </div>
-                                    <div className={`text-2xl font-bold ${summary.netCashFlow >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                        {summary.netCashFlow >= 0 ? '+' : ''}AED {formatNumber(summary.netCashFlow)}
-                                    </div>
-                                </div>
+                            <div className="text-xl font-bold text-green-500">
+                                +AED {formatNumber(summary.totalCltInflows)}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Accounts by Type</CardTitle>
-                        <CardDescription>Balance distribution</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {Object.entries(summary.accountsByType).length === 0 ? (
-                                <p className="text-center text-muted-foreground py-4">No accounts configured</p>
-                            ) : (
-                                Object.entries(summary.accountsByType).map(([type, accounts]) => {
-                                    const total = accounts.reduce((sum, a) => sum + (a.current_balance || a.opening_balance || 0), 0);
-                                    return (
-                                        <div key={type} className="p-4 rounded-lg bg-muted/50 border">
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <h4 className="font-medium capitalize">{type.replace('_', ' ')} Accounts</h4>
-                                                    <p className="text-xs text-muted-foreground">{accounts.length} account(s)</p>
-                                                </div>
-                                                <div className="text-xl font-bold text-emerald-500">
-                                                    AED {formatNumber(total)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
+                <Card className="cursor-pointer hover:bg-muted/50" onClick={() => navigate('/finance/clt/payables')}>
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <ArrowUpCircle className="h-8 w-8 text-red-500" />
+                                <div>
+                                    <h4 className="font-medium">View All Payables</h4>
+                                    <p className="text-sm text-muted-foreground">{summary.payablesCount} transactions</p>
+                                </div>
+                            </div>
+                            <div className="text-xl font-bold text-red-500">
+                                -AED {formatNumber(summary.totalCltOutflows)}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

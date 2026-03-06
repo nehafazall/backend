@@ -40,6 +40,32 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 100% (17/17 tests), Frontend 100%
 
+#### P0: Finance Dashboard & Cash Flow Transparency (COMPLETED)
+**Requirement:** Finance dashboard to show receivables data with bank mapping, pre/post settlement amounts for cash flow transparency, and filters on Receivables & Payables pages.
+
+**Implementation:**
+
+**1. Treasury Dashboard Enhancements:**
+- **Pre-Settlement Balance**: Shows actual balance with settled payments only
+- **Post-Settlement Balance**: Shows projected balance including pending settlements  
+- **Cash Flow by Bank Account** table: Opening balance, settled inflows, pending inflows, outflows, current/projected balance per bank
+- **Bank Filter**: Filter all data by specific bank account
+- **Quick Links**: Clickable cards to navigate to Receivables/Payables
+
+**2. Receivables Page Filters:**
+- Date range (From/To)
+- Payment Gateway
+- Settlement Status (Settled/Pending)
+- Bank Account
+- Summary row showing filtered total
+
+**3. Payables Page Filters:**
+- Date range (From/To)
+- Cost Center
+- Bank Account
+- Status (Paid/Pending)
+- Summary row showing filtered total
+
 #### P0: Finance Verification → Receivables Flow Fix (COMPLETED)
 **Problem:** When approving finance verifications, entries were NOT being created in CLT Receivables.
 

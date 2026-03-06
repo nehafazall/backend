@@ -48,6 +48,13 @@ const CltReceivablesPage = () => {
     const [records, setRecords] = useState([]);
     const [paymentGateways, setPaymentGateways] = useState([]);
     const [bankAccounts, setBankAccounts] = useState([]);
+    const [filters, setFilters] = useState({
+        dateFrom: '',
+        dateTo: '',
+        gateway: 'all',
+        settlementStatus: 'all',
+        bank: 'all'
+    });
     const [pspMappings, setPspMappings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -250,12 +257,41 @@ const CltReceivablesPage = () => {
         a.click();
     };
 
+    // Filter records based on filters
+    const filteredRecords = useMemo(() => {
+        return records.filter(r => {
+            // Date filters
+            if (filters.dateFrom && r.date < filters.dateFrom) return false;
+            if (filters.dateTo && r.date > filters.dateTo) return false;
+            
+            // Gateway filter
+            if (filters.gateway !== 'all' && r.payment_gateway_id !== filters.gateway) return false;
+            
+            // Settlement status filter
+            if (filters.settlementStatus !== 'all') {
+                const isSettled = r.settlement_status === 'settled';
+                if (filters.settlementStatus === 'settled' && !isSettled) return false;
+                if (filters.settlementStatus === 'pending' && isSettled) return false;
+            }
+            
+            // Bank filter
+            if (filters.bank !== 'all' && r.bank_account_id !== filters.bank) return false;
+            
+            return true;
+        });
+    }, [records, filters]);
+
+    // Calculate filtered total
+    const filteredTotal = useMemo(() => {
+        return filteredRecords.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+    }, [filteredRecords]);
+
     const paginatedRecords = useMemo(() => {
         const start = (page - 1) * pageSize;
-        return records.slice(start, start + pageSize);
-    }, [records, page]);
+        return filteredRecords.slice(start, start + pageSize);
+    }, [filteredRecords, page]);
 
-    const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
 
     // Get selected gateway for settlement info display
     const selectedGateway = useMemo(() => {
@@ -423,6 +459,92 @@ const CltReceivablesPage = () => {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    {/* Filters Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-3 bg-muted/30 rounded-lg">
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Date From</label>
+                            <Input
+                                type="date"
+                                value={filters.dateFrom}
+                                onChange={(e) => setFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                                className="h-9"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Date To</label>
+                            <Input
+                                type="date"
+                                value={filters.dateTo}
+                                onChange={(e) => setFilters(f => ({ ...f, dateTo: e.target.value }))}
+                                className="h-9"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Gateway</label>
+                            <Select value={filters.gateway} onValueChange={(v) => setFilters(f => ({ ...f, gateway: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Gateways" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Gateways</SelectItem>
+                                    {paymentGateways.map(gw => (
+                                        <SelectItem key={gw.id} value={gw.id}>{gw.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Settlement Status</label>
+                            <Select value={filters.settlementStatus} onValueChange={(v) => setFilters(f => ({ ...f, settlementStatus: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="settled">Settled</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Bank Account</label>
+                            <Select value={filters.bank} onValueChange={(v) => setFilters(f => ({ ...f, bank: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Banks" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Banks</SelectItem>
+                                    {bankAccounts.map(ba => (
+                                        <SelectItem key={ba.id} value={ba.id}>{ba.bank_name} - {ba.account_name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* Summary Row */}
+                    <div className="flex items-center justify-between mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-muted-foreground">
+                                Showing {filteredRecords.length} of {records.length} records
+                            </span>
+                            {filters.settlementStatus !== 'all' && (
+                                <Badge variant="outline" className="text-green-500">
+                                    {filters.settlementStatus === 'settled' ? 'Settled' : 'Pending'} only
+                                </Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-sm">
+                                <span className="text-muted-foreground">Total: </span>
+                                <span className="font-bold text-green-500">AED {formatNumber(filteredTotal)}</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setFilters({ dateFrom: '', dateTo: '', gateway: 'all', settlementStatus: 'all', bank: 'all' })}>
+                                Clear Filters
+                            </Button>
+                        </div>
+                    </div>
+
                     {loading ? (
                         <div className="space-y-2">
                             <Skeleton className="h-10 w-full" />

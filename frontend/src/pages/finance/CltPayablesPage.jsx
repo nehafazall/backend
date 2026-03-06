@@ -49,6 +49,13 @@ const CltPayablesPage = () => {
     const [editingId, setEditingId] = useState(null);
     const [page, setPage] = useState(1);
     const pageSize = 10;
+    const [filters, setFilters] = useState({
+        dateFrom: '',
+        dateTo: '',
+        costCenter: 'all',
+        bank: 'all',
+        status: 'all'
+    });
 
     const convertToAED = useCallback((amount, currency) => {
         const amt = parseFloat(amount) || 0;
@@ -207,12 +214,41 @@ const CltPayablesPage = () => {
         a.click();
     };
 
+    // Filter records based on filters
+    const filteredRecords = useMemo(() => {
+        return records.filter(r => {
+            // Date filters
+            if (filters.dateFrom && r.date < filters.dateFrom) return false;
+            if (filters.dateTo && r.date > filters.dateTo) return false;
+            
+            // Cost Center filter
+            if (filters.costCenter !== 'all' && r.cost_center_id !== filters.costCenter) return false;
+            
+            // Bank filter
+            if (filters.bank !== 'all' && r.bank_account_id !== filters.bank) return false;
+            
+            // Status filter
+            if (filters.status !== 'all') {
+                const isPaid = r.status === 'paid';
+                if (filters.status === 'paid' && !isPaid) return false;
+                if (filters.status === 'pending' && isPaid) return false;
+            }
+            
+            return true;
+        });
+    }, [records, filters]);
+
+    // Calculate filtered total
+    const filteredTotal = useMemo(() => {
+        return filteredRecords.reduce((sum, r) => sum + (r.amount_in_aed || r.amount || 0), 0);
+    }, [filteredRecords]);
+
     const paginatedRecords = useMemo(() => {
         const start = (page - 1) * pageSize;
-        return records.slice(start, start + pageSize);
-    }, [records, page]);
+        return filteredRecords.slice(start, start + pageSize);
+    }, [filteredRecords, page]);
 
-    const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
 
     return (
         <div className="space-y-6" data-testid="clt-payables-page">
@@ -353,6 +389,87 @@ const CltPayablesPage = () => {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    {/* Filters Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-3 bg-muted/30 rounded-lg">
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Date From</label>
+                            <Input
+                                type="date"
+                                value={filters.dateFrom}
+                                onChange={(e) => setFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                                className="h-9"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Date To</label>
+                            <Input
+                                type="date"
+                                value={filters.dateTo}
+                                onChange={(e) => setFilters(f => ({ ...f, dateTo: e.target.value }))}
+                                className="h-9"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Cost Center</label>
+                            <Select value={filters.costCenter} onValueChange={(v) => setFilters(f => ({ ...f, costCenter: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Cost Centers" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Cost Centers</SelectItem>
+                                    {costCenters.map(cc => (
+                                        <SelectItem key={cc.id} value={cc.id}>{cc.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Bank Account</label>
+                            <Select value={filters.bank} onValueChange={(v) => setFilters(f => ({ ...f, bank: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Banks" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Banks</SelectItem>
+                                    {bankAccounts.map(ba => (
+                                        <SelectItem key={ba.id} value={ba.id}>{ba.bank_name} - {ba.account_name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                            <Select value={filters.status} onValueChange={(v) => setFilters(f => ({ ...f, status: v }))}>
+                                <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="All Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="paid">Paid</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* Summary Row */}
+                    <div className="flex items-center justify-between mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-muted-foreground">
+                                Showing {filteredRecords.length} of {records.length} records
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-sm">
+                                <span className="text-muted-foreground">Total: </span>
+                                <span className="font-bold text-red-500">AED {formatNumber(filteredTotal)}</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setFilters({ dateFrom: '', dateTo: '', costCenter: 'all', bank: 'all', status: 'all' })}>
+                                Clear Filters
+                            </Button>
+                        </div>
+                    </div>
+
                     {loading ? (
                         <div className="space-y-2">
                             <Skeleton className="h-10 w-full" />
@@ -413,7 +530,7 @@ const CltPayablesPage = () => {
                             </Table>
                             <div className="flex items-center justify-between mt-4">
                                 <span className="text-sm text-muted-foreground">
-                                    Page {page} of {totalPages} ({records.length} records)
+                                    Page {page} of {totalPages} ({filteredRecords.length} records)
                                 </span>
                                 <div className="flex gap-2">
                                     <Button 
