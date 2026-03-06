@@ -15829,7 +15829,7 @@ async def verify_payment(
                 })
     else:
         # Single payment
-        payment_method = verification.get("payment_method", "").lower()
+        payment_method = (verification.get("payment_method") or "").lower()
         settlement_info = calculate_settlement_date(payment_method, now)
         if settlement_info["status"] == "pending_settlement":
             all_immediate = False
@@ -15900,6 +15900,8 @@ async def verify_payment(
     
     # Only create journal entry if all payments are immediate (no pending settlements)
     journal_entry_id = None
+    receivable_id = None
+    
     if all_immediate:
         journal_entry = {
             "id": str(uuid.uuid4()),
@@ -15923,6 +15925,34 @@ async def verify_payment(
         await db.journal_entries.insert_one(journal_entry)
         journal_entry_id = journal_entry["id"]
     
+    # Create CLT Receivables entry for all verified payments
+    receivable = {
+        "id": str(uuid.uuid4()),
+        "date": data.get("payment_date", now.strftime("%Y-%m-%d")),
+        "account_name": verification["customer_name"],
+        "amount": verification["sale_amount"],
+        "currency": "AED",
+        "amount_in_aed": verification["sale_amount"],
+        "payment_method": verification.get("payment_method") or "",
+        "payment_for": verification.get("course_name") or "Course Enrollment",
+        "transaction_id": data.get("payment_reference", "") or verification.get("transaction_id", "") or "",
+        "verification_id": verification_id,
+        "lead_id": verification.get("lead_id"),
+        "student_id": verification.get("student_id"),
+        "sales_executive_id": verification.get("sales_executive_id"),
+        "sales_executive_name": verification.get("sales_executive_name"),
+        "is_split_payment": is_split_payment,
+        "payment_splits": payment_splits,
+        "settlement_status": "settled" if all_immediate else "pending",
+        "source": "finance_verification",
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now.isoformat()
+    }
+    await db.finance_clt_receivables.insert_one(receivable)
+    receivable_id = receivable["id"]
+    logger.info(f"Created receivable entry {receivable_id} for verification {verification_id}")
+    
     # Update verification record
     await db.finance_verifications.update_one(
         {"id": verification_id},
@@ -15933,6 +15963,7 @@ async def verify_payment(
             "verified_by_name": user["full_name"],
             "transaction_id": transaction["id"],
             "journal_entry_id": journal_entry_id,
+            "receivable_id": receivable_id,
             "settlement_status": "pending" if not all_immediate else "settled",
             "pending_settlement_count": len(settlement_records),
             "verified_references": data.get("split_references", []) if is_split_payment else [{"reference": data.get("payment_reference", "")}]
@@ -15980,9 +16011,10 @@ async def verify_payment(
         "success": True, 
         "transaction_id": transaction["id"], 
         "journal_entry_id": journal_entry_id,
+        "receivable_id": receivable_id,
         "settlement_status": "settled" if all_immediate else "pending",
         "pending_settlements": len(settlement_records),
-        "message": "Payment verified. " + ("Journal entry created." if all_immediate else f"{len(settlement_records)} settlement(s) pending. Journal entry will be created after settlement.")
+        "message": "Payment verified and added to Receivables. " + ("Journal entry created." if all_immediate else f"{len(settlement_records)} settlement(s) pending. Journal entry will be created after settlement.")
     }
 
 @api_router.post("/finance/verifications/{verification_id}/reject")
