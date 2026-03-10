@@ -40,6 +40,34 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 100% (17/17 tests), Frontend 100%
 
+#### P1: Email Notifications for SLA Breaches & Daily Finance Report (COMPLETED)
+**Requirement:** Add email alerts for SLA breaches and daily finance report at 12:00 AM UAE time.
+
+**Implementation:**
+
+**1. SLA Breach Email Alerts:**
+- Email sent when a lead breaches SLA threshold (48+ hours)
+- Recipients: Assigned sales executive + all sales managers
+- Professional HTML template with lead details, time elapsed, and urgency
+
+**2. Daily Finance Report (12:00 AM UAE):**
+- Automated scheduler runs at midnight UAE time
+- Recipients: accounts@clt-academy.com, aqib@clt-academy.com (CEO), faizeen@clt-academy.com (COO)
+- Report includes:
+  - Sales Today (amount + count)
+  - Sales This Month (amount + count)
+  - Treasury Balance (total across all banks)
+  - Bank Account Balances (per bank)
+  - Pending Settlements
+  - Expenses (MTD)
+  - Top 5 Sales Performers
+  - Pending Verifications count
+- Beautiful HTML email template with CLT branding
+
+**New API Endpoints:**
+- `POST /api/admin/send-daily-finance-report` - Manual trigger for testing
+- `GET /api/admin/email-status` - Check email configuration status
+
 #### P0: Finance Dashboard & Cash Flow Transparency (COMPLETED)
 **Requirement:** Finance dashboard to show receivables data with bank mapping, pre/post settlement amounts for cash flow transparency, and filters on Receivables & Payables pages.
 

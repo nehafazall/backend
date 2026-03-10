@@ -30,6 +30,8 @@ from email_service import (
     get_leave_status_template,
     get_regularization_request_template,
     get_regularization_status_template,
+    get_sla_breach_alert_template,
+    get_daily_finance_report_template,
     is_email_configured
 )
 
@@ -1242,6 +1244,42 @@ async def process_sla_checks():
                             entity_type="lead",
                             entity_id=lead["id"]
                         )
+                    
+                    # Send SLA breach email alerts to managers
+                    if is_email_configured():
+                        time_since_created = now - datetime.fromisoformat(lead.get("created_at", now.isoformat()).replace("Z", "+00:00"))
+                        hours_elapsed = time_since_created.total_seconds() / 3600
+                        time_elapsed_str = f"{int(hours_elapsed)} hours" if hours_elapsed < 48 else f"{int(hours_elapsed/24)} days"
+                        
+                        sla_email_html = get_sla_breach_alert_template(
+                            lead_name=lead.get("full_name", "Unknown"),
+                            lead_phone=lead.get("phone", "N/A"),
+                            lead_email=lead.get("email", ""),
+                            lead_source=lead.get("source", "Unknown"),
+                            assigned_to=lead.get("assigned_to_name", "Unassigned"),
+                            sla_status=new_status,
+                            time_elapsed=time_elapsed_str,
+                            sla_threshold="48 hours for first contact"
+                        )
+                        
+                        # Send to assigned sales executive
+                        if lead.get("assigned_to"):
+                            assigned_user = await db.users.find_one({"id": lead["assigned_to"]})
+                            if assigned_user and assigned_user.get("email"):
+                                await send_email_async(
+                                    assigned_user["email"],
+                                    f"⚠️ SLA BREACH: Lead {lead['full_name']} requires immediate attention",
+                                    sla_email_html
+                                )
+                        
+                        # Send to sales managers
+                        for manager in managers:
+                            if manager.get("email"):
+                                await send_email_async(
+                                    manager["email"],
+                                    f"⚠️ SLA BREACH ALERT: {lead['full_name']} - {lead.get('assigned_to_name', 'Unassigned')}",
+                                    sla_email_html
+                                )
                 
                 # If reassigned to pool, log activity
                 if sla_update.get("in_pool"):
@@ -14725,7 +14763,36 @@ async def switch_environment(data: Dict, user = Depends(require_roles(["super_ad
         "restart_required": True
     }
 
-# ==================== MARKETING MODULE ====================
+@api_router.post("/admin/send-daily-finance-report")
+async def trigger_daily_finance_report(user = Depends(require_roles(["super_admin", "ceo"]))):
+    """
+    Manually trigger the daily finance report email.
+    Useful for testing or sending ad-hoc reports.
+    """
+    try:
+        await send_daily_finance_report()
+        return {
+            "success": True,
+            "message": "Daily finance report has been sent to accounts@clt-academy.com, aqib@clt-academy.com, and faizeen@clt-academy.com"
+        }
+    except Exception as e:
+        logger.error(f"Error sending manual finance report: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send report: {str(e)}")
+
+@api_router.get("/admin/email-status")
+async def get_email_status(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Check email configuration status"""
+    return {
+        "email_configured": is_email_configured(),
+        "smtp_host": os.environ.get("SMTP_HOST", "not set"),
+        "smtp_user": os.environ.get("SMTP_USER", "not set"),
+        "from_name": os.environ.get("SMTP_FROM_NAME", "CLT Synapse"),
+        "daily_report_recipients": [
+            "accounts@clt-academy.com",
+            "aqib@clt-academy.com",
+            "faizeen@clt-academy.com"
+        ]
+    }
 # Meta Ads Integration for lead import and analytics
 
 # Initialize Meta Ads Service (only if credentials are configured)
@@ -17084,6 +17151,9 @@ async def startup_event():
     # Start background scheduler for Google Sheets auto-sync
     asyncio.create_task(sheets_auto_sync_loop())
     
+    # Start background scheduler for daily finance report
+    asyncio.create_task(daily_finance_report_loop())
+    
     logger.info("CLT Synapse ERP v2.0 started successfully")
 
 async def sheets_auto_sync_loop():
@@ -17094,6 +17164,162 @@ async def sheets_auto_sync_loop():
             await run_auto_sync()
         except Exception as e:
             logger.error(f"Sheets auto-sync loop error: {e}")
+
+async def daily_finance_report_loop():
+    """Background loop for daily finance report at 12:00 AM UAE Time"""
+    import pytz
+    uae_tz = pytz.timezone('Asia/Dubai')
+    
+    while True:
+        try:
+            # Calculate seconds until next 12:00 AM UAE time
+            now_uae = datetime.now(uae_tz)
+            next_midnight = now_uae.replace(hour=0, minute=0, second=0, microsecond=0)
+            if now_uae >= next_midnight:
+                next_midnight += timedelta(days=1)
+            
+            seconds_until_midnight = (next_midnight - now_uae).total_seconds()
+            
+            logger.info(f"Daily Finance Report: Next run in {seconds_until_midnight/3600:.1f} hours at {next_midnight}")
+            
+            # Wait until midnight
+            await asyncio.sleep(seconds_until_midnight)
+            
+            # Generate and send the report
+            await send_daily_finance_report()
+            
+            # Wait a bit before recalculating to avoid running twice
+            await asyncio.sleep(60)
+            
+        except Exception as e:
+            logger.error(f"Daily finance report loop error: {e}")
+            await asyncio.sleep(3600)  # Wait 1 hour on error
+
+async def send_daily_finance_report():
+    """Generate and send the daily finance report email"""
+    import pytz
+    uae_tz = pytz.timezone('Asia/Dubai')
+    now_uae = datetime.now(uae_tz)
+    today_str = now_uae.strftime("%Y-%m-%d")
+    month_start = now_uae.replace(day=1).strftime("%Y-%m-%d")
+    
+    logger.info(f"Generating daily finance report for {today_str}")
+    
+    try:
+        # Get sales data for today
+        today_receivables = await db.finance_clt_receivables.find({
+            "date": today_str
+        }).to_list(1000)
+        sales_today = sum(r.get("amount", 0) for r in today_receivables)
+        sales_today_count = len(today_receivables)
+        
+        # Get sales data for this month
+        month_receivables = await db.finance_clt_receivables.find({
+            "date": {"$gte": month_start, "$lte": today_str}
+        }).to_list(10000)
+        sales_this_month = sum(r.get("amount", 0) for r in month_receivables)
+        sales_this_month_count = len(month_receivables)
+        
+        # Get bank accounts and treasury balance
+        bank_accounts = await db.bank_accounts.find({"is_active": {"$ne": False}}, {"_id": 0}).to_list(100)
+        treasury_balance = sum(b.get("current_balance", b.get("opening_balance", 0)) for b in bank_accounts)
+        
+        # Get expenses
+        all_payables = await db.finance_clt_payables.find({}, {"_id": 0}).to_list(10000)
+        total_expenses = sum(p.get("amount", 0) for p in all_payables)
+        
+        month_payables = await db.finance_clt_payables.find({
+            "date": {"$gte": month_start, "$lte": today_str}
+        }).to_list(10000)
+        expenses_this_month = sum(p.get("amount", 0) for p in month_payables)
+        
+        # Get pending settlements
+        pending_settlements_list = await db.pending_settlements.find({"status": "pending"}).to_list(1000)
+        pending_settlements = sum(s.get("amount", 0) for s in pending_settlements_list)
+        
+        # Get pending verifications
+        pending_verifications = await db.finance_verifications.count_documents({"status": "pending_verification"})
+        
+        # Get top sales reps this month
+        # Aggregate enrollments by sales executive
+        pipeline = [
+            {"$match": {"date": {"$gte": month_start}}},
+            {"$group": {
+                "_id": "$sales_executive_id",
+                "name": {"$first": "$sales_executive_name"},
+                "revenue": {"$sum": "$amount"},
+                "enrollments": {"$sum": 1}
+            }},
+            {"$sort": {"revenue": -1}},
+            {"$limit": 5}
+        ]
+        top_sales_cursor = db.finance_clt_receivables.aggregate(pipeline)
+        top_sales_reps = []
+        async for rep in top_sales_cursor:
+            if rep.get("name"):
+                top_sales_reps.append({
+                    "name": rep.get("name", "Unknown"),
+                    "revenue": rep.get("revenue", 0),
+                    "enrollments": rep.get("enrollments", 0)
+                })
+        
+        # Generate the report HTML
+        report_date = now_uae.strftime("%A, %B %d, %Y")
+        report_html = get_daily_finance_report_template(
+            report_date=report_date,
+            sales_today=sales_today,
+            sales_today_count=sales_today_count,
+            sales_this_month=sales_this_month,
+            sales_this_month_count=sales_this_month_count,
+            treasury_balance=treasury_balance,
+            bank_accounts=bank_accounts,
+            total_expenses=total_expenses,
+            expenses_this_month=expenses_this_month,
+            pending_settlements=pending_settlements,
+            pending_verifications=pending_verifications,
+            top_sales_reps=top_sales_reps
+        )
+        
+        # Send to recipients
+        recipients = [
+            "accounts@clt-academy.com",
+            "aqib@clt-academy.com",      # CEO
+            "faizeen@clt-academy.com"    # COO
+        ]
+        
+        subject = f"📊 CLT Daily Finance Report - {report_date}"
+        
+        for recipient in recipients:
+            try:
+                success = await send_email_async(recipient, subject, report_html)
+                if success:
+                    logger.info(f"Daily finance report sent to {recipient}")
+                else:
+                    logger.warning(f"Failed to send daily finance report to {recipient}")
+            except Exception as e:
+                logger.error(f"Error sending daily finance report to {recipient}: {e}")
+        
+        # Log the report generation
+        await db.system_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "type": "daily_finance_report",
+            "date": today_str,
+            "recipients": recipients,
+            "metrics": {
+                "sales_today": sales_today,
+                "sales_this_month": sales_this_month,
+                "treasury_balance": treasury_balance,
+                "total_expenses": total_expenses
+            },
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        logger.info(f"Daily finance report generated and sent successfully for {today_str}")
+        
+    except Exception as e:
+        logger.error(f"Error generating daily finance report: {e}")
+        import traceback
+        traceback.print_exc()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
