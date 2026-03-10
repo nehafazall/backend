@@ -5,7 +5,48 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
-### Session Mar 10, 2026 - Customer Service Upgrade Workflow
+### Session Mar 10, 2026 - Customer Service Upgrade Workflow + HR Enhancements
+
+#### Feature 1: Visual Upgrade Path Indicator (COMPLETED)
+**Problem:** CS agents and mentors needed a visual way to see a student's journey through course levels.
+
+**Solution:** Added `UpgradePathIndicator` component showing student's progress:
+
+**UI Features:**
+- 5-level progress bar: Starter → Basic → Intermediate → Advanced → Mastery
+- Current level highlighted with ring effect and icon
+- Upgrade count badge showing total upgrades (e.g., "8 Upgrades")
+- Upgrade History section with from/to course badges and dates
+- Next Level hint showing what's next in their journey
+- Mastery achievement message when student reaches top level
+- Supports compact mode for smaller displays
+
+**Location:** Student Detail Modal in Customer Service page
+
+#### Feature 2: Welcome Email for New Employees (COMPLETED)
+**Problem:** New employees needed a professional onboarding email with their credentials and employment details.
+
+**Solution:** Implemented automatic welcome email on employee creation:
+
+**Email Template Includes:**
+- CLT Synapse header with logo
+- User ID (company email) and password
+- Employee ID, Date of Joining, Tenure
+- Department, Designation, System Role
+- HR Manager signature (name, email, phone from employee master)
+- Login button to CLT Synapse portal
+- Security warning to change password
+
+**API:** `POST /api/hr/employees/with-user` 
+- Now returns `welcome_email_sent: true/false`
+- Message includes email status confirmation
+
+**Technical Implementation:**
+- `get_employee_welcome_template()` in email_service.py
+- `send_employee_welcome_email()` helper function
+- `calculate_tenure_text()` for human-readable tenure
+
+**Test Results:** Backend 100% (9/9 tests), Frontend 100%
 
 #### P0: Customer Service Upgrade Workflow (COMPLETED)
 **Problem:** Needed a workflow for existing students to upgrade their course, with proper tracking and mentor visibility.
