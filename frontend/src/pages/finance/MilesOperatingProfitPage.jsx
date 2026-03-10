@@ -191,12 +191,15 @@ const MilesOperatingProfitPage = () => {
             formatNumber(r.operating_profit_aed)
         ]);
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
+        a.style.display = 'none';
         a.href = url;
         a.download = 'miles_operating_profit.csv';
+        document.body.appendChild(a);
         a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 150);
     };
 
     const paginatedRecords = useMemo(() => {

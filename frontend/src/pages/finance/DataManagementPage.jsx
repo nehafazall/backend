@@ -47,15 +47,31 @@ const DataManagementPage = () => {
             return;
         }
 
-        const columns = TEMPLATES[selectedType];
-        const csv = columns.join(',') + '\n' + columns.map(() => '').join(',');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${selectedType}_template.csv`;
-        a.click();
-        toast.success('Template downloaded');
+        try {
+            const columns = TEMPLATES[selectedType];
+            const csv = columns.join(',') + '\n' + columns.map(() => '').join(',');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `${selectedType}_template.csv`;
+            
+            // Append to body, click, then remove
+            document.body.appendChild(a);
+            a.click();
+            
+            // Clean up after a short delay
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            toast.success('Template downloaded');
+        } catch (error) {
+            console.error('Download error:', error);
+            toast.error('Failed to download template');
+        }
     };
 
     const handleFileSelect = async (e) => {
@@ -129,9 +145,15 @@ const DataManagementPage = () => {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = url;
                 a.download = `${selectedType}_export.csv`;
+                document.body.appendChild(a);
                 a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 150);
                 toast.success('Data exported successfully');
             } else {
                 toast.error('Export failed');

@@ -74,18 +74,39 @@ function ImportButton({ type, templateType, onSuccess }) {
     }
 
     function download() {
-        if (!template) return;
+        if (!template) {
+            toast.error('Template not loaded. Please wait and try again.');
+            return;
+        }
         const content = template.template;
         if (!content) {
             toast.error('Template content not available');
             return;
         }
-        const blob = new Blob([content], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = (template.filename || actualType + '_template.csv');
-        a.click();
-        toast.success('Template downloaded successfully');
+        
+        try {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = (template.filename || actualType + '_template.csv');
+            
+            // Append to body, click, then remove
+            document.body.appendChild(a);
+            a.click();
+            
+            // Clean up after a short delay
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            toast.success('Template downloaded successfully');
+        } catch (error) {
+            console.error('Download error:', error);
+            toast.error('Failed to download template');
+        }
     }
 
     function parseCSVLine(line) {

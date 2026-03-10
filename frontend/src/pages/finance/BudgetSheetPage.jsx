@@ -111,12 +111,15 @@ const BudgetSheetPage = () => {
             return [item.cost_center, ...monthlyValues.map(v => formatNumber(v)), formatNumber(total)];
         });
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
+        a.style.display = 'none';
         a.href = url;
         a.download = `budget_${entity}_${year}.csv`;
+        document.body.appendChild(a);
         a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 150);
     };
 
     const calculateRowTotal = (item) => {
