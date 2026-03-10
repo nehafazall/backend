@@ -69,29 +69,28 @@ def extract_db_name_from_url(mongo_url: str) -> str:
 def get_database_name():
     """
     Get database name with the following priority:
-    1. Extract from MONGO_URL connection string (for production Atlas)
-    2. Use environment-specific DB_NAME_* variables
-    3. Fallback to DB_NAME
+    1. Extract from MONGO_URL connection string (for production Atlas - HIGHEST PRIORITY)
+    2. Use DB_NAME environment variable (for explicit configuration)
+    3. Default to 'clt_academy_erp' as last resort
+    
+    NOTE: In Emergent production deployments, the database name should ALWAYS
+    be extracted from MONGO_URL. The Atlas MongoDB user only has access to
+    the database specified in the connection string.
     """
     mongo_url = os.environ.get('MONGO_URL', '')
     
-    # First, try to extract from MONGO_URL (production Atlas uses this)
+    # PRIORITY 1: Extract from MONGO_URL (production Atlas uses this)
     db_from_url = extract_db_name_from_url(mongo_url)
     if db_from_url:
         return db_from_url
     
-    # Fallback to environment-based selection for local development
-    app_env = os.environ.get('APP_ENV', 'production').lower()
+    # PRIORITY 2: Use explicit DB_NAME if set
+    db_name = os.environ.get('DB_NAME')
+    if db_name:
+        return db_name
     
-    if app_env == 'development':
-        return os.environ.get('DB_NAME_DEV', os.environ.get('DB_NAME', 'clt_synapse_dev'))
-    elif app_env == 'testing':
-        return os.environ.get('DB_NAME_TEST', os.environ.get('DB_NAME', 'clt_synapse_test'))
-    elif app_env == 'production':
-        return os.environ.get('DB_NAME_PROD', os.environ.get('DB_NAME', 'clt_synapse_prod'))
-    else:
-        # Fallback to legacy DB_NAME for backwards compatibility
-        return os.environ.get('DB_NAME', 'clt_academy_erp')
+    # PRIORITY 3: Default fallback
+    return 'clt_academy_erp'
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -102,8 +101,8 @@ CURRENT_APP_ENV = os.environ.get('APP_ENV', 'production').lower()
 
 # Log database source for debugging
 _db_from_url = extract_db_name_from_url(mongo_url)
-_db_source = "MONGO_URL" if _db_from_url else f"environment ({CURRENT_APP_ENV})"
-print(f"Database '{CURRENT_DB_NAME}' loaded from {_db_source}")
+_db_source = "MONGO_URL connection string" if _db_from_url else "DB_NAME environment variable"
+print(f"✅ Database '{CURRENT_DB_NAME}' loaded from {_db_source}")
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
