@@ -48,14 +48,45 @@ load_dotenv(ROOT_DIR / '.env')
 # Environment-based database selection
 # APP_ENV can be: development, testing, production
 
+def extract_db_name_from_url(mongo_url: str) -> str:
+    """Extract database name from MongoDB connection string"""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(mongo_url)
+        # Get the path which contains the database name
+        # MongoDB URI format: mongodb+srv://user:pass@host/database?options
+        if parsed.path and len(parsed.path) > 1:
+            # Remove leading slash and any query parameters
+            db_name = parsed.path.lstrip('/')
+            if '?' in db_name:
+                db_name = db_name.split('?')[0]
+            if db_name:
+                return db_name
+    except Exception:
+        pass
+    return None
+
 def get_database_name():
-    """Get database name based on current environment"""
+    """
+    Get database name with the following priority:
+    1. Extract from MONGO_URL connection string (for production Atlas)
+    2. Use environment-specific DB_NAME_* variables
+    3. Fallback to DB_NAME
+    """
+    mongo_url = os.environ.get('MONGO_URL', '')
+    
+    # First, try to extract from MONGO_URL (production Atlas uses this)
+    db_from_url = extract_db_name_from_url(mongo_url)
+    if db_from_url:
+        return db_from_url
+    
+    # Fallback to environment-based selection for local development
     app_env = os.environ.get('APP_ENV', 'production').lower()
     
     if app_env == 'development':
-        return os.environ.get('DB_NAME_DEV', 'clt_synapse_dev')
+        return os.environ.get('DB_NAME_DEV', os.environ.get('DB_NAME', 'clt_synapse_dev'))
     elif app_env == 'testing':
-        return os.environ.get('DB_NAME_TEST', 'clt_synapse_test')
+        return os.environ.get('DB_NAME_TEST', os.environ.get('DB_NAME', 'clt_synapse_test'))
     elif app_env == 'production':
         return os.environ.get('DB_NAME_PROD', os.environ.get('DB_NAME', 'clt_synapse_prod'))
     else:
@@ -68,6 +99,11 @@ client = AsyncIOMotorClient(mongo_url)
 CURRENT_DB_NAME = get_database_name()
 db = client[CURRENT_DB_NAME]
 CURRENT_APP_ENV = os.environ.get('APP_ENV', 'production').lower()
+
+# Log database source for debugging
+_db_from_url = extract_db_name_from_url(mongo_url)
+_db_source = "MONGO_URL" if _db_from_url else f"environment ({CURRENT_APP_ENV})"
+print(f"Database '{CURRENT_DB_NAME}' loaded from {_db_source}")
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
