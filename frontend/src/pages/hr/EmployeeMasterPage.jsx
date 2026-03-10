@@ -13,6 +13,7 @@ import {
     Filter, Download, Eye, Pencil, AlertTriangle, Calendar, UserCheck
 } from 'lucide-react';
 import EmployeeModal from './EmployeeModal';
+import ImportButton from '@/components/ImportButton';
 
 const STATUS_COLORS = {
     active: 'bg-green-500',
@@ -165,6 +166,7 @@ const EmployeeMasterPage = () => {
                     <Button variant="outline" size="sm" onClick={fetchEmployees}>
                         <RefreshCw className="h-4 w-4 mr-2" />Refresh
                     </Button>
+                    <ImportButton templateType="employees" title="Import Employees" onSuccess={fetchEmployees} />
                     <Button variant="outline" size="sm" onClick={handleSyncToUsers} disabled={syncing}>
                         <UserCheck className="h-4 w-4 mr-2" />{syncing ? 'Syncing...' : 'Sync to Users'}
                     </Button>

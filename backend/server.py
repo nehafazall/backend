@@ -6302,6 +6302,40 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "notes": "Experienced trader"
             },
             "instructions": "Fields marked with * are mandatory\nmentor_email MUST be a valid mentor email from the system\nmentor_stage options: new_student, discussion_started, pitched_for_redeposit, interested, closed\nStudents imported will be assigned to specified mentor (NOT round-robin)"
+        },
+        "employees": {
+            "filename": "employees_import_template.csv",
+            "headers": [
+                "employee_id*", "full_name*", "gender*", "date_of_birth", "nationality",
+                "personal_email", "company_email*", "mobile_number*", "department*",
+                "designation*", "role*", "employment_type*", "work_location",
+                "joining_date*", "probation_days", "basic_salary", "reporting_manager_email", "team_name"
+            ],
+            "fields": {
+                "required": ["employee_id", "full_name", "gender", "company_email", "mobile_number", "department", "designation", "role", "employment_type", "joining_date"],
+                "optional": ["date_of_birth", "nationality", "personal_email", "work_location", "probation_days", "basic_salary", "reporting_manager_email", "team_name"]
+            },
+            "example_row": {
+                "employee_id": "CLT-EMP-001",
+                "full_name": "Ahmed Khan",
+                "gender": "male",
+                "date_of_birth": "1990-05-15",
+                "nationality": "UAE",
+                "personal_email": "ahmed.personal@gmail.com",
+                "company_email": "ahmed@clt-academy.com",
+                "mobile_number": "+971501234567",
+                "department": "Sales",
+                "designation": "Sales Executive",
+                "role": "sales_agent",
+                "employment_type": "full_time",
+                "work_location": "Dubai Office",
+                "joining_date": "2024-01-15",
+                "probation_days": "90",
+                "basic_salary": "5000",
+                "reporting_manager_email": "manager@clt-academy.com",
+                "team_name": "Alpha Team"
+            },
+            "instructions": "EMPLOYEE IMPORT - Creates employee record AND user account automatically\n\nFields marked with * are mandatory\n\ngender options: male, female, other\nrole options: super_admin, admin, hr, finance, sales_manager, team_leader, sales_agent, cs_head, cs_agent, academic_master, mentor, operations, marketing\nemployment_type options: full_time, part_time, contract, intern, probation\n\nUser account created with:\n- Email: company_email\n- Password: FirstName@123 (e.g., Ahmed@123)\n- Role: As specified\n\nWelcome email sent automatically with login credentials\n\nNote: When employee is terminated/resigned, their user access auto-disables after 30 days (can also be disabled manually)"
         }
     }
     
@@ -6379,6 +6413,11 @@ async def download_import_template(template_type: str, token: Optional[str] = No
             "filename": "students_mentor_import_template.csv",
             "headers": ["full_name*", "phone*", "email", "country", "package_bought*", "mentor_email*", "cs_agent_email", "mentor_stage", "learning_goals", "notes"],
             "example_row": ["Sara Khan", "+971504567890", "sara@example.com", "UAE", "Pro Trading Course", "mentor@clt-academy.com", "cs@clt-academy.com", "discussion_started", "Master technical analysis", "Experienced trader"]
+        },
+        "employees": {
+            "filename": "employees_import_template.csv",
+            "headers": ["employee_id*", "full_name*", "gender*", "date_of_birth", "nationality", "personal_email", "company_email*", "mobile_number*", "department*", "designation*", "role*", "employment_type*", "work_location", "joining_date*", "probation_days", "basic_salary", "reporting_manager_email", "team_name"],
+            "example_row": ["CLT-EMP-001", "Ahmed Khan", "male", "1990-05-15", "UAE", "ahmed.personal@gmail.com", "ahmed@clt-academy.com", "+971501234567", "Sales", "Sales Executive", "sales_agent", "full_time", "Dubai Office", "2024-01-15", "90", "5000", "manager@clt-academy.com", "Alpha Team"]
         }
     }
     
@@ -7400,6 +7439,268 @@ async def import_mentor_withdrawals(data: List[Dict], user = Depends(require_rol
             results["errors"].append(f"Row {i+1}: {str(e)}")
     
     return results
+
+@api_router.post("/import/employees")
+async def import_employees(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """
+    Import employees with automatic user account creation.
+    - Creates employee record in hr_employees collection
+    - Creates user account with company_email and auto-generated password
+    - Sends welcome email with credentials
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "users_created": 0, "welcome_emails_sent": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Valid role options
+    valid_roles = ["super_admin", "admin", "hr", "finance", "sales_manager", "team_leader", 
+                   "sales_agent", "cs_head", "cs_agent", "academic_master", "mentor", 
+                   "operations", "marketing", "employee"]
+    
+    for i, row in enumerate(data):
+        try:
+            # Check required fields
+            required = ["employee_id", "full_name", "gender", "company_email", "mobile_number", 
+                       "department", "designation", "role", "employment_type", "joining_date"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check for duplicate employee_id or company_email
+            existing_emp = await db.hr_employees.find_one({
+                "$or": [
+                    {"employee_id": row["employee_id"]},
+                    {"company_email": row["company_email"]}
+                ]
+            })
+            if existing_emp:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Employee ID or email already exists")
+                continue
+            
+            # Validate role
+            role = row["role"].lower().replace(" ", "_")
+            if role not in valid_roles:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Invalid role '{row['role']}'. Valid: {valid_roles}")
+                continue
+            
+            # Find reporting manager if specified
+            reporting_manager_id = None
+            if row.get("reporting_manager_email"):
+                manager = await db.users.find_one({"email": row["reporting_manager_email"]})
+                if manager:
+                    reporting_manager_id = manager["id"]
+            
+            # Find team if specified
+            team_id = None
+            if row.get("team_name"):
+                team = await db.teams.find_one({"name": row["team_name"]})
+                if team:
+                    team_id = team["id"]
+            
+            # Generate password: FirstName@123
+            first_name = row["full_name"].split()[0]
+            password = f"{first_name}@123"
+            
+            # Create user account
+            user_uuid = str(uuid.uuid4())
+            user_record = {
+                "id": user_uuid,
+                "email": row["company_email"],
+                "password": hash_password(password),
+                "full_name": row["full_name"],
+                "role": role,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.users.insert_one(user_record)
+            results["users_created"] += 1
+            
+            # Create employee record
+            employee_uuid = str(uuid.uuid4())
+            employee_record = {
+                "id": employee_uuid,
+                "employee_id": row["employee_id"],
+                "user_id": user_uuid,
+                "full_name": row["full_name"],
+                "gender": row["gender"].lower(),
+                "date_of_birth": row.get("date_of_birth"),
+                "nationality": row.get("nationality"),
+                "personal_email": row.get("personal_email"),
+                "company_email": row["company_email"],
+                "mobile_number": row["mobile_number"],
+                "department": row["department"],
+                "designation": row["designation"],
+                "role": role,
+                "employment_type": row["employment_type"].lower().replace(" ", "_"),
+                "work_location": row.get("work_location"),
+                "joining_date": row["joining_date"],
+                "probation_days": int(row.get("probation_days", 90)) if row.get("probation_days") else 90,
+                "basic_salary": float(row.get("basic_salary", 0)) if row.get("basic_salary") else None,
+                "reporting_manager_id": reporting_manager_id,
+                "team_id": team_id,
+                "employment_status": "active",
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.hr_employees.insert_one(employee_record)
+            
+            # Send welcome email
+            try:
+                email_sent = await send_employee_welcome_email(employee_record, password)
+                if email_sent:
+                    results["welcome_emails_sent"] += 1
+            except Exception as email_err:
+                logger.warning(f"Failed to send welcome email to {row['company_email']}: {email_err}")
+            
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.put("/hr/employees/{employee_id}/terminate")
+async def terminate_employee(
+    employee_id: str,
+    termination_date: Optional[str] = None,
+    reason: Optional[str] = None,
+    disable_access_immediately: bool = False,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Terminate/resign an employee.
+    - Sets employment_status to terminated/resigned
+    - Schedules user access to be disabled after 30 days (or immediately if specified)
+    """
+    employee = await db.hr_employees.find_one({"id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc)
+    term_date = termination_date or now.isoformat()
+    
+    # Calculate access disable date (30 days from termination unless immediate)
+    if disable_access_immediately:
+        access_disable_date = now.isoformat()
+    else:
+        access_disable_date = (now + timedelta(days=30)).isoformat()
+    
+    # Update employee record
+    update_data = {
+        "employment_status": "terminated",
+        "termination_date": term_date,
+        "termination_reason": reason,
+        "access_disable_date": access_disable_date,
+        "updated_at": now.isoformat()
+    }
+    await db.hr_employees.update_one({"id": employee_id}, {"$set": update_data})
+    
+    # If immediate disable, also disable the user account
+    if disable_access_immediately and employee.get("user_id"):
+        await db.users.update_one(
+            {"id": employee["user_id"]},
+            {"$set": {"is_active": False, "deactivated_at": now.isoformat(), "deactivation_reason": "Employment terminated"}}
+        )
+    
+    # Create audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee_id,
+        "action": "terminate",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now.isoformat(),
+        "changes": {
+            "termination_date": term_date,
+            "reason": reason,
+            "access_disabled_immediately": disable_access_immediately,
+            "access_disable_date": access_disable_date
+        }
+    })
+    
+    return {
+        "message": f"Employee {employee['full_name']} terminated successfully",
+        "termination_date": term_date,
+        "access_disable_date": access_disable_date,
+        "access_disabled_immediately": disable_access_immediately
+    }
+
+@api_router.put("/hr/employees/{employee_id}/toggle-access")
+async def toggle_employee_access(
+    employee_id: str,
+    is_active: bool,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Manually enable/disable employee user access
+    """
+    employee = await db.hr_employees.find_one({"id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    if not employee.get("user_id"):
+        raise HTTPException(status_code=400, detail="Employee has no linked user account")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Update user account
+    update_data = {"is_active": is_active, "updated_at": now}
+    if not is_active:
+        update_data["deactivated_at"] = now
+        update_data["deactivation_reason"] = "Manually disabled by admin"
+    else:
+        update_data["reactivated_at"] = now
+    
+    await db.users.update_one({"id": employee["user_id"]}, {"$set": update_data})
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "employee",
+        "entity_id": employee_id,
+        "action": "toggle_access",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {"is_active": is_active}
+    })
+    
+    return {
+        "message": f"User access {'enabled' if is_active else 'disabled'} for {employee['full_name']}",
+        "is_active": is_active
+    }
+
+# Background task to auto-disable access for terminated employees after 30 days
+async def check_terminated_employee_access():
+    """Check and disable access for employees past their access_disable_date"""
+    now = datetime.now(timezone.utc)
+    
+    # Find terminated employees whose access should be disabled
+    terminated = await db.hr_employees.find({
+        "employment_status": {"$in": ["terminated", "resigned"]},
+        "access_disable_date": {"$lte": now.isoformat()}
+    }).to_list(100)
+    
+    for emp in terminated:
+        if emp.get("user_id"):
+            # Check if user is still active
+            emp_user = await db.users.find_one({"id": emp["user_id"]})
+            if emp_user and emp_user.get("is_active"):
+                # Disable access
+                await db.users.update_one(
+                    {"id": emp["user_id"]},
+                    {"$set": {
+                        "is_active": False,
+                        "deactivated_at": now.isoformat(),
+                        "deactivation_reason": "Auto-disabled: 30 days after termination"
+                    }}
+                )
+                logger.info(f"Auto-disabled access for terminated employee: {emp['full_name']}")
 
 @api_router.get("/mentor/revenue-summary")
 async def get_mentor_revenue_summary(

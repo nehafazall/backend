@@ -25,6 +25,7 @@ const TYPE_CONFIG = {
     mentor_redeposits: { title: 'Mentor Redeposits', endpoint: '/import/mentor-redeposits', useJson: true },
     cs_upgrades: { title: 'CS Upgrades', endpoint: '/import/cs-upgrades', useJson: true },
     mentor_withdrawals: { title: 'Mentor Withdrawals', endpoint: '/import/mentor-withdrawals', useJson: true },
+    employees: { title: 'Employees', endpoint: '/import/employees', useJson: true },
     courses: { title: 'Courses', endpoint: '/import/courses', useJson: false },
     users: { title: 'Users', endpoint: '/import/users', useJson: false },
 };
