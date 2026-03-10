@@ -6314,6 +6314,93 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
     
     return tmpl
 
+@api_router.get("/import/templates/{template_type}/download")
+async def download_import_template(template_type: str, token: Optional[str] = None, request: Request = None):
+    """Download CSV import template as a file"""
+    from fastapi.responses import Response
+    
+    # Verify token (from query param or header)
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+    
+    if auth_token:
+        try:
+            payload = jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
+            # Token is valid, proceed
+        except:
+            pass  # Allow download anyway for templates (not sensitive data)
+    
+    # Get the template data
+    templates = {
+        "leads": {
+            "filename": "leads_import_template.csv",
+            "headers": ["full_name*", "phone*", "email", "country", "city", "lead_source", "course_of_interest", "campaign_name", "notes"],
+            "example_row": ["John Doe", "+971501234567", "john@example.com", "UAE", "Dubai", "Meta Ads", "Advanced Trading", "Feb2024_UAE", "Interested in weekend batches"]
+        },
+        "historical_leads": {
+            "filename": "historical_leads_import_template.csv",
+            "headers": ["full_name*", "phone*", "additional_numbers", "email", "country", "city", "course_enrolled*", "agent_employee_id*", "team_name*"],
+            "example_row": ["Ahmed Ali", "+971501234567", "+971502345678,+971503456789", "ahmed@example.com", "UAE", "Dubai", "Advanced Trading Mastery", "CLT-EMP-001", "Alpha Team"]
+        },
+        "comprehensive_students": {
+            "filename": "comprehensive_students_import_template.csv",
+            "headers": ["student_name*", "phone*", "additional_numbers", "email*", "country", "city", "enrolled_course*", "enrollment_amount", "enrollment_date", "sales_agent_employee_id*", "team_name*", "cs_agent_employee_id*", "mentor_employee_id"],
+            "example_row": ["Ahmed Ali", "+971501234567", "+971502345678,+971503456789", "ahmed@example.com", "UAE", "Dubai", "Advanced Trading Mastery", "15000", "2025-06-15", "CLT-EMP-001", "Alpha Team", "CLT-EMP-003", "CLT-EMP-002"]
+        },
+        "cs_upgrades": {
+            "filename": "cs_upgrades_import_template.csv",
+            "headers": ["month*", "date*", "cs_employee_id*", "student_email*", "upgrade_amount*", "upgrade_to_course"],
+            "example_row": ["2026-03", "2026-03-10", "CLT-EMP-003", "student@example.com", "10000", "Advanced Trading Mastery"]
+        },
+        "mentor_redeposits": {
+            "filename": "mentor_redeposits_import_template.csv",
+            "headers": ["month*", "date*", "mentor_employee_id*", "student_email*", "redeposit_amount*"],
+            "example_row": ["2026-03", "2026-03-10", "CLT-EMP-002", "student@example.com", "5000"]
+        },
+        "mentor_withdrawals": {
+            "filename": "mentor_withdrawals_import_template.csv",
+            "headers": ["date*", "mentor_employee_id*", "student_email*", "withdrawal_amount*", "notes"],
+            "example_row": ["2026-03-10", "CLT-EMP-002", "student@example.com", "2000", "Partial withdrawal"]
+        },
+        "customers": {
+            "filename": "customers_import_template.csv",
+            "headers": ["full_name*", "phone*", "email", "country", "package_bought*", "payment_amount*", "payment_method*", "payment_date*", "closed_by*", "cs_agent_email", "mentor_email", "notes"],
+            "example_row": ["Jane Smith", "+971502345678", "jane@example.com", "UAE", "Advanced Trading Course", "5000", "stripe", "2024-01-15", "salesperson@clt-academy.com", "cs@clt-academy.com", "mentor@clt-academy.com", "VIP customer"]
+        },
+        "students_cs": {
+            "filename": "students_cs_import_template.csv",
+            "headers": ["full_name*", "phone*", "email", "country", "package_bought*", "cs_agent_email*", "mentor_email", "batch_plan", "trading_level", "notes"],
+            "example_row": ["Ali Khan", "+971503456789", "ali@example.com", "UAE", "Advanced Trading Course", "cs@clt-academy.com", "mentor@clt-academy.com", "Weekend Morning", "Intermediate", "Referred by existing student"]
+        },
+        "students_mentor": {
+            "filename": "students_mentor_import_template.csv",
+            "headers": ["full_name*", "phone*", "email", "country", "package_bought*", "mentor_email*", "cs_agent_email", "mentor_stage", "learning_goals", "notes"],
+            "example_row": ["Sara Khan", "+971504567890", "sara@example.com", "UAE", "Pro Trading Course", "mentor@clt-academy.com", "cs@clt-academy.com", "discussion_started", "Master technical analysis", "Experienced trader"]
+        }
+    }
+    
+    if template_type not in templates:
+        raise HTTPException(status_code=400, detail=f"Invalid template type. Available: {list(templates.keys())}")
+    
+    tmpl = templates[template_type]
+    
+    # Generate CSV content
+    csv_content = ",".join(tmpl["headers"]) + "\n" + ",".join([str(v) for v in tmpl["example_row"]])
+    
+    # Return as downloadable file
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={tmpl['filename']}",
+            "Content-Type": "text/csv; charset=utf-8",
+            "Cache-Control": "no-cache"
+        }
+    )
+
 @api_router.post("/import/leads")
 async def import_leads(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))):
     """Import leads from CSV data - uses round-robin assignment"""

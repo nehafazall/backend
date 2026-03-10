@@ -74,54 +74,30 @@ function ImportButton({ type, templateType, onSuccess }) {
     }
 
     function download() {
-        if (!template) {
-            toast.error('Template not loaded. Please wait and try again.');
-            return;
-        }
-        const content = template.template;
-        if (!content) {
-            toast.error('Template content not available');
-            return;
-        }
+        // Use direct backend download endpoint
+        const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+        const token = localStorage.getItem('clt_token');
+        const downloadUrl = `${API_URL}/api/import/templates/${actualType}/download`;
         
-        try {
-            const filename = (template.filename || actualType + '_template.csv');
-            
-            // Method 1: Try data URL download
-            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(content);
-            
-            const link = document.createElement('a');
-            link.setAttribute('href', csvContent);
-            link.setAttribute('download', filename);
-            link.style.visibility = 'hidden';
-            link.style.position = 'absolute';
-            link.style.left = '-9999px';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            toast.success(`Template "${filename}" - check your Downloads folder`, {
-                duration: 5000,
-                description: 'If download didn\'t start, click "Open in New Tab" below'
-            });
-        } catch (error) {
-            console.error('Download error:', error);
-            // Fallback: Open in new tab
-            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(content);
-            window.open(csvContent, '_blank');
-            toast.info('Template opened in new tab. Use Ctrl+S to save.');
-        }
+        // Open in new window/tab to trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl + `?token=${token}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('Download started - check your Downloads folder');
     }
     
     function openTemplateInNewTab() {
-        if (!template || !template.template) {
-            toast.error('Template not loaded');
-            return;
-        }
-        const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(template.template);
-        window.open(csvContent, '_blank');
-        toast.info('Template opened in new tab. Use Ctrl+S (or Cmd+S on Mac) to save as CSV file.');
+        // Use direct backend download endpoint
+        const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+        const token = localStorage.getItem('clt_token');
+        const downloadUrl = `${API_URL}/api/import/templates/${actualType}/download?token=${token}`;
+        window.open(downloadUrl, '_blank');
+        toast.info('Template opened in new tab');
     }
 
     function parseCSVLine(line) {
