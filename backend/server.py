@@ -1173,18 +1173,34 @@ async def get_round_robin_agent(role: str, region: str = None, department: str =
     if not agents:
         return None
     
-    # Get assignment counts
-    assignment_counts = {}
-    for agent in agents:
-        if role in ["sales_executive", "sales_manager", "team_leader"]:
-            count = await db.leads.count_documents({"assigned_to": agent["id"]})
-        elif role in ["cs_agent", "cs_head"]:
-            count = await db.students.count_documents({"cs_agent_id": agent["id"]})
-        elif role in ["mentor", "academic_master"]:
-            count = await db.students.count_documents({"mentor_id": agent["id"]})
-        else:
-            count = 0
-        assignment_counts[agent["id"]] = count
+    # Get assignment counts using aggregation to avoid N+1 queries
+    agent_ids = [agent["id"] for agent in agents]
+    assignment_counts = {agent_id: 0 for agent_id in agent_ids}
+    
+    if role in ["sales_executive", "sales_manager", "team_leader"]:
+        # Get lead counts in single aggregation
+        lead_counts = await db.leads.aggregate([
+            {"$match": {"assigned_to": {"$in": agent_ids}}},
+            {"$group": {"_id": "$assigned_to", "count": {"$sum": 1}}}
+        ]).to_list(len(agent_ids))
+        for item in lead_counts:
+            assignment_counts[item["_id"]] = item["count"]
+    elif role in ["cs_agent", "cs_head"]:
+        # Get student counts for CS agents
+        cs_counts = await db.students.aggregate([
+            {"$match": {"cs_agent_id": {"$in": agent_ids}}},
+            {"$group": {"_id": "$cs_agent_id", "count": {"$sum": 1}}}
+        ]).to_list(len(agent_ids))
+        for item in cs_counts:
+            assignment_counts[item["_id"]] = item["count"]
+    elif role in ["mentor", "academic_master"]:
+        # Get student counts for mentors
+        mentor_counts = await db.students.aggregate([
+            {"$match": {"mentor_id": {"$in": agent_ids}}},
+            {"$group": {"_id": "$mentor_id", "count": {"$sum": 1}}}
+        ]).to_list(len(agent_ids))
+        for item in mentor_counts:
+            assignment_counts[item["_id"]] = item["count"]
     
     # Return agent with lowest count
     min_agent = min(agents, key=lambda a: assignment_counts.get(a["id"], 0))
@@ -1352,105 +1368,132 @@ async def process_sla_checks():
     """Background task to check all SLA statuses and send notifications"""
     now = datetime.now(timezone.utc)
     
-    # Check all active leads
-    leads = await db.leads.find({
-        "stage": {"$nin": ["enrolled", "rejected"]},
-        "in_pool": {"$ne": True}
-    }).to_list(10000)
+    # Check all active leads with pagination and projection (avoid memory exhaustion)
+    # Only fetch fields needed for SLA check
+    sla_projection = {
+        "_id": 0, "id": 1, "full_name": 1, "phone": 1, "email": 1, "source": 1,
+        "stage": 1, "created_at": 1, "assigned_at": 1, "first_contact_at": 1,
+        "assigned_to": 1, "assigned_to_name": 1, "sla_status": 1, "sla_warning_at": 1,
+        "sla_warning_level": 1
+    }
     
-    for lead in leads:
-        sla_update = await check_lead_sla(lead)
-        if sla_update:
-            old_status = lead.get("sla_status", "ok")
-            new_status = sla_update.get("sla_status", old_status)
-            
-            await db.leads.update_one({"id": lead["id"]}, {"$set": sla_update})
-            
-            # Send notifications on status change
-            if new_status != old_status or sla_update.get("sla_warning_level", 0) > lead.get("sla_warning_level", 0):
-                # Notify sales executive
-                if lead.get("assigned_to"):
-                    await create_notification(
-                        lead["assigned_to"],
-                        f"SLA {new_status.upper()}: {lead['full_name']}",
-                        f"Lead requires immediate attention. Status: {new_status}",
-                        "warning" if new_status == "warning" else "error",
-                        f"/sales",
-                        entity_type="lead",
-                        entity_id=lead["id"]
-                    )
+    # Process leads in batches of 500 to avoid memory issues
+    batch_size = 500
+    skip = 0
+    total_processed = 0
+    max_leads = 5000  # Safety limit
+    
+    while total_processed < max_leads:
+        leads = await db.leads.find(
+            {"stage": {"$nin": ["enrolled", "rejected"]}, "in_pool": {"$ne": True}},
+            sla_projection
+        ).skip(skip).limit(batch_size).to_list(batch_size)
+        
+        if not leads:
+            break
+        
+        for lead in leads:
+            sla_update = await check_lead_sla(lead)
+            if sla_update:
+                old_status = lead.get("sla_status", "ok")
+                new_status = sla_update.get("sla_status", old_status)
                 
-                # Notify manager on breach or level 2 warning
-                if new_status == "breach" or sla_update.get("sla_warning_level", 0) >= 2:
-                    managers = await db.users.find({
-                        "role": {"$in": ["sales_manager", "team_leader", "admin", "super_admin"]},
-                        "is_active": True
-                    }).to_list(100)
-                    for manager in managers:
+                await db.leads.update_one({"id": lead["id"]}, {"$set": sla_update})
+                
+                # Send notifications on status change
+                if new_status != old_status or sla_update.get("sla_warning_level", 0) > lead.get("sla_warning_level", 0):
+                    # Notify sales executive
+                    if lead.get("assigned_to"):
                         await create_notification(
-                            manager["id"],
-                            f"SLA BREACH: Lead {lead['full_name']}",
-                            f"Lead has breached SLA. Assigned to: {lead.get('assigned_to_name', 'Unassigned')}",
-                            "error",
+                            lead["assigned_to"],
+                            f"SLA {new_status.upper()}: {lead['full_name']}",
+                            f"Lead requires immediate attention. Status: {new_status}",
+                            "warning" if new_status == "warning" else "error",
                             f"/sales",
                             entity_type="lead",
                             entity_id=lead["id"]
                         )
                     
-                    # Send SLA breach email alerts to managers
-                    if is_email_configured():
-                        time_since_created = now - datetime.fromisoformat(lead.get("created_at", now.isoformat()).replace("Z", "+00:00"))
-                        hours_elapsed = time_since_created.total_seconds() / 3600
-                        time_elapsed_str = f"{int(hours_elapsed)} hours" if hours_elapsed < 48 else f"{int(hours_elapsed/24)} days"
-                        
-                        sla_email_html = get_sla_breach_alert_template(
-                            lead_name=lead.get("full_name", "Unknown"),
-                            lead_phone=lead.get("phone", "N/A"),
-                            lead_email=lead.get("email", ""),
-                            lead_source=lead.get("source", "Unknown"),
-                            assigned_to=lead.get("assigned_to_name", "Unassigned"),
-                            sla_status=new_status,
-                            time_elapsed=time_elapsed_str,
-                            sla_threshold="48 hours for first contact"
-                        )
-                        
-                        # Send to assigned sales executive
-                        if lead.get("assigned_to"):
-                            assigned_user = await db.users.find_one({"id": lead["assigned_to"]})
-                            if assigned_user and assigned_user.get("email"):
-                                await send_email_async(
-                                    assigned_user["email"],
-                                    f"⚠️ SLA BREACH: Lead {lead['full_name']} requires immediate attention",
-                                    sla_email_html
-                                )
-                        
-                        # Send to sales managers
+                    # Notify manager on breach or level 2 warning
+                    if new_status == "breach" or sla_update.get("sla_warning_level", 0) >= 2:
+                        managers = await db.users.find({
+                            "role": {"$in": ["sales_manager", "team_leader", "admin", "super_admin"]},
+                            "is_active": True
+                        }).to_list(100)
                         for manager in managers:
-                            if manager.get("email"):
-                                await send_email_async(
-                                    manager["email"],
-                                    f"⚠️ SLA BREACH ALERT: {lead['full_name']} - {lead.get('assigned_to_name', 'Unassigned')}",
-                                    sla_email_html
-                                )
-                
-                # If reassigned to pool, log activity
-                if sla_update.get("in_pool"):
-                    await db.activity_logs.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "entity_type": "lead",
-                        "entity_id": lead["id"],
-                        "action": "sla_reassign_to_pool",
-                        "user_id": "system",
-                        "user_name": "System (SLA)",
-                        "details": {"reason": "Inactive for 10+ days, returned to lead pool"},
-                        "created_at": now.isoformat()
-                    })
+                            await create_notification(
+                                manager["id"],
+                                f"SLA BREACH: Lead {lead['full_name']}",
+                                f"Lead has breached SLA. Assigned to: {lead.get('assigned_to_name', 'Unassigned')}",
+                                "error",
+                                f"/sales",
+                                entity_type="lead",
+                                entity_id=lead["id"]
+                            )
+                        
+                        # Send SLA breach email alerts to managers
+                        if is_email_configured():
+                            time_since_created = now - datetime.fromisoformat(lead.get("created_at", now.isoformat()).replace("Z", "+00:00"))
+                            hours_elapsed = time_since_created.total_seconds() / 3600
+                            time_elapsed_str = f"{int(hours_elapsed)} hours" if hours_elapsed < 48 else f"{int(hours_elapsed/24)} days"
+                            
+                            sla_email_html = get_sla_breach_alert_template(
+                                lead_name=lead.get("full_name", "Unknown"),
+                                lead_phone=lead.get("phone", "N/A"),
+                                lead_email=lead.get("email", ""),
+                                lead_source=lead.get("source", "Unknown"),
+                                assigned_to=lead.get("assigned_to_name", "Unassigned"),
+                                sla_status=new_status,
+                                time_elapsed=time_elapsed_str,
+                                sla_threshold="48 hours for first contact"
+                            )
+                            
+                            # Send to assigned sales executive
+                            if lead.get("assigned_to"):
+                                assigned_user = await db.users.find_one({"id": lead["assigned_to"]})
+                                if assigned_user and assigned_user.get("email"):
+                                    await send_email_async(
+                                        assigned_user["email"],
+                                        f"⚠️ SLA BREACH: Lead {lead['full_name']} requires immediate attention",
+                                        sla_email_html
+                                    )
+                            
+                            # Send to sales managers
+                            for manager in managers:
+                                if manager.get("email"):
+                                    await send_email_async(
+                                        manager["email"],
+                                        f"⚠️ SLA BREACH ALERT: {lead['full_name']} - {lead.get('assigned_to_name', 'Unassigned')}",
+                                        sla_email_html
+                                    )
+                    
+                    # If reassigned to pool, log activity
+                    if sla_update.get("in_pool"):
+                        await db.activity_logs.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "entity_type": "lead",
+                            "entity_id": lead["id"],
+                            "action": "sla_reassign_to_pool",
+                            "user_id": "system",
+                            "user_name": "System (SLA)",
+                            "details": {"reason": "Inactive for 10+ days, returned to lead pool"},
+                            "created_at": now.isoformat()
+                        })
+        
+        total_processed += len(leads)
+        skip += batch_size
     
-    # Check all new students for CS activation SLA
-    students = await db.students.find({
-        "stage": "new_student",
-        "activation_call_at": None
-    }).to_list(10000)
+    # Check all new students for CS activation SLA with pagination
+    student_projection = {
+        "_id": 0, "id": 1, "full_name": 1, "stage": 1, "created_at": 1,
+        "activation_call_at": 1, "cs_agent_id": 1, "cs_agent_name": 1,
+        "sla_status": 1, "sla_warning_at": 1
+    }
+    
+    students = await db.students.find(
+        {"stage": "new_student", "activation_call_at": None},
+        student_projection
+    ).limit(1000).to_list(1000)
     
     for student in students:
         sla_update = await check_student_sla(student)
@@ -1489,7 +1532,7 @@ async def process_sla_checks():
                         entity_id=student["id"]
                     )
     
-    return {"leads_checked": len(leads), "students_checked": len(students)}
+    return {"leads_checked": total_processed, "students_checked": len(students)}
 
 async def create_or_update_customer(lead: Dict, student: Dict, payment: Dict = None):
     """Create or update customer master record"""
@@ -1986,24 +2029,46 @@ async def get_commissions(
     if status:
         query["status"] = status
     
-    commissions = await db.commissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    # Use aggregation pipeline to join user and course data in single query (avoid N+1)
+    pipeline = [
+        {"$match": query},
+        {"$sort": {"created_at": -1}},
+        {"$limit": limit},
+        # Lookup user names
+        {"$lookup": {
+            "from": "users",
+            "localField": "user_id",
+            "foreignField": "id",
+            "as": "user_info"
+        }},
+        # Lookup course names
+        {"$lookup": {
+            "from": "courses",
+            "localField": "course_id",
+            "foreignField": "id",
+            "as": "course_info"
+        }},
+        # Project and normalize fields
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "user_id": 1,
+            "lead_id": 1,
+            "course_id": 1,
+            "commission_amount": 1,
+            "amount": {"$ifNull": ["$amount", "$commission_amount"]},
+            "sale_type": {"$ifNull": ["$sale_type", "$commission_type"]},
+            "commission_type": 1,
+            "status": 1,
+            "month": 1,
+            "created_at": 1,
+            "paid_at": 1,
+            "user_name": {"$arrayElemAt": ["$user_info.full_name", 0]},
+            "course_name": {"$arrayElemAt": ["$course_info.name", 0]}
+        }}
+    ]
     
-    # Add user and course names, and normalize field names
-    for comm in commissions:
-        comm_user = await db.users.find_one({"id": comm.get("user_id")})
-        comm["user_name"] = comm_user.get("full_name") if comm_user else None
-        
-        course = await db.courses.find_one({"id": comm.get("course_id")})
-        comm["course_name"] = course.get("name") if course else None
-        
-        # Normalize amount field (some records have commission_amount, ensure amount exists)
-        if "amount" not in comm and "commission_amount" in comm:
-            comm["amount"] = comm["commission_amount"]
-        
-        # Normalize sale_type
-        if "sale_type" not in comm and "commission_type" in comm:
-            comm["sale_type"] = comm["commission_type"]
-    
+    commissions = await db.commissions.aggregate(pipeline).to_list(limit)
     return commissions
 
 @api_router.get("/commissions/summary")
