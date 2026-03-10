@@ -54,7 +54,7 @@ const MilesExpensePage = () => {
     const [page, setPage] = useState(1);
     const pageSize = 10;
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('clt_token');
 
     const convertToAED = useCallback((amount, currency) => {
         const amt = parseFloat(amount) || 0;

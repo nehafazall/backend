@@ -28,7 +28,7 @@ const TreasurySettlementsPage = () => {
     const [settlements, setSettlements] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('clt_token');
 
     const fetchData = useCallback(async () => {
         setLoading(true);

@@ -41,7 +41,7 @@ const CltFinanceDashboard = () => {
     const [receivables, setReceivables] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('clt_token');
 
     const fetchData = useCallback(async () => {
         setLoading(true);

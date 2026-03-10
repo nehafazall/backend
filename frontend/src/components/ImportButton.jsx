@@ -76,11 +76,16 @@ function ImportButton({ type, templateType, onSuccess }) {
     function download() {
         if (!template) return;
         const content = template.template;
+        if (!content) {
+            toast.error('Template content not available');
+            return;
+        }
         const blob = new Blob([content], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = type + '_template.csv';
+        a.download = (template.filename || actualType + '_template.csv');
         a.click();
+        toast.success('Template downloaded successfully');
     }
 
     function parseCSVLine(line) {

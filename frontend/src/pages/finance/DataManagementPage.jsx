@@ -39,7 +39,7 @@ const DataManagementPage = () => {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef(null);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('clt_token');
 
     const handleDownloadTemplate = () => {
         if (!selectedType) {

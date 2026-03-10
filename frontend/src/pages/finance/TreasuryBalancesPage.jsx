@@ -40,7 +40,7 @@ const TreasuryBalancesPage = () => {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('clt_token');
 
     const fetchRecords = useCallback(async () => {
         setLoading(true);
