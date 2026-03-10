@@ -51,6 +51,7 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import UpgradeModal, { getCourseColor, UpgradeHistoryCard } from '@/components/UpgradeModal';
 import {
     Search,
     Phone,
@@ -64,6 +65,7 @@ import {
     Bell,
     PhoneCall,
     GripVertical,
+    ArrowUp,
 } from 'lucide-react';
 
 const CS_STAGES = [
@@ -76,12 +78,15 @@ const CS_STAGES = [
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
-const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
+const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
+    const isUpgradedStudent = student.is_upgraded_student;
+    const courseName = student.current_course_name || student.package_bought;
+    const courseColors = getCourseColor(courseName);
 
     return (
         <div
-            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''}`}
+            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${isUpgradedStudent ? `${courseColors.bg} ${courseColors.border} border-2` : ''}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`student-card-${student.id}`}
         >
@@ -90,11 +95,19 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
                     <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
                         <GripVertical className="h-4 w-4" />
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white text-sm font-medium">
+                    <div className={`w-8 h-8 rounded-full ${isUpgradedStudent ? courseColors.bg + ' ' + courseColors.text : 'bg-emerald-600 text-white'} flex items-center justify-center text-sm font-medium`}>
                         {student.full_name?.charAt(0) || '?'}
                     </div>
                     <div>
-                        <p className="font-medium text-sm">{student.full_name}</p>
+                        <div className="flex items-center gap-1">
+                            <p className="font-medium text-sm">{student.full_name}</p>
+                            {isUpgradedStudent && (
+                                <Badge className="bg-emerald-500 text-white text-[10px] px-1 py-0">
+                                    <ArrowUp className="h-2 w-2 mr-0.5" />
+                                    x{student.upgrade_count || 1}
+                                </Badge>
+                            )}
+                        </div>
                         {student.cs_agent_name && (
                             <p className="text-xs text-muted-foreground">
                                 Agent: {student.cs_agent_name}
@@ -117,6 +130,18 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
                             <Bell className="h-4 w-4 mr-2" />
                             Set Reminder
                         </DropdownMenuItem>
+                        {student.stage === 'activated' && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                    onClick={(e) => { e.stopPropagation(); onInitiateUpgrade(student); }}
+                                    className="text-emerald-600"
+                                >
+                                    <TrendingUp className="h-4 w-4 mr-2" />
+                                    Initiate Upgrade
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -133,20 +158,22 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
                         className="h-6 w-6"
                     />
                 </div>
-                {student.package_bought && (
-                    <p className="flex items-center gap-2 text-muted-foreground">
-                        <GraduationCap className="h-3 w-3" />
-                        {student.package_bought}
+                {courseName && (
+                    <p className="flex items-center gap-2">
+                        <GraduationCap className="h-3 w-3 text-muted-foreground" />
+                        <Badge className={`${courseColors.bg} ${courseColors.text} text-xs`}>
+                            {courseName}
+                        </Badge>
                     </p>
                 )}
             </div>
             
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {student.onboarding_complete && (
                         <Badge className="bg-emerald-500 text-white text-xs">Onboarded</Badge>
                     )}
-                    {student.upgrade_eligible && (
+                    {student.upgrade_eligible && !isUpgradedStudent && (
                         <Badge className="bg-yellow-500 text-white text-xs">Upgrade Ready</Badge>
                     )}
                     {hasReminder && (
@@ -165,7 +192,7 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
 };
 
 // Sortable wrapper for StudentCard
-const SortableStudentCard = ({ student, onView, onSetReminder }) => {
+const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade }) => {
     const {
         attributes,
         listeners,
@@ -186,13 +213,14 @@ const SortableStudentCard = ({ student, onView, onSetReminder }) => {
                 student={student}
                 onView={onView}
                 onSetReminder={onSetReminder}
+                onInitiateUpgrade={onInitiateUpgrade}
                 isDragging={isDragging}
             />
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrade }) => {
     const stageStudents = students.filter(s => s.stage === stage.id);
     const studentIds = stageStudents.map(s => s.id);
     const StageIcon = stage.icon;
@@ -225,6 +253,7 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
                                 student={student}
                                 onView={onView}
                                 onSetReminder={onSetReminder}
+                                onInitiateUpgrade={onInitiateUpgrade}
                             />
                         ))}
                         {stageStudents.length === 0 && (
@@ -257,6 +286,10 @@ const CustomerServicePage = () => {
         onboarding_complete: false,
         classes_attended: 0,
     });
+    
+    // Upgrade modal state
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeStudent, setUpgradeStudent] = useState(null);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -310,6 +343,20 @@ const CustomerServicePage = () => {
         setShowReminderModal(false);
         setReminderStudent(null);
         fetchStudents();
+    };
+
+    // Initiate upgrade flow for a student
+    const handleInitiateUpgrade = (student) => {
+        setUpgradeStudent(student);
+        setShowUpgradeModal(true);
+    };
+
+    // When upgrade is completed
+    const handleUpgradeComplete = (updatedStudent) => {
+        setShowUpgradeModal(false);
+        setUpgradeStudent(null);
+        fetchStudents();
+        toast.success(`Upgrade initiated for ${updatedStudent.full_name}`);
     };
 
     // Drag and drop handlers
@@ -462,6 +509,7 @@ const CustomerServicePage = () => {
                                 students={students}
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
+                                onInitiateUpgrade={handleInitiateUpgrade}
                             />
                         ))}
                     </div>
@@ -471,6 +519,7 @@ const CustomerServicePage = () => {
                                 student={students.find(s => s.id === activeId)}
                                 onView={() => {}}
                                 onSetReminder={() => {}}
+                                onInitiateUpgrade={() => {}}
                                 isDragging={true}
                             />
                         ) : null}
@@ -680,6 +729,14 @@ const CustomerServicePage = () => {
                 onClose={() => { setShowActivationModal(false); setPendingActivationStudent(null); }}
                 student={pendingActivationStudent}
                 onComplete={handleActivationComplete}
+            />
+
+            {/* Upgrade Modal */}
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => { setShowUpgradeModal(false); setUpgradeStudent(null); }}
+                student={upgradeStudent}
+                onUpgradeComplete={handleUpgradeComplete}
             />
         </div>
     );

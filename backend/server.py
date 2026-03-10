@@ -452,6 +452,14 @@ class StudentUpdate(BaseModel):
     reminder_time: Optional[str] = None  # HH:MM format
     reminder_note: Optional[str] = None
     reminder_type: Optional[str] = None  # upgrade, redeposit, general
+    # Upgrade tracking fields
+    current_course_id: Optional[str] = None
+    current_course_name: Optional[str] = None
+    upgrade_to_course_id: Optional[str] = None
+    upgrade_to_course_name: Optional[str] = None
+    upgrade_to_amount: Optional[float] = None
+    wallet_transfer_confirmed: Optional[bool] = None
+    mt5_account_number: Optional[str] = None  # Current MT5 account
 
 class StudentResponse(StudentBase):
     id: str
@@ -477,6 +485,19 @@ class StudentResponse(StudentBase):
     reminder_note: Optional[str] = None
     reminder_type: Optional[str] = None
     reminder_completed: bool = False
+    # Upgrade tracking fields
+    current_course_id: Optional[str] = None
+    current_course_name: Optional[str] = None
+    upgrade_to_course_id: Optional[str] = None
+    upgrade_to_course_name: Optional[str] = None
+    upgrade_to_amount: Optional[float] = None
+    wallet_transfer_confirmed: Optional[bool] = None
+    mt5_account_number: Optional[str] = None  # Current MT5 account
+    mt5_account_history: Optional[List[Dict]] = None  # History of MT5 accounts
+    upgrade_history: Optional[List[Dict]] = None  # History of upgrades
+    upgrade_count: Optional[int] = 0  # Number of upgrades
+    is_upgraded_student: Optional[bool] = False  # Flag for mentors
+    activation_questionnaire: Optional[Dict] = None  # Stored questionnaire data
     created_at: datetime
     updated_at: datetime
     
@@ -4036,6 +4057,252 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
     updated = await db.students.find_one({"id": student_id}, {"_id": 0})
     return updated
 
+@api_router.post("/students/{student_id}/initiate-upgrade")
+async def initiate_student_upgrade(
+    student_id: str,
+    upgrade_course_id: str,
+    mt5_account_changed: bool = False,
+    new_mt5_account: Optional[str] = None,
+    wallet_transfer_confirmed: bool = False,
+    notes: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin", "cs_agent"]))
+):
+    """
+    Initiate upgrade for an activated student.
+    - Fetches previous questionnaire data
+    - Tracks MT5 account history
+    - Creates upgrade record
+    - Moves student back to new_student stage (for CS)
+    - Marks as upgraded student (not counted as new for mentors)
+    """
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Get the upgrade course
+    course = await db.courses.find_one({"id": upgrade_course_id})
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Build MT5 account history
+    mt5_history = student.get("mt5_account_history", [])
+    current_mt5 = student.get("mt5_account_number") or student.get("activation_questionnaire", {}).get("trading_account_number")
+    
+    if current_mt5:
+        # Add current to history if not already there
+        existing_mt5_ids = [m.get("account_number") for m in mt5_history]
+        if current_mt5 not in existing_mt5_ids:
+            mt5_history.append({
+                "account_number": current_mt5,
+                "broker_name": student.get("activation_questionnaire", {}).get("broker_name", ""),
+                "added_at": student.get("activation_questionnaire", {}).get("completed_at", now.isoformat()),
+                "status": "active" if not mt5_account_changed else "previous"
+            })
+    
+    # If MT5 account changed, add the new one
+    if mt5_account_changed and new_mt5_account:
+        # Mark previous as inactive
+        for m in mt5_history:
+            m["status"] = "previous"
+        
+        mt5_history.append({
+            "account_number": new_mt5_account,
+            "broker_name": "",
+            "added_at": now.isoformat(),
+            "status": "active"
+        })
+    
+    # Build upgrade history
+    upgrade_history = student.get("upgrade_history", [])
+    upgrade_record = {
+        "id": str(uuid.uuid4()),
+        "from_course_id": student.get("current_course_id"),
+        "from_course_name": student.get("current_course_name") or student.get("package_bought"),
+        "to_course_id": course["id"],
+        "to_course_name": course["name"],
+        "to_amount": course.get("price", 0),
+        "mt5_account_changed": mt5_account_changed,
+        "new_mt5_account": new_mt5_account if mt5_account_changed else None,
+        "wallet_transfer_confirmed": wallet_transfer_confirmed,
+        "notes": notes,
+        "initiated_by": user["id"],
+        "initiated_by_name": user["full_name"],
+        "initiated_at": now.isoformat(),
+        "status": "pending_activation"
+    }
+    upgrade_history.append(upgrade_record)
+    
+    # Preserve questionnaire data but prepare for re-activation
+    questionnaire = student.get("activation_questionnaire", {})
+    
+    # Update student record
+    update_data = {
+        "stage": "new_student",  # Back to new student for CS
+        "upgrade_pitched": False,
+        "upgrade_closed": False,
+        "upgrade_to_course_id": course["id"],
+        "upgrade_to_course_name": course["name"],
+        "upgrade_to_amount": course.get("price", 0),
+        "wallet_transfer_confirmed": wallet_transfer_confirmed,
+        "mt5_account_number": new_mt5_account if mt5_account_changed else current_mt5,
+        "mt5_account_history": mt5_history,
+        "upgrade_history": upgrade_history,
+        "upgrade_count": len(upgrade_history),
+        "is_upgraded_student": True,  # Mark as upgrade, not new
+        "previous_questionnaire": questionnaire,  # Store for pre-fill
+        "updated_at": now.isoformat()
+    }
+    
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+    
+    # Update customer master with upgrade history
+    if student.get("lead_id"):
+        lead = await db.leads.find_one({"id": student["lead_id"]})
+        if lead:
+            customer_id = lead.get("customer_master_id")
+            if customer_id:
+                await db.customer_master.update_one(
+                    {"id": customer_id},
+                    {
+                        "$push": {"upgrade_history": upgrade_record},
+                        "$inc": {"total_upgrades": 1},
+                        "$set": {
+                            "latest_course_id": course["id"],
+                            "latest_course_name": course["name"],
+                            "updated_at": now.isoformat()
+                        }
+                    }
+                )
+    
+    await log_activity("student", student_id, "upgrade_initiated", user, {
+        "to_course": course["name"],
+        "amount": course.get("price", 0),
+        "mt5_changed": mt5_account_changed
+    })
+    
+    # Notify CS agent
+    if student.get("cs_agent_id"):
+        await create_notification(
+            student["cs_agent_id"],
+            f"Upgrade Initiated: {student['full_name']}",
+            f"Student upgrading to {course['name']}. Complete activation questionnaire.",
+            "info",
+            f"/cs/students/{student_id}"
+        )
+    
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return {
+        "success": True,
+        "message": f"Upgrade initiated to {course['name']}",
+        "student": updated,
+        "upgrade_record": upgrade_record
+    }
+
+@api_router.post("/students/{student_id}/complete-upgrade-activation")
+async def complete_upgrade_activation(
+    student_id: str,
+    questionnaire_data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "cs_agent"]))
+):
+    """
+    Complete the activation for an upgraded student.
+    - Updates questionnaire with new/modified data
+    - Activates student
+    - Updates course and amount
+    - Notifies mentor (same mentor, with upgrade flag)
+    """
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    if not student.get("is_upgraded_student"):
+        raise HTTPException(status_code=400, detail="This endpoint is for upgraded students only")
+    
+    now = datetime.now(timezone.utc)
+    
+    # Update MT5 account if changed in questionnaire
+    new_mt5 = questionnaire_data.get("trading_account_number")
+    mt5_history = student.get("mt5_account_history", [])
+    
+    if new_mt5 and new_mt5 != student.get("mt5_account_number"):
+        # Add to history
+        for m in mt5_history:
+            m["status"] = "previous"
+        mt5_history.append({
+            "account_number": new_mt5,
+            "broker_name": questionnaire_data.get("broker_name", ""),
+            "added_at": now.isoformat(),
+            "status": "active"
+        })
+    
+    # Mark upgrade as completed
+    upgrade_history = student.get("upgrade_history", [])
+    if upgrade_history:
+        upgrade_history[-1]["status"] = "completed"
+        upgrade_history[-1]["completed_at"] = now.isoformat()
+        upgrade_history[-1]["completed_by"] = user["id"]
+    
+    update_data = {
+        "stage": "activated",
+        "current_course_id": student.get("upgrade_to_course_id"),
+        "current_course_name": student.get("upgrade_to_course_name"),
+        "package_bought": student.get("upgrade_to_course_name"),
+        "activation_questionnaire": {
+            **questionnaire_data,
+            "completed_at": now.isoformat(),
+            "completed_by": user["id"],
+            "is_upgrade_activation": True
+        },
+        "mt5_account_number": new_mt5 or student.get("mt5_account_number"),
+        "mt5_account_history": mt5_history,
+        "upgrade_history": upgrade_history,
+        "mentor_stage": "new_student",  # Reset mentor stage but keep same mentor
+        "updated_at": now.isoformat()
+    }
+    
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+    
+    # Notify mentor about upgraded student
+    if student.get("mentor_id"):
+        await create_notification(
+            student["mentor_id"],
+            f"UPGRADED: {student['full_name']}",
+            f"Student has upgraded to {student.get('upgrade_to_course_name')}. This is an existing student, not new.",
+            "info",
+            f"/mentor/students/{student_id}"
+        )
+    
+    await log_activity("student", student_id, "upgrade_activation_completed", user, {
+        "course": student.get("upgrade_to_course_name")
+    })
+    
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return {
+        "success": True,
+        "message": "Upgrade activation completed",
+        "student": updated
+    }
+
+@api_router.get("/students/{student_id}/upgrade-history")
+async def get_student_upgrade_history(student_id: str, user = Depends(get_current_user)):
+    """Get complete upgrade history for a student"""
+    student = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    return {
+        "student_id": student_id,
+        "student_name": student.get("full_name"),
+        "current_course": student.get("current_course_name") or student.get("package_bought"),
+        "upgrade_count": student.get("upgrade_count", 0),
+        "is_upgraded_student": student.get("is_upgraded_student", False),
+        "upgrade_history": student.get("upgrade_history", []),
+        "mt5_account_history": student.get("mt5_account_history", []),
+        "total_spent": sum(u.get("to_amount", 0) for u in student.get("upgrade_history", []))
+    }
+
 # ==================== PAYMENTS (FINANCE) ====================
 
 @api_router.get("/payments", response_model=List[PaymentResponse])
@@ -6829,7 +7096,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://finance-hub-803.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://cs-upgrade.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
