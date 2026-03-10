@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, Download, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Upload, Download, CheckCircle, XCircle, AlertTriangle, FileText, ExternalLink } from 'lucide-react';
 
 const TYPE_CONFIG = {
     leads: { title: 'Leads', endpoint: '/import/leads', useJson: true },
@@ -85,28 +85,43 @@ function ImportButton({ type, templateType, onSuccess }) {
         }
         
         try {
-            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = (template.filename || actualType + '_template.csv');
+            const filename = (template.filename || actualType + '_template.csv');
             
-            // Append to body, click, then remove
-            document.body.appendChild(a);
-            a.click();
+            // Method 1: Try data URL download
+            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(content);
             
-            // Clean up after a short delay
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+            const link = document.createElement('a');
+            link.setAttribute('href', csvContent);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            link.style.position = 'absolute';
+            link.style.left = '-9999px';
             
-            toast.success('Template downloaded successfully');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success(`Template "${filename}" - check your Downloads folder`, {
+                duration: 5000,
+                description: 'If download didn\'t start, click "Open in New Tab" below'
+            });
         } catch (error) {
             console.error('Download error:', error);
-            toast.error('Failed to download template');
+            // Fallback: Open in new tab
+            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(content);
+            window.open(csvContent, '_blank');
+            toast.info('Template opened in new tab. Use Ctrl+S to save.');
         }
+    }
+    
+    function openTemplateInNewTab() {
+        if (!template || !template.template) {
+            toast.error('Template not loaded');
+            return;
+        }
+        const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(template.template);
+        window.open(csvContent, '_blank');
+        toast.info('Template opened in new tab. Use Ctrl+S (or Cmd+S on Mac) to save as CSV file.');
     }
 
     function parseCSVLine(line) {
@@ -244,6 +259,10 @@ function ImportButton({ type, templateType, onSuccess }) {
 
                                 <Button onClick={download} variant="secondary" className="w-full">
                                     <Download className="h-4 w-4 mr-2" />Download Template
+                                </Button>
+                                
+                                <Button onClick={openTemplateInNewTab} variant="outline" size="sm" className="w-full text-xs">
+                                    <ExternalLink className="h-3 w-3 mr-1" />Open Template in New Tab (if download doesn't work)
                                 </Button>
 
                                 <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">

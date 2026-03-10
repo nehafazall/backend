@@ -50,24 +50,23 @@ const DataManagementPage = () => {
         try {
             const columns = TEMPLATES[selectedType];
             const csv = columns.join(',') + '\n' + columns.map(() => '').join(',');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `${selectedType}_template.csv`;
+            const filename = `${selectedType}_template.csv`;
             
-            // Append to body, click, then remove
-            document.body.appendChild(a);
-            a.click();
+            // Use data URL approach for better browser compatibility
+            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
             
-            // Clean up after a short delay
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+            const link = document.createElement('a');
+            link.setAttribute('href', csvContent);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            link.style.position = 'absolute';
+            link.style.left = '-9999px';
             
-            toast.success('Template downloaded');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success(`Template "${filename}" downloaded`);
         } catch (error) {
             console.error('Download error:', error);
             toast.error('Failed to download template');
