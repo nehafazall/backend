@@ -5,6 +5,58 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
+### Session Mar 10, 2026 - Customer Service Upgrade Workflow
+
+#### P0: Customer Service Upgrade Workflow (COMPLETED)
+**Problem:** Needed a workflow for existing students to upgrade their course, with proper tracking and mentor visibility.
+
+**Solution:** Implemented complete upgrade workflow:
+
+**1. Backend Implementation:**
+- `POST /api/students/{id}/initiate-upgrade` - Creates upgrade record, moves student back to new_student stage
+- `POST /api/students/{id}/complete-upgrade-activation` - Completes the upgrade activation process
+- `GET /api/students/{id}/upgrade-history` - Returns complete upgrade history
+- Student tracks: `is_upgraded_student`, `upgrade_count`, `upgrade_history`, `mt5_account_history`
+- Mentor gets notified but student NOT counted as new (preserves metrics)
+
+**2. Frontend Implementation:**
+- `UpgradeModal.jsx` - Full upgrade form with course selection, MT5 tracking, wallet confirmation
+- Course color-coding: `getCourseColor()` function maps courses to colors (mastery=emerald, advanced=green, etc.)
+- Upgrade badge shows "↑ xN" on student cards for upgraded students
+- "Initiate Upgrade" menu option only appears for students in "activated" stage
+
+**3. Key Features:**
+- Mandatory course selection for upgrade
+- MT5 account change tracking (history preserved)
+- Wallet transfer confirmation checkbox
+- Color-coded student cards based on course level
+- Previous questionnaire data preserved and pre-filled
+- Student stays with same mentor after upgrade
+
+**Bugs Fixed During Testing:**
+1. localStorage key: Changed from 'token' to 'clt_token'
+2. Course price display: Now uses `(course.price || course.base_price)`
+3. Dark mode visibility: Wallet checkbox styling fixed
+
+**Test Results:** Backend 100% (12/12 tests), Frontend 100%
+
+#### P1: Unified Transactions Page (VERIFIED WORKING)
+**Status:** Already implemented and functional at `/finance/:entity/transactions`
+
+**Features:**
+- Summary cards: Total Inflows, Total Outflows, Net Cash Flow
+- Comprehensive filters: Search, Type (Money In/Out), Bank Account, Date Range
+- Transaction History table showing all money movements
+- Export to CSV functionality
+- Sources: Sales, Payables, Expenses, Commissions, Enrollments
+
+**Backend Endpoint:** `GET /api/finance/unified-transactions` aggregates from:
+- clt_receivables (Money In)
+- clt_payables (Money Out)
+- expenses (Money Out)
+- commission_settlements (Money Out)
+- finance_verifications (Money In from enrollments)
+
 ### Session Mar 6, 2026 - P0 Finance & BioCloud Fixes
 
 #### P0: ObjectId Serialization Fix (COMPLETED)
