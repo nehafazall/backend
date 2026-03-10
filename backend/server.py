@@ -32,6 +32,7 @@ from email_service import (
     get_regularization_status_template,
     get_sla_breach_alert_template,
     get_daily_finance_report_template,
+    get_employee_welcome_template,
     is_email_configured
 )
 
@@ -1010,6 +1011,101 @@ async def log_activity(entity_type: str, entity_id: str, action: str, user: Dict
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.activity_logs.insert_one(activity)
+
+def calculate_tenure_text(joining_date_str: str) -> str:
+    """Calculate human-readable tenure from joining date"""
+    try:
+        now = datetime.now(timezone.utc)
+        if 'T' in joining_date_str:
+            join_date = datetime.fromisoformat(joining_date_str.replace('Z', '+00:00'))
+        else:
+            join_date = datetime.strptime(joining_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        
+        delta = now - join_date
+        days = delta.days
+        
+        if days < 0:
+            return "Starting soon"
+        elif days == 0:
+            return "Just joined today!"
+        elif days == 1:
+            return "1 day"
+        elif days < 7:
+            return f"{days} days"
+        elif days < 30:
+            weeks = days // 7
+            return f"{weeks} week{'s' if weeks > 1 else ''}"
+        elif days < 365:
+            months = days // 30
+            return f"{months} month{'s' if months > 1 else ''}"
+        else:
+            years = days // 365
+            months = (days % 365) // 30
+            if months > 0:
+                return f"{years} year{'s' if years > 1 else ''}, {months} month{'s' if months > 1 else ''}"
+            return f"{years} year{'s' if years > 1 else ''}"
+    except:
+        return "Just joined"
+
+async def send_employee_welcome_email(
+    employee: Dict,
+    password: str,
+    background_tasks = None
+):
+    """Send welcome email to new employee"""
+    if not is_email_configured():
+        logger.warning("Email not configured. Skipping welcome email.")
+        return False
+    
+    try:
+        # Get HR Manager info
+        hr_manager = await db.users.find_one({"role": "hr", "is_active": True})
+        if not hr_manager:
+            hr_manager = await db.users.find_one({"role": {"$in": ["hr", "super_admin"]}, "is_active": True})
+        
+        hr_manager_name = hr_manager.get("full_name", "HR Team") if hr_manager else "HR Team"
+        
+        # Get HR employee record for phone
+        hr_phone = ""
+        if hr_manager:
+            hr_emp = await db.hr_employees.find_one({"user_id": hr_manager.get("id")})
+            if hr_emp:
+                hr_phone = hr_emp.get("mobile_number", "")
+        
+        # Calculate tenure
+        tenure_text = calculate_tenure_text(employee.get("joining_date", ""))
+        
+        # Generate email HTML
+        email_html = get_employee_welcome_template(
+            employee_name=employee.get("full_name", ""),
+            employee_email=employee.get("company_email", ""),
+            password=password,
+            employee_id=employee.get("employee_id", ""),
+            joining_date=employee.get("joining_date", ""),
+            tenure_text=tenure_text,
+            designation=employee.get("designation", ""),
+            department=employee.get("department", ""),
+            role=employee.get("role", "employee"),
+            hr_manager_name=hr_manager_name,
+            hr_phone=hr_phone
+        )
+        
+        # Send email
+        success = await send_email_async(
+            to_email=employee.get("company_email"),
+            subject="Welcome to CLT Synapse, an CLT ECO SYSTEM",
+            html_content=email_html
+        )
+        
+        if success:
+            logger.info(f"Welcome email sent to {employee.get('company_email')}")
+        else:
+            logger.warning(f"Failed to send welcome email to {employee.get('company_email')}")
+        
+        return success
+    except Exception as e:
+        logger.error(f"Error sending welcome email: {str(e)}")
+        return False
 
 async def create_notification(
     user_id: str, 
@@ -9654,17 +9750,31 @@ async def create_employee_with_user(
         }
     })
     
+    # Send welcome email if new user was created
+    welcome_email_sent = False
+    if user_uuid and not existing_user and data.create_user_account:
+        # Get the password that was set
+        if data.initial_password:
+            password_for_email = data.initial_password
+        else:
+            first_name = data.full_name.split()[0]
+            password_for_email = f"{first_name}@123"
+        
+        # Send welcome email
+        welcome_email_sent = await send_employee_welcome_email(employee, password_for_email)
+    
     employee.pop("_id", None)
     return {
         "employee": employee,
         "user_created": user_uuid is not None and not existing_user,
         "user_linked": user_uuid is not None,
         "user_id": user_uuid,
+        "welcome_email_sent": welcome_email_sent,
         "message": f"Employee created successfully" + (
             f". User account created with email {data.company_email}" if user_uuid and not existing_user
             else f". Linked to existing user account" if user_uuid and existing_user
             else ""
-        )
+        ) + (". Welcome email sent." if welcome_email_sent else "")
     }
 
 @api_router.post("/hr/employees/sync-to-users")

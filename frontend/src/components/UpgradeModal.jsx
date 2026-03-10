@@ -46,6 +46,177 @@ export const getCourseColor = (courseName) => {
     return COURSE_COLORS.starter;
 };
 
+// Course level ordering for upgrade path visualization
+const COURSE_LEVELS = [
+    { key: 'starter', label: 'Starter', icon: '🌱' },
+    { key: 'basic', label: 'Basic', icon: '📘' },
+    { key: 'intermediate', label: 'Intermediate', icon: '📚' },
+    { key: 'advanced', label: 'Advanced', icon: '🎓' },
+    { key: 'mastery', label: 'Mastery', icon: '👑' }
+];
+
+// Get course level index from course name
+const getCourseLevel = (courseName) => {
+    if (!courseName) return 0;
+    const name = courseName.toLowerCase();
+    if (name.includes('mastery')) return 4;
+    if (name.includes('advanced')) return 3;
+    if (name.includes('intermediate')) return 2;
+    if (name.includes('basic')) return 1;
+    return 0; // starter
+};
+
+// Visual Upgrade Path Indicator Component
+export const UpgradePathIndicator = ({ 
+    currentCourse, 
+    upgradeHistory = [], 
+    compact = false,
+    showHistory = true 
+}) => {
+    const currentLevel = getCourseLevel(currentCourse);
+    
+    if (compact) {
+        return (
+            <div className="flex items-center gap-1">
+                {COURSE_LEVELS.map((level, idx) => {
+                    const isCompleted = idx < currentLevel;
+                    const isCurrent = idx === currentLevel;
+                    const color = COURSE_COLORS[level.key];
+                    
+                    return (
+                        <React.Fragment key={level.key}>
+                            <div 
+                                className={`
+                                    w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
+                                    transition-all duration-300
+                                    ${isCompleted ? `${color.bg} ${color.text}` : ''}
+                                    ${isCurrent ? `${color.bg} ${color.border} border-2 ${color.text} ring-2 ring-offset-1 ring-${level.key === 'mastery' ? 'emerald' : level.key}-400` : ''}
+                                    ${!isCompleted && !isCurrent ? 'bg-slate-100 dark:bg-slate-800 text-slate-400' : ''}
+                                `}
+                                title={level.label}
+                            >
+                                {isCompleted ? '✓' : isCurrent ? level.icon : (idx + 1)}
+                            </div>
+                            {idx < COURSE_LEVELS.length - 1 && (
+                                <div className={`w-3 h-0.5 ${idx < currentLevel ? 'bg-emerald-400' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+        );
+    }
+    
+    return (
+        <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                    Upgrade Journey
+                </h4>
+                {upgradeHistory?.length > 0 && (
+                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {upgradeHistory.length} Upgrade{upgradeHistory.length > 1 ? 's' : ''}
+                    </Badge>
+                )}
+            </div>
+            
+            {/* Progress Path */}
+            <div className="relative flex items-center justify-between mb-4 py-2">
+                {/* Progress Line Background */}
+                <div className="absolute left-0 right-0 top-1/2 h-1 bg-slate-200 dark:bg-slate-700 -translate-y-1/2 rounded-full" />
+                
+                {/* Progress Line Filled */}
+                <div 
+                    className="absolute left-0 top-1/2 h-1 bg-gradient-to-r from-emerald-400 to-emerald-500 -translate-y-1/2 rounded-full transition-all duration-500"
+                    style={{ width: `${(currentLevel / (COURSE_LEVELS.length - 1)) * 100}%` }}
+                />
+                
+                {/* Level Nodes */}
+                {COURSE_LEVELS.map((level, idx) => {
+                    const isCompleted = idx < currentLevel;
+                    const isCurrent = idx === currentLevel;
+                    const color = COURSE_COLORS[level.key];
+                    
+                    return (
+                        <div key={level.key} className="relative z-10 flex flex-col items-center">
+                            <div 
+                                className={`
+                                    w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold
+                                    transition-all duration-300 shadow-sm
+                                    ${isCompleted ? `${color.bg} ${color.text} ${color.border} border-2` : ''}
+                                    ${isCurrent ? `${color.bg} ${color.text} ${color.border} border-3 ring-4 ring-offset-2 ring-${level.key === 'mastery' ? 'emerald' : level.key}-200 scale-110` : ''}
+                                    ${!isCompleted && !isCurrent ? 'bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 text-slate-400' : ''}
+                                `}
+                            >
+                                {isCompleted ? '✓' : level.icon}
+                            </div>
+                            <span className={`
+                                mt-2 text-xs font-medium
+                                ${isCurrent ? `${color.text} font-bold` : ''}
+                                ${isCompleted ? 'text-emerald-600' : ''}
+                                ${!isCompleted && !isCurrent ? 'text-slate-400' : ''}
+                            `}>
+                                {level.label}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+            
+            {/* Upgrade History */}
+            {showHistory && upgradeHistory?.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <h5 className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                        <History className="h-3 w-3" />
+                        Upgrade History
+                    </h5>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {upgradeHistory.map((upgrade, idx) => {
+                            const fromColor = getCourseColor(upgrade.from_course);
+                            const toColor = getCourseColor(upgrade.to_course);
+                            const upgradeDate = upgrade.upgraded_at ? new Date(upgrade.upgraded_at).toLocaleDateString() : 'N/A';
+                            
+                            return (
+                                <div key={idx} className="flex items-center gap-2 text-xs bg-white dark:bg-slate-800 rounded-lg px-2 py-1.5 border border-slate-100 dark:border-slate-700">
+                                    <Badge className={`${fromColor.bg} ${fromColor.text} text-[10px] px-1.5`}>
+                                        {upgrade.from_course || 'Initial'}
+                                    </Badge>
+                                    <span className="text-emerald-500">→</span>
+                                    <Badge className={`${toColor.bg} ${toColor.text} text-[10px] px-1.5`}>
+                                        {upgrade.to_course}
+                                    </Badge>
+                                    <span className="text-slate-400 ml-auto">{upgradeDate}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+            
+            {/* Next Upgrade Hint */}
+            {currentLevel < COURSE_LEVELS.length - 1 && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <span className="text-emerald-500">💡</span>
+                        Next level: <span className="font-medium text-slate-700 dark:text-slate-300">{COURSE_LEVELS[currentLevel + 1]?.label}</span>
+                    </p>
+                </div>
+            )}
+            
+            {/* Mastery Achievement */}
+            {currentLevel === COURSE_LEVELS.length - 1 && (
+                <div className="mt-3 pt-3 border-t border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-2 -mx-1">
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center gap-1">
+                        <span>🏆</span>
+                        Congratulations! You've reached Mastery level!
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const UpgradeModal = ({ isOpen, onClose, student, onUpgradeComplete }) => {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(false);

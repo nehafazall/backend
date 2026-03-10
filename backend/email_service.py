@@ -671,3 +671,167 @@ async def send_email_async(
     import asyncio
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, send_email, to_email, subject, html_content, plain_content, cc)
+
+
+def get_employee_welcome_template(
+    employee_name: str,
+    employee_email: str,
+    password: str,
+    employee_id: str,
+    joining_date: str,
+    tenure_text: str,
+    designation: str,
+    department: str,
+    role: str,
+    hr_manager_name: str = "HR Team",
+    hr_phone: str = ""
+) -> str:
+    """
+    Generate welcome email template for new employees
+    
+    Args:
+        employee_name: Full name of the employee
+        employee_email: Company email (login ID)
+        password: Initial password
+        employee_id: Employee ID
+        joining_date: Date of joining
+        tenure_text: Human readable tenure (e.g., "Just joined" or "2 months")
+        designation: Job title
+        department: Department name
+        role: System role
+        hr_manager_name: Name of HR Manager
+        hr_phone: HR phone number
+    """
+    # Format joining date nicely
+    try:
+        from datetime import datetime as dt
+        join_dt = dt.fromisoformat(joining_date.replace('Z', '+00:00')) if 'T' in joining_date else dt.strptime(joining_date, '%Y-%m-%d')
+        formatted_date = join_dt.strftime('%B %d, %Y')
+    except:
+        formatted_date = joining_date
+    
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to CLT Synapse</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+            <!-- Header with Logo -->
+            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 40px 30px; text-align: center;">
+                <img src="https://clt-academy.com/wp-content/uploads/2023/07/CLT-Academy-Logo-1.png" alt="CLT Logo" style="height: 60px; margin-bottom: 20px;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Welcome to CLT Synapse</h1>
+                <p style="color: #94a3b8; margin: 10px 0 0 0; font-size: 14px; letter-spacing: 1px;">AN CLT ECO SYSTEM</p>
+            </div>
+            
+            <!-- Main Content -->
+            <div style="padding: 40px 30px;">
+                <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                    Dear <strong>{employee_name}</strong>,
+                </p>
+                
+                <p style="color: #334155; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                    We are thrilled to welcome you to the CLT family! Your journey with us begins today, 
+                    and we're excited to have you on board.
+                </p>
+                
+                <!-- Account Credentials Card -->
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #0ea5e9;">
+                    <h3 style="color: #0369a1; margin: 0 0 15px 0; font-size: 16px; display: flex; align-items: center;">
+                        🔐 Your Login Credentials
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #64748b; font-size: 14px; width: 120px;">User ID:</td>
+                            <td style="padding: 8px 0; color: #1e40af; font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;">{employee_email}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Password:</td>
+                            <td style="padding: 8px 0; color: #1e40af; font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;">{password}</td>
+                        </tr>
+                    </table>
+                    <p style="color: #ef4444; font-size: 12px; margin: 15px 0 0 0; padding: 10px; background: #fef2f2; border-radius: 6px;">
+                        ⚠️ Please change your password after first login for security.
+                    </p>
+                </div>
+                
+                <!-- Employee Details Card -->
+                <div style="background: #f8fafc; border-radius: 12px; padding: 25px; margin: 25px 0; border: 1px solid #e2e8f0;">
+                    <h3 style="color: #334155; margin: 0 0 15px 0; font-size: 16px;">
+                        📋 Your Employment Details
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0; width: 140px;">Employee ID:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">{employee_id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Date of Joining:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">{formatted_date}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Tenure:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">
+                                <span style="background: #dcfce7; color: #166534; padding: 3px 10px; border-radius: 12px; font-size: 12px;">{tenure_text}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Department:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">{department}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0;">Designation:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">{designation}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #64748b; font-size: 14px;">System Role:</td>
+                            <td style="padding: 10px 0; color: #334155; font-size: 14px; font-weight: 500;">
+                                <span style="background: #dbeafe; color: #1e40af; padding: 3px 10px; border-radius: 12px; font-size: 12px;">{role.replace('_', ' ').title()}</span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <!-- Login Button -->
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="https://cs-upgrade.preview.emergentagent.com/login" 
+                       style="display: inline-block; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);">
+                        Login to CLT Synapse →
+                    </a>
+                </div>
+                
+                <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0; text-align: center;">
+                    If you have any questions, feel free to reach out to the HR team.
+                </p>
+            </div>
+            
+            <!-- HR Signature -->
+            <div style="background: #f1f5f9; padding: 25px 30px; border-top: 1px solid #e2e8f0;">
+                <p style="color: #334155; font-size: 14px; margin: 0 0 5px 0;">Best Regards,</p>
+                <p style="color: #1e3a5f; font-size: 16px; font-weight: 600; margin: 0 0 3px 0;">{hr_manager_name}</p>
+                <p style="color: #64748b; font-size: 13px; margin: 0 0 10px 0;">HR Manager</p>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 10px;">
+                    <p style="color: #64748b; font-size: 12px; margin: 0;">
+                        📧 <a href="mailto:hr@clt-academy.com" style="color: #0ea5e9; text-decoration: none;">hr@clt-academy.com</a>
+                        {f'&nbsp;&nbsp;|&nbsp;&nbsp;📞 {hr_phone}' if hr_phone else ''}
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background: #1e3a5f; padding: 20px 30px; text-align: center;">
+                <img src="https://clt-academy.com/wp-content/uploads/2023/07/CLT-Academy-Logo-1.png" alt="CLT Logo" style="height: 35px; margin-bottom: 10px; opacity: 0.9;">
+                <p style="color: #94a3b8; font-size: 11px; margin: 0;">
+                    © 2026 CLT Academy. All rights reserved.
+                </p>
+                <p style="color: #64748b; font-size: 10px; margin: 5px 0 0 0;">
+                    This is an automated message from CLT Synapse ERP.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """

@@ -51,7 +51,7 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import UpgradeModal, { getCourseColor, UpgradeHistoryCard } from '@/components/UpgradeModal';
+import UpgradeModal, { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
 import {
     Search,
     Phone,
@@ -638,6 +638,15 @@ const CustomerServicePage = () => {
                                     </div>
                                 </CardContent>
                             </Card>
+                            
+                            {/* Upgrade Journey Path */}
+                            {(selectedStudent.upgrade_history?.length > 0 || selectedStudent.current_course_name || selectedStudent.is_upgraded_student) && (
+                                <UpgradePathIndicator
+                                    currentCourse={selectedStudent.current_course_name || selectedStudent.package_bought}
+                                    upgradeHistory={selectedStudent.upgrade_history || []}
+                                    showHistory={true}
+                                />
+                            )}
                             
                             {/* Update Section */}
                             <Card>
