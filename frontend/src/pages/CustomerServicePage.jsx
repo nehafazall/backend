@@ -75,6 +75,7 @@ const CS_STAGES = [
     { id: 'pitched_for_upgrade', label: 'Pitched Upgrade', color: 'bg-orange-500', icon: TrendingUp },
     { id: 'in_progress', label: 'In Progress', color: 'bg-cyan-500', icon: Clock },
     { id: 'interested', label: 'Interested', color: 'bg-yellow-500', icon: CheckCircle },
+    { id: 'upgraded', label: 'Upgraded', color: 'bg-emerald-600', icon: ArrowUp },
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 

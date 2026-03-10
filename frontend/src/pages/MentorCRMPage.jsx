@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, studentApi } from '@/lib/api';
+import { useAuth, studentApi, apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -247,6 +247,7 @@ const MentorCRMPage = () => {
         mentor_stage: '',
         notes: '',
     });
+    const [redepositSummary, setRedepositSummary] = useState(null);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -260,7 +261,17 @@ const MentorCRMPage = () => {
 
     useEffect(() => {
         fetchStudents();
+        fetchRedepositSummary();
     }, []);
+
+    const fetchRedepositSummary = async () => {
+        try {
+            const response = await apiClient.get('/mentor/redeposits/summary');
+            setRedepositSummary(response.data);
+        } catch (error) {
+            console.error('Failed to fetch redeposit summary:', error);
+        }
+    };
 
     const fetchStudents = async () => {
         try {
@@ -378,6 +389,35 @@ const MentorCRMPage = () => {
 
     return (
         <div className="space-y-6" data-testid="mentor-crm-page">
+            {/* Monthly Redeposit Summary Card */}
+            {redepositSummary && (
+                <Card className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white">
+                    <CardContent className="py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-6">
+                                <div>
+                                    <p className="text-emerald-100 text-sm">Monthly Redeposits ({redepositSummary.month})</p>
+                                    <p className="text-3xl font-bold">AED {redepositSummary.totals?.grand_total?.toLocaleString() || 0}</p>
+                                </div>
+                                <div className="h-12 w-px bg-emerald-500"></div>
+                                <div>
+                                    <p className="text-emerald-100 text-sm">Total Deposits</p>
+                                    <p className="text-2xl font-semibold">{redepositSummary.totals?.total_redeposits || 0}</p>
+                                </div>
+                                <div className="h-12 w-px bg-emerald-500"></div>
+                                <div>
+                                    <p className="text-emerald-100 text-sm">Students Pitched</p>
+                                    <p className="text-2xl font-semibold">{redepositSummary.totals?.unique_students || 0}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <DollarSign className="h-8 w-8 text-emerald-200" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -396,7 +436,14 @@ const MentorCRMPage = () => {
                         />
                     </div>
                     {['super_admin', 'admin', 'academic_master'].includes(user?.role) && (
-                        <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />
+                        <>
+                            <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />
+                            <ImportButton 
+                                templateType="mentor_redeposits" 
+                                title="Import Redeposits" 
+                                onSuccess={() => { fetchStudents(); fetchRedepositSummary(); }} 
+                            />
+                        </>
                     )}
                 </div>
             </div>

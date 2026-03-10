@@ -166,7 +166,7 @@ LEAD_REJECTION_REASONS = [
 
 STUDENT_STAGES = [
     "new_student", "activated", "satisfactory_call", 
-    "pitched_for_upgrade", "in_progress", "interested", "not_interested"
+    "pitched_for_upgrade", "in_progress", "interested", "upgraded", "not_interested"
 ]
 
 MENTOR_STAGES = [
@@ -6115,6 +6115,49 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
             },
             "instructions": "Fields marked with * are mandatory\nPhone must include country code (e.g., +971501234567)\nDuplicate phone numbers will be skipped\nLead source options: Meta Ads, Google Ads, Website, Referral, Walk-in, Other\nLeads will be auto-assigned via round-robin to sales executives"
         },
+        "historical_leads": {
+            "filename": "historical_leads_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "additional_numbers", "email", "country", "city",
+                "course_enrolled*", "agent_employee_id*", "team_name*"
+            ],
+            "fields": {
+                "required": ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"],
+                "optional": ["additional_numbers", "email", "country", "city"]
+            },
+            "example_row": {
+                "full_name": "Ahmed Ali",
+                "phone": "+971501234567",
+                "additional_numbers": "+971502345678,+971503456789",
+                "email": "ahmed@example.com",
+                "country": "UAE",
+                "city": "Dubai",
+                "course_enrolled": "Advanced Trading Mastery",
+                "agent_employee_id": "CLT-EMP-001",
+                "team_name": "Alpha Team"
+            },
+            "instructions": "For importing historical/closed leads only\nFields marked with * are mandatory\nPhone must include country code\nadditional_numbers: comma-separated list of extra phone numbers\nagent_employee_id MUST match an existing employee ID in the system\nteam_name MUST match an existing team name\nLeads will be imported as ENROLLED (closed) and also created as ACTIVATED students in CS"
+        },
+        "mentor_redeposits": {
+            "filename": "mentor_redeposits_import_template.csv",
+            "headers": [
+                "month*", "date*", "mentor_name*", "mentor_employee_id*", 
+                "student_email*", "redeposit_amount*"
+            ],
+            "fields": {
+                "required": ["month", "date", "mentor_name", "mentor_employee_id", "student_email", "redeposit_amount"],
+                "optional": []
+            },
+            "example_row": {
+                "month": "2026-03",
+                "date": "2026-03-10",
+                "mentor_name": "John Mentor",
+                "mentor_employee_id": "CLT-EMP-002",
+                "student_email": "student@example.com",
+                "redeposit_amount": "5000"
+            },
+            "instructions": "For importing mentor redeposits\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\nmentor_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\nAfter import, student will move to 'discussion_started' in mentor kanban\nRedeposit totals are tracked monthly and reset at beginning of each month"
+        },
         "customers": {
             "filename": "customers_import_template.csv",
             "headers": [
@@ -6502,6 +6545,299 @@ async def import_students_mentor(data: List[Dict], user = Depends(require_roles(
             results["errors"].append(f"Row {i+1}: {str(e)}")
     
     return results
+
+@api_router.post("/import/historical-leads")
+async def import_historical_leads(data: List[Dict], user = Depends(require_roles(["super_admin", "admin"]))):
+    """
+    Import historical/closed leads. 
+    These leads go directly to 'enrolled' stage and also create activated students in CS.
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            required = ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check for duplicate phone
+            existing_lead = await db.leads.find_one({"phone": row["phone"]})
+            if existing_lead:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Phone {row['phone']} already exists")
+                continue
+            
+            # Find agent by employee_id
+            agent_employee = await db.hr_employees.find_one({"employee_id": row["agent_employee_id"]})
+            if not agent_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Agent with Employee ID '{row['agent_employee_id']}' not found")
+                continue
+            
+            # Get the user account linked to this employee
+            agent_user = await db.users.find_one({"id": agent_employee.get("user_id")})
+            if not agent_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account linked to Employee ID '{row['agent_employee_id']}'")
+                continue
+            
+            # Find team by name
+            team = await db.teams.find_one({"name": row["team_name"]})
+            if not team:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Team '{row['team_name']}' not found")
+                continue
+            
+            # Parse additional numbers
+            additional_numbers = []
+            if row.get("additional_numbers"):
+                additional_numbers = [n.strip() for n in row["additional_numbers"].split(",") if n.strip()]
+            
+            lead_id = str(uuid.uuid4())
+            
+            # Create lead in enrolled stage
+            lead_record = {
+                "id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "additional_numbers": additional_numbers,
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "course_of_interest": row["course_enrolled"],
+                "package_bought": row["course_enrolled"],
+                "stage": "enrolled",
+                "assigned_to": agent_user["id"],
+                "assigned_to_name": agent_user["full_name"],
+                "assigned_at": now,
+                "first_contact_at": now,
+                "enrolled_at": now,
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "source": "Historical Import",
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            }
+            
+            await db.leads.insert_one(lead_record)
+            
+            # Also create student record in CS (activated stage)
+            student_id = str(uuid.uuid4())
+            
+            # Get a CS agent via round robin (or use system default)
+            cs_agent = await get_round_robin_agent("cs_agent")
+            
+            student_record = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "additional_numbers": additional_numbers,
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "package_bought": row["course_enrolled"],
+                "current_course_name": row["course_enrolled"],
+                "stage": "activated",  # Historical students go directly to activated
+                "mentor_stage": "new_student",
+                "onboarding_complete": True,  # Mark as completed for historical
+                "cs_agent_id": cs_agent["id"] if cs_agent else None,
+                "cs_agent_name": cs_agent["full_name"] if cs_agent else None,
+                "sales_agent_id": agent_user["id"],
+                "sales_agent_name": agent_user["full_name"],
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            await db.students.insert_one(student_record)
+            results["students_created"] += 1
+            
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.post("/import/mentor-redeposits")
+async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master"]))):
+    """
+    Import mentor redeposits.
+    After import, student moves to 'discussion_started' in mentor kanban.
+    Redeposit totals are tracked monthly.
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "total_amount": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            required = ["month", "date", "mentor_name", "mentor_employee_id", "student_email", "redeposit_amount"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Find mentor by employee_id
+            mentor_employee = await db.hr_employees.find_one({"employee_id": row["mentor_employee_id"]})
+            if not mentor_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Mentor with Employee ID '{row['mentor_employee_id']}' not found")
+                continue
+            
+            mentor_user = await db.users.find_one({"id": mentor_employee.get("user_id")})
+            if not mentor_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account for mentor Employee ID '{row['mentor_employee_id']}'")
+                continue
+            
+            # Find student by email
+            student = await db.students.find_one({"email": row["student_email"]})
+            if not student:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Student with email '{row['student_email']}' not found")
+                continue
+            
+            # Parse amount
+            try:
+                amount = float(row["redeposit_amount"])
+            except ValueError:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Invalid redeposit_amount '{row['redeposit_amount']}'")
+                continue
+            
+            redeposit_id = str(uuid.uuid4())
+            
+            # Create redeposit record
+            redeposit_record = {
+                "id": redeposit_id,
+                "month": row["month"],
+                "date": row["date"],
+                "mentor_id": mentor_user["id"],
+                "mentor_name": mentor_user["full_name"],
+                "mentor_employee_id": row["mentor_employee_id"],
+                "student_id": student["id"],
+                "student_name": student["full_name"],
+                "student_email": row["student_email"],
+                "amount": amount,
+                "status": "closed",
+                "created_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            }
+            
+            await db.mentor_redeposits.insert_one(redeposit_record)
+            
+            # Update student - move back to discussion_started for re-pitching
+            await db.students.update_one(
+                {"id": student["id"]},
+                {"$set": {
+                    "mentor_stage": "discussion_started",
+                    "last_redeposit_at": now,
+                    "last_redeposit_amount": amount,
+                    "updated_at": now
+                },
+                "$inc": {
+                    "total_redeposits": amount,
+                    "redeposit_count": 1
+                }}
+            )
+            
+            results["success"] += 1
+            results["total_amount"] += amount
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.get("/mentor/redeposits/summary")
+async def get_mentor_redeposits_summary(
+    mentor_id: Optional[str] = None,
+    month: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """
+    Get redeposit summary for mentors.
+    If no month specified, returns current month's data.
+    Total resets at beginning of each month.
+    """
+    # If not admin/super_admin, only show own data
+    target_mentor_id = mentor_id
+    if user.get("role") not in ["super_admin", "admin", "academic_master"]:
+        if user.get("role") in ["mentor"]:
+            target_mentor_id = user["id"]
+        else:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Default to current month
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    
+    query = {"month": month}
+    if target_mentor_id:
+        query["mentor_id"] = target_mentor_id
+    
+    # Aggregate redeposits by mentor
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$mentor_id",
+            "mentor_name": {"$first": "$mentor_name"},
+            "total_amount": {"$sum": "$amount"},
+            "redeposit_count": {"$sum": 1},
+            "students": {"$addToSet": "$student_id"}
+        }},
+        {"$project": {
+            "_id": 0,
+            "mentor_id": "$_id",
+            "mentor_name": 1,
+            "total_amount": 1,
+            "redeposit_count": 1,
+            "unique_students": {"$size": "$students"}
+        }},
+        {"$sort": {"total_amount": -1}}
+    ]
+    
+    mentor_summaries = await db.mentor_redeposits.aggregate(pipeline).to_list(100)
+    
+    # Get overall totals
+    total_pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": None,
+            "grand_total": {"$sum": "$amount"},
+            "total_redeposits": {"$sum": 1},
+            "unique_students": {"$addToSet": "$student_id"},
+            "unique_mentors": {"$addToSet": "$mentor_id"}
+        }}
+    ]
+    
+    totals = await db.mentor_redeposits.aggregate(total_pipeline).to_list(1)
+    overall = totals[0] if totals else {"grand_total": 0, "total_redeposits": 0, "unique_students": [], "unique_mentors": []}
+    
+    return {
+        "month": month,
+        "mentors": mentor_summaries,
+        "totals": {
+            "grand_total": overall.get("grand_total", 0),
+            "total_redeposits": overall.get("total_redeposits", 0),
+            "unique_students": len(overall.get("unique_students", [])),
+            "unique_mentors": len(overall.get("unique_mentors", []))
+        }
+    }
 
 # ==================== 3CX INTEGRATION ENDPOINTS ====================
 
