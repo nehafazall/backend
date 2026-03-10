@@ -5,6 +5,62 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
+### Session Mar 10, 2026 - Comprehensive Historical Import & LTV Tracking
+
+#### Feature: Comprehensive Historical Import System (COMPLETED)
+**Problem:** Need to import 950 historical students with proper assignments to Sales agents, CS agents, and Mentors.
+
+**Solution:** Created a multi-import system with LTV tracking:
+
+**1. Comprehensive Students Import** (`/api/import/comprehensive-students`)
+Fields: student_name*, phone*, additional_numbers, email*, country, city, enrolled_course*, enrollment_amount, enrollment_date, sales_agent_employee_id*, team_name*, cs_agent_employee_id*, mentor_employee_id
+
+Creates:
+- Lead as "Enrolled" (assigned to Sales Agent)
+- Student as "Activated" in CS (assigned to CS Agent)
+- Mentor assignment (if provided)
+- Initial LTV transaction record
+
+**2. CS Upgrades Import** (`/api/import/cs-upgrades`)
+Fields: month*, date*, cs_employee_id*, student_email*, upgrade_amount*, upgrade_to_course
+- Tracks all upgrade transactions per CS agent
+- Updates student upgrade_count and upgrade_history
+- Adds to student LTV
+
+**3. Mentor Redeposits Import** (`/api/import/mentor-redeposits`)
+Fields: month*, date*, mentor_employee_id*, student_email*, redeposit_amount*
+- Tracks redeposit transactions per mentor
+- Student moves back to "discussion_started" for re-pitching
+- Monthly totals reset at beginning of each month
+- Adds to student LTV
+
+**4. Mentor Withdrawals Import** (`/api/import/mentor-withdrawals`)
+Fields: date*, mentor_employee_id*, student_email*, withdrawal_amount*, notes
+- For Admin/Financier to add daily/backdated withdrawal entries
+- Reduces active revenue for mentor
+- Net = Redeposits - Withdrawals
+- Used for commission calculations
+- Subtracts from student LTV
+
+**5. LTV Tracking System**
+- New collection: `student_transactions` - tracks ALL financial events
+- Each student has: first_enrollment_amount, total_upgrades, total_redeposits, total_withdrawals, ltv
+- API: `GET /api/student/{student_id}/ltv` - returns complete LTV breakdown
+
+**6. Mentor Revenue Summary** (`/api/mentor/revenue-summary`)
+- Shows: Monthly Redeposits | Withdrawals | Net Active | Students Pitched
+- Holistic view for commission calculation
+
+**Frontend Changes:**
+- Sales: "Import Historical Students" button (comprehensive import)
+- CS: "Import Upgrades" button added
+- Mentor: "Import Redeposits" + "Import Withdrawals" buttons
+- Mentor: Revenue summary card shows Redeposits, Withdrawals, Net Active
+
+#### CS Kanban - "Upgraded" Stage (COMPLETED)
+- Added "Upgraded" stage after "Interested" in CS kanban
+- Stages: New Student → Activated → Satisfactory Call → Pitched Upgrade → In Progress → Interested → Upgraded → Not Interested
+
 ### Session Mar 10, 2026 - Customer Service Upgrade Workflow + HR Enhancements
 
 #### Feature 1: Visual Upgrade Path Indicator (COMPLETED)

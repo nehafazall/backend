@@ -6141,22 +6141,89 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
         "mentor_redeposits": {
             "filename": "mentor_redeposits_import_template.csv",
             "headers": [
-                "month*", "date*", "mentor_name*", "mentor_employee_id*", 
+                "month*", "date*", "mentor_employee_id*", 
                 "student_email*", "redeposit_amount*"
             ],
             "fields": {
-                "required": ["month", "date", "mentor_name", "mentor_employee_id", "student_email", "redeposit_amount"],
+                "required": ["month", "date", "mentor_employee_id", "student_email", "redeposit_amount"],
                 "optional": []
             },
             "example_row": {
                 "month": "2026-03",
                 "date": "2026-03-10",
-                "mentor_name": "John Mentor",
                 "mentor_employee_id": "CLT-EMP-002",
                 "student_email": "student@example.com",
                 "redeposit_amount": "5000"
             },
-            "instructions": "For importing mentor redeposits\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\nmentor_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\nAfter import, student will move to 'discussion_started' in mentor kanban\nRedeposit totals are tracked monthly and reset at beginning of each month"
+            "instructions": "For importing mentor redeposits\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\nmentor_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\nAfter import, student will move to 'discussion_started' in mentor kanban\nRedeposit totals are tracked monthly and reset at beginning of each month\nAll transactions recorded for LTV tracking"
+        },
+        "cs_upgrades": {
+            "filename": "cs_upgrades_import_template.csv",
+            "headers": [
+                "month*", "date*", "cs_employee_id*", 
+                "student_email*", "upgrade_amount*", "upgrade_to_course"
+            ],
+            "fields": {
+                "required": ["month", "date", "cs_employee_id", "student_email", "upgrade_amount"],
+                "optional": ["upgrade_to_course"]
+            },
+            "example_row": {
+                "month": "2026-03",
+                "date": "2026-03-10",
+                "cs_employee_id": "CLT-EMP-003",
+                "student_email": "student@example.com",
+                "upgrade_amount": "10000",
+                "upgrade_to_course": "Advanced Trading Mastery"
+            },
+            "instructions": "For importing CS upgrades\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\ncs_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\nStudent can have multiple upgrades\nAll upgrades tracked for LTV calculation"
+        },
+        "mentor_withdrawals": {
+            "filename": "mentor_withdrawals_import_template.csv",
+            "headers": [
+                "date*", "mentor_employee_id*", "student_email*", 
+                "withdrawal_amount*", "notes"
+            ],
+            "fields": {
+                "required": ["date", "mentor_employee_id", "student_email", "withdrawal_amount"],
+                "optional": ["notes"]
+            },
+            "example_row": {
+                "date": "2026-03-10",
+                "mentor_employee_id": "CLT-EMP-002",
+                "student_email": "student@example.com",
+                "withdrawal_amount": "2000",
+                "notes": "Partial withdrawal"
+            },
+            "instructions": "For importing mentor withdrawals (by Admin/Financier only)\nFields marked with * are mandatory\ndate format: YYYY-MM-DD\nBackdated entries are allowed\nWithdrawals reduce active revenue for mentor\nNet = Redeposits - Withdrawals\nUsed for commission calculation"
+        },
+        "comprehensive_students": {
+            "filename": "comprehensive_students_import_template.csv",
+            "headers": [
+                "student_name*", "phone*", "additional_numbers", "email*", "country", "city",
+                "enrolled_course*", "enrollment_amount", "enrollment_date",
+                "sales_agent_employee_id*", "team_name*", 
+                "cs_agent_employee_id*", "mentor_employee_id"
+            ],
+            "fields": {
+                "required": ["student_name", "phone", "email", "enrolled_course", "sales_agent_employee_id", "team_name", "cs_agent_employee_id"],
+                "optional": ["additional_numbers", "country", "city", "enrollment_amount", "enrollment_date", "mentor_employee_id"]
+            },
+            "example_row": {
+                "student_name": "Ahmed Ali",
+                "phone": "+971501234567",
+                "additional_numbers": "+971502345678,+971503456789",
+                "email": "ahmed@example.com",
+                "country": "UAE",
+                "city": "Dubai",
+                "enrolled_course": "Advanced Trading Mastery",
+                "enrollment_amount": "15000",
+                "enrollment_date": "2025-06-15",
+                "sales_agent_employee_id": "CLT-EMP-001",
+                "team_name": "Alpha Team",
+                "cs_agent_employee_id": "CLT-EMP-003",
+                "mentor_employee_id": "CLT-EMP-002"
+            },
+            "instructions": "COMPREHENSIVE HISTORICAL IMPORT\nImports students with Sales, CS, and Mentor assignments in one go\n\nFields marked with * are mandatory\nAll Employee IDs must match existing employees in the system\nTeam name must match existing team\n\nThis creates:\n1. Lead as 'Enrolled' (assigned to Sales Agent)\n2. Student as 'Activated' in CS (assigned to CS Agent)\n3. Mentor assignment (if mentor_employee_id provided)\n\nAfter this import, use:\n- cs_upgrades template for upgrade transactions\n- mentor_redeposits template for redeposit transactions\n- mentor_withdrawals template for withdrawal entries\n\nAll transactions tracked for LTV calculation"
         },
         "customers": {
             "filename": "customers_import_template.csv",
@@ -6751,9 +6818,26 @@ async def import_mentor_redeposits(data: List[Dict], user = Depends(require_role
                 },
                 "$inc": {
                     "total_redeposits": amount,
-                    "redeposit_count": 1
+                    "redeposit_count": 1,
+                    "ltv": amount  # Add to LTV
                 }}
             )
+            
+            # Create LTV transaction record
+            await db.student_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student["id"],
+                "student_email": row["student_email"],
+                "type": "redeposit",
+                "amount": amount,
+                "date": row["date"],
+                "month": row["month"],
+                "employee_id": row["mentor_employee_id"],
+                "employee_name": mentor_user["full_name"],
+                "department": "academics",
+                "notes": "Redeposit",
+                "created_at": now
+            })
             
             results["success"] += 1
             results["total_amount"] += amount
@@ -6836,6 +6920,532 @@ async def get_mentor_redeposits_summary(
             "total_redeposits": overall.get("total_redeposits", 0),
             "unique_students": len(overall.get("unique_students", [])),
             "unique_mentors": len(overall.get("unique_mentors", []))
+        }
+    }
+
+@api_router.post("/import/comprehensive-students")
+async def import_comprehensive_students(data: List[Dict], user = Depends(require_roles(["super_admin", "admin"]))):
+    """
+    Comprehensive historical import - creates leads, students, and assigns to CS + Mentor
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "leads_created": 0, "students_created": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            required = ["student_name", "phone", "email", "enrolled_course", "sales_agent_employee_id", "team_name", "cs_agent_employee_id"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Check for duplicate
+            existing = await db.students.find_one({"$or": [{"phone": row["phone"]}, {"email": row["email"]}]})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+1}: Student with phone/email already exists")
+                continue
+            
+            # Find sales agent by employee_id
+            sales_employee = await db.hr_employees.find_one({"employee_id": row["sales_agent_employee_id"]})
+            if not sales_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Sales agent Employee ID '{row['sales_agent_employee_id']}' not found")
+                continue
+            sales_user = await db.users.find_one({"id": sales_employee.get("user_id")})
+            if not sales_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account for sales agent")
+                continue
+            
+            # Find team
+            team = await db.teams.find_one({"name": row["team_name"]})
+            if not team:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Team '{row['team_name']}' not found")
+                continue
+            
+            # Find CS agent by employee_id
+            cs_employee = await db.hr_employees.find_one({"employee_id": row["cs_agent_employee_id"]})
+            if not cs_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: CS agent Employee ID '{row['cs_agent_employee_id']}' not found")
+                continue
+            cs_user = await db.users.find_one({"id": cs_employee.get("user_id")})
+            if not cs_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account for CS agent")
+                continue
+            
+            # Find mentor if provided
+            mentor_user = None
+            if row.get("mentor_employee_id"):
+                mentor_employee = await db.hr_employees.find_one({"employee_id": row["mentor_employee_id"]})
+                if mentor_employee:
+                    mentor_user = await db.users.find_one({"id": mentor_employee.get("user_id")})
+            
+            # Parse additional numbers
+            additional_numbers = []
+            if row.get("additional_numbers"):
+                additional_numbers = [n.strip() for n in row["additional_numbers"].split(",") if n.strip()]
+            
+            # Parse enrollment amount
+            enrollment_amount = 0
+            if row.get("enrollment_amount"):
+                try:
+                    enrollment_amount = float(row["enrollment_amount"])
+                except:
+                    pass
+            
+            lead_id = str(uuid.uuid4())
+            student_id = str(uuid.uuid4())
+            
+            # Create lead as enrolled
+            lead_record = {
+                "id": lead_id,
+                "full_name": row["student_name"],
+                "phone": row["phone"],
+                "additional_numbers": additional_numbers,
+                "email": row["email"],
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "course_of_interest": row["enrolled_course"],
+                "package_bought": row["enrolled_course"],
+                "stage": "enrolled",
+                "assigned_to": sales_user["id"],
+                "assigned_to_name": sales_user["full_name"],
+                "assigned_at": row.get("enrollment_date", now),
+                "first_contact_at": row.get("enrollment_date", now),
+                "enrolled_at": row.get("enrollment_date", now),
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "source": "Historical Import",
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.leads.insert_one(lead_record)
+            results["leads_created"] += 1
+            
+            # Create student as activated
+            student_record = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": row["student_name"],
+                "phone": row["phone"],
+                "additional_numbers": additional_numbers,
+                "email": row["email"],
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "package_bought": row["enrolled_course"],
+                "current_course_name": row["enrolled_course"],
+                "stage": "activated",
+                "mentor_stage": "new_student" if mentor_user else None,
+                "onboarding_complete": True,
+                "cs_agent_id": cs_user["id"],
+                "cs_agent_name": cs_user["full_name"],
+                "mentor_id": mentor_user["id"] if mentor_user else None,
+                "mentor_name": mentor_user["full_name"] if mentor_user else None,
+                "sales_agent_id": sales_user["id"],
+                "sales_agent_name": sales_user["full_name"],
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "is_historical": True,
+                "sla_status": "ok",
+                # LTV tracking fields
+                "first_enrollment_amount": enrollment_amount,
+                "total_upgrades": 0,
+                "total_redeposits": 0,
+                "total_withdrawals": 0,
+                "ltv": enrollment_amount,  # Initial LTV = first enrollment
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.students.insert_one(student_record)
+            results["students_created"] += 1
+            
+            # Create LTV transaction record
+            if enrollment_amount > 0:
+                await db.student_transactions.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "student_id": student_id,
+                    "student_email": row["email"],
+                    "type": "enrollment",
+                    "amount": enrollment_amount,
+                    "course": row["enrolled_course"],
+                    "date": row.get("enrollment_date", now),
+                    "employee_id": row["sales_agent_employee_id"],
+                    "employee_name": sales_user["full_name"],
+                    "department": "sales",
+                    "notes": "Initial enrollment",
+                    "created_at": now
+                })
+            
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.post("/import/cs-upgrades")
+async def import_cs_upgrades(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "cs_head"]))):
+    """
+    Import CS upgrades - tracks upgrade transactions per CS agent
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "total_amount": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            required = ["month", "date", "cs_employee_id", "student_email", "upgrade_amount"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Find CS agent by employee_id
+            cs_employee = await db.hr_employees.find_one({"employee_id": row["cs_employee_id"]})
+            if not cs_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: CS agent Employee ID '{row['cs_employee_id']}' not found")
+                continue
+            cs_user = await db.users.find_one({"id": cs_employee.get("user_id")})
+            if not cs_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account for CS agent")
+                continue
+            
+            # Find student
+            student = await db.students.find_one({"email": row["student_email"]})
+            if not student:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Student with email '{row['student_email']}' not found")
+                continue
+            
+            # Parse amount
+            try:
+                amount = float(row["upgrade_amount"])
+            except ValueError:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Invalid upgrade_amount")
+                continue
+            
+            upgrade_id = str(uuid.uuid4())
+            
+            # Create upgrade record
+            await db.cs_upgrades.insert_one({
+                "id": upgrade_id,
+                "month": row["month"],
+                "date": row["date"],
+                "cs_agent_id": cs_user["id"],
+                "cs_agent_name": cs_user["full_name"],
+                "cs_employee_id": row["cs_employee_id"],
+                "student_id": student["id"],
+                "student_name": student["full_name"],
+                "student_email": row["student_email"],
+                "amount": amount,
+                "upgrade_to_course": row.get("upgrade_to_course"),
+                "previous_course": student.get("current_course_name"),
+                "created_at": now,
+                "created_by": user["id"]
+            })
+            
+            # Update student - mark as upgraded, update LTV
+            update_fields = {
+                "is_upgraded_student": True,
+                "last_upgrade_at": row["date"],
+                "last_upgrade_amount": amount,
+                "updated_at": now
+            }
+            if row.get("upgrade_to_course"):
+                update_fields["current_course_name"] = row["upgrade_to_course"]
+            
+            await db.students.update_one(
+                {"id": student["id"]},
+                {"$set": update_fields,
+                 "$inc": {
+                    "upgrade_count": 1,
+                    "total_upgrades": amount,
+                    "ltv": amount
+                 },
+                 "$push": {
+                    "upgrade_history": {
+                        "id": upgrade_id,
+                        "from_course": student.get("current_course_name"),
+                        "to_course": row.get("upgrade_to_course"),
+                        "amount": amount,
+                        "date": row["date"],
+                        "cs_agent_id": cs_user["id"],
+                        "cs_agent_name": cs_user["full_name"],
+                        "upgraded_at": now
+                    }
+                 }}
+            )
+            
+            # Create LTV transaction record
+            await db.student_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student["id"],
+                "student_email": row["student_email"],
+                "type": "upgrade",
+                "amount": amount,
+                "course": row.get("upgrade_to_course"),
+                "date": row["date"],
+                "month": row["month"],
+                "employee_id": row["cs_employee_id"],
+                "employee_name": cs_user["full_name"],
+                "department": "cs",
+                "notes": f"Upgrade from {student.get('current_course_name', 'N/A')} to {row.get('upgrade_to_course', 'N/A')}",
+                "created_at": now
+            })
+            
+            results["success"] += 1
+            results["total_amount"] += amount
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.post("/import/mentor-withdrawals")
+async def import_mentor_withdrawals(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """
+    Import mentor withdrawals - for financier to add daily/backdated withdrawals
+    Reduces active revenue for mentor
+    """
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "total_amount": 0}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(data):
+        try:
+            required = ["date", "mentor_employee_id", "student_email", "withdrawal_amount"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Missing required fields: {missing}")
+                continue
+            
+            # Find mentor by employee_id
+            mentor_employee = await db.hr_employees.find_one({"employee_id": row["mentor_employee_id"]})
+            if not mentor_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Mentor Employee ID '{row['mentor_employee_id']}' not found")
+                continue
+            mentor_user = await db.users.find_one({"id": mentor_employee.get("user_id")})
+            if not mentor_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: No user account for mentor")
+                continue
+            
+            # Find student
+            student = await db.students.find_one({"email": row["student_email"]})
+            if not student:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Student with email '{row['student_email']}' not found")
+                continue
+            
+            # Parse amount
+            try:
+                amount = float(row["withdrawal_amount"])
+            except ValueError:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+1}: Invalid withdrawal_amount")
+                continue
+            
+            withdrawal_id = str(uuid.uuid4())
+            month = row["date"][:7] if len(row["date"]) >= 7 else datetime.now().strftime("%Y-%m")
+            
+            # Create withdrawal record
+            await db.mentor_withdrawals.insert_one({
+                "id": withdrawal_id,
+                "date": row["date"],
+                "month": month,
+                "mentor_id": mentor_user["id"],
+                "mentor_name": mentor_user["full_name"],
+                "mentor_employee_id": row["mentor_employee_id"],
+                "student_id": student["id"],
+                "student_name": student["full_name"],
+                "student_email": row["student_email"],
+                "amount": amount,
+                "notes": row.get("notes", ""),
+                "created_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            })
+            
+            # Update student - track withdrawal, update LTV
+            await db.students.update_one(
+                {"id": student["id"]},
+                {"$inc": {
+                    "total_withdrawals": amount,
+                    "ltv": -amount  # Reduce LTV by withdrawal
+                },
+                "$set": {
+                    "last_withdrawal_at": row["date"],
+                    "updated_at": now
+                }}
+            )
+            
+            # Create LTV transaction record (negative)
+            await db.student_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student["id"],
+                "student_email": row["student_email"],
+                "type": "withdrawal",
+                "amount": -amount,  # Negative for withdrawal
+                "date": row["date"],
+                "month": month,
+                "employee_id": row["mentor_employee_id"],
+                "employee_name": mentor_user["full_name"],
+                "department": "academics",
+                "notes": row.get("notes", "Withdrawal"),
+                "created_at": now
+            })
+            
+            results["success"] += 1
+            results["total_amount"] += amount
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+1}: {str(e)}")
+    
+    return results
+
+@api_router.get("/mentor/revenue-summary")
+async def get_mentor_revenue_summary(
+    mentor_id: Optional[str] = None,
+    month: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """
+    Get revenue summary for mentors including redeposits, withdrawals, and net
+    """
+    target_mentor_id = mentor_id
+    if user.get("role") not in ["super_admin", "admin", "academic_master", "finance"]:
+        if user.get("role") == "mentor":
+            target_mentor_id = user["id"]
+        else:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Default to current month
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    
+    # Build query
+    redeposit_query = {"month": month}
+    withdrawal_query = {"month": month}
+    if target_mentor_id:
+        redeposit_query["mentor_id"] = target_mentor_id
+        withdrawal_query["mentor_id"] = target_mentor_id
+    
+    # Get redeposits
+    redeposit_pipeline = [
+        {"$match": redeposit_query},
+        {"$group": {
+            "_id": "$mentor_id",
+            "mentor_name": {"$first": "$mentor_name"},
+            "total_redeposits": {"$sum": "$amount"},
+            "redeposit_count": {"$sum": 1}
+        }}
+    ]
+    redeposits = await db.mentor_redeposits.aggregate(redeposit_pipeline).to_list(100)
+    redeposit_map = {r["_id"]: r for r in redeposits}
+    
+    # Get withdrawals
+    withdrawal_pipeline = [
+        {"$match": withdrawal_query},
+        {"$group": {
+            "_id": "$mentor_id",
+            "mentor_name": {"$first": "$mentor_name"},
+            "total_withdrawals": {"$sum": "$amount"},
+            "withdrawal_count": {"$sum": 1}
+        }}
+    ]
+    withdrawals = await db.mentor_withdrawals.aggregate(withdrawal_pipeline).to_list(100)
+    withdrawal_map = {w["_id"]: w for w in withdrawals}
+    
+    # Combine data
+    all_mentor_ids = set(redeposit_map.keys()) | set(withdrawal_map.keys())
+    mentor_summaries = []
+    
+    for mid in all_mentor_ids:
+        r = redeposit_map.get(mid, {"total_redeposits": 0, "redeposit_count": 0, "mentor_name": ""})
+        w = withdrawal_map.get(mid, {"total_withdrawals": 0, "withdrawal_count": 0})
+        
+        total_redeposits = r.get("total_redeposits", 0)
+        total_withdrawals = w.get("total_withdrawals", 0)
+        net_active = total_redeposits - total_withdrawals
+        
+        mentor_summaries.append({
+            "mentor_id": mid,
+            "mentor_name": r.get("mentor_name") or w.get("mentor_name", ""),
+            "total_redeposits": total_redeposits,
+            "redeposit_count": r.get("redeposit_count", 0),
+            "total_withdrawals": total_withdrawals,
+            "withdrawal_count": w.get("withdrawal_count", 0),
+            "net_active": net_active
+        })
+    
+    # Sort by net_active descending
+    mentor_summaries.sort(key=lambda x: x["net_active"], reverse=True)
+    
+    # Calculate totals
+    grand_redeposits = sum(m["total_redeposits"] for m in mentor_summaries)
+    grand_withdrawals = sum(m["total_withdrawals"] for m in mentor_summaries)
+    
+    return {
+        "month": month,
+        "mentors": mentor_summaries,
+        "totals": {
+            "grand_redeposits": grand_redeposits,
+            "grand_withdrawals": grand_withdrawals,
+            "grand_net": grand_redeposits - grand_withdrawals,
+            "mentor_count": len(mentor_summaries)
+        }
+    }
+
+@api_router.get("/student/{student_id}/ltv")
+async def get_student_ltv(student_id: str, user = Depends(get_current_user)):
+    """
+    Get complete LTV (Lifetime Value) breakdown for a student
+    """
+    student = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Get all transactions for this student
+    transactions = await db.student_transactions.find(
+        {"student_id": student_id},
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    # Calculate LTV breakdown
+    enrollment = sum(t["amount"] for t in transactions if t["type"] == "enrollment")
+    upgrades = sum(t["amount"] for t in transactions if t["type"] == "upgrade")
+    redeposits = sum(t["amount"] for t in transactions if t["type"] == "redeposit")
+    withdrawals = sum(abs(t["amount"]) for t in transactions if t["type"] == "withdrawal")
+    
+    return {
+        "student_id": student_id,
+        "student_name": student.get("full_name"),
+        "student_email": student.get("email"),
+        "ltv_breakdown": {
+            "first_enrollment": enrollment,
+            "total_upgrades": upgrades,
+            "total_redeposits": redeposits,
+            "total_withdrawals": withdrawals,
+            "net_ltv": enrollment + upgrades + redeposits - withdrawals
+        },
+        "transactions": transactions,
+        "summary": {
+            "upgrade_count": student.get("upgrade_count", 0),
+            "redeposit_count": student.get("redeposit_count", 0),
+            "current_course": student.get("current_course_name"),
+            "mentor": student.get("mentor_name"),
+            "cs_agent": student.get("cs_agent_name")
         }
     }
 

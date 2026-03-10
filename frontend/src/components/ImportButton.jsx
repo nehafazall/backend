@@ -18,10 +18,13 @@ import { Upload, Download, CheckCircle, XCircle, AlertTriangle, FileText } from 
 const TYPE_CONFIG = {
     leads: { title: 'Leads', endpoint: '/import/leads', useJson: true },
     historical_leads: { title: 'Historical Leads', endpoint: '/import/historical-leads', useJson: true },
+    comprehensive_students: { title: 'Comprehensive Students', endpoint: '/import/comprehensive-students', useJson: true },
     customers: { title: 'Customers', endpoint: '/import/customers', useJson: true },
     students_cs: { title: 'CS Students', endpoint: '/import/students/cs', useJson: true },
     students_mentor: { title: 'Mentor Students', endpoint: '/import/students/mentor', useJson: true },
     mentor_redeposits: { title: 'Mentor Redeposits', endpoint: '/import/mentor-redeposits', useJson: true },
+    cs_upgrades: { title: 'CS Upgrades', endpoint: '/import/cs-upgrades', useJson: true },
+    mentor_withdrawals: { title: 'Mentor Withdrawals', endpoint: '/import/mentor-withdrawals', useJson: true },
     courses: { title: 'Courses', endpoint: '/import/courses', useJson: false },
     users: { title: 'Users', endpoint: '/import/users', useJson: false },
 };

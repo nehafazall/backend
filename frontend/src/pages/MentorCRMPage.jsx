@@ -261,15 +261,22 @@ const MentorCRMPage = () => {
 
     useEffect(() => {
         fetchStudents();
-        fetchRedepositSummary();
+        fetchRevenueSummary();
     }, []);
 
-    const fetchRedepositSummary = async () => {
+    const fetchRevenueSummary = async () => {
         try {
-            const response = await apiClient.get('/mentor/redeposits/summary');
+            const response = await apiClient.get('/mentor/revenue-summary');
             setRedepositSummary(response.data);
         } catch (error) {
-            console.error('Failed to fetch redeposit summary:', error);
+            console.error('Failed to fetch revenue summary:', error);
+            // Fallback to redeposit summary
+            try {
+                const fallback = await apiClient.get('/mentor/redeposits/summary');
+                setRedepositSummary(fallback.data);
+            } catch (e) {
+                console.error('Failed to fetch redeposit summary:', e);
+            }
         }
     };
 
@@ -389,7 +396,7 @@ const MentorCRMPage = () => {
 
     return (
         <div className="space-y-6" data-testid="mentor-crm-page">
-            {/* Monthly Redeposit Summary Card */}
+            {/* Monthly Revenue Summary Card */}
             {redepositSummary && (
                 <Card className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white">
                     <CardContent className="py-4">
@@ -397,12 +404,23 @@ const MentorCRMPage = () => {
                             <div className="flex items-center gap-6">
                                 <div>
                                     <p className="text-emerald-100 text-sm">Monthly Redeposits ({redepositSummary.month})</p>
-                                    <p className="text-3xl font-bold">AED {redepositSummary.totals?.grand_total?.toLocaleString() || 0}</p>
+                                    <p className="text-3xl font-bold text-emerald-50">
+                                        AED {(redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0).toLocaleString()}
+                                    </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>
                                 <div>
-                                    <p className="text-emerald-100 text-sm">Total Deposits</p>
-                                    <p className="text-2xl font-semibold">{redepositSummary.totals?.total_redeposits || 0}</p>
+                                    <p className="text-emerald-100 text-sm">Withdrawals</p>
+                                    <p className="text-2xl font-semibold text-red-200">
+                                        - AED {(redepositSummary.totals?.grand_withdrawals || 0).toLocaleString()}
+                                    </p>
+                                </div>
+                                <div className="h-12 w-px bg-emerald-500"></div>
+                                <div>
+                                    <p className="text-emerald-100 text-sm">Net Active</p>
+                                    <p className="text-2xl font-bold text-yellow-200">
+                                        AED {(redepositSummary.totals?.grand_net || (redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0) - (redepositSummary.totals?.grand_withdrawals || 0)).toLocaleString()}
+                                    </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>
                                 <div>
@@ -441,9 +459,16 @@ const MentorCRMPage = () => {
                             <ImportButton 
                                 templateType="mentor_redeposits" 
                                 title="Import Redeposits" 
-                                onSuccess={() => { fetchStudents(); fetchRedepositSummary(); }} 
+                                onSuccess={() => { fetchStudents(); fetchRevenueSummary(); }} 
                             />
                         </>
+                    )}
+                    {['super_admin', 'admin', 'finance'].includes(user?.role) && (
+                        <ImportButton 
+                            templateType="mentor_withdrawals" 
+                            title="Import Withdrawals" 
+                            onSuccess={() => { fetchStudents(); fetchRevenueSummary(); }} 
+                        />
                     )}
                 </div>
             </div>
