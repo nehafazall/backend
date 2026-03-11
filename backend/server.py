@@ -11025,6 +11025,51 @@ async def create_employee(data: EmployeeCreate, user = Depends(require_roles(["s
     
     await db.hr_employees.insert_one(employee)
     
+    # Auto-create user account if company_email exists
+    if data.company_email:
+        existing_user = await db.users.find_one({"email": data.company_email})
+        if existing_user:
+            # Link existing user to this employee
+            await db.hr_employees.update_one(
+                {"id": employee_uuid},
+                {"$set": {"user_id": existing_user["id"]}}
+            )
+            employee["user_id"] = existing_user["id"]
+            await db.users.update_one(
+                {"id": existing_user["id"]},
+                {"$set": {"employee_id": employee_uuid, "updated_at": now}}
+            )
+        else:
+            # Create new user account
+            user_uuid = str(uuid.uuid4())
+            role = getattr(data, 'role', None) or "staff"
+            first_name = data.full_name.split()[0] if data.full_name else "User"
+            password = f"{first_name}@123"
+            permissions = get_default_permissions(role)
+            
+            new_user = {
+                "id": user_uuid,
+                "email": data.company_email,
+                "password": hash_password(password),
+                "full_name": data.full_name,
+                "role": role,
+                "department": getattr(data, 'department', None),
+                "is_active": True,
+                "status": "active",
+                "permissions": permissions,
+                "employee_id": employee_uuid,
+                "created_at": now,
+                "updated_at": now,
+                "created_via": "employee_creation"
+            }
+            await db.users.insert_one(new_user)
+            
+            await db.hr_employees.update_one(
+                {"id": employee_uuid},
+                {"$set": {"user_id": user_uuid}}
+            )
+            employee["user_id"] = user_uuid
+    
     # Audit log
     await db.hr_audit_logs.insert_one({
         "id": str(uuid.uuid4()),

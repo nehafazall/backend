@@ -55,6 +55,18 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 92% (12/13), Frontend 100%
 
+#### Auto User Account Creation on Employee Creation (IMPLEMENTED & VERIFIED)
+**Problem:** Every time employees were created manually in Employee Master, they didn't appear in User Management. Required manual sync each time.
+
+**Fix:** Modified `POST /api/hr/employees` endpoint to automatically:
+1. Check if a user account exists with the employee's company email
+2. If exists → link the user to the employee
+3. If not → create a new user account with default password (`FirstName@123`) and link both records
+
+**Result:** Any employee created with a company email now instantly appears in User Management. No manual sync needed.
+
+**Test Results:** Verified — created test employee, user auto-created immediately.
+
 #### Bug Fix: User Management - Team Names Not Showing & Missing Users (FIXED & VERIFIED)
 **Problems:**
 1. Team names for CHALLENGER and GLADIATOR not showing in User Management table
