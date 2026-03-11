@@ -41,6 +41,20 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 100% (14/14), Frontend 100%
 
+#### Bug Fix: Teams Management - Leader/Member Assignment & Departments (FIXED & VERIFIED)
+**Problems:**
+1. Could not assign team leaders — modal filtered to `['team_leader', 'sales_manager', 'sales_executive']` roles but all users had `sales_agent` role
+2. "Academics" department missing from team creation dropdown
+3. Could not add members from Employee Master — same restrictive role filter
+
+**Fixes:**
+- Removed restrictive role filters from `availableUsers` and `potentialLeaders` — now shows ALL active users
+- Updated departments list to all 8: Sales, Finance, Customer Service, **Mentors/Academics**, Operations, Marketing, HR, Quality Control
+- Added search bars to both Leader and Member selection modals (filter by name/email)
+- Fixed N+1 queries in GET /api/teams (batch leader names + member counts) and GET /api/leads (batch assigned user + course names)
+
+**Test Results:** Backend 92% (12/13), Frontend 100%
+
 #### Feature: Manual Attendance Import via XLSX (COMPLETED & VERIFIED)
 **Problem:** When BioCloud sync fails, HR needs a fallback to manually import monthly attendance data for payroll processing.
 
