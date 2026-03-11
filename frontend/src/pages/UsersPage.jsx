@@ -187,7 +187,7 @@ const UsersPage = () => {
 
     const fetchTeams = async () => {
         try {
-            const response = await api.get('/teams');
+            const response = await api.get('/teams?active_only=false');
             setTeams(response.data);
         } catch (error) {
             console.error('Failed to fetch teams', error);
@@ -257,6 +257,7 @@ const UsersPage = () => {
             department: user.department || '',
             phone: user.phone || '',
             region: user.region || '',
+            team_id: user.team_id || '',
             team_leader_id: user.team_leader_id || '',
             is_active: user.is_active,
             environment_access: user.environment_access || [],
@@ -1065,6 +1066,29 @@ const UsersPage = () => {
                                     className="mt-2"
                                     data-testid="edit-user-3cx-extension-input"
                                 />
+                            </div>
+                        )}
+
+                        {/* Team Selection in Edit */}
+                        {teams.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>Team</Label>
+                                <Select
+                                    value={formData.team_id || 'none'}
+                                    onValueChange={(value) => setFormData({ ...formData, team_id: value === 'none' ? '' : value })}
+                                >
+                                    <SelectTrigger data-testid="edit-user-team-select">
+                                        <SelectValue placeholder="Select team" />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[9999]">
+                                        <SelectItem value="none">No Team</SelectItem>
+                                        {teams.map((team) => (
+                                            <SelectItem key={team.id} value={team.id}>
+                                                {team.name} ({team.department})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
 

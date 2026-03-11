@@ -2598,6 +2598,10 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
         if "phone" in data:
             employee_update["mobile_number"] = data["phone"]
         
+        # Sync team_id
+        if "team_id" in data:
+            employee_update["team_id"] = data["team_id"] if data["team_id"] else None
+        
         if employee_update:
             employee_update["updated_at"] = now
             await db.hr_employees.update_one(
