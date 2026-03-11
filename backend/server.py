@@ -7542,7 +7542,11 @@ async def import_employees(data: List[Dict], user = Depends(require_roles(["supe
                 "basic_salary": float(row.get("basic_salary", 0)) if row.get("basic_salary") else None,
                 "reporting_manager_id": reporting_manager_id,
                 "team_id": team_id,
+                "notice_period_days": int(row.get("notice_period_days", 30)) if row.get("notice_period_days") else 30,
+                "annual_leave_balance": float(row.get("annual_leave_balance", 30)) if row.get("annual_leave_balance") else 30,
+                "sick_leave_balance": float(row.get("sick_leave_balance", 15)) if row.get("sick_leave_balance") else 15,
                 "employment_status": "active",
+                "documents": [],
                 "created_at": now,
                 "updated_at": now
             }
@@ -10728,12 +10732,12 @@ class EmployeeResponse(BaseModel):
     designation: str
     reporting_manager_id: Optional[str] = None
     reporting_manager_name: Optional[str] = None
-    employment_type: str
-    work_location: str
+    employment_type: str = "full_time"
+    work_location: Optional[str] = None
     joining_date: str
-    probation_days: int
+    probation_days: int = 90
     confirmation_date: Optional[str] = None
-    notice_period_days: int
+    notice_period_days: int = 30
     employment_status: str
     termination_date: Optional[str] = None
     role: Optional[str] = None
@@ -10753,8 +10757,8 @@ class EmployeeResponse(BaseModel):
     # Enhanced Salary Structure
     salary_structure: Optional[Dict] = None
     bank_details: Optional[Dict] = None
-    annual_leave_balance: float
-    sick_leave_balance: float
+    annual_leave_balance: float = 0
+    sick_leave_balance: float = 0
     documents: List[Dict] = []
     user_id: Optional[str] = None
     created_via: Optional[str] = None
@@ -13676,6 +13680,7 @@ async def bulk_import_employees(
                 "id": str(uuid.uuid4()),
                 **emp_data,
                 "documents": [],
+                "notice_period_days": emp_data.get("notice_period_days", 30),
                 "annual_leave_balance": emp_data.get("annual_leave_balance", 30),
                 "sick_leave_balance": emp_data.get("sick_leave_balance", 15),
                 "created_at": now,
@@ -18856,6 +18861,55 @@ async def get_bank_account_transactions(account_id: str, user = Depends(require_
         "transactions": transactions_sorted
     }
 
+# ==================== ADMIN - USER DEACTIVATION ENDPOINTS ====================
+
+@api_router.post("/admin/run-deactivation-check")
+async def run_deactivation_check(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Manually trigger the user deactivation check"""
+    count = await process_user_deactivations()
+    return {
+        "message": f"Deactivation check complete. {count} user(s) deactivated.",
+        "deactivated_count": count
+    }
+
+@api_router.get("/admin/pending-deactivations")
+async def get_pending_deactivations(user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get list of terminated/resigned employees with pending access deactivation"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    pending = await db.hr_employees.find({
+        "employment_status": {"$in": ["terminated", "resigned"]},
+        "access_disable_date": {"$gt": now},
+        "user_id": {"$exists": True, "$ne": None},
+        "access_disabled": {"$ne": True}
+    }, {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "company_email": 1, 
+        "employment_status": 1, "termination_date": 1, "access_disable_date": 1}).to_list(500)
+    
+    deactivated = await db.hr_employees.find({
+        "employment_status": {"$in": ["terminated", "resigned"]},
+        "access_disabled": True
+    }, {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "company_email": 1,
+        "employment_status": 1, "termination_date": 1, "access_disabled_at": 1}).sort("access_disabled_at", -1).to_list(50)
+    
+    overdue = await db.hr_employees.find({
+        "employment_status": {"$in": ["terminated", "resigned"]},
+        "access_disable_date": {"$lte": now},
+        "user_id": {"$exists": True, "$ne": None},
+        "access_disabled": {"$ne": True}
+    }, {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "company_email": 1,
+        "employment_status": 1, "termination_date": 1, "access_disable_date": 1}).to_list(500)
+    
+    return {
+        "pending": pending,
+        "overdue": overdue,
+        "recently_deactivated": deactivated,
+        "counts": {
+            "pending": len(pending),
+            "overdue": len(overdue),
+            "recently_deactivated": len(deactivated)
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -18964,6 +19018,9 @@ async def startup_event():
     
     # Start background scheduler for daily finance report
     asyncio.create_task(daily_finance_report_loop())
+    
+    # Start background scheduler for automatic user deactivation
+    asyncio.create_task(user_deactivation_loop())
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
 
@@ -19131,6 +19188,61 @@ async def send_daily_finance_report():
         logger.error(f"Error generating daily finance report: {e}")
         import traceback
         traceback.print_exc()
+
+# ==================== AUTOMATIC USER DEACTIVATION ====================
+
+async def process_user_deactivations():
+    """Check for terminated/resigned employees whose access_disable_date has passed and deactivate their user accounts."""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Find employees with access_disable_date that has passed, who still have active user accounts
+    employees = await db.hr_employees.find({
+        "employment_status": {"$in": ["terminated", "resigned"]},
+        "access_disable_date": {"$lte": now},
+        "user_id": {"$exists": True, "$ne": None},
+        "access_disabled": {"$ne": True}
+    }, {"_id": 0}).to_list(500)
+    
+    deactivated_count = 0
+    for emp in employees:
+        try:
+            user = await db.users.find_one({"id": emp["user_id"]})
+            if user and user.get("is_active", True):
+                await db.users.update_one(
+                    {"id": emp["user_id"]},
+                    {"$set": {
+                        "is_active": False,
+                        "deactivated_at": now,
+                        "deactivation_reason": f"Auto-deactivated: Employee {emp.get('employment_status', 'terminated')} (access_disable_date reached)"
+                    }}
+                )
+                deactivated_count += 1
+                logger.info(f"Auto-deactivated user {emp.get('company_email', emp['user_id'])} (employee: {emp['employee_id']})")
+            
+            # Mark employee as access_disabled to avoid re-processing
+            await db.hr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"access_disabled": True, "access_disabled_at": now}}
+            )
+        except Exception as e:
+            logger.error(f"Error deactivating user for employee {emp.get('employee_id')}: {e}")
+    
+    if deactivated_count > 0:
+        logger.info(f"Auto-deactivation complete: {deactivated_count} users deactivated")
+    
+    return deactivated_count
+
+async def user_deactivation_loop():
+    """Background loop that checks every 6 hours for users to deactivate"""
+    await asyncio.sleep(30)  # Initial delay to let the server fully start
+    while True:
+        try:
+            count = await process_user_deactivations()
+            if count > 0:
+                logger.info(f"User deactivation loop: {count} users deactivated")
+        except Exception as e:
+            logger.error(f"User deactivation loop error: {e}")
+        await asyncio.sleep(6 * 3600)  # Run every 6 hours
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
