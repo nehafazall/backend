@@ -2694,15 +2694,27 @@ async def get_teams(
     
     teams = await db.teams.find(query, {"_id": 0}).sort("name", 1).to_list(100)
     
-    # Enrich with leader name and member count
+    # Batch enrich with leader names and member counts (avoid N+1)
+    leader_ids = [t["leader_id"] for t in teams if t.get("leader_id")]
+    if leader_ids:
+        leaders_list = await db.users.find({"id": {"$in": leader_ids}}, {"_id": 0, "id": 1, "full_name": 1}).to_list(len(leader_ids))
+        leaders_map = {u["id"]: u["full_name"] for u in leaders_list}
+    else:
+        leaders_map = {}
+    
+    team_ids = [t["id"] for t in teams]
+    if team_ids:
+        member_counts_agg = await db.users.aggregate([
+            {"$match": {"team_id": {"$in": team_ids}, "active": {"$ne": False}}},
+            {"$group": {"_id": "$team_id", "count": {"$sum": 1}}}
+        ]).to_list(len(team_ids))
+        counts_map = {m["_id"]: m["count"] for m in member_counts_agg}
+    else:
+        counts_map = {}
+    
     for team in teams:
-        if team.get("leader_id"):
-            leader = await db.users.find_one({"id": team["leader_id"]})
-            team["leader_name"] = leader.get("full_name") if leader else None
-        
-        # Count members
-        member_count = await db.users.count_documents({"team_id": team["id"], "active": {"$ne": False}})
-        team["member_count"] = member_count
+        team["leader_name"] = leaders_map.get(team.get("leader_id"))
+        team["member_count"] = counts_map.get(team["id"], 0)
     
     return teams
 
@@ -2930,14 +2942,25 @@ async def get_leads(
     
     leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     
+    # Batch fetch assigned user names (avoid N+1)
+    assigned_ids = list({l["assigned_to"] for l in leads if l.get("assigned_to")})
+    if assigned_ids:
+        assigned_users = await db.users.find({"id": {"$in": assigned_ids}}, {"_id": 0, "id": 1, "full_name": 1}).to_list(len(assigned_ids))
+        assigned_map = {u["id"]: u["full_name"] for u in assigned_users}
+    else:
+        assigned_map = {}
+    
+    # Batch fetch course names (avoid N+1)
+    course_ids = list({l["course_id"] for l in leads if l.get("course_id")})
+    if course_ids:
+        courses = await db.courses.find({"id": {"$in": course_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(len(course_ids))
+        course_map = {c["id"]: c["name"] for c in courses}
+    else:
+        course_map = {}
+    
     for lead in leads:
-        if lead.get("assigned_to"):
-            assigned_user = await db.users.find_one({"id": lead["assigned_to"]})
-            lead["assigned_to_name"] = assigned_user.get("full_name") if assigned_user else None
-        
-        if lead.get("course_id"):
-            course = await db.courses.find_one({"id": lead["course_id"]})
-            lead["course_name"] = course.get("name") if course else None
+        lead["assigned_to_name"] = assigned_map.get(lead.get("assigned_to"))
+        lead["course_name"] = course_map.get(lead.get("course_id"))
         
         # Real-time SLA check using new logic
         sla_update = await check_lead_sla(lead)

@@ -27,10 +27,12 @@ const TeamsPage = () => {
     const [showMemberModal, setShowMemberModal] = useState(false);
     const [showLeaderModal, setShowLeaderModal] = useState(false);
     const [editingTeam, setEditingTeam] = useState(null);
+    const [searchLeader, setSearchLeader] = useState('');
+    const [searchMember, setSearchMember] = useState('');
     
     const [teamForm, setTeamForm] = useState({
         name: '',
-        department: 'sales',
+        department: 'Sales',
         description: ''
     });
 
@@ -155,16 +157,14 @@ const TeamsPage = () => {
 
     // Filter users who can be added to a team (not already in this team)
     const availableUsers = users.filter(u => 
-        !selectedTeam?.members?.find(m => m.id === u.id) &&
-        ['sales_executive', 'team_leader', 'sales_manager'].includes(u.role)
+        u.is_active !== false &&
+        !selectedTeam?.members?.find(m => m.id === u.id)
     );
 
-    // Filter for potential leaders
-    const potentialLeaders = selectedTeam?.members?.length > 0 
-        ? selectedTeam.members 
-        : users.filter(u => ['team_leader', 'sales_manager', 'sales_executive'].includes(u.role));
+    // Filter for potential leaders — any active user can be a leader
+    const potentialLeaders = users.filter(u => u.is_active !== false);
 
-    const departments = ['sales', 'customer_service', 'marketing', 'operations'];
+    const departments = ['Sales', 'Finance', 'Customer Service', 'Mentors/Academics', 'Operations', 'Marketing', 'HR', 'Quality Control'];
 
     return (
         <div className="space-y-6" data-testid="teams-page">
@@ -374,7 +374,7 @@ const TeamsPage = () => {
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent className="z-[9999]">
                                     {departments.map((d) => (
-                                        <SelectItem key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1).replace('_', ' ')}</SelectItem>
+                                        <SelectItem key={d} value={d}>{d}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -396,29 +396,47 @@ const TeamsPage = () => {
             </Dialog>
 
             {/* Assign Leader Modal */}
-            <Dialog open={showLeaderModal} onOpenChange={setShowLeaderModal}>
+            <Dialog open={showLeaderModal} onOpenChange={(v) => { setShowLeaderModal(v); setSearchLeader(''); }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Assign Team Leader</DialogTitle>
-                        <DialogDescription>Select a user to be the team leader</DialogDescription>
+                        <DialogDescription>Select an employee to be the team leader</DialogDescription>
                     </DialogHeader>
+                    <Input 
+                        placeholder="Search by name or email..."
+                        value={searchLeader}
+                        onChange={(e) => setSearchLeader(e.target.value)}
+                        data-testid="search-leader-input"
+                    />
                     <ScrollArea className="max-h-[400px]">
                         <div className="space-y-2">
-                            {potentialLeaders.map((u) => (
+                            {potentialLeaders
+                                .filter(u => !searchLeader || 
+                                    u.full_name?.toLowerCase().includes(searchLeader.toLowerCase()) ||
+                                    u.email?.toLowerCase().includes(searchLeader.toLowerCase())
+                                )
+                                .map((u) => (
                                 <div 
                                     key={u.id}
                                     className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted cursor-pointer"
                                     onClick={() => handleSetLeader(u.id)}
+                                    data-testid={`leader-option-${u.id}`}
                                 >
                                     <div>
                                         <p className="font-medium">{u.full_name}</p>
                                         <p className="text-sm text-muted-foreground">{u.email}</p>
                                     </div>
-                                    <Badge variant="outline">{u.role}</Badge>
+                                    <div className="flex items-center gap-2">
+                                        {u.department && <Badge variant="secondary" className="text-xs">{u.department}</Badge>}
+                                        <Badge variant="outline">{u.role}</Badge>
+                                    </div>
                                 </div>
                             ))}
-                            {potentialLeaders.length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">No users available</p>
+                            {potentialLeaders.filter(u => !searchLeader || 
+                                u.full_name?.toLowerCase().includes(searchLeader.toLowerCase()) ||
+                                u.email?.toLowerCase().includes(searchLeader.toLowerCase())
+                            ).length === 0 && (
+                                <p className="text-center text-muted-foreground py-8">No users found</p>
                             )}
                         </div>
                     </ScrollArea>
@@ -426,29 +444,47 @@ const TeamsPage = () => {
             </Dialog>
 
             {/* Add Member Modal */}
-            <Dialog open={showMemberModal} onOpenChange={setShowMemberModal}>
+            <Dialog open={showMemberModal} onOpenChange={(v) => { setShowMemberModal(v); setSearchMember(''); }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Add Team Member</DialogTitle>
-                        <DialogDescription>Select a user to add to this team</DialogDescription>
+                        <DialogDescription>Select an employee to add to this team</DialogDescription>
                     </DialogHeader>
+                    <Input 
+                        placeholder="Search by name or email..."
+                        value={searchMember}
+                        onChange={(e) => setSearchMember(e.target.value)}
+                        data-testid="search-member-input"
+                    />
                     <ScrollArea className="max-h-[400px]">
                         <div className="space-y-2">
-                            {availableUsers.map((u) => (
+                            {availableUsers
+                                .filter(u => !searchMember || 
+                                    u.full_name?.toLowerCase().includes(searchMember.toLowerCase()) ||
+                                    u.email?.toLowerCase().includes(searchMember.toLowerCase())
+                                )
+                                .map((u) => (
                                 <div 
                                     key={u.id}
                                     className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted cursor-pointer"
                                     onClick={() => handleAddMember(u.id)}
+                                    data-testid={`member-option-${u.id}`}
                                 >
                                     <div>
                                         <p className="font-medium">{u.full_name}</p>
                                         <p className="text-sm text-muted-foreground">{u.email}</p>
                                     </div>
-                                    <Badge variant="outline">{u.role}</Badge>
+                                    <div className="flex items-center gap-2">
+                                        {u.department && <Badge variant="secondary" className="text-xs">{u.department}</Badge>}
+                                        <Badge variant="outline">{u.role}</Badge>
+                                    </div>
                                 </div>
                             ))}
-                            {availableUsers.length === 0 && (
-                                <p className="text-center text-muted-foreground py-8">No available users to add</p>
+                            {availableUsers.filter(u => !searchMember || 
+                                u.full_name?.toLowerCase().includes(searchMember.toLowerCase()) ||
+                                u.email?.toLowerCase().includes(searchMember.toLowerCase())
+                            ).length === 0 && (
+                                <p className="text-center text-muted-foreground py-8">No available employees to add</p>
                             )}
                         </div>
                     </ScrollArea>
