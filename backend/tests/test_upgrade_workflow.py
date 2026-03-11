@@ -19,7 +19,7 @@ import uuid
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://cs-upgrade.preview.emergentagent.com"
+    BASE_URL = "https://hr-sync-dashboard.preview.emergentagent.com"
 
 # Test credentials
 TEST_EMAIL = "aqib@clt-academy.com"
