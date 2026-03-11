@@ -55,7 +55,27 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 92% (12/13), Frontend 100%
 
-#### Bug Fix: Employee Master - Role/Team Not Saving & Date Format (FIXED & VERIFIED)
+#### Bug Fix: User Management - Team Names Not Showing & Missing Users (FIXED & VERIFIED)
+**Problems:**
+1. Team names for CHALLENGER and GLADIATOR not showing in User Management table
+2. Manually created employees (Falja, Della, Karthika) not appearing in User Management — they had no linked user accounts
+3. Edit User modal missing Team dropdown entirely
+
+**Root Causes:**
+- `fetchTeams` used default `active_only=true`, potentially filtering teams
+- `handleEditUser` didn't include `team_id` in form state — team was lost when editing
+- Edit User modal had no Team Selection dropdown (only Create modal had it)
+- 3 employees created manually via HR module never had user accounts generated
+- User update endpoint didn't sync `team_id` bidirectionally to linked employee record
+
+**Fixes:**
+- Changed `fetchTeams` to use `active_only=false` to include all teams
+- Added `team_id: user.team_id || ''` to `handleEditUser` form state
+- Added Team Selection dropdown to Edit User modal (shows all 10 teams)
+- Ran `POST /api/hr/employees/sync-to-users` to create user accounts for 3 employees
+- Added `team_id` to bidirectional sync in `PUT /api/users/{id}` endpoint
+
+**Test Results:** Backend 100% (9/9), Frontend 100%
 **Problems:**
 1. System role changes not saving when editing employees
 2. Team assignment not saving
