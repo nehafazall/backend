@@ -55,6 +55,26 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 92% (12/13), Frontend 100%
 
+#### Bug Fix: Employee Master - Role/Team Not Saving & Date Format (FIXED & VERIFIED)
+**Problems:**
+1. System role changes not saving when editing employees
+2. Team assignment not saving
+3. Date format inconsistent (DD/MM/YYYY from CSV imports vs YYYY-MM-DD from UI)
+
+**Root Causes:**
+- `EmployeeUpdate` Pydantic model in `hr_module.py` was missing `role` and `team_id` fields — Pydantic silently stripped them
+- `EmployeeResponse` model missing `team_id` — couldn't return it to frontend
+- `UserBase` model missing `team_id` — couldn't return in user API responses
+- No date normalization for imported records
+
+**Fixes:**
+- Added `role: Optional[str]` and `team_id: Optional[str]` to `EmployeeUpdate` model
+- Added `team_id` to `EmployeeResponse` and `UserBase` models
+- Added `team_id` sync in the update handler (syncs to linked user account)
+- Created `_normalize_date()` helper that converts DD/MM/YYYY → YYYY-MM-DD on read
+
+**Test Results:** Backend 100% (12/12), Frontend 100%
+
 #### Feature: Manual Attendance Import via XLSX (COMPLETED & VERIFIED)
 **Problem:** When BioCloud sync fails, HR needs a fallback to manually import monthly attendance data for payroll processing.
 
