@@ -41,6 +41,28 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 100% (14/14), Frontend 100%
 
+#### Feature: Manual Attendance Import via XLSX (COMPLETED & VERIFIED)
+**Problem:** When BioCloud sync fails, HR needs a fallback to manually import monthly attendance data for payroll processing.
+
+**Solution:**
+**Step 1 - Download Template:** `GET /api/hr/attendance/template/download?month=YYYY-MM`
+- Generates XLSX with all active employees pre-filled
+- Pre-filled columns: Employee ID, Name, Department, Designation, Basic Salary, Housing/Transport/Food/Phone/Other Allowances, Fixed Incentive
+- Yellow editable columns: Full Days, Half Days, Approved Leaves
+- Professional styling with frozen panes and validation notes
+
+**Step 2 - Upload Filled Sheet:** `POST /api/hr/attendance/import` (multipart: file + month)
+- Reads filled XLSX and creates daily `hr_attendance` records
+- Full Days → `status: "present"`, Half Days → `status: "present" + half_day: true`, Approved Leaves → `status: "leave"`
+- Tagged with `source: "manual_import"` to distinguish from biometric data
+- Re-import replaces only manual records (preserves biometric data)
+
+**Payroll Integration:** The existing payroll engine (`POST /api/hr/payroll/run`) automatically picks up imported attendance data — no changes needed.
+
+**Frontend:** New "Manual Import" tab on HR > Attendance page with month selector, download template button, and upload area.
+
+**Test Results:** Backend 100% (14/14), Frontend 100%
+
 ### Session Mar 10, 2026 - Comprehensive Historical Import & LTV Tracking
 
 #### Feature: Comprehensive Historical Import System (COMPLETED)
