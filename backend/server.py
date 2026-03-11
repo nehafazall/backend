@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -12575,6 +12576,310 @@ async def get_attendance(
     
     records = await db.hr_attendance.find(query, {"_id": 0}).sort([("date", -1), ("employee_code", 1)]).to_list(1000)
     return records
+
+# ==================== MANUAL ATTENDANCE IMPORT ====================
+
+@api_router.get("/hr/attendance/template/download")
+async def download_attendance_template(
+    month: str,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Generate and download an XLSX attendance template for a given month.
+    Pre-fills all active employees with their salary structure.
+    month format: YYYY-MM (e.g. 2026-03)
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    import calendar as cal_module
+    import io
+
+    # Parse month
+    try:
+        year, m = month.split("-")
+        year, m = int(year), int(m)
+        month_name = cal_module.month_name[m]
+        total_days = cal_module.monthrange(year, m)[1]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+
+    # Fetch active employees with salary
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0}
+    ).sort("employee_id", 1).to_list(500)
+
+    if not employees:
+        raise HTTPException(status_code=404, detail="No active employees found")
+
+    # Also fetch approved leave counts for each employee for this month
+    month_start = f"{year}-{str(m).zfill(2)}-01"
+    month_end = f"{year}-{str(m).zfill(2)}-{total_days}"
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Attendance {month_name} {year}"
+
+    # Styles
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    title_font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+    sub_font = Font(name="Calibri", italic=True, size=10, color="666666")
+    salary_fill = PatternFill(start_color="E8F0FE", end_color="E8F0FE", fill_type="solid")
+    input_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin")
+    )
+
+    # Title rows
+    ws.merge_cells("A1:N1")
+    ws["A1"] = f"CLT Synapse - Monthly Attendance Sheet"
+    ws["A1"].font = title_font
+    ws.merge_cells("A2:N2")
+    ws["A2"] = f"Month: {month_name} {year}  |  Total Calendar Days: {total_days}  |  DO NOT modify columns A-K (pre-filled)"
+    ws["A2"].font = sub_font
+    ws.merge_cells("A3:N3")
+    ws["A3"] = f"Fill YELLOW columns (L, M, N) with attendance data. Full Days + Half Days + Approved Leaves should not exceed {total_days}."
+    ws["A3"].font = Font(name="Calibri", bold=True, size=10, color="B71C1C")
+
+    # Headers (row 5)
+    headers = [
+        ("A", "Employee ID", 15),
+        ("B", "Employee Name", 25),
+        ("C", "Department", 18),
+        ("D", "Designation", 20),
+        ("E", "Basic Salary", 14),
+        ("F", "Housing Allowance", 16),
+        ("G", "Transport Allowance", 16),
+        ("H", "Food Allowance", 14),
+        ("I", "Phone Allowance", 14),
+        ("J", "Other Allowances", 16),
+        ("K", "Fixed Incentive", 14),
+        ("L", "Full Days", 12),
+        ("M", "Half Days", 12),
+        ("N", "Approved Leaves", 16),
+    ]
+
+    for col_letter, title, width in headers:
+        cell = ws[f"{col_letter}5"]
+        cell.value = title
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+        ws.column_dimensions[col_letter].width = width
+
+    # Data rows (starting row 6)
+    for idx, emp in enumerate(employees):
+        row = idx + 6
+        salary = emp.get("salary_structure", {})
+
+        # Pre-filled columns (A-K) - locked info
+        data = [
+            emp.get("employee_id", ""),
+            emp.get("full_name", ""),
+            emp.get("department", ""),
+            emp.get("designation", ""),
+            salary.get("basic_salary", emp.get("basic_salary", 0)) or 0,
+            salary.get("housing_allowance", 0) or 0,
+            salary.get("transport_allowance", 0) or 0,
+            salary.get("food_allowance", 0) or 0,
+            salary.get("phone_allowance", salary.get("telephone_allowance", 0)) or 0,
+            salary.get("other_allowances", 0) or 0,
+            salary.get("fixed_incentive", 0) or 0,
+        ]
+
+        for c, val in enumerate(data, 1):
+            cell = ws.cell(row=row, column=c, value=val)
+            cell.border = thin_border
+            cell.fill = salary_fill
+            if c >= 5:  # Salary columns - number format
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal="right")
+
+        # Editable columns (L, M, N) - yellow highlight
+        for c in [12, 13, 14]:
+            cell = ws.cell(row=row, column=c, value=0)
+            cell.border = thin_border
+            cell.fill = input_fill
+            cell.number_format = '0'
+            cell.alignment = Alignment(horizontal="center")
+
+    # Freeze panes: header row + employee ID column
+    ws.freeze_panes = "B6"
+
+    # Write to bytes
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"attendance_template_{month_name}_{year}.xlsx"
+    tmp_path = f"/tmp/{filename}"
+    with open(tmp_path, "wb") as f:
+        f.write(buffer.getvalue())
+
+    return FileResponse(
+        tmp_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@api_router.post("/hr/attendance/import")
+async def import_attendance(
+    file: UploadFile = File(...),
+    month: str = Form(...),
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Import monthly attendance from a filled XLSX template.
+    Creates daily attendance records in hr_attendance for payroll calculation.
+    month format: YYYY-MM
+    """
+    import openpyxl
+    import calendar as cal_module
+    import io
+
+    # Parse month
+    try:
+        year, m = month.split("-")
+        year, m = int(year), int(m)
+        total_days = cal_module.monthrange(year, m)[1]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+
+    # Read the uploaded file
+    contents = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+        ws = wb.active
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XLSX file: {str(e)}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    results = {"imported": 0, "skipped": 0, "errors": [], "attendance_records_created": 0}
+
+    # Read data rows (starting row 6, columns A-N)
+    for row in ws.iter_rows(min_row=6, max_col=14, values_only=False):
+        employee_id_val = row[0].value  # Column A: Employee ID
+        if not employee_id_val:
+            continue
+
+        employee_id_str = str(employee_id_val).strip()
+        full_days = int(row[11].value or 0)   # Column L
+        half_days = int(row[12].value or 0)    # Column M
+        approved_leaves = int(row[13].value or 0)  # Column N
+
+        # Validate totals
+        total_marked = full_days + half_days + approved_leaves
+        if total_marked > total_days:
+            results["errors"].append(f"{employee_id_str}: Total days ({total_marked}) exceeds calendar days ({total_days})")
+            results["skipped"] += 1
+            continue
+
+        if total_marked == 0:
+            results["skipped"] += 1
+            continue
+
+        # Find employee
+        emp = await db.hr_employees.find_one({"employee_id": employee_id_str}, {"_id": 0})
+        if not emp:
+            results["errors"].append(f"{employee_id_str}: Employee not found")
+            results["skipped"] += 1
+            continue
+
+        # Delete existing imported attendance for this employee+month
+        month_start = f"{year}-{str(m).zfill(2)}-01"
+        month_end = f"{year}-{str(m).zfill(2)}-{total_days}"
+        await db.hr_attendance.delete_many({
+            "employee_id": emp["id"],
+            "date": {"$gte": month_start, "$lte": month_end},
+            "source": "manual_import"
+        })
+
+        # Create daily attendance records
+        day_counter = 1
+        records_to_insert = []
+
+        # Full days → status="present"
+        for _ in range(full_days):
+            if day_counter > total_days:
+                break
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
+            records_to_insert.append({
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_code": emp["employee_id"],
+                "employee_name": emp["full_name"],
+                "department": emp.get("department"),
+                "date": date_str,
+                "biometric_in": "09:00:00",
+                "biometric_out": "18:00:00",
+                "total_work_hours": 9,
+                "late_minutes": 0,
+                "status": "present",
+                "source": "manual_import",
+                "created_at": now,
+                "updated_at": now
+            })
+            day_counter += 1
+
+        # Half days → status="present" + late_minutes=31 (triggers half-day deduction in payroll)
+        for _ in range(half_days):
+            if day_counter > total_days:
+                break
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
+            records_to_insert.append({
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_code": emp["employee_id"],
+                "employee_name": emp["full_name"],
+                "department": emp.get("department"),
+                "date": date_str,
+                "biometric_in": "13:00:00",
+                "biometric_out": "18:00:00",
+                "total_work_hours": 4.5,
+                "late_minutes": 240,
+                "status": "present",
+                "half_day": True,
+                "source": "manual_import",
+                "created_at": now,
+                "updated_at": now
+            })
+            day_counter += 1
+
+        # Approved leaves → status="leave"
+        for _ in range(approved_leaves):
+            if day_counter > total_days:
+                break
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
+            records_to_insert.append({
+                "id": str(uuid.uuid4()),
+                "employee_id": emp["id"],
+                "employee_code": emp["employee_id"],
+                "employee_name": emp["full_name"],
+                "department": emp.get("department"),
+                "date": date_str,
+                "status": "leave",
+                "source": "manual_import",
+                "created_at": now,
+                "updated_at": now
+            })
+            day_counter += 1
+
+        if records_to_insert:
+            await db.hr_attendance.insert_many(records_to_insert)
+            results["attendance_records_created"] += len(records_to_insert)
+
+        results["imported"] += 1
+
+    return {
+        "message": f"Attendance import complete. {results['imported']} employees processed, {results['attendance_records_created']} daily records created.",
+        **results
+    }
 
 # ==================== BIOCLOUD INTEGRATION ====================
 
