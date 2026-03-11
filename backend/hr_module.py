@@ -204,6 +204,8 @@ class EmployeeUpdate(BaseModel):
     employment_status: Optional[EmploymentStatus] = None
     employee_category: Optional[EmployeeCategory] = None
     grade: Optional[str] = None
+    role: Optional[str] = None
+    team_id: Optional[str] = None
     visa_details: Optional[VisaDetails] = None
     salary_structure: Optional[SalaryStructure] = None
     bank_details: Optional[BankDetails] = None

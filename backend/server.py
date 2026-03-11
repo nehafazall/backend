@@ -209,6 +209,7 @@ class UserBase(BaseModel):
     is_active: bool = True
     region: Optional[str] = None
     team_leader_id: Optional[str] = None
+    team_id: Optional[str] = None  # Team assignment (synced from HR employee)
     permissions: Optional[Dict[str, str]] = None  # {module: permission_level}
     monthly_target: float = 0
     commission_rate_override: Optional[float] = None
@@ -10785,6 +10786,7 @@ class EmployeeResponse(BaseModel):
     sick_leave_balance: float = 0
     documents: List[Dict] = []
     user_id: Optional[str] = None
+    team_id: Optional[str] = None
     created_via: Optional[str] = None
     created_at: str
     updated_at: str
@@ -10810,6 +10812,22 @@ class SalaryStructure(BaseModel):
     @property
     def net_salary(self) -> float:
         return self.gross_salary - self.deductions
+
+def _normalize_date(val: str) -> str:
+    """Normalize date strings to YYYY-MM-DD format"""
+    if not val:
+        return val
+    # Already YYYY-MM-DD
+    if len(val) >= 10 and val[4] == '-':
+        return val[:10]
+    # DD/MM/YYYY or DD-MM-YYYY
+    for sep in ['/', '-']:
+        parts = val.split(sep)
+        if len(parts) == 3:
+            d, m, y = parts
+            if len(y) == 4 and len(d) <= 2:
+                return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+    return val
 
 @api_router.get("/hr/employees", response_model=List[EmployeeResponse])
 async def get_employees(
@@ -10838,11 +10856,22 @@ async def get_employees(
     
     employees = await db.hr_employees.find(query, {"_id": 0}).sort("employee_id", 1).to_list(500)
     
-    # Enrich with reporting manager names
+    # Normalize date formats and enrich with reporting manager names
+    manager_ids = list({e["reporting_manager_id"] for e in employees if e.get("reporting_manager_id")})
+    if manager_ids:
+        managers = await db.hr_employees.find({"id": {"$in": manager_ids}}, {"_id": 0, "id": 1, "full_name": 1}).to_list(len(manager_ids))
+        manager_map = {m["id"]: m["full_name"] for m in managers}
+    else:
+        manager_map = {}
+    
     for emp in employees:
-        if emp.get("reporting_manager_id"):
-            manager = await db.hr_employees.find_one({"id": emp["reporting_manager_id"]}, {"_id": 0, "full_name": 1})
-            emp["reporting_manager_name"] = manager["full_name"] if manager else None
+        # Normalize date fields to YYYY-MM-DD
+        for date_field in ["joining_date", "date_of_birth", "confirmation_date", "termination_date"]:
+            val = emp.get(date_field)
+            if val and isinstance(val, str):
+                emp[date_field] = _normalize_date(val)
+        
+        emp["reporting_manager_name"] = manager_map.get(emp.get("reporting_manager_id"))
     
     return employees
 
@@ -10944,6 +10973,12 @@ async def get_employee(employee_id: str, user = Depends(require_roles(["super_ad
     if employee.get("reporting_manager_id"):
         manager = await db.hr_employees.find_one({"id": employee["reporting_manager_id"]}, {"_id": 0, "full_name": 1})
         employee["reporting_manager_name"] = manager["full_name"] if manager else None
+    
+    # Normalize dates
+    for date_field in ["joining_date", "date_of_birth", "confirmation_date", "termination_date"]:
+        val = employee.get(date_field)
+        if val and isinstance(val, str):
+            employee[date_field] = _normalize_date(val)
     
     return employee
 
@@ -12064,6 +12099,8 @@ async def update_employee(employee_id: str, data: EmployeeUpdate, user = Depends
             user_update["role"] = update_data["role"]
         if "company_email" in update_data:
             user_update["email"] = update_data["company_email"]
+        if "team_id" in update_data:
+            user_update["team_id"] = update_data["team_id"] if update_data["team_id"] else None
         
         if user_update:
             user_update["updated_at"] = now
