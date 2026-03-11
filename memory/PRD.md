@@ -5,6 +5,42 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 ## Latest Updates (March 2026)
 
+### Session Mar 11, 2026 - P0 Bug Fix & Automatic User Deactivation
+
+#### P0 Bug Fix: "Failed to Fetch Employees" (FIXED & VERIFIED)
+**Problem:** After bulk importing employees via CSV, the HR Employee Master page showed "Failed to fetch employees" error. The entire employee list was broken.
+
+**Root Cause:** The `EmployeeResponse` Pydantic model had `notice_period_days: int`, `annual_leave_balance: float`, and `sick_leave_balance: float` as required fields. Imported employee records didn't include these fields, causing Pydantic validation to fail for the entire response.
+
+**Fix:**
+- Made `notice_period_days` default to `30`
+- Made `annual_leave_balance` default to `0`
+- Made `sick_leave_balance` default to `0`
+- Made `work_location` Optional (imports may not set it)
+- Made `employment_type` default to `"full_time"` and `probation_days` default to `90`
+- Updated both import endpoints (`/import/employees` and `/hr/employees/import`) to set these fields
+
+**Test Results:** Backend 100% (14/14), Frontend 100%
+
+#### P1 Feature: Automatic User Deactivation (COMPLETED & VERIFIED)
+**Problem:** When employees are terminated/resigned, their system access needs to be automatically disabled after a 30-day grace period.
+
+**Solution:**
+- Background scheduler (`user_deactivation_loop`) runs every 6 hours
+- Checks for employees with `access_disable_date` that has passed
+- Deactivates their user accounts and marks them as `access_disabled: true`
+- Two admin endpoints for manual management:
+  - `POST /api/admin/run-deactivation-check` - Manual trigger
+  - `GET /api/admin/pending-deactivations` - View pending/overdue/deactivated lists
+
+**Flow:**
+1. Employee terminated via `PUT /api/hr/employees/{id}/terminate`
+2. `access_disable_date` set to 30 days from termination (or immediate if specified)
+3. Background job checks every 6 hours and deactivates users whose date has passed
+4. Admin can view pending deactivations and manually trigger checks
+
+**Test Results:** Backend 100% (14/14), Frontend 100%
+
 ### Session Mar 10, 2026 - Comprehensive Historical Import & LTV Tracking
 
 #### Feature: Comprehensive Historical Import System (COMPLETED)
@@ -1086,17 +1122,15 @@ User Management                    Employee Master
 - **Finance Permissions**: Granular View/Edit/Delete per module in User Management
 
 ## Future/Backlog Tasks
-- Complete Finance Architecture Refactor:
-  - Unified Transactions View (all money-in/money-out)
-  - 2-step approval flow (Sales creates → Finance approves → Journal post)
-  - Customer transaction history for LTV calculation
 - Course and Commission Configuration (awaiting user's course details and commission rates)
+- Refactor `server.py` into modular route files (urgent tech debt)
 - Google Ads API integration (extend Marketing module)
+- Payslip generation logic (placeholder exists at `/sshr/payslips`)
+- Connect Mentor Dashboard leaderboard to live data
+- Clean up unused `downloadHelper.js` utility
 - WhatsApp/SMS notifications
 - Self-hosting package (Docker, PostgreSQL migration)
 - Mobile app
 - AI-powered lead scoring
 - Direct ZKTeco biometric device API integration (if network access available)
-- Payslip generation logic (placeholder exists at `/sshr/payslips`)
-- Refactor `server.py` into modular route files
 
