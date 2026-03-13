@@ -374,7 +374,7 @@ const SalesDashboard = () => {
 
             {/* Drill-down Modal */}
             <Dialog open={drillModal.open} onOpenChange={(o) => setDrillModal(prev => ({ ...prev, open: o }))}>
-                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader><DialogTitle>{drillModal.title}</DialogTitle></DialogHeader>
                     {drillModal.loading && <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}
                     {!drillModal.loading && drillModal.type === 'team_agents' && (

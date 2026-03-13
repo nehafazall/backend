@@ -14,19 +14,19 @@
         --card-foreground: 17 27% 15%;
         --popover: 0 0% 100%;
         --popover-foreground: 17 27% 15%;
-        --primary: 356 85% 57%;
+        --primary: 356 85% 50%;
         --primary-foreground: 0 0% 100%;
         --secondary: 0 0% 96%;
         --secondary-foreground: 17 27% 15%;
         --muted: 0 0% 96%;
-        --muted-foreground: 0 0% 45%;
+        --muted-foreground: 0 0% 36%;
         --accent: 356 85% 95%;
-        --accent-foreground: 356 85% 45%;
-        --destructive: 356 85% 57%;
+        --accent-foreground: 356 85% 38%;
+        --destructive: 356 85% 50%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 90%;
-        --input: 0 0% 90%;
-        --ring: 356 85% 57%;
+        --border: 0 0% 85%;
+        --input: 0 0% 85%;
+        --ring: 356 85% 50%;
         --radius: 0.5rem;
         
         /* Semantic Colors */
@@ -50,23 +50,23 @@
     .dark {
         /* Dark Theme - CLT Academy Brand Colors */
         --background: 17 27% 10%;
-        --foreground: 0 0% 98%;
-        --card: 17 27% 15%;
-        --card-foreground: 0 0% 98%;
-        --popover: 17 27% 15%;
-        --popover-foreground: 0 0% 98%;
+        --foreground: 0 0% 95%;
+        --card: 17 20% 14%;
+        --card-foreground: 0 0% 95%;
+        --popover: 17 20% 14%;
+        --popover-foreground: 0 0% 95%;
         --primary: 356 85% 57%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 17 27% 20%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 17 27% 20%;
-        --muted-foreground: 0 0% 69%;
-        --accent: 17 27% 25%;
-        --accent-foreground: 0 0% 98%;
+        --secondary: 17 20% 20%;
+        --secondary-foreground: 0 0% 95%;
+        --muted: 17 20% 20%;
+        --muted-foreground: 0 0% 78%;
+        --accent: 17 20% 24%;
+        --accent-foreground: 0 0% 95%;
         --destructive: 356 85% 57%;
         --destructive-foreground: 0 0% 100%;
-        --border: 17 27% 25%;
-        --input: 17 27% 25%;
+        --border: 17 20% 28%;
+        --input: 17 20% 28%;
         --ring: 356 85% 57%;
     }
 }
