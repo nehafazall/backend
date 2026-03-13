@@ -337,6 +337,12 @@ const EmployeeDetailsPage = () => {
                                             {employee.employment_status}
                                         </Badge>
                                     </div>
+                                    {(employee.employment_status === 'resigned' || employee.employment_status === 'terminated') && (
+                                        <div>
+                                            <span className="text-muted-foreground">Last Working Day</span>
+                                            <p className="font-medium">{employee.last_working_day || '-'}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

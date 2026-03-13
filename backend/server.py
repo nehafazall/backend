@@ -11875,6 +11875,7 @@ class EmployeeResponse(BaseModel):
     notice_period_days: int = 30
     employment_status: str
     termination_date: Optional[str] = None
+    last_working_day: Optional[str] = None
     role: Optional[str] = None
     employee_category: Optional[str] = None
     grade: Optional[str] = None

@@ -294,6 +294,7 @@ const EmployeeMasterPage = () => {
                             <TableHead>Department</TableHead>
                             <TableHead>Designation</TableHead>
                             <TableHead>Joining Date</TableHead>
+                            <TableHead>Last Working Day</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Alerts</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -317,6 +318,12 @@ const EmployeeMasterPage = () => {
                                 <TableCell>{emp.department}</TableCell>
                                 <TableCell>{emp.designation}</TableCell>
                                 <TableCell>{emp.joining_date}</TableCell>
+                                <TableCell>
+                                    {(emp.employment_status === 'resigned' || emp.employment_status === 'terminated') && emp.last_working_day
+                                        ? <span className="text-muted-foreground">{emp.last_working_day}</span>
+                                        : <span className="text-muted-foreground">—</span>
+                                    }
+                                </TableCell>
                                 <TableCell>
                                     <Badge className={`${STATUS_COLORS[emp.employment_status] || 'bg-slate-500'} text-white`}>
                                         {emp.employment_status?.replace('_', ' ')}

@@ -89,6 +89,9 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
                             </Select>
                         </div>
                     </div>
+                    {(f.employment_status === 'resigned' || f.employment_status === 'terminated') && (
+                        <div><Label>Last Working Day</Label><Input type="date" value={f.last_working_day||''} onChange={e => set('last_working_day', e.target.value)} data-testid="last-working-day-input" /></div>
+                    )}
                     {!employee?.id && (
                         <div className="flex items-center gap-2 p-3 bg-muted rounded">
                             <Switch checked={f.create_user_account!==false} onCheckedChange={v => set('create_user_account', v)} />
