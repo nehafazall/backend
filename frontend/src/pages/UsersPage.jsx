@@ -50,25 +50,27 @@ import {
 } from 'lucide-react';
 import ImportButton from '@/components/ImportButton';
 
-const ROLES = [
-    { id: 'super_admin', label: 'Super Admin', color: 'bg-purple-500', entity_access: ['clt', 'miles'] },
-    { id: 'admin', label: 'Admin', color: 'bg-blue-500', entity_access: ['clt', 'miles'] },
-    { id: 'sales_manager', label: 'Sales Manager', color: 'bg-green-500' },
-    { id: 'team_leader', label: 'Team Leader', color: 'bg-cyan-500' },
-    { id: 'sales_executive', label: 'Sales Executive', color: 'bg-yellow-500' },
-    { id: 'cs_head', label: 'CS Head', color: 'bg-pink-500' },
-    { id: 'cs_agent', label: 'CS Agent', color: 'bg-indigo-500' },
-    { id: 'mentor', label: 'Mentor', color: 'bg-orange-500' },
-    { id: 'hr', label: 'HR', color: 'bg-rose-500' },
-    // Finance-specific roles
-    { id: 'finance_manager', label: 'Finance Manager', color: 'bg-emerald-600', entity_access: ['clt', 'miles'], description: 'Both CLT & MILES' },
-    { id: 'finance_admin', label: 'Finance Admin', color: 'bg-teal-500', entity_access: ['miles'], description: 'MILES only' },
-    { id: 'finance_treasurer', label: 'Finance Treasurer', color: 'bg-cyan-600', entity_access: ['miles'], description: 'MILES only' },
-    { id: 'finance_verifier', label: 'Finance Verifier', color: 'bg-sky-500', entity_access: ['miles'], description: 'MILES only' },
-    { id: 'financier', label: 'Financier', color: 'bg-blue-600', entity_access: ['miles'], description: 'MILES only' },
-    { id: 'accounts', label: 'Accounts', color: 'bg-green-600', entity_access: ['clt'], description: 'CLT only' },
-    { id: 'finance', label: 'Finance (Legacy)', color: 'bg-emerald-500', entity_access: ['clt', 'miles'] },
-];
+// Default role metadata (colors, labels) — used as fallback when API roles don't have metadata
+const DEFAULT_ROLE_META = {
+    super_admin: { label: 'Super Admin', color: 'bg-purple-500', entity_access: ['clt', 'miles'] },
+    admin: { label: 'Admin', color: 'bg-blue-500', entity_access: ['clt', 'miles'] },
+    sales_manager: { label: 'Sales Manager', color: 'bg-green-500' },
+    team_leader: { label: 'Team Leader', color: 'bg-cyan-500' },
+    sales_executive: { label: 'Sales Executive', color: 'bg-yellow-500' },
+    cs_head: { label: 'CS Head', color: 'bg-pink-500' },
+    cs_agent: { label: 'CS Agent', color: 'bg-indigo-500' },
+    mentor: { label: 'Mentor', color: 'bg-orange-500' },
+    hr: { label: 'HR', color: 'bg-rose-500' },
+    finance_manager: { label: 'Finance Manager', color: 'bg-emerald-600', entity_access: ['clt', 'miles'], description: 'Both CLT & MILES' },
+    finance_admin: { label: 'Finance Admin', color: 'bg-teal-500', entity_access: ['miles'], description: 'MILES only' },
+    finance_treasurer: { label: 'Finance Treasurer', color: 'bg-cyan-600', entity_access: ['miles'], description: 'MILES only' },
+    finance_verifier: { label: 'Finance Verifier', color: 'bg-sky-500', entity_access: ['miles'], description: 'MILES only' },
+    financier: { label: 'Financier', color: 'bg-blue-600', entity_access: ['miles'], description: 'MILES only' },
+    accounts: { label: 'Accounts', color: 'bg-green-600', entity_access: ['clt'], description: 'CLT only' },
+    finance: { label: 'Finance (Legacy)', color: 'bg-emerald-500', entity_access: ['clt', 'miles'] },
+};
+
+const RANDOM_COLORS = ['bg-violet-500', 'bg-lime-500', 'bg-amber-500', 'bg-fuchsia-500', 'bg-teal-600', 'bg-red-500'];
 
 const FINANCE_ROLES = ['finance_manager', 'finance_admin', 'finance_treasurer', 'finance_verifier', 'financier', 'accounts', 'finance'];
 
@@ -110,6 +112,7 @@ const UsersPage = () => {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [teams, setTeams] = useState([]);
+    const [ROLES, setROLES] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -183,7 +186,28 @@ const UsersPage = () => {
     useEffect(() => {
         fetchUsers();
         fetchTeams();
+        fetchRoles();
     }, [roleFilter]);
+
+    const fetchRoles = async () => {
+        try {
+            const response = await api.get('/roles');
+            const apiRoles = response.data.map((r, idx) => {
+                const meta = DEFAULT_ROLE_META[r.id] || {};
+                return {
+                    id: r.id,
+                    label: r.label || meta.label || r.id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                    color: r.color || meta.color || RANDOM_COLORS[idx % RANDOM_COLORS.length],
+                    entity_access: r.entity_access || meta.entity_access || [],
+                    description: r.description || meta.description || '',
+                };
+            });
+            setROLES(apiRoles);
+        } catch (error) {
+            // Fallback to default roles
+            setROLES(Object.entries(DEFAULT_ROLE_META).map(([id, meta]) => ({ id, ...meta })));
+        }
+    };
 
     const fetchTeams = async () => {
         try {
@@ -810,14 +834,14 @@ const UsersPage = () => {
                             <div className="space-y-2">
                                 <Label>Team</Label>
                                 <Select
-                                    value={formData.team_id || undefined}
-                                    onValueChange={(value) => setFormData({ ...formData, team_id: value })}
+                                    value={formData.team_id || 'none'}
+                                    onValueChange={(value) => setFormData({ ...formData, team_id: value === 'none' ? '' : value })}
                                 >
                                     <SelectTrigger data-testid="user-team-select">
                                         <SelectValue placeholder="Select team" />
                                     </SelectTrigger>
                                     <SelectContent position="popper" className="z-[9999]">
-                                        <SelectItem value="">No Team</SelectItem>
+                                        <SelectItem value="none">No Team</SelectItem>
                                         {teams.map((team) => (
                                             <SelectItem key={team.id} value={team.id}>
                                                 {team.name} ({team.department})
