@@ -5,23 +5,25 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 13, 2026)
 
-### Completed: Dual-Role Views for CS Head, Academic Master, CEO
-- **CS Page**: "My Students" / "Team Overview" toggle for cs_head, admin, super_admin
-  - My Students: filters by cs_agent_id (only their assigned students)
-  - Team Overview: shows all 902+ students with agent summary badges
-- **Mentor Page**: Same toggle for academic_master, admin, super_admin
-  - My Students: filters by mentor_id (their assigned students)
-  - Team Overview: shows all 899+ students with mentor summary badges
-- **CEO Dashboard**: "Pending Approvals" widget replaces Recent Transactions for super_admin/admin
-  - Shows: Leave Requests, Time Regularization, Payroll Processing, Finance Verifications, Expiring Documents
-  - Each item clickable → navigates to relevant page
+### Completed: CS Dashboard Overhaul
+- **5 Key Metrics**: Achieved Revenue (AED 25,795), Pipeline Revenue, Agent Commission (AED 1,100), Head Commission, Total Commission
+- **Individual / Team toggle** for CS Head to switch between personal and team view
+- **Agent Revenue Chart**: Horizontal bar chart showing who closed how much revenue + commission
+- **Leaderboard**: Top agents ranked by commission with gold/silver/bronze medals
+- **Monthly Revenue Trend**: Area chart with revenue + commission over time
+- **This Month vs Last Month**: Cumulative line chart comparison
+- **Pipeline**: Revenue from pitched upgrades awaiting closure
+- **Agent Bifurcation**: Students per agent with SLA rates
+- **Period Filter**: Today, This Week, This Month, This Quarter, This Year, Overall
 
 ### Previously Completed
-- CS Upgrade Pricing & Commission System (3 paths, 9 price tiers, auto commissions)
-- Access Control Unification (roles from Role Management populate Access Control dropdown)
-- Sales Dashboard Overhaul (date filters, team revenue drill-down, month comparison)
-- All modals scrollable globally, improved color contrast
-- Salary payout method field, last working day for resigned/terminated
+- Dual-role views (My Students / Team Overview toggle) for CS Head and Academic Master
+- CEO Pending Approvals widget on Home Dashboard
+- CS Upgrade Pricing & Commission System (3 paths, 9 price tiers)
+- Access Control Unification, Sales Dashboard Overhaul
+- All modals scrollable, improved color contrast
+- Salary payout method, last working day field
+- Student Code field on CS cards
 
 ---
 
@@ -30,10 +32,13 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - Backend: FastAPI + Motor (async MongoDB) + Pydantic
 - Database: MongoDB
 
-## Permission System
-- `canAccess(path)` from PermissionProvider is the single authority for sidebar visibility
-- Super admin always has full access
-- Layout.jsx uses permission system (not hardcoded role arrays)
+## CS Dashboard API Endpoints
+- `GET /api/cs/dashboard/stats` — Key metrics (supports period + view_mode)
+- `GET /api/cs/dashboard/agent-revenue` — Per-agent revenue + commission
+- `GET /api/cs/dashboard/monthly-trend` — Monthly upgrade revenue
+- `GET /api/cs/dashboard/month-comparison` — This month vs last month
+- `GET /api/cs/dashboard/pipeline` — Pitched upgrade revenue
+- `GET /api/cs/dashboard/leaderboard` — Agents ranked by commission
 
 ---
 
@@ -44,8 +49,7 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ### P2 - Future
 - Refactor server.py into domain-specific routes
-- Payslip Generation
-- Google Ads API Integration
+- Payslip Generation, Google Ads API Integration
 - Fix Babel Plugin RangeError
 
 ---
