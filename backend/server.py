@@ -19339,6 +19339,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    # Auto-seed database if empty (for fresh deployments)
+    from db_seeder import seed_database
+    await seed_database(db)
+    
     await bootstrap_super_admin()
     await bootstrap_departments()
     

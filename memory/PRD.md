@@ -55,6 +55,18 @@ Build a custom, modular ERP system for CLT Synapse (formerly CLT Academy) that u
 
 **Test Results:** Backend 92% (12/13), Frontend 100%
 
+#### Data Seeding System for Deployments (IMPLEMENTED & VERIFIED)
+**Problem:** Preview and production have separate databases. When deploying, all data (employees, users, teams, etc.) was lost.
+
+**Solution:**
+- `export_seed.py` — Exports all current MongoDB data to `seed_data.json` (run anytime to update)
+- `db_seeder.py` — Auto-seeds database on startup if empty (checks `users` collection count)
+- Integrated into `server.py` startup event — runs before bootstrap functions
+- Includes: users (with hashed passwords), employees, teams, departments, courses, leads, students, connectors, attendance, etc.
+- Smart check: only seeds if database is empty, won't duplicate on restarts
+
+**Usage:** Run `python3 export_seed.py` in backend folder before deploying to update seed file with latest data.
+
 #### Auto User Account Creation on Employee Creation (IMPLEMENTED & VERIFIED)
 **Problem:** Every time employees were created manually in Employee Master, they didn't appear in User Management. Required manual sync each time.
 
