@@ -5,40 +5,31 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 13, 2026)
 
-### Completed: Sales Dashboard Overhaul + UI/UX Improvements
+### Completed: CS Upgrade Pricing & Commission System
 
-**Sales Dashboard (Fully Rebuilt):**
-- Date filters: Today, Yesterday, This Week, This Month, This Quarter, This Year, Overall, Custom Range
-- Key metrics cards: Revenue (AED 2,174,969), Total Leads (1,223), Conversion (73.8%), Avg Deal (AED 2,411), Today's Transactions
-- Top 10 Agents horizontal bar chart (filterable by period)
-- Team-wise Revenue chart with click-to-drill-down (shows individual agent breakdown in modal)
-- Monthly Revenue Trend (dual-axis area chart: revenue + deals)
-- This Month vs Last Month comparison (cumulative line chart)
-- Sales by Course donut chart with drill-down modal
-- Monthly Leaderboard (top 5 agents with "View All" modal)
-- Lead Pipeline (clickable, navigates to Sales CRM)
-- All widgets support date period filtering
+**Upgrade Flow:**
+1. Drag student to "Pitched Upgrade" → Pricing modal shows 3 upgrade paths:
+   - Basic/Intermediate: 1,600 | 1,999 | 2,105 AED
+   - Intermediate → Advanced: 3,599 | 3,899 | 4,100 AED  
+   - Basic → Advanced: 5,600 | 6,000 | 6,500 AED
+2. Drag from "Pitched Upgrade" to "Upgraded" → Confirm + Payment modal:
+   - Verifies if same/upgraded/downgraded from pitched package
+   - Collects payment method + proof screenshot
+   - Creates finance verification, LTV transaction, finance receivable
+3. After confirmation → student returns to "New Student" for re-activation with questionnaire
 
-**Global UI/UX Improvements:**
-- All modals/popups now scrollable (max-h-[85vh] overflow-y-auto in base DialogContent)
-- Improved color contrast for both light and dark themes:
-  - Light: muted-foreground 36% (was 45%), borders 85% (was 90%)
-  - Dark: muted-foreground 78% (was 69%), borders 28% (was 25%), card 14% (was 15%)
+**Commission Structure (Auto-Calculated):**
+- Agent: 1600→75, 1999→100, 2105→150, 3599→75, 3899→150, 4100→200, 5600→150, 6000→250, 6500→350
+- CS Head: 30 AED (basic/intermediate paths), 60 AED (basic→advanced)
+- CS Head doing upgrade herself: gets both agent + head commission
 
-**Data Integrity Fixes:**
-- 68 future-dated records corrected (day/month swapped)
-- DB seed exported with corrected data (5,197 documents)
-- No future-dated revenue remaining (verified: trend ends at March 2026)
+**Student Code:** Added external platform Student ID field — displayed on kanban cards, editable in detail modal
 
-### Previous Work
-- 901 students imported with correct US date format (MM/DD/YYYY)
-- 46 courses auto-created with prices
-- 899 LTV transactions, 901 customers, 899 finance receivables
-- CS Dashboard: Agent bifurcation with SLA rates + date filters
-- Mentor Dashboard: Student counts per mentor + redeposit tracking
-- Finance Dashboard: Total receivables AED 2,174,969
-- Import buttons removed from Sales CRM
-- Payment Gateway form crash fixed
+### Previously Completed: Sales Dashboard Overhaul + UI/UX
+- Sales Dashboard with date filters, team revenue drill-down, month comparison
+- All modals scrollable globally (dialog.jsx base component)
+- Improved color contrast for light and dark themes
+- 68 future-dated records corrected and DB seed exported
 
 ---
 
@@ -49,28 +40,34 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - Backend: FastAPI + Motor (async MongoDB) + Pydantic
 - Database: MongoDB
 
-### Data Counts
-- Leads: 1,223 | Students: 902 | Courses: 46
-- LTV Transactions: 899 | Customers: 901 | Finance Receivables: 899
-- Employees: 72 | Users: 72 | Teams: 11
+### Key Collections
+- students, leads, customers, courses, teams, users, employees
+- cs_commissions (NEW), finance_verifications, finance_clt_receivables
+- ltv_transactions, activity_logs, notifications
 
 ---
 
 ## Backlog
 
 ### P1 - Upcoming
+- Sales Commission Configuration (user said "for Sales we will do it later")
 - User Verification for Google Sheets connector
-- Course and Commission Configuration (awaiting user business logic)
+- Course and Commission Configuration UI
 
 ### P2 - Future
 - Refactor server.py into domain-specific routes
 - Payslip Generation
 - Google Ads API Integration
 - Mentor Dashboard leaderboard with live data
-- Fix Babel Plugin RangeError (currently mitigated with workaround)
-- 51 failed import rows (missing employee IDs: 40003, 40011, 40027)
+- Fix Babel Plugin RangeError
 
 ---
 
 ## Credentials
 - **Super Admin:** aqib@clt-academy.com / @Aqib1234
+
+## Key API Endpoints (CS Upgrade)
+- `GET /api/cs/upgrade-packages` — Returns pricing config
+- `POST /api/cs/pitch-upgrade/{student_id}` — Record pitched upgrade
+- `POST /api/cs/confirm-upgrade/{student_id}` — Confirm with payment, create commissions
+- `PATCH /api/students/{student_id}/student-code` — Update external student ID
