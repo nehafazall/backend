@@ -401,7 +401,7 @@ function Layout() {
     const currentSection = activeSection ? SECTIONS[activeSection] : null;
     const isHomePage = !activeSection || currentPath === '/home';
 
-    // Determine visible sections using permission system
+    // Determine visible sections using permission system (Access Control is primary authority)
     const visibleSections = [];
     const sectionKeys = Object.keys(SECTIONS);
     for (let i = 0; i < sectionKeys.length; i++) {
@@ -411,17 +411,8 @@ function Layout() {
         if (userRole === 'super_admin') {
             visibleSections.push(section);
         } else {
-            // First check if user's role is in the section's allowed roles
-            if (!section.roles || !section.roles.includes(userRole)) {
-                continue; // Skip this section if role not allowed
-            }
-            // Then check if user can access ANY item in the section via permissions
-            const hasAccessToAnyItem = section.items.some(item => {
-                // If item has specific roles, check those first
-                if (item.roles && !item.roles.includes(userRole)) return false;
-                // Then check permission-based access
-                return canAccess(item.path);
-            });
+            // Check if user can access ANY item in the section via permission system
+            const hasAccessToAnyItem = section.items.some(item => canAccess(item.path));
             if (hasAccessToAnyItem) {
                 visibleSections.push(section);
             }
@@ -433,7 +424,7 @@ function Layout() {
     if (currentSection) {
         for (let i = 0; i < currentSection.items.length; i++) {
             const item = currentSection.items[i];
-            if (checkAccess(item.path, item.roles)) {
+            if (userRole === 'super_admin' || canAccess(item.path)) {
                 sidebarItems.push(item);
             }
         }

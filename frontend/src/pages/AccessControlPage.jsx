@@ -24,7 +24,7 @@ import {
     TrendingUp, Briefcase, BarChart3, Key, UserCircle
 } from 'lucide-react';
 
-const ROLES = [
+const STATIC_ROLES = [
     { id: 'admin', label: 'Admin' },
     { id: 'sales_manager', label: 'Sales Manager' },
     { id: 'team_leader', label: 'Team Leader' },
@@ -97,6 +97,8 @@ const MODULE_HIERARCHY = [
             { id: 'performance', label: 'Performance', path: '/hr/performance' },
             { id: 'hr_assets', label: 'Assets', path: '/hr/assets' },
             { id: 'hr_analytics', label: 'HR Analytics', path: '/hr/analytics' },
+            { id: 'hr_documents', label: 'Company Documents', path: '/hr/documents' },
+            { id: 'hr_approvals', label: 'Approval Queue', path: '/hr/approvals' },
         ]
     },
     {
@@ -377,12 +379,29 @@ function ModuleCard({ module, permissions, onPermissionChange, onModuleToggle, i
 
 function AccessControlPage() {
     const { user } = useAuth();
+    const [roles, setRoles] = useState(STATIC_ROLES);
     const [selectedRole, setSelectedRole] = useState('sales_executive');
     const [permissions, setPermissions] = useState({});
     const [expandedModules, setExpandedModules] = useState({});
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Load roles from backend (includes custom roles from Role Management)
+    useEffect(() => {
+        const fetchRoles = async () => {
+            try {
+                const res = await apiClient.get('/roles');
+                const allRoles = res.data
+                    .filter(r => r.id !== 'super_admin')
+                    .map(r => ({ id: r.id || r.name, label: r.display_name || r.name }));
+                if (allRoles.length > 0) setRoles(allRoles);
+            } catch {
+                // Keep static fallback
+            }
+        };
+        fetchRoles();
+    }, []);
 
     useEffect(() => {
         loadRolePermissions(selectedRole);
@@ -484,7 +503,7 @@ function AccessControlPage() {
         setSaving(true);
         try {
             await apiClient.put(`/roles/${selectedRole}/permissions`, permissions);
-            toast.success(`Permissions saved for ${ROLES.find(r => r.id === selectedRole)?.label}`);
+            toast.success(`Permissions saved for ${roles.find(r => r.id === selectedRole)?.label || selectedRole}`);
             setHasChanges(false);
         } catch (error) {
             toast.error('Failed to save permissions');
@@ -551,7 +570,7 @@ function AccessControlPage() {
                                     <SelectValue placeholder="Select role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {ROLES.map((role) => (
+                                    {roles.map((role) => (
                                         <SelectItem key={role.id} value={role.id}>
                                             {role.label}
                                         </SelectItem>

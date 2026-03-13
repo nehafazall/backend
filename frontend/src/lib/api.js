@@ -246,7 +246,7 @@ const MODULE_HIERARCHY = [
     },
     {
         id: 'hr',
-        subPages: ['hr_dashboard', 'employee_master', 'leave_management', 'attendance', 'biocloud_sync', 'payroll', 'performance', 'hr_assets', 'hr_analytics']
+        subPages: ['hr_dashboard', 'employee_master', 'leave_management', 'attendance', 'biocloud_sync', 'payroll', 'performance', 'hr_assets', 'hr_analytics', 'hr_documents', 'hr_approvals']
     },
     {
         id: 'finance',
@@ -422,6 +422,14 @@ const PATH_TO_SUBPAGE = {
     '/password-resets': 'password_resets',
     '/audit-log': 'audit_log',
     '/admin-settings': 'admin_settings',
+    // SSHR paths
+    '/sshr': 'sshr_dashboard',
+    '/sshr/payslips': 'sshr_payslips',
+    // HR extra paths
+    '/hr/documents': 'hr_documents',
+    '/hr/approvals': 'hr_approvals',
+    // Finance extra paths  
+    '/finance/verifications': 'finance_verifications',
 };
 
 // SubPage ID to module mapping
