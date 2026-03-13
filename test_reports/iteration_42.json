@@ -1,0 +1,133 @@
+{
+  "summary": "CS Upgrade Pricing and Commission System - ALL TESTS PASSED (16/16 backend + All frontend). Verified: GET /api/cs/upgrade-packages returns 3 paths with correct prices/commissions, POST /api/cs/pitch-upgrade saves pitched data and moves student to pitched_for_upgrade, POST /api/cs/confirm-upgrade creates finance verification + CS commissions + LTV transaction and moves student to new_student, PATCH /api/students/{id}/student-code updates student_code field. Frontend: CS kanban with all columns, UpgradePricingModal with 3 paths and price options, commission info displayed, student_code input in detail modal.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "StudentCard component",
+        "issues": ["Minor HTML nesting warning: <div> inside <p> in Badge component (non-breaking, cosmetic only)"]
+      }
+    ]
+  },
+
+  "passed_tests": [
+    "Backend: test_get_upgrade_packages_returns_all_paths - All 3 paths returned",
+    "Backend: test_basic_to_intermediate_prices_and_commissions - 1600/1999/2105 with 75/100/150 AED commissions",
+    "Backend: test_intermediate_to_advanced_prices_and_commissions - 3599/3899/4100 with 75/150/200 AED commissions",
+    "Backend: test_basic_to_advanced_prices_and_commissions - 5600/6000/6500 with 150/250/350 AED commissions",
+    "Backend: test_head_commission_structure - 30 AED for basic/intermediate paths, 60 AED for basic_to_advanced",
+    "Backend: test_pitch_upgrade_requires_student - 404 for non-existent student",
+    "Backend: test_pitch_upgrade_requires_valid_path - 400 for invalid path",
+    "Backend: test_pitch_upgrade_requires_valid_price - 400 for invalid price",
+    "Backend: test_pitch_upgrade_success_and_stage_update - Student moved to pitched_for_upgrade",
+    "Backend: test_confirm_upgrade_creates_verification_record - Finance verification created",
+    "Backend: test_confirm_upgrade_creates_commissions - Agent and head commissions created",
+    "Backend: test_confirm_upgrade_moves_to_new_student - Student moved to new_student for re-activation",
+    "Backend: test_update_student_code - Student code updated successfully",
+    "Backend: test_student_code_can_be_cleared - Empty string accepted",
+    "Backend: test_student_code_invalid_student - 404 for non-existent student",
+    "Backend: test_all_commission_values_exact - All commission values match specification",
+    "Frontend: CS page loads at /cs with all 8 kanban columns",
+    "Frontend: UpgradePricingModal opens when changing stage to pitched_for_upgrade",
+    "Frontend: Modal shows 3 upgrade paths (Basic/Int, Int/Adv, Basic/Adv)",
+    "Frontend: Price options display correct values (1600/1999/2105 for Basic/Int)",
+    "Frontend: Agent commission info visible (AED 75/100/150)",
+    "Frontend: Student detail modal has editable Student ID input field",
+    "Frontend: Student cards show upgrade count badge (x5)",
+    "Frontend: Current Package and upgrade history displayed in detail modal"
+  ],
+
+  "features_verified": {
+    "upgrade_packages_endpoint": {
+      "status": "WORKING",
+      "details": "GET /api/cs/upgrade-packages returns all 3 paths with correct prices and commissions"
+    },
+    "pitch_upgrade_endpoint": {
+      "status": "WORKING",
+      "details": "POST /api/cs/pitch-upgrade/{id} saves pitched data, moves student to pitched_for_upgrade stage"
+    },
+    "confirm_upgrade_endpoint": {
+      "status": "WORKING",
+      "details": "POST /api/cs/confirm-upgrade/{id} creates finance verification, agent/head commissions, LTV transaction, finance receivable, moves student to new_student"
+    },
+    "student_code_endpoint": {
+      "status": "WORKING",
+      "details": "PATCH /api/students/{id}/student-code updates student_code field"
+    },
+    "cs_kanban_columns": {
+      "status": "WORKING",
+      "details": "All 8 columns present: new_student, activated, satisfactory_call, pitched_for_upgrade, in_progress, interested, upgraded, not_interested"
+    },
+    "upgrade_pricing_modal": {
+      "status": "WORKING",
+      "details": "Modal opens on stage change, shows 3 paths with price options and commission info"
+    },
+    "commission_structure": {
+      "status": "WORKING",
+      "details": "Agent: 1600→75, 1999→100, 2105→150, 3599→75, 3899→150, 4100→200, 5600→150, 6000→250, 6500→350. Head: 30 AED (basic/int), 60 AED (basic/adv)"
+    },
+    "student_code_display": {
+      "status": "WORKING",
+      "details": "Student ID input field in detail modal, editable and saves to backend"
+    }
+  },
+
+  "commission_values_verified": {
+    "basic_to_intermediate": {
+      "1600": {"agent": 75, "head": 30},
+      "1999": {"agent": 100, "head": 30},
+      "2105": {"agent": 150, "head": 30}
+    },
+    "intermediate_to_advanced": {
+      "3599": {"agent": 75, "head": 30},
+      "3899": {"agent": 150, "head": 30},
+      "4100": {"agent": 200, "head": 30}
+    },
+    "basic_to_advanced": {
+      "5600": {"agent": 150, "head": 60},
+      "6000": {"agent": 250, "head": 60},
+      "6500": {"agent": 350, "head": 60}
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_cs_upgrade_system.py",
+    "/app/test_reports/pytest/pytest_cs_upgrade_system.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_cs_upgrade_system.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (All CS upgrade features working correctly)"
+  },
+
+  "test_credentials": {
+    "super_admin": {
+      "email": "aqib@clt-academy.com",
+      "password": "@Aqib1234"
+    }
+  },
+
+  "seed_data_creation": "Using existing test student 'Samidha Hameed' (ID: f595bc32-bf3a-4838-8075-7c53d81cdab3) with 5 upgrades",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "CS Upgrade Pricing System fully tested and working. Key endpoints: /api/cs/upgrade-packages (GET), /api/cs/pitch-upgrade/{id} (POST), /api/cs/confirm-upgrade/{id} (POST), /api/students/{id}/student-code (PATCH). UpgradePricingModal opens when dragging to pitched_for_upgrade column or changing stage in detail modal. UpgradeConfirmPaymentModal opens when moving from pitched_for_upgrade to upgraded. Commission records are stored in cs_commissions collection. Finance verification records in finance_verifications collection.",
+
+  "testing_method": "Backend pytest (16 tests) + Playwright browser automation for frontend verification"
+}

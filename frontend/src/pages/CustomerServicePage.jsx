@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, studentApi } from '@/lib/api';
+import { useAuth, studentApi, apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +51,9 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import UpgradeModal, { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
+import UpgradePricingModal from '@/components/UpgradePricingModal';
+import UpgradeConfirmPaymentModal from '@/components/UpgradeConfirmPaymentModal';
+import { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
 import {
     Search,
     Phone,
@@ -159,6 +161,12 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                         className="h-6 w-6"
                     />
                 </div>
+                {student.student_code && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <GraduationCap className="h-3 w-3" />
+                        <span className="font-mono text-xs" data-testid={`student-code-${student.id}`}>ID: {student.student_code}</span>
+                    </div>
+                )}
                 {courseName && (
                     <p className="flex items-center gap-2">
                         <GraduationCap className="h-3 w-3 text-muted-foreground" />
@@ -291,6 +299,12 @@ const CustomerServicePage = () => {
     // Upgrade modal state
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [upgradeStudent, setUpgradeStudent] = useState(null);
+    // Upgrade pricing modal (pitched_for_upgrade)
+    const [showPricingModal, setShowPricingModal] = useState(false);
+    const [pricingStudent, setPricingStudent] = useState(null);
+    // Upgrade confirm + payment modal (upgraded)
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmStudent, setConfirmStudent] = useState(null);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -394,9 +408,27 @@ const CustomerServicePage = () => {
         // If dropped in a different stage, update the student
         if (targetStage && targetStage !== activeStudent.stage) {
             // Check if moving to "activated" stage - show questionnaire
-            if (targetStage === 'activated' && activeStudent.stage === 'new_student') {
+            if (targetStage === 'activated' && (activeStudent.stage === 'new_student')) {
                 setPendingActivationStudent(activeStudent);
                 setShowActivationModal(true);
+                return;
+            }
+
+            // Check if moving to "pitched_for_upgrade" - show pricing modal
+            if (targetStage === 'pitched_for_upgrade') {
+                setPricingStudent(activeStudent);
+                setShowPricingModal(true);
+                return;
+            }
+
+            // Check if moving to "upgraded" - show confirm + payment modal
+            if (targetStage === 'upgraded') {
+                if (!activeStudent.pitched_upgrade_path) {
+                    toast.error('Student must be pitched first before upgrading');
+                    return;
+                }
+                setConfirmStudent(activeStudent);
+                setShowConfirmModal(true);
                 return;
             }
             
@@ -441,6 +473,26 @@ const CustomerServicePage = () => {
             setShowDetailModal(false);
             setPendingActivationStudent(selectedStudent);
             setShowActivationModal(true);
+            return;
+        }
+
+        // Check if changing to "pitched_for_upgrade" - show pricing modal
+        if (updateData.stage === 'pitched_for_upgrade' && selectedStudent.stage !== 'pitched_for_upgrade') {
+            setShowDetailModal(false);
+            setPricingStudent(selectedStudent);
+            setShowPricingModal(true);
+            return;
+        }
+
+        // Check if changing to "upgraded" - show confirm + payment modal
+        if (updateData.stage === 'upgraded' && selectedStudent.stage !== 'upgraded') {
+            if (!selectedStudent.pitched_upgrade_path) {
+                toast.error('Student must be pitched first before upgrading');
+                return;
+            }
+            setShowDetailModal(false);
+            setConfirmStudent(selectedStudent);
+            setShowConfirmModal(true);
             return;
         }
         
@@ -613,6 +665,27 @@ const CustomerServicePage = () => {
                                             <span className="ml-2">{formatDate(selectedStudent.created_at)}</span>
                                         </div>
                                     </div>
+
+                                    {/* Student Code / External ID */}
+                                    <div className="mt-4 flex items-center gap-3">
+                                        <Label className="text-sm text-muted-foreground whitespace-nowrap">Student ID:</Label>
+                                        <Input
+                                            value={selectedStudent.student_code || ''}
+                                            placeholder="Enter external student code"
+                                            className="h-8 text-sm font-mono max-w-[200px]"
+                                            data-testid="student-code-input"
+                                            onChange={async (e) => {
+                                                const code = e.target.value;
+                                                setSelectedStudent(prev => ({ ...prev, student_code: code }));
+                                            }}
+                                            onBlur={async (e) => {
+                                                const code = e.target.value;
+                                                try {
+                                                    await apiClient.patch(`/students/${selectedStudent.id}/student-code`, { student_code: code });
+                                                } catch { /* silent */ }
+                                            }}
+                                        />
+                                    </div>
                                     
                                     {/* 3CX Call Center Integration */}
                                     <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-muted-foreground/20">
@@ -744,12 +817,30 @@ const CustomerServicePage = () => {
                 onComplete={handleActivationComplete}
             />
 
-            {/* Upgrade Modal */}
-            <UpgradeModal
-                isOpen={showUpgradeModal}
-                onClose={() => { setShowUpgradeModal(false); setUpgradeStudent(null); }}
-                student={upgradeStudent}
-                onUpgradeComplete={handleUpgradeComplete}
+            {/* Upgrade Pricing Modal (pitched_for_upgrade) */}
+            <UpgradePricingModal
+                open={showPricingModal}
+                onClose={() => { setShowPricingModal(false); setPricingStudent(null); }}
+                student={pricingStudent}
+                onPitchComplete={(updatedStudent) => {
+                    setShowPricingModal(false);
+                    setPricingStudent(null);
+                    fetchStudents();
+                    toast.success(`Upgrade pitched for ${updatedStudent.full_name}`);
+                }}
+            />
+
+            {/* Upgrade Confirm + Payment Modal (upgraded) */}
+            <UpgradeConfirmPaymentModal
+                open={showConfirmModal}
+                onClose={() => { setShowConfirmModal(false); setConfirmStudent(null); }}
+                student={confirmStudent}
+                onConfirmComplete={(updatedStudent) => {
+                    setShowConfirmModal(false);
+                    setConfirmStudent(null);
+                    fetchStudents();
+                    toast.success(`Upgrade confirmed for ${updatedStudent.full_name}. Student moved to New Student — please re-activate.`, { duration: 6000 });
+                }}
             />
         </div>
     );

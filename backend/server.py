@@ -452,6 +452,7 @@ class StudentUpdate(BaseModel):
     satisfaction_score: Optional[int] = None
     activation_call_at: Optional[datetime] = None
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
+    student_code: Optional[str] = None  # External platform student ID
     # Reminder fields
     reminder_date: Optional[datetime] = None
     reminder_time: Optional[str] = None  # HH:MM format
@@ -502,6 +503,13 @@ class StudentResponse(StudentBase):
     upgrade_count: Optional[int] = 0  # Number of upgrades
     is_upgraded_student: Optional[bool] = False  # Flag for mentors
     activation_questionnaire: Optional[Dict] = None  # Stored questionnaire data
+    student_code: Optional[str] = None  # External platform student ID
+    pitched_upgrade_path: Optional[str] = None
+    pitched_upgrade_label: Optional[str] = None
+    pitched_upgrade_price: Optional[float] = None
+    last_upgrade_amount: Optional[float] = None
+    last_upgrade_path: Optional[str] = None
+    last_upgrade_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     
@@ -4392,6 +4400,331 @@ async def initiate_student_upgrade(
         "student": updated,
         "upgrade_record": upgrade_record
     }
+
+# ==================== CS UPGRADE PACKAGES & COMMISSION ====================
+
+CS_UPGRADE_PACKAGES = {
+    "basic_to_intermediate": {
+        "label": "Basic / Intermediate",
+        "description": "One-level upgrade",
+        "prices": [
+            {"amount": 1600, "agent_commission": 75, "head_commission": 30},
+            {"amount": 1999, "agent_commission": 100, "head_commission": 30},
+            {"amount": 2105, "agent_commission": 150, "head_commission": 30},
+        ]
+    },
+    "intermediate_to_advanced": {
+        "label": "Intermediate to Advanced",
+        "description": "Upgrade from Intermediate to Advanced",
+        "prices": [
+            {"amount": 3599, "agent_commission": 75, "head_commission": 30},
+            {"amount": 3899, "agent_commission": 150, "head_commission": 30},
+            {"amount": 4100, "agent_commission": 200, "head_commission": 30},
+        ]
+    },
+    "basic_to_advanced": {
+        "label": "Basic to Advanced",
+        "description": "Direct jump upgrade",
+        "prices": [
+            {"amount": 5600, "agent_commission": 150, "head_commission": 60},
+            {"amount": 6000, "agent_commission": 250, "head_commission": 60},
+            {"amount": 6500, "agent_commission": 350, "head_commission": 60},
+        ]
+    }
+}
+
+@api_router.get("/cs/upgrade-packages")
+async def get_cs_upgrade_packages(user=Depends(get_current_user)):
+    """Return the upgrade pricing configuration."""
+    return CS_UPGRADE_PACKAGES
+
+@api_router.post("/cs/pitch-upgrade/{student_id}")
+async def pitch_upgrade(
+    student_id: str,
+    body: Dict,
+    user=Depends(require_roles(["super_admin", "admin", "cs_head", "cs_agent"]))
+):
+    """Record a pitched upgrade when student moves to pitched_for_upgrade stage."""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    upgrade_path = body.get("upgrade_path")
+    selected_price = body.get("selected_price")
+    if not upgrade_path or not selected_price:
+        raise HTTPException(status_code=400, detail="upgrade_path and selected_price are required")
+
+    package = CS_UPGRADE_PACKAGES.get(upgrade_path)
+    if not package:
+        raise HTTPException(status_code=400, detail="Invalid upgrade path")
+
+    price_entry = next((p for p in package["prices"] if p["amount"] == selected_price), None)
+    if not price_entry:
+        raise HTTPException(status_code=400, detail="Invalid price for this upgrade path")
+
+    now = datetime.now(timezone.utc).isoformat()
+    pitched_data = {
+        "stage": "pitched_for_upgrade",
+        "upgrade_pitched": True,
+        "pitched_upgrade_path": upgrade_path,
+        "pitched_upgrade_label": package["label"],
+        "pitched_upgrade_price": selected_price,
+        "pitched_agent_commission": price_entry["agent_commission"],
+        "pitched_head_commission": price_entry["head_commission"],
+        "pitched_by": user["id"],
+        "pitched_by_name": user["full_name"],
+        "pitched_at": now,
+        "updated_at": now,
+    }
+    await db.students.update_one({"id": student_id}, {"$set": pitched_data})
+
+    await log_activity("student", student_id, "upgrade_pitched", user, {
+        "upgrade_path": package["label"],
+        "price": selected_price
+    })
+
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return {"success": True, "student": updated}
+
+@api_router.post("/cs/confirm-upgrade/{student_id}")
+async def confirm_upgrade(
+    student_id: str,
+    body: Dict,
+    user=Depends(require_roles(["super_admin", "admin", "cs_head", "cs_agent"]))
+):
+    """
+    Confirm upgrade with final package + payment details. Creates:
+    - Finance verification record
+    - CS agent commission
+    - CS head commission
+    - Upgrade history entry
+    - LTV transaction
+    """
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    final_path = body.get("upgrade_path")
+    final_price = body.get("selected_price")
+    payment_method = body.get("payment_method")
+    payment_proof = body.get("payment_proof")
+    payment_proof_filename = body.get("payment_proof_filename")
+    payment_notes = body.get("payment_notes", "")
+    is_split_payment = body.get("is_split_payment", False)
+    payment_splits = body.get("payment_splits")
+    transaction_id = body.get("transaction_id", "")
+    change_type = body.get("change_type", "same")  # same, upgraded, downgraded
+
+    if not final_path or not final_price:
+        raise HTTPException(status_code=400, detail="upgrade_path and selected_price are required")
+
+    package = CS_UPGRADE_PACKAGES.get(final_path)
+    if not package:
+        raise HTTPException(status_code=400, detail="Invalid upgrade path")
+
+    price_entry = next((p for p in package["prices"] if p["amount"] == final_price), None)
+    if not price_entry:
+        raise HTTPException(status_code=400, detail="Invalid price for this upgrade path")
+
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+
+    # --- Build upgrade history entry ---
+    upgrade_history = student.get("upgrade_history", [])
+    upgrade_record = {
+        "id": str(uuid.uuid4()),
+        "from_course_name": student.get("current_course_name") or student.get("package_bought"),
+        "to_course_name": package["label"],
+        "upgrade_path": final_path,
+        "amount": final_price,
+        "change_type": change_type,
+        "payment_method": payment_method,
+        "agent_commission": price_entry["agent_commission"],
+        "head_commission": price_entry["head_commission"],
+        "confirmed_by": user["id"],
+        "confirmed_by_name": user["full_name"],
+        "confirmed_at": now_iso,
+    }
+    upgrade_history.append(upgrade_record)
+
+    # --- Determine new course name based on path ---
+    course_name_map = {
+        "basic_to_intermediate": "Intermediate",
+        "intermediate_to_advanced": "Advanced",
+        "basic_to_advanced": "Advanced",
+    }
+    new_course_name = course_name_map.get(final_path, package["label"])
+
+    # --- Update student ---
+    update_data = {
+        "stage": "new_student",  # Back to new_student for re-activation with questionnaire
+        "upgrade_closed": True,
+        "upgrade_pitched": False,
+        "current_course_name": new_course_name,
+        "upgrade_history": upgrade_history,
+        "upgrade_count": len(upgrade_history),
+        "is_upgraded_student": True,
+        "last_upgrade_amount": final_price,
+        "last_upgrade_path": final_path,
+        "last_upgrade_at": now_iso,
+        "updated_at": now_iso,
+    }
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+
+    # --- Create finance verification record ---
+    verification_id = str(uuid.uuid4())
+    verification_record = {
+        "id": verification_id,
+        "type": "cs_upgrade_payment",
+        "student_id": student_id,
+        "customer_name": student["full_name"],
+        "phone": student.get("phone"),
+        "email": student.get("email"),
+        "course_name": f"Upgrade: {package['label']}",
+        "sale_amount": final_price,
+        "payment_method": payment_method,
+        "payment_date": now_iso[:10],
+        "payment_proof": payment_proof,
+        "payment_proof_filename": payment_proof_filename,
+        "payment_notes": payment_notes,
+        "is_split_payment": is_split_payment,
+        "payment_splits": payment_splits,
+        "transaction_id": transaction_id,
+        "cs_agent_id": student.get("cs_agent_id") or user["id"],
+        "cs_agent_name": student.get("cs_agent_name") or user["full_name"],
+        "status": "pending_verification",
+        "submitted_at": now_iso,
+        "verified_at": None,
+        "verified_by": None,
+        "notes": payment_notes,
+    }
+    await db.finance_verifications.insert_one(verification_record)
+
+    # --- Record CS agent commission ---
+    agent_id = student.get("cs_agent_id") or user["id"]
+    agent_name = student.get("cs_agent_name") or user["full_name"]
+    agent_commission_amount = price_entry["agent_commission"]
+
+    cs_commission_record = {
+        "id": str(uuid.uuid4()),
+        "type": "cs_upgrade_agent",
+        "student_id": student_id,
+        "student_name": student["full_name"],
+        "upgrade_path": final_path,
+        "upgrade_label": package["label"],
+        "upgrade_amount": final_price,
+        "commission_amount": agent_commission_amount,
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "agent_role": "cs_agent",
+        "status": "pending",
+        "created_at": now_iso,
+    }
+    await db.cs_commissions.insert_one(cs_commission_record)
+
+    # --- Record CS head commission ---
+    head_commission_amount = price_entry["head_commission"]
+    # Find the CS head
+    cs_head = await db.users.find_one({"role": "cs_head", "is_active": True}, {"_id": 0})
+    cs_head_id = cs_head["id"] if cs_head else None
+    cs_head_name = cs_head["full_name"] if cs_head else "N/A"
+
+    # If the agent IS the CS head, they get BOTH commissions
+    is_head_doing_upgrade = (user.get("role") == "cs_head") or (agent_id == cs_head_id)
+
+    if cs_head_id:
+        head_record = {
+            "id": str(uuid.uuid4()),
+            "type": "cs_upgrade_head",
+            "student_id": student_id,
+            "student_name": student["full_name"],
+            "upgrade_path": final_path,
+            "upgrade_label": package["label"],
+            "upgrade_amount": final_price,
+            "commission_amount": head_commission_amount,
+            "agent_id": cs_head_id,
+            "agent_name": cs_head_name,
+            "agent_role": "cs_head",
+            "is_self_upgrade": is_head_doing_upgrade,
+            "status": "pending",
+            "created_at": now_iso,
+        }
+        await db.cs_commissions.insert_one(head_record)
+
+    # --- Create LTV transaction ---
+    ltv_record = {
+        "id": str(uuid.uuid4()),
+        "student_id": student_id,
+        "student_name": student["full_name"],
+        "type": "upgrade",
+        "amount": final_price,
+        "description": f"CS Upgrade: {package['label']}",
+        "date": now_iso[:10],
+        "created_by": user["id"],
+        "created_at": now_iso,
+    }
+    await db.ltv_transactions.insert_one(ltv_record)
+
+    # --- Create finance receivable ---
+    receivable = {
+        "id": str(uuid.uuid4()),
+        "customer_name": student["full_name"],
+        "phone": student.get("phone"),
+        "amount": final_price,
+        "amount_in_aed": final_price,
+        "type": "cs_upgrade",
+        "description": f"CS Upgrade: {package['label']}",
+        "date": now_iso[:10],
+        "status": "pending",
+        "created_at": now_iso,
+    }
+    await db.finance_clt_receivables.insert_one(receivable)
+
+    # Notify finance
+    finance_users = await db.users.find(
+        {"role": {"$in": ["finance", "admin", "super_admin"]}, "is_active": True}, {"id": 1}
+    ).to_list(100)
+    for fu in finance_users:
+        await create_notification(
+            fu["id"],
+            "CS Upgrade - Payment Verification Required",
+            f"Student: {student['full_name']} | Upgrade: {package['label']} | AED {final_price}",
+            "warning",
+            "/finance/verifications"
+        )
+
+    await log_activity("student", student_id, "upgrade_confirmed", user, {
+        "upgrade_path": package["label"],
+        "price": final_price,
+        "agent_commission": agent_commission_amount,
+        "head_commission": head_commission_amount,
+    })
+
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return {
+        "success": True,
+        "student": updated,
+        "verification_id": verification_id,
+        "commissions": {
+            "agent": {"name": agent_name, "amount": agent_commission_amount},
+            "head": {"name": cs_head_name, "amount": head_commission_amount},
+            "head_also_agent": is_head_doing_upgrade,
+        }
+    }
+
+@api_router.patch("/students/{student_id}/student-code")
+async def update_student_code(
+    student_id: str,
+    body: Dict,
+    user=Depends(require_roles(["super_admin", "admin", "cs_head", "cs_agent"]))
+):
+    """Update external student code/ID."""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    code = body.get("student_code", "")
+    await db.students.update_one({"id": student_id}, {"$set": {"student_code": code, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True, "student_code": code}
 
 @api_router.post("/students/{student_id}/complete-upgrade-activation")
 async def complete_upgrade_activation(
