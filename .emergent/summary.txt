@@ -1,147 +1,184 @@
 <analysis>**original_problem_statement:**
-The user's primary goal is to build a comprehensive, integrated business management system. The latest request is to implement a feature for importing historical data of closed customers from an XLSX file.
+The user's primary goal is to build a comprehensive, integrated business management system. The latest requests focus on correcting data inconsistencies from a large XLSX import and significantly overhauling the Sales Dashboard for better analytics and usability.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Import Feature:** Create a new feature to import historical student data from an XLSX file.
-2.  **File Format:** The import must handle a specific XLSX format with the following columns: , , , , , , , , , , , , .
-3.  **Course Auto-Creation:** If a course in the sheet does not exist, it should be created automatically. If a course with the same name but a different price is found, a new variant should be created (e.g., Basic Package - 2).
-4.  **Automated Assignments:** Upon import, students must be automatically assigned to their respective Sales Agent, CS Agent, and Mentor dashboards.
-5.  **Workflow Status:**
-    *   In the Sales CRM, these students should be in the Enrolled stage.
-    *   In the Customer Service (CS) module, they should be in the Activated stage.
-6.  **Financials:** The enrollment amount should be booked as revenue for the corresponding month. The imported students and their revenue should be reflected in a Customer Master view.
-7.  **User-Provided Data:** The user has supplied the file  to be imported.
+1.  **Fix Data Integrity:** Correct revenue data that was incorrectly recorded with future dates.
+2.  **Sales Dashboard Overhaul:**
+    *   Implement comprehensive date filters: Today, Yesterday, This Week, This Month, This Quarter, This Year, and a custom date range selector.
+    *   Replace the Top 5 Agents chart with a Team-wise Revenue chart.
+    *   Enable drill-down functionality on the team revenue chart, showing individual team member performance in a popup.
+    *   Add an XY Scatter plot comparing the current month's daily revenue against the previous month's.
+3.  **Global UI/UX Improvements:**
+    *   Improve color contrast for both light and dark themes to enhance readability across all charts, text, and components.
+    *   Make all popups (modals) throughout the application scrollable to prevent content from being cut off on smaller screens.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack business management platform using React, FastAPI, and MongoDB. It features modules for HR, Sales, Finance, Customer Service, and Mentorship. A new backend endpoint () has just been created to handle the new XLSX import requirement, along with a corresponding UI button on the Sales CRM page. A robust data seeding system is also in place, which exports database contents to a  file to ensure data continuity between preview and production environments upon deployment.
+The application is a full-stack business management platform (React/FastAPI/MongoDB) with modules for HR, Sales, Finance, CS, and Mentorship. A large volume of historical student data has been imported. The agent has just completed fixing future-dated records in the database and has built and tested all the new backend endpoints required for the requested Sales Dashboard overhaul.
 
 **Last working item**:
--   **Last item agent was working:** Implementing the historical student data import from an XLSX file. The user has provided the final file () and confirmed the business rules. The agent's last action was to begin processing this file.
+-   **Last item agent was working:** Building the backend infrastructure for the new Sales Dashboard. This involved creating new API endpoints for team-wise revenue, month-over-month revenue comparison, and integrating a flexible date-filtering mechanism into all relevant dashboard endpoints.
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** Y (Tested with a small dummy file, but not the user's final 900+ record file).
--   **Which testing method agent to use?** backend testing agent
+-   **Agent Testing Done:** Y (Backend endpoints were successfully tested via ).
+-   **Which testing method agent to use?** frontend testing agent (After the frontend dashboard is rebuilt).
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Complete Historical Student Data Import (P0 - HIGHEST PRIORITY)**
-    -   **Description:** The user has provided the final XLSX file () for import. The agent must use the newly created endpoint () to process this file and populate the system with historical data.
+-   **Issue 1: Fix Incorrect Future Revenue Dates (P0)**
+    -   **Description:** 68 records were imported with enrollment dates in the future (Apr-Dec 2026) due to a date format mismatch.
+    -   **Attempted fixes:** The agent successfully ran a database script to swap the day and month for all 68 affected records, correcting the dates.
     -   **Next debug checklist:**
-        1.  Download the user-provided artifact: .
-        2.  Call the  endpoint using  with the downloaded file.
-        3.  Verify the results: check the counts of , , , and  created.
-        4.  Confirm that students are correctly assigned to their respective sales agents, CS agents, and mentors in the database and visible on the frontend.
-        5.  Verify that the imported students are in the 'Enrolled' (Sales) and 'Activated' (CS) stages.
-        6.  **CRITICAL**: After a successful import, run the command  to update the  file with the newly imported data.
-    -   **Why fix this issue and what will be achieved with the fix?** This is the user's primary active request. Completing it will populate the system with critical historical data and enable full use of the platform.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Both
+        1.  Run the command   Exported departments: 10 documents
+  Exported courses: 46 documents
+  Exported commission_rules: 1 documents
+  Exported system_config: 1 documents
+  Exported users: 72 documents
+  Exported hr_employees: 72 documents
+  Exported teams: 11 documents
+  Exported leads: 1223 documents
+  Exported students: 902 documents
+  Exported sheet_connectors: 1 documents
+  Exported payments: 1 documents
+  Exported hr_attendance: 143 documents
+  Exported call_logs: 14 documents
+  Exported hr_payroll_batches: 1 documents
+  Exported integrations: 0 documents
+  Exported ltv_transactions: 899 documents
+  Exported customers: 901 documents
+  Exported finance_clt_receivables: 899 documents
 
--   **Issue 2:  in  (P2 - LOW PRIORITY)**
-    -   **Description:** A recurring Babel plugin error that crashes the frontend. It is currently mitigated by disabling the plugin in . This is a known technical debt item.
-    -   **Status:** NOT STARTED
-    -   **Is recurring issue?** Y
+Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to capture the corrected dates in the  file. This is a critical un-done step.
+        2.  Verify on the frontend Sales Dashboard that no revenue is displayed for future months.
+    -   **Status:** USER VERIFICATION PENDING
+    -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Frontend
 
 **In progress Task List**:
--   **Task 1: Historical Student Data Import from XLSX**
-    -   **Where to resume:** Download the user-provided  file and execute the import via the  endpoint.
-    -   **What will be achieved with this?** All historical student data will be loaded into the system, correctly assigned to employees, and placed in the correct workflow stages.
+-   **Task 1: Rebuild Sales Dashboard Frontend (P0)**
+    -   **Description:** The user has requested a complete redesign of the Sales Dashboard with new charts and filters.
+    -   **Where to resume:** All necessary backend endpoints are now available. The next step is to rewrite the file  to implement the new UI, including date filters, the team revenue chart with drill-down popups, and the month-over-month scatter plot.
+    -   **What will be achieved with this?** A more insightful, interactive, and user-friendly Sales Dashboard that meets specific analytical requirements.
     -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Should Test frontend/backend/both after fix?** Frontend
     -   **Blocked on something:** No
 
 **Upcoming and Future Tasks**
 
 **Upcoming Tasks:**
--   **P1: Course and Commission Configuration:** Implement UI and backend for programmatically setting up courses and a multi-level commission structure. (Blocked: Awaiting specific business logic from the user).
--   **P1: User Verification for Google Sheets:** The Google Sheets connector issue was resolved, but the user has not explicitly tested and verified it yet.
+-   **P1: Make All Popups Scrollable:** Address the user's feedback that modals across the application are not scrollable. This will likely involve modifying a base dialog/modal component to add  CSS styling.
+-   **P1: Improve Theme Color Contrast:** Revise the application's global CSS ( or ) to ensure better color contrast between text, charts, and background elements in both light and dark themes.
 
 **Future Tasks:**
--   **Refactor :** Break down the monolithic  into domain-specific route files (e.g., , ) to improve maintainability.
--   Implement Payslip Generation.
--   Integrate with Google Ads API.
--   Connect the Mentor Dashboard leaderboard to live data and verify its accuracy.
+-   **P1: User Verification for Google Sheets:** The previously fixed Google Sheets connector is still awaiting user testing and confirmation.
+-   **P2: Refactor :** Break down the monolithic  into domain-specific route files to improve maintainability.
+-   **P2: Course and Commission Configuration:** Implement UI and backend for setting up courses and a multi-level commission structure (currently blocked awaiting business logic from the user).
+-   **P2: Implement Payslip Generation.**
+-   **P2: Integrate with Google Ads API.**
+-   **P2: Resolve Babel Plugin :** Fix the recurring  in  instead of using the current workaround of disabling it.
 
 **Completed work in this session**
--   **Feature: Historical Student XLSX Import (Backend/UI):** Created the backend endpoint () and frontend  component to handle the new import requirement.
--   **Feature: Data Seeding for Deployment:** Implemented a robust data export/import system (, ) to ensure data from the preview environment is carried over to production on deployment.
--   **Bug Fix: User Management Crash & Dynamic Roles:** Fixed a crash when creating a user and updated the roles dropdown to be dynamic, fetching roles from the  endpoint.
--   **Bug Fix: Mismatched Employee Counts & Missing Users:** Corrected logic and cleaned up data to ensure the HR Dashboard count matches the Employee Master, and fixed recurring issues where manually created employees were not getting user accounts.
--   **User Issue Resolution: Google Sheets Connection:** Successfully guided the user to fix their Google Cloud OAuth configuration, resolving the blocked error.
--   **Feature: Manual Attendance Import:** Added a feature to bulk-import employee attendance from an XLSX file.
--   **Multiple Bug Fixes:** Resolved issues in Team creation, Employee Master record saving (role, team ID, date formats), and fixed several N+1 query performance problems.
+-   **Data Integrity Fixes:**
+    -   Successfully re-imported over 900 historical student records with corrected date parsing logic ().
+    -   Enhanced the import process to create corresponding records in  and  collections.
+    -   Fixed a bug where future-dated revenue was being recorded by running a script to correct 68 invalid dates in the database.
+-   **Backend Enhancements:**
+    -   Fixed all dashboard endpoints to correctly calculate revenue from imported data by using  and .
+    -   Created a new, flexible date filtering utility () and integrated it into all dashboard APIs.
+    -   Built new endpoints to support the dashboard overhaul:  and .
+-   **UI & Bug Fixes:**
+    -   Removed the Import button from the  as requested.
+    -   Fixed the Finance Dashboard to correctly sum total receivables from imported data.
+    -   Resolved a critical crash in the Payment Gateway creation form caused by an invalid  prop in a Shadcn UI component.
+-   **Data Seeding:**
+    -   Updated  to include the new  and  collections in the database seed file, ensuring data persistence.
 
 **Earlier issues found/mentioned but not fixed**
--   The  in  remains unresolved but is mitigated by disabling the plugin in .
+-   The  in  remains unresolved and is only mitigated by disabling the plugin.
 
 **Known issue recurrence from previous fork**
--   The Babel plugin  is a known, persistent issue.
+-   **Issue:**  in .
+-   **Recurrence count:** High (persistent across multiple forks).
+-   **Status:** NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Robust Data Seeding:** A startup script now populates the database from  *after* MongoDB indexes are created, ensuring data from preview can be reliably migrated to production. An export script () updates this seed file.
--   **XLSX Data Parsing:** Use of  and  on the backend to read, validate, and process data from uploaded XLSX files for complex import operations.
--   **Dynamic Frontend Components:** Converted hardcoded lists (like user roles) into dynamic data fetches from API endpoints, making the UI more maintainable.
--   **Bidirectional Data Sync:** Logic added to update related records across different collections (e.g., updating an 's team also updates the corresponding  record).
+-   **Dynamic Dashboarding:** Building complex backend aggregations with MongoDB to power date-filtered, role-based, and team-based dashboard analytics.
+-   **Data Remediation:** Running targeted scripts directly against the database to fix data integrity issues (e.g., incorrect dates) from a large data import.
+-   **API Refactoring:** Modifying multiple existing API endpoints to accept new parameters (like date filters) while maintaining backward compatibility for other parts of the app.
+-   **Component-Level Debugging:** Identifying and fixing UI component library-specific errors (e.g., Shadcn  crash).
 
 **key DB schema**
--   **:** Schema now supports auto-creation with appended numbers for price variations (e.g., Basic Package - 2).
--   **:** Schema extended to handle new fields from the XLSX import like ,  and handle various statuses.
--   ** & :** Models updated to correctly handle and sync  and  across both collections.
+-   **:** Primary collection for imported data. Key fields used for new dashboards: , , , .
+-   **:** Master customer records created during import.
+-   **:** Revenue records created during import.
+-   **:** Used for the new team-based revenue reporting.
 
 **changes in tech stack**
--   **Added backend dependencies:** ,  for XLSX processing.
+-   None.
 
 **All files of reference**
 -   
 -   
 -   
--   
--   
--   User-uploaded artifact:  (Public URL: )
+-    (for color contrast fix)
+-    (potential location for scrollable modal fix)
 
 **Areas that need refactoring**:
--   **:** This monolithic file is a significant source of technical debt. It urgently needs to be broken down into smaller, domain-specific route files (, , etc.).
+-   **:** This monolithic file remains a high-priority technical debt item.
+-   **Modals/Popups:** A global refactor is needed to create a base scrollable modal component to address the user's UI/UX feedback.
 
 **key api endpoints**
--   : **NEW & CRITICAL** endpoint that processes a complex XLSX file to import historical student data.
--   : **NEW & CRITICAL** endpoint to trigger a re-export of the database to .
--   : **MODIFIED** to automatically create a user account when a new employee is created.
--   : **FIXED** to correctly save  and .
+-   **MODIFIED:** , , ,  (all now support date filters).
+-   **NEW:**  (Provides data for team-wise revenue chart).
+-   **NEW:**  (Provides drill-down data for a specific team).
+-   **NEW:**  (Provides data for the This Month vs. Last Month scatter plot).
 
 **Critical Info for New Agent**
--   Your immediate and highest priority is to complete the historical data import. The user has provided the file . You must download this file and use the  endpoint to perform the import.
--   **Crucial Post-Import Step:** After the import is successfully completed and verified, you **MUST** run the export script () to update the  file. Forgetting this step will cause all newly imported historical data to be lost upon the next deployment.
--   The data seeding mechanism is a core feature for the user. Ensure it is handled correctly.
--   Refactoring  remains a high-priority technical debt item to be addressed after the import is complete.
+-   Your immediate priority is to rebuild the frontend of the Sales Dashboard () using the new backend endpoints. The backend work is already complete and tested.
+-   **Crucial Step:** Before starting the frontend work, you **MUST** run   Exported departments: 10 documents
+  Exported courses: 46 documents
+  Exported commission_rules: 1 documents
+  Exported system_config: 1 documents
+  Exported users: 72 documents
+  Exported hr_employees: 72 documents
+  Exported teams: 11 documents
+  Exported leads: 1223 documents
+  Exported students: 902 documents
+  Exported sheet_connectors: 1 documents
+  Exported payments: 1 documents
+  Exported hr_attendance: 143 documents
+  Exported call_logs: 14 documents
+  Exported hr_payroll_batches: 1 documents
+  Exported integrations: 0 documents
+  Exported ltv_transactions: 899 documents
+  Exported customers: 901 documents
+  Exported finance_clt_receivables: 899 documents
+
+Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to save the recent date corrections to the seed file.
+-   After the dashboard is complete, address the two global UI/UX tasks: making all modals scrollable and improving theme color contrast.
+-   The  file is extremely large. Make surgical changes using  and be mindful of the broad impact of any modifications.
 
 **documents and test reports created in this job**
 -    (Updated)
--    through 
--    (Created and updated)
--    (Created)
+-    (Multiple new test reports generated)
+-    (Updated with new collections and data fixes)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Reports mismatched employee counts and missing user accounts. (FIXED)
-2.  **User:** Initiates request for historical data import with business logic.
-3.  **User:** Provides exact XLSX column headers.
-4.  **Agent:** Confirms plan to build the feature.
-5.  **Agent:** Shares plan for import feature implementation.
-6.  **Agent:** Informs user the feature is ready and asks for the file.
-7.  **User:** Uploads  and confirms logic.
-8.  **Agent:** Shares plan to use the uploaded file.
-9.  **User:** Continue - approves the plan to import the file.
-10. **Agent:** Acknowledges and begins the import process. **(PENDING ACTION)**
+1.  **User:** Requests fixing future revenue dates, a full Sales Dashboard overhaul (filters, new charts, drill-downs), improved color contrast, and scrollable modals.
+2.  **Agent:** Acknowledges the requests and begins investigating the future date issue.
+3.  **Agent:** Discovers 68 records with future dates in the database.
+4.  **Agent:** Runs a script to correct all 68 invalid dates in the  and  collections.
+5.  **Agent:** Confirms the dates are fixed and begins implementing the backend changes for the new dashboard features.
+6.  **Agent:** Creates and modifies all necessary backend endpoints ( helper, team revenue, monthly comparison, and adds filtering to existing endpoints).
+7.  **Agent:** Successfully tests all new and updated endpoints via .
+8.  **Agent:** Is now ready to begin the frontend implementation for the new Sales Dashboard.
 
 **Project Health Check:**
--   **Working:** Core workflows (HR, Sales, CS, Teams, User Management), data seeding, and all previously reported bugs.
--   **In Progress:** The final step of the historical student data import (processing the user's actual file).
--   **Broken / Needs Attention:** The  error is mitigated but not resolved.
+-   **Broken:** The Sales Dashboard UI is misaligned with user requirements. There are global usability issues with modals (not scrollable) and readability (poor color contrast).
+-   **Working:** Core backend logic, all API endpoints (including new ones), data import and seeding mechanisms, and other modules (HR, CS, Finance, Mentor).
 
 **3rd Party Integrations**
 -   APScheduler
@@ -149,18 +186,39 @@ The application is a full-stack business management platform using React, FastAP
 -   Google Sheets API
 -   ZK BioCloud (via web scraping)
 -   SMTP (via Gmail)
--   **New:** , 
+-   
+-   
 
 **Testing status**
--   **Testing agent used after significant changes:** YES, extensively.
+-   **Testing agent used after significant changes:** YES, used to validate the last set of bug fixes.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** None permanent.
--   **Known regressions:** None.
+-   **Known regressions:** The Sales Dashboard UI does not meet the latest user specifications.
 
 **Credentials to test flow:**
--   **Super Admin (Local/Dev):**
+-   **Super Admin:**
     -   Email: 
     -   Password: 
 
 **What agent forgot to execute**
--   The previous agent correctly identified all steps but has not yet completed the final import and the subsequent database export. The next agent must ensure the  command is run after the data from  is successfully imported.</analysis>
+-   The agent fixed the future-dated records in the database but **did not run   Exported departments: 10 documents
+  Exported courses: 46 documents
+  Exported commission_rules: 1 documents
+  Exported system_config: 1 documents
+  Exported users: 72 documents
+  Exported hr_employees: 72 documents
+  Exported teams: 11 documents
+  Exported leads: 1223 documents
+  Exported students: 902 documents
+  Exported sheet_connectors: 1 documents
+  Exported payments: 1 documents
+  Exported hr_attendance: 143 documents
+  Exported call_logs: 14 documents
+  Exported hr_payroll_batches: 1 documents
+  Exported integrations: 0 documents
+  Exported ltv_transactions: 899 documents
+  Exported customers: 901 documents
+  Exported finance_clt_receivables: 899 documents
+
+Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB)** to persist these critical fixes in the  file. This must be done first.
+-   The agent has not yet started implementing the requested frontend changes for the Sales Dashboard or the global UI/UX improvements (scrollable modals, color contrast).</analysis>

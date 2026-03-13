@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 class CLTAcademyERPTester:
-    def __init__(self, base_url="https://student-bulk-load.preview.emergentagent.com"):
+    def __init__(self, base_url="https://data-integrity-fix-40.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.user_data = None

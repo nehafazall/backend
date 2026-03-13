@@ -5526,42 +5526,59 @@ async def get_mentor_dashboard(user = Depends(get_current_user)):
 
 # ==================== ENHANCED DASHBOARD ENDPOINTS (Agent Bifurcation + Date Filters) ====================
 
-def _get_date_range(period: str):
-    """Get start date for a given period filter."""
+def _get_date_range(period: str, custom_start: str = None, custom_end: str = None):
+    """Get start and end date for a given period filter."""
     now = datetime.now(timezone.utc)
-    if period == "today":
-        return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+    end_date = None
+    if period == "custom" and custom_start:
+        return custom_start, custom_end
+    elif period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+        return start, None
+    elif period == "yesterday":
+        yesterday = now - timedelta(days=1)
+        start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+        end_date = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+        return start, end_date
     elif period == "this_week":
         start = now - timedelta(days=now.weekday())
-        return start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+        return start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10], None
     elif period == "this_month":
-        return now.replace(day=1).isoformat()[:10]
+        return now.replace(day=1).isoformat()[:10], None
     elif period == "this_quarter":
         q_month = ((now.month - 1) // 3) * 3 + 1
-        return now.replace(month=q_month, day=1).isoformat()[:10]
+        return now.replace(month=q_month, day=1).isoformat()[:10], None
     elif period == "this_year":
-        return now.replace(month=1, day=1).isoformat()[:10]
-    return None  # "overall" = no filter
+        return now.replace(month=1, day=1).isoformat()[:10], None
+    return None, None  # "overall" = no filter
+
+def _build_date_filter(field: str, period: str, custom_start: str = None, custom_end: str = None):
+    """Build a MongoDB date filter."""
+    start, end = _get_date_range(period, custom_start, custom_end)
+    if not start:
+        return {}
+    filt = {field: {"$gte": start}}
+    if end:
+        filt[field]["$lt"] = end
+    return filt
 
 @api_router.get("/dashboard/sales-agent-closings")
 async def get_sales_agent_closings(
     period: str = "overall",
     limit: int = 10,
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
     user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))
 ):
-    """Top agents by closings. period: today, this_week, this_month, this_quarter, this_year, overall"""
     query = {"stage": "enrolled"}
-    start_date = _get_date_range(period)
-    if start_date:
-        query["enrolled_at"] = {"$gte": start_date}
-
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
     pipeline = [
         {"$match": query},
         {"$group": {
             "_id": "$assigned_to",
             "name": {"$first": "$assigned_to_name"},
             "closings": {"$sum": 1},
-            "revenue": {"$sum": "$enrollment_amount"},
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
         }},
         {"$sort": {"closings": -1}},
         {"$limit": limit}
@@ -5572,13 +5589,12 @@ async def get_sales_agent_closings(
 @api_router.get("/dashboard/cs-agent-bifurcation")
 async def get_cs_agent_bifurcation(
     period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
     user = Depends(require_roles(["super_admin", "admin"]))
 ):
-    """Students per CS agent with SLA rates. period: today, this_week, this_month, this_quarter, this_year, overall"""
     query = {"cs_agent_id": {"$exists": True, "$ne": None}}
-    start_date = _get_date_range(period)
-    if start_date:
-        query["enrolled_at"] = {"$gte": start_date}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
 
     pipeline = [
         {"$match": query},
@@ -5607,13 +5623,12 @@ async def get_cs_agent_bifurcation(
 @api_router.get("/dashboard/mentor-bifurcation")
 async def get_mentor_bifurcation(
     period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
     user = Depends(require_roles(["super_admin", "admin"]))
 ):
-    """Students per mentor with redeposit totals. period: today, this_week, this_month, this_quarter, this_year, overall"""
     query = {"mentor_id": {"$exists": True, "$ne": None}}
-    start_date = _get_date_range(period)
-    if start_date:
-        query["enrolled_at"] = {"$gte": start_date}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
 
     pipeline = [
         {"$match": query},
@@ -5722,6 +5737,157 @@ async def get_today_transactions(user = Depends(get_current_user)):
         "total_amount": total,
         "transactions": transactions
     }
+
+
+@api_router.get("/dashboard/team-revenue")
+async def get_team_revenue(
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Team-wise revenue with individual agent drill-down."""
+    query = {"stage": "enrolled", "team_name": {"$exists": True, "$ne": None}}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
+
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$team_name",
+            "team_id": {"$first": "$team_id"},
+            "deals": {"$sum": 1},
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
+        }},
+        {"$sort": {"revenue": -1}}
+    ]
+    result = await db.leads.aggregate(pipeline).to_list(50)
+    return [{"team_name": r["_id"], "team_id": r.get("team_id"), "deals": r["deals"], "revenue": r["revenue"]} for r in result if r["_id"]]
+
+@api_router.get("/dashboard/team-revenue/{team_name}/agents")
+async def get_team_agent_details(
+    team_name: str,
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Individual agent performance within a team."""
+    query = {"stage": "enrolled", "team_name": team_name}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
+
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$assigned_to",
+            "agent_name": {"$first": "$assigned_to_name"},
+            "deals": {"$sum": 1},
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
+        }},
+        {"$sort": {"revenue": -1}}
+    ]
+    result = await db.leads.aggregate(pipeline).to_list(50)
+    return [{"agent_name": r.get("agent_name", "Unknown"), "deals": r["deals"], "revenue": r["revenue"]} for r in result]
+
+@api_router.get("/dashboard/filtered-stats")
+async def get_filtered_dashboard_stats(
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Dashboard summary stats with date filters."""
+    date_filter = _build_date_filter("enrolled_at", period, custom_start, custom_end)
+
+    # Count enrolled leads in period
+    enrolled_query = {"stage": "enrolled", **date_filter}
+    total_enrolled = await db.leads.count_documents(enrolled_query)
+
+    # Revenue in period
+    rev_pipeline = [
+        {"$match": enrolled_query},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}}}
+    ]
+    rev_result = await db.leads.aggregate(rev_pipeline).to_list(1)
+    total_revenue = rev_result[0]["total"] if rev_result else 0
+
+    # Total leads in period
+    leads_date_filter = _build_date_filter("created_at", period, custom_start, custom_end)
+    total_leads = await db.leads.count_documents(leads_date_filter)
+
+    # Avg deal size
+    avg_deal = total_revenue / total_enrolled if total_enrolled > 0 else 0
+
+    # Conversion rate
+    conversion_rate = round((total_enrolled / total_leads * 100), 1) if total_leads > 0 else 0
+
+    return {
+        "total_enrolled": total_enrolled,
+        "total_revenue": total_revenue,
+        "total_leads": total_leads,
+        "avg_deal_size": round(avg_deal, 0),
+        "conversion_rate": conversion_rate,
+        "period": period,
+    }
+
+@api_router.get("/dashboard/month-comparison")
+async def get_month_comparison(user = Depends(get_current_user)):
+    """Compare this month vs last month revenue on daily basis for XY scatter."""
+    now = datetime.now(timezone.utc)
+    this_month_start = now.replace(day=1).isoformat()[:10]
+
+    # Last month
+    if now.month == 1:
+        last_month_start = f"{now.year - 1}-12-01"
+        last_month_end = f"{now.year}-01-01"
+    else:
+        last_month_start = now.replace(month=now.month - 1, day=1).isoformat()[:10]
+        last_month_end = this_month_start
+
+    # This month daily
+    this_pipeline = [
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}}},
+        {"$addFields": {"day": {"$substr": ["$enrolled_at", 8, 2]}}},
+        {"$group": {"_id": "$day", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    this_result = await db.leads.aggregate(this_pipeline).to_list(31)
+
+    # Last month daily
+    last_pipeline = [
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": last_month_start, "$lt": last_month_end}}},
+        {"$addFields": {"day": {"$substr": ["$enrolled_at", 8, 2]}}},
+        {"$group": {"_id": "$day", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    last_result = await db.leads.aggregate(last_pipeline).to_list(31)
+
+    # Merge into daily comparison
+    this_map = {r["_id"]: r for r in this_result}
+    last_map = {r["_id"]: r for r in last_result}
+    all_days = sorted(set(list(this_map.keys()) + list(last_map.keys())))
+
+    comparison = []
+    this_cumulative = 0
+    last_cumulative = 0
+    for day in all_days:
+        this_rev = this_map.get(day, {}).get("revenue", 0)
+        last_rev = last_map.get(day, {}).get("revenue", 0)
+        this_cumulative += this_rev
+        last_cumulative += last_rev
+        comparison.append({
+            "day": int(day),
+            "this_month": this_rev,
+            "last_month": last_rev,
+            "this_cumulative": this_cumulative,
+            "last_cumulative": last_cumulative,
+        })
+
+    return {
+        "this_month_label": now.strftime("%B %Y"),
+        "last_month_label": (now.replace(day=1) - timedelta(days=1)).strftime("%B %Y"),
+        "data": comparison,
+    }
+
 
 
 
@@ -9231,7 +9397,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://student-bulk-load.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://data-integrity-fix-40.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
