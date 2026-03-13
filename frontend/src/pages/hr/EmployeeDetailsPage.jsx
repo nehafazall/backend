@@ -603,7 +603,7 @@ const EmployeeDetailsPage = () => {
                                     <Label>Basic Salary (AED)</Label>
                                     <Input
                                         type="number"
-                                        value={salary.basic_salary}
+                                        value={salary.basic_salary || ''}
                                         onChange={(e) => setSalary({ ...salary, basic_salary: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
@@ -611,7 +611,7 @@ const EmployeeDetailsPage = () => {
                                     <Label>Housing Allowance (AED)</Label>
                                     <Input
                                         type="number"
-                                        value={salary.housing_allowance}
+                                        value={salary.housing_allowance || ''}
                                         onChange={(e) => setSalary({ ...salary, housing_allowance: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
@@ -619,7 +619,7 @@ const EmployeeDetailsPage = () => {
                                     <Label>Transport Allowance (AED)</Label>
                                     <Input
                                         type="number"
-                                        value={salary.transport_allowance}
+                                        value={salary.transport_allowance || ''}
                                         onChange={(e) => setSalary({ ...salary, transport_allowance: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
@@ -627,7 +627,7 @@ const EmployeeDetailsPage = () => {
                                     <Label>Telephone Allowance (AED)</Label>
                                     <Input
                                         type="number"
-                                        value={salary.telephone_allowance}
+                                        value={salary.telephone_allowance || ''}
                                         onChange={(e) => setSalary({ ...salary, telephone_allowance: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
@@ -635,7 +635,7 @@ const EmployeeDetailsPage = () => {
                                     <Label>Other Allowances (AED)</Label>
                                     <Input
                                         type="number"
-                                        value={salary.other_allowances}
+                                        value={salary.other_allowances || ''}
                                         onChange={(e) => setSalary({ ...salary, other_allowances: parseFloat(e.target.value) || 0 })}
                                     />
                                 </div>
