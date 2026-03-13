@@ -6423,7 +6423,230 @@ async def get_month_comparison(user = Depends(get_current_user)):
     }
 
 
+# ==================== DRILL-DOWN ANALYTICS ====================
 
+@api_router.get("/dashboard/agent/{agent_id}/closed-students")
+async def get_agent_closed_students(
+    agent_id: str,
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get students/leads closed by a specific sales agent."""
+    query = {"stage": "enrolled", "assigned_to": agent_id}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
+    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "email": 1, "course_of_interest": 1, "enrollment_amount": 1, "enrolled_at": 1, "team_name": 1}).sort("enrolled_at", -1).to_list(200)
+    return leads
+
+@api_router.get("/dashboard/team/{team_name}/agent/{agent_id}/students")
+async def get_team_agent_students(
+    team_name: str,
+    agent_id: str,
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get students an agent brought within a specific team."""
+    query = {"stage": "enrolled", "team_name": team_name, "assigned_to": agent_id}
+    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
+    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "course_of_interest": 1, "enrollment_amount": 1, "enrolled_at": 1}).sort("enrolled_at", -1).to_list(200)
+    return leads
+
+@api_router.get("/dashboard/lead-pipeline/{stage}/details")
+async def get_lead_pipeline_stage_details(
+    stage: str,
+    period: str = "overall",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get leads at a specific pipeline stage with agent-wise breakdown."""
+    query = {"stage": stage}
+    query.update(_build_date_filter("created_at", period, custom_start, custom_end))
+    
+    # Agent-wise breakdown
+    agent_pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$assigned_to",
+            "agent_name": {"$first": "$assigned_to_name"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}}
+    ]
+    agent_breakdown = await db.leads.aggregate(agent_pipeline).to_list(100)
+    
+    # Individual leads
+    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "email": 1, "assigned_to_name": 1, "course_of_interest": 1, "created_at": 1, "last_activity": 1}).sort("created_at", -1).to_list(200)
+    
+    total = await db.leads.count_documents(query)
+    
+    return {
+        "stage": stage,
+        "total": total,
+        "agent_breakdown": [{"agent_name": a.get("agent_name", "Unassigned"), "count": a["count"]} for a in agent_breakdown],
+        "leads": leads
+    }
+
+@api_router.get("/cs/dashboard/agent/{agent_id}/students")
+async def get_cs_agent_students(
+    agent_id: str,
+    period: str = "overall",
+    user=Depends(get_current_user)
+):
+    """Get students handled by a specific CS agent with upgrade details."""
+    query = {"cs_agent_id": agent_id}
+    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "stage": 1, "course_name": 1, "cs_agent_name": 1, "upgrade_history": 1, "pitched_upgrade_label": 1, "pitched_upgrade_price": 1, "enrolled_at": 1}).sort("enrolled_at", -1).to_list(200)
+    
+    result = []
+    for s in students:
+        total_upgrade_revenue = sum(uh.get("amount", 0) for uh in (s.get("upgrade_history") or []))
+        result.append({
+            "student_name": s.get("student_name", "Unknown"),
+            "student_code": s.get("student_code", ""),
+            "stage": s.get("stage", ""),
+            "course": s.get("course_name", ""),
+            "upgrade_count": len(s.get("upgrade_history") or []),
+            "upgrade_revenue": total_upgrade_revenue,
+            "pitched_label": s.get("pitched_upgrade_label", ""),
+            "pitched_price": s.get("pitched_upgrade_price", 0),
+        })
+    return result
+
+@api_router.get("/cs/dashboard/pipeline/{stage}/details")
+async def get_cs_pipeline_stage_details(
+    stage: str,
+    user=Depends(get_current_user)
+):
+    """Get CS pipeline stage details with per-agent breakdown."""
+    query = {"stage": stage}
+    
+    agent_pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$cs_agent_id",
+            "agent_name": {"$first": "$cs_agent_name"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}}
+    ]
+    agent_breakdown = await db.students.aggregate(agent_pipeline).to_list(100)
+    
+    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "cs_agent_name": 1, "course_name": 1, "stage": 1, "pitched_upgrade_label": 1, "pitched_upgrade_price": 1}).sort("enrolled_at", -1).to_list(200)
+    
+    total = await db.students.count_documents(query)
+    
+    return {
+        "stage": stage,
+        "total": total,
+        "agent_breakdown": [{"agent_name": a.get("agent_name", "Unassigned"), "count": a["count"]} for a in agent_breakdown],
+        "students": students
+    }
+
+@api_router.get("/mentor/dashboard/{mentor_id}/students")
+async def get_mentor_students_detail(
+    mentor_id: str,
+    user=Depends(get_current_user)
+):
+    """Get students assigned to a specific mentor."""
+    students = await db.students.find(
+        {"mentor_id": mentor_id},
+        {"_id": 0, "student_name": 1, "student_code": 1, "mentor_stage": 1, "course_name": 1, "enrolled_at": 1, "phone": 1}
+    ).sort("enrolled_at", -1).to_list(200)
+    return students
+
+@api_router.get("/mentor/dashboard/pipeline/{stage}/details")
+async def get_mentor_pipeline_stage_details(
+    stage: str,
+    user=Depends(get_current_user)
+):
+    """Get mentor pipeline stage details with per-mentor breakdown."""
+    query = {"mentor_stage": stage, "mentor_id": {"$exists": True, "$ne": None}}
+    
+    mentor_pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$mentor_id",
+            "mentor_name": {"$first": "$mentor_name"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}}
+    ]
+    mentor_breakdown = await db.students.aggregate(mentor_pipeline).to_list(100)
+    
+    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "mentor_name": 1, "course_name": 1, "mentor_stage": 1, "phone": 1}).to_list(200)
+    
+    total = await db.students.count_documents(query)
+    
+    return {
+        "stage": stage,
+        "total": total,
+        "mentor_breakdown": [{"mentor_name": m.get("mentor_name", "Unknown"), "count": m["count"]} for m in mentor_breakdown],
+        "students": students
+    }
+
+@api_router.get("/dashboard/department/{dept_name}/employees")
+async def get_department_employees(
+    dept_name: str,
+    user=Depends(get_current_user)
+):
+    """Get employees in a specific department."""
+    employees = await db.employees.find(
+        {"department": dept_name, "status": "active"},
+        {"_id": 0, "employee_id": 1, "full_name": 1, "email": 1, "designation": 1, "department": 1, "date_of_joining": 1}
+    ).to_list(200)
+    return employees
+
+@api_router.get("/dashboard/monthly-revenue/{month}/details")
+async def get_monthly_revenue_details(
+    month: str,
+    user=Depends(get_current_user)
+):
+    """Get revenue breakdown for a specific month (format: Jan, Feb, etc.)."""
+    month_names = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+    month_num = month_names.get(month)
+    if not month_num:
+        return {"error": "Invalid month"}
+    
+    now = datetime.now(timezone.utc)
+    year = now.year
+    start = f"{year}-{month_num:02d}-01"
+    if month_num == 12:
+        end = f"{year + 1}-01-01"
+    else:
+        end = f"{year}-{month_num + 1:02d}-01"
+    
+    query = {"stage": "enrolled", "enrolled_at": {"$gte": start, "$lt": end}}
+    
+    # By course
+    course_pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$course_of_interest", "count": {"$sum": 1}, "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}}},
+        {"$sort": {"revenue": -1}}
+    ]
+    by_course = await db.leads.aggregate(course_pipeline).to_list(20)
+    
+    # By agent
+    agent_pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$assigned_to_name", "count": {"$sum": 1}, "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}}},
+        {"$sort": {"revenue": -1}}
+    ]
+    by_agent = await db.leads.aggregate(agent_pipeline).to_list(20)
+    
+    total_enrolled = await db.leads.count_documents(query)
+    rev_result = await db.leads.aggregate([{"$match": query}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}}}]).to_list(1)
+    total_revenue = rev_result[0]["total"] if rev_result else 0
+    
+    return {
+        "month": month,
+        "total_enrolled": total_enrolled,
+        "total_revenue": total_revenue,
+        "by_course": [{"course": r["_id"] or "Unknown", "count": r["count"], "revenue": r["revenue"]} for r in by_course],
+        "by_agent": [{"agent": r["_id"] or "Unknown", "count": r["count"], "revenue": r["revenue"]} for r in by_agent],
+    }
 
 # ==================== BULK IMPORT: COURSES & USERS ====================
 

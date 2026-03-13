@@ -134,24 +134,65 @@ export const useTheme = () => {
     return context;
 };
 
+const getAutoTheme = () => {
+    // Abu Dhabi timezone GST+4 — dark during night (7pm-6am), light during day
+    const now = new Date();
+    const utcHours = now.getUTCHours();
+    const abuDhabiHour = (utcHours + 4) % 24;
+    // Day: 6am - 7pm = light, Night: 7pm - 6am = dark
+    return (abuDhabiHour >= 6 && abuDhabiHour < 19) ? 'light' : 'dark';
+};
+
 export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(() => {
-        return localStorage.getItem('clt_theme') || 'dark';
+        const saved = localStorage.getItem('clt_theme');
+        if (saved === 'auto' || !saved) return getAutoTheme();
+        return saved;
+    });
+    const [themeMode, setThemeMode] = useState(() => {
+        return localStorage.getItem('clt_theme_mode') || 'auto';
     });
 
     useEffect(() => {
         const root = window.document.documentElement;
+        const applied = themeMode === 'auto' ? getAutoTheme() : themeMode;
         root.classList.remove('light', 'dark');
-        root.classList.add(theme);
-        localStorage.setItem('clt_theme', theme);
-    }, [theme]);
+        root.classList.add(applied);
+        setTheme(applied);
+        localStorage.setItem('clt_theme', applied);
+        localStorage.setItem('clt_theme_mode', themeMode);
+    }, [themeMode]);
+
+    // Re-check auto theme every minute
+    useEffect(() => {
+        if (themeMode !== 'auto') return;
+        const interval = setInterval(() => {
+            const auto = getAutoTheme();
+            setTheme(prev => {
+                if (prev !== auto) {
+                    const root = window.document.documentElement;
+                    root.classList.remove('light', 'dark');
+                    root.classList.add(auto);
+                    localStorage.setItem('clt_theme', auto);
+                    return auto;
+                }
+                return prev;
+            });
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [themeMode]);
 
     const toggleTheme = () => {
-        setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+        // Cycle: auto → light → dark → auto
+        setThemeMode(prev => {
+            if (prev === 'auto') return 'light';
+            if (prev === 'light') return 'dark';
+            return 'auto';
+        });
     };
 
     return (
-        <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, themeMode, setTheme, setThemeMode, toggleTheme }}>
             {children}
         </ThemeContext.Provider>
     );

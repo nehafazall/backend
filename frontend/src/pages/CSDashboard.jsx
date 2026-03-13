@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, apiClient } from '@/lib/api';
-import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line,
+    AreaChart, Area, LineChart, Line, Legend,
 } from 'recharts';
 import {
-    Users, TrendingUp, Award, Target, DollarSign, Clock, Star,
-    ArrowUpRight, Headphones, Filter, ShieldCheck, Trophy, Zap,
+    Users, TrendingUp, Award, Target, DollarSign, Star,
+    Filter, ShieldCheck, Trophy, Zap, ChevronRight,
 } from 'lucide-react';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
@@ -54,7 +53,7 @@ const CSDashboard = () => {
     const [period, setPeriod] = useState('overall');
     const [viewMode, setViewMode] = useState('team');
     const [loading, setLoading] = useState(true);
-    const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+    const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], type: '', loading: false });
 
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
 
@@ -86,6 +85,41 @@ const CSDashboard = () => {
         }
     };
 
+    // ====== DRILL-DOWN HANDLERS ======
+    const drillAgentStudents = async (agentName) => {
+        setDrillModal({ open: true, title: `${agentName} - Students`, data: [], type: 'cs_agent_students', loading: true });
+        try {
+            // Find agent_id from agentRevenue or bifurcation
+            const studentsRes = await apiClient.get(`/students?limit=500`);
+            const students = (studentsRes.data || []).filter(s => s.cs_agent_name === agentName);
+            setDrillModal(prev => ({ ...prev, data: students, loading: false }));
+        } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
+    };
+
+    const drillPipelineItem = async (pipelineItem) => {
+        setDrillModal({ open: true, title: `${pipelineItem.label} - Students`, data: [], type: 'cs_pipeline_detail', loading: true });
+        try {
+            const res = await apiClient.get(`/cs/dashboard/pipeline/pitched_for_upgrade/details`);
+            setDrillModal(prev => ({ ...prev, data: res.data || {}, loading: false }));
+        } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
+    };
+
+    const drillBifurcationAgent = async (agent) => {
+        setDrillModal({ open: true, title: `${agent.agent_name} - Student Breakdown`, data: [], type: 'cs_bifurcation_detail', loading: true });
+        try {
+            const studentsRes = await apiClient.get(`/students?limit=500`);
+            const students = (studentsRes.data || []).filter(s => s.cs_agent_name === agent.agent_name);
+            // Group by stage
+            const stageGroups = {};
+            students.forEach(s => {
+                const stage = s.stage || 'unknown';
+                if (!stageGroups[stage]) stageGroups[stage] = [];
+                stageGroups[stage].push(s);
+            });
+            setDrillModal(prev => ({ ...prev, data: { students, stageGroups, agent }, loading: false }));
+        } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
+    };
+
     if (loading) {
         return (<div className="flex items-center justify-center h-96"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>);
     }
@@ -98,26 +132,13 @@ const CSDashboard = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">CS Dashboard</h1>
-                    <p className="text-muted-foreground">Upgrade revenue, commissions & team performance</p>
+                    <p className="text-muted-foreground">Upgrade revenue, commissions & team performance - click charts to drill down</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* View Toggle for CS Head */}
                     {isHeadOrAdmin && (
                         <div className="inline-flex rounded-lg border p-1 bg-muted/30" data-testid="cs-dash-view-toggle">
-                            <button
-                                onClick={() => setViewMode('individual')}
-                                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${viewMode === 'individual' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                data-testid="cs-dash-individual"
-                            >
-                                Individual
-                            </button>
-                            <button
-                                onClick={() => setViewMode('team')}
-                                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${viewMode === 'team' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                data-testid="cs-dash-team"
-                            >
-                                Team
-                            </button>
+                            <button onClick={() => setViewMode('individual')} className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${viewMode === 'individual' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} data-testid="cs-dash-individual">Individual</button>
+                            <button onClick={() => setViewMode('team')} className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${viewMode === 'team' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} data-testid="cs-dash-team">Team</button>
                         </div>
                     )}
                     <Select value={period} onValueChange={setPeriod}>
@@ -131,7 +152,7 @@ const CSDashboard = () => {
                 </div>
             </div>
 
-            {/* Key Metrics — Commission Focus */}
+            {/* Key Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20">
                     <CardContent className="pt-5 pb-4">
@@ -145,7 +166,6 @@ const CSDashboard = () => {
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
                     <CardContent className="pt-5 pb-4">
                         <div className="flex items-center justify-between">
@@ -158,7 +178,6 @@ const CSDashboard = () => {
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
                     <CardContent className="pt-5 pb-4">
                         <div className="flex items-center justify-between">
@@ -171,7 +190,6 @@ const CSDashboard = () => {
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
                     <CardContent className="pt-5 pb-4">
                         <div className="flex items-center justify-between">
@@ -183,7 +201,6 @@ const CSDashboard = () => {
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                     <CardContent className="pt-5 pb-4">
                         <div className="flex items-center justify-between">
@@ -197,23 +214,24 @@ const CSDashboard = () => {
                 </Card>
             </div>
 
-            {/* Row 2: Agent Revenue Chart + Leaderboard */}
+            {/* Agent Revenue + Leaderboard */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-2">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base">Agent Revenue Closed</CardTitle>
-                        <CardDescription>Who closed how much upgrade revenue</CardDescription>
+                        <CardDescription>Click any bar to see agent's students</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {agentRevenue.length > 0 ? (
                             <ResponsiveContainer width="100%" height={280}>
-                                <BarChart data={agentRevenue} layout="vertical">
+                                <BarChart data={agentRevenue} layout="vertical"
+                                    onClick={(e) => { if (e?.activePayload) drillAgentStudents(e.activePayload[0].payload.agent_name); }}>
                                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                                     <XAxis type="number" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
                                     <YAxis dataKey="agent_name" type="category" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} width={100} />
                                     <Tooltip content={<ChartTooltip formatter={formatCurrency} />} />
-                                    <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} name="Revenue" />
-                                    <Bar dataKey="commission" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Commission" />
+                                    <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} name="Revenue" cursor="pointer" />
+                                    <Bar dataKey="commission" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Commission" cursor="pointer" />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -227,15 +245,14 @@ const CSDashboard = () => {
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" /> Leaderboard</CardTitle>
-                            {leaderboard.length > 5 && (
-                                <button className="text-xs text-primary hover:underline" onClick={() => setShowLeaderboardModal(true)}>View All</button>
-                            )}
                         </div>
+                        <CardDescription>Click agent to see details</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
                             {leaderboard.slice(0, 5).map((agent, idx) => (
-                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30" data-testid={`leaderboard-${idx}`}>
+                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                                    onClick={() => drillAgentStudents(agent.agent_name)} data-testid={`leaderboard-${idx}`}>
                                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500 text-white' : idx === 1 ? 'bg-gray-400 text-white' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-muted text-muted-foreground'}`}>
                                         {idx + 1}
                                     </div>
@@ -243,9 +260,12 @@ const CSDashboard = () => {
                                         <p className="text-sm font-medium truncate">{agent.agent_name}</p>
                                         <p className="text-xs text-muted-foreground">{agent.upgrades} upgrades</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-bold font-mono text-emerald-500">{formatCurrency(agent.commission)}</p>
-                                        <p className="text-[10px] text-muted-foreground">{formatCurrency(agent.revenue)} rev</p>
+                                    <div className="text-right flex items-center gap-1">
+                                        <div>
+                                            <p className="text-sm font-bold font-mono text-emerald-500">{formatCurrency(agent.commission)}</p>
+                                            <p className="text-[10px] text-muted-foreground">{formatCurrency(agent.revenue)} rev</p>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                 </div>
                             ))}
@@ -255,7 +275,7 @@ const CSDashboard = () => {
                 </Card>
             </div>
 
-            {/* Row 3: Monthly Trend + Month vs Month */}
+            {/* Monthly Trend + Month vs Month */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader className="pb-2">
@@ -311,14 +331,14 @@ const CSDashboard = () => {
                 </Card>
             </div>
 
-            {/* Row 4: Pipeline + Agent Bifurcation */}
+            {/* Pipeline + Agent Bifurcation */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-base">Upgrade Pipeline</CardTitle>
-                                <CardDescription>Revenue from pitched upgrades awaiting closure</CardDescription>
+                                <CardDescription>Click any item to see student details</CardDescription>
                             </div>
                             <Badge variant="outline" className="text-amber-500 border-amber-500/40 font-mono">{formatCurrency(totalPipeline)}</Badge>
                         </div>
@@ -327,7 +347,8 @@ const CSDashboard = () => {
                         {pipeline.length > 0 ? (
                             <div className="space-y-3">
                                 {pipeline.map((p, idx) => (
-                                    <div key={idx} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                                    <div key={idx} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                                        onClick={() => drillPipelineItem(p)}>
                                         <div className="p-2 rounded-lg" style={{ backgroundColor: `${COLORS[idx % COLORS.length]}20` }}>
                                             <Target className="h-4 w-4" style={{ color: COLORS[idx % COLORS.length] }} />
                                         </div>
@@ -335,7 +356,10 @@ const CSDashboard = () => {
                                             <p className="text-sm font-medium">{p.label}</p>
                                             <p className="text-xs text-muted-foreground">{p.count} students pitched</p>
                                         </div>
-                                        <p className="text-lg font-bold font-mono">{formatCurrency(p.revenue)}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-lg font-bold font-mono">{formatCurrency(p.revenue)}</p>
+                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -343,7 +367,6 @@ const CSDashboard = () => {
                             <div className="h-40 flex flex-col items-center justify-center text-muted-foreground">
                                 <Target className="h-8 w-8 mb-2 opacity-30" />
                                 <p className="text-sm">No upgrades in pipeline</p>
-                                <p className="text-xs">Students in "Pitched Upgrade" will appear here</p>
                             </div>
                         )}
                     </CardContent>
@@ -352,18 +375,19 @@ const CSDashboard = () => {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> Agent Bifurcation</CardTitle>
-                        <CardDescription>Students per agent with SLA rates</CardDescription>
+                        <CardDescription>Click any bar to see agent's student breakdown by stage</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {agentBifurcation.length > 0 ? (
                             <ResponsiveContainer width="100%" height={260}>
-                                <BarChart data={agentBifurcation}>
+                                <BarChart data={agentBifurcation}
+                                    onClick={(e) => { if (e?.activePayload) drillBifurcationAgent(e.activePayload[0].payload); }}>
                                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                                     <XAxis dataKey="agent_name" tick={{ className: 'fill-muted-foreground', fontSize: 9 }} angle={-15} textAnchor="end" height={50} />
                                     <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 11 }} />
                                     <Tooltip content={<ChartTooltip />} />
-                                    <Bar dataKey="total_students" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Total" />
-                                    <Bar dataKey="activated" fill="#10b981" radius={[4, 4, 0, 0]} name="Activated" />
+                                    <Bar dataKey="total_students" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Total" cursor="pointer" />
+                                    <Bar dataKey="activated" fill="#10b981" radius={[4, 4, 0, 0]} name="Activated" cursor="pointer" />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -373,25 +397,100 @@ const CSDashboard = () => {
                 </Card>
             </div>
 
-            {/* Leaderboard Full Modal */}
-            <Dialog open={showLeaderboardModal} onOpenChange={setShowLeaderboardModal}>
-                <DialogContent className="max-w-lg">
+            {/* Drill-Down Modal */}
+            <Dialog open={drillModal.open} onOpenChange={(o) => setDrillModal(prev => ({ ...prev, open: o }))}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col" data-testid="cs-drill-modal">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 text-amber-500" /> Full Leaderboard</DialogTitle>
+                        <DialogTitle>{drillModal.title}</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                        {leaderboard.map((agent, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500 text-white' : idx === 1 ? 'bg-gray-400 text-white' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-muted text-muted-foreground'}`}>
-                                    {idx + 1}
+                    <div className="overflow-y-auto flex-1">
+                        {drillModal.loading && <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}
+
+                        {/* CS Agent Students */}
+                        {!drillModal.loading && drillModal.type === 'cs_agent_students' && (
+                            <>
+                                <Badge variant="secondary" className="mb-3">{drillModal.data.length} students</Badge>
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Code</TableHead><TableHead>Stage</TableHead><TableHead>Course</TableHead></TableRow></TableHeader>
+                                    <TableBody>{drillModal.data.map((s, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell className="font-medium">{s.student_name}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">{s.student_code || '-'}</TableCell>
+                                            <TableCell><Badge variant="outline" className="text-xs">{s.stage?.replace(/_/g, ' ')}</Badge></TableCell>
+                                            <TableCell className="text-muted-foreground">{s.course_name}</TableCell>
+                                        </TableRow>
+                                    ))}</TableBody>
+                                </Table>
+                                {drillModal.data.length === 0 && <p className="text-center text-muted-foreground py-4">No students found</p>}
+                            </>
+                        )}
+
+                        {/* CS Pipeline Detail */}
+                        {!drillModal.loading && drillModal.type === 'cs_pipeline_detail' && drillModal.data?.agent_breakdown && (
+                            <div className="space-y-4">
+                                <Badge variant="outline" className="text-lg px-3 py-1">{drillModal.data.total} students</Badge>
+                                <div>
+                                    <h4 className="text-sm font-semibold mb-2">Agent-wise Breakdown</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {drillModal.data.agent_breakdown.map((a, i) => (
+                                            <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted/70"
+                                                onClick={() => drillAgentStudents(a.agent_name)}>
+                                                <span className="text-sm font-medium truncate">{a.agent_name}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Badge variant="secondary">{a.count}</Badge>
+                                                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-medium">{agent.agent_name}</p>
-                                    <p className="text-xs text-muted-foreground">{agent.upgrades} upgrades | {formatCurrency(agent.revenue)} revenue</p>
+                                <div>
+                                    <h4 className="text-sm font-semibold mb-2">Students</h4>
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Agent</TableHead><TableHead>Course</TableHead><TableHead>Pitched Package</TableHead></TableRow></TableHeader>
+                                        <TableBody>{(drillModal.data.students || []).slice(0, 50).map((s, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell className="font-medium">{s.student_name}</TableCell>
+                                                <TableCell className="text-muted-foreground">{s.cs_agent_name || 'Unassigned'}</TableCell>
+                                                <TableCell className="text-muted-foreground">{s.course_name}</TableCell>
+                                                <TableCell className="text-xs">{s.pitched_upgrade_label || '-'}</TableCell>
+                                            </TableRow>
+                                        ))}</TableBody>
+                                    </Table>
                                 </div>
-                                <p className="text-lg font-bold font-mono text-emerald-500">{formatCurrency(agent.commission)}</p>
                             </div>
-                        ))}
+                        )}
+
+                        {/* CS Bifurcation Detail */}
+                        {!drillModal.loading && drillModal.type === 'cs_bifurcation_detail' && drillModal.data?.stageGroups && (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <Badge variant="secondary">{drillModal.data.students.length} total students</Badge>
+                                    <Badge variant="outline">SLA Rate: {drillModal.data.agent?.sla_rate || 0}%</Badge>
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold mb-2">By Stage</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                                        {Object.entries(drillModal.data.stageGroups).map(([stage, students]) => (
+                                            <div key={stage} className="p-3 rounded-lg bg-muted/50 text-center">
+                                                <p className="text-lg font-bold">{students.length}</p>
+                                                <p className="text-xs text-muted-foreground capitalize">{stage.replace(/_/g, ' ')}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Stage</TableHead><TableHead>Course</TableHead></TableRow></TableHeader>
+                                    <TableBody>{drillModal.data.students.slice(0, 50).map((s, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell className="font-medium">{s.student_name}</TableCell>
+                                            <TableCell><Badge variant="outline" className="text-xs">{s.stage?.replace(/_/g, ' ')}</Badge></TableCell>
+                                            <TableCell className="text-muted-foreground">{s.course_name}</TableCell>
+                                        </TableRow>
+                                    ))}</TableBody>
+                                </Table>
+                            </div>
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>

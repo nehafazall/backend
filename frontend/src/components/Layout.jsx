@@ -27,6 +27,7 @@ import {
     Bell,
     Moon,
     Sun,
+    Monitor,
     Menu,
     X,
     Building2,
@@ -297,7 +298,7 @@ function Layout() {
     }, [unreadCount, notifications, soundEnabled]);
     
     const { user, logout } = useAuth();
-    const { theme, toggleTheme } = useTheme();
+    const { theme, themeMode, toggleTheme } = useTheme();
     const { canAccess, canAccessModule, loading: permLoading } = usePermissions();
     const navigate = useNavigate();
     const location = useLocation();
@@ -576,7 +577,9 @@ function Layout() {
                     </div>
                     <div className="flex items-center gap-2">
                         <EnvironmentSwitcher />
-                        <Button variant="ghost" size="icon" onClick={toggleTheme}>{theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}</Button>
+                        <Button variant="ghost" size="icon" onClick={toggleTheme} title={`Theme: ${themeMode || 'auto'}`} data-testid="theme-toggle">
+                            {themeMode === 'auto' ? <Monitor className="h-5 w-5" /> : theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                        </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="relative">
