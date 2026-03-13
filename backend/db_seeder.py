@@ -1,11 +1,16 @@
 """
 Database Seeder - Auto-seeds the database on first startup if empty.
 Loads data from seed_data.json exported from the preview environment.
+Also supports exporting current DB state via CLI: python3 db_seeder.py export
 """
 import json
 import os
+import sys
 import logging
+import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
+from bson import ObjectId
 
 logger = logging.getLogger("db_seeder")
 
@@ -98,3 +103,55 @@ async def seed_database(db):
         import traceback
         traceback.print_exc()
         return False
+
+
+def _serialize(obj):
+    """Convert MongoDB types to JSON-serializable types."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items() if k != "_id"}
+    if isinstance(obj, list):
+        return [_serialize(i) for i in obj]
+    return obj
+
+
+async def export_database():
+    """Export current database state to seed_data.json."""
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+    db_name = os.environ.get("DB_NAME", "clt_academy_erp")
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+
+    seed_data = {}
+    total = 0
+    for coll_name in SEED_ORDER:
+        docs = await db[coll_name].find({}).to_list(None)
+        clean_docs = [_serialize(doc) for doc in docs]
+        seed_data[coll_name] = clean_docs
+        total += len(clean_docs)
+        print(f"  Exported {coll_name}: {len(clean_docs)} documents")
+
+    seed_data["_meta"] = {
+        "source": "preview",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "total_documents": total,
+    }
+
+    with open(SEED_FILE, "w") as f:
+        json.dump(seed_data, f, default=str)
+
+    size_mb = SEED_FILE.stat().st_size / (1024 * 1024)
+    print(f"\nExport complete: {total} documents -> {SEED_FILE} ({size_mb:.1f} MB)")
+    client.close()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "export":
+        asyncio.run(export_database())
+    else:
+        print("Usage: python3 db_seeder.py export")

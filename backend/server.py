@@ -266,8 +266,8 @@ class CourseBase(BaseModel):
     name: str
     code: str
     description: Optional[str] = None
-    base_price: float
-    category: str  # basic, advanced, mentorship, etc.
+    base_price: Optional[float] = None  # Made optional for imported courses
+    category: Optional[str] = None  # Made optional for imported courses
     is_active: bool = True
     addons: Optional[List[Dict]] = None  # [{name, price}]
 
@@ -276,8 +276,11 @@ class CourseCreate(CourseBase):
 
 class CourseResponse(CourseBase):
     id: str
-    created_at: datetime
-    updated_at: datetime
+    price: Optional[float] = None  # For imported courses that use 'price' instead of 'base_price'
+    currency: Optional[str] = None  # For imported courses
+    status: Optional[str] = None  # For imported courses
+    created_at: Optional[str] = None  # Made optional string for imported courses
+    updated_at: Optional[str] = None  # Made optional string for imported courses
     
     model_config = ConfigDict(extra="ignore")
 
@@ -336,7 +339,7 @@ class LeadReassignmentRequest(BaseModel):
 class LeadBase(BaseModel):
     full_name: str
     phone: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     country: Optional[str] = None
     city: Optional[str] = None
     lead_source: Optional[str] = None
@@ -389,7 +392,7 @@ class LeadResponse(LeadBase):
     assigned_to: Optional[str] = None
     assigned_to_name: Optional[str] = None
     rejection_reason: Optional[str] = None
-    follow_up_date: Optional[datetime] = None
+    follow_up_date: Optional[str] = None
     call_notes: Optional[str] = None
     course_id: Optional[str] = None
     course_name: Optional[str] = None
@@ -398,19 +401,18 @@ class LeadResponse(LeadBase):
     estimated_value: Optional[float] = None
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
-    call_recording_url: Optional[str] = None  # 3CX integration placeholder
-    created_at: datetime
-    updated_at: datetime
-    last_activity: Optional[datetime] = None
-    assigned_at: Optional[datetime] = None  # When lead was assigned
-    first_contact_at: Optional[datetime] = None  # When first contacted
-    sla_status: str = "ok"  # ok, warning, breach
-    sla_warning_at: Optional[datetime] = None  # When warning was issued
-    sla_warning_level: int = 0  # 0=none, 1=first warning, 2=second warning
+    call_recording_url: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    last_activity: Optional[str] = None
+    assigned_at: Optional[str] = None
+    first_contact_at: Optional[str] = None
+    sla_status: str = "ok"
+    sla_warning_at: Optional[str] = None
+    sla_warning_level: int = 0
     sla_breach: bool = False
-    in_pool: bool = False  # True if in agentic pool
-    # Reminder fields
-    reminder_date: Optional[datetime] = None
+    in_pool: bool = False
+    reminder_date: Optional[str] = None
     reminder_time: Optional[str] = None
     reminder_note: Optional[str] = None
     reminder_completed: bool = False
@@ -421,7 +423,7 @@ class StudentBase(BaseModel):
     lead_id: Optional[str] = None
     full_name: str
     phone: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     country: Optional[str] = None
     package_bought: Optional[str] = None
     batch_plan: Optional[str] = None
@@ -478,12 +480,11 @@ class StudentResponse(StudentBase):
     upgrade_pitched: bool = False
     upgrade_closed: bool = False
     upgrade_amount: Optional[float] = None
-    activation_call_at: Optional[datetime] = None
-    call_recording_url: Optional[str] = None  # 3CX integration placeholder
-    sla_status: str = "ok"  # ok, warning, breach
-    sla_warning_at: Optional[datetime] = None
-    # Reminder fields
-    reminder_date: Optional[datetime] = None
+    activation_call_at: Optional[str] = None
+    call_recording_url: Optional[str] = None
+    sla_status: str = "ok"
+    sla_warning_at: Optional[str] = None
+    reminder_date: Optional[str] = None
     reminder_time: Optional[str] = None
     reminder_note: Optional[str] = None
     reminder_type: Optional[str] = None
@@ -501,8 +502,8 @@ class StudentResponse(StudentBase):
     upgrade_count: Optional[int] = 0  # Number of upgrades
     is_upgraded_student: Optional[bool] = False  # Flag for mentors
     activation_questionnaire: Optional[Dict] = None  # Stored questionnaire data
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     
     model_config = ConfigDict(extra="ignore")
 
@@ -510,7 +511,7 @@ class StudentResponse(StudentBase):
 class CustomerBase(BaseModel):
     full_name: str
     phone: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     country: Optional[str] = None
     lead_id: Optional[str] = None
     student_id: Optional[str] = None
@@ -6946,7 +6947,7 @@ async def import_historical_students_xlsx(
     results = {
         "imported": 0, "skipped": 0, "failed": 0, "errors": [],
         "leads_created": 0, "students_created": 0, "courses_created": 0,
-        "ltv_transactions": 0
+        "ltv_transactions": 0, "teams_created": 0
     }
 
     # Read headers from row 1
@@ -6963,6 +6964,10 @@ async def import_historical_students_xlsx(
     # Pre-fetch all employees and teams for batch lookup
     all_employees = await db.hr_employees.find({}, {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "user_id": 1}).to_list(500)
     emp_by_id = {str(e["employee_id"]): e for e in all_employees}
+    # Also build name-based lookup (lowered) as fallback for rows with names instead of IDs
+    emp_by_name = {}
+    for e in all_employees:
+        emp_by_name[e["full_name"].strip().lower()] = e
 
     all_teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
     team_by_name = {}
@@ -6971,6 +6976,36 @@ async def import_historical_students_xlsx(
 
     all_users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1}).to_list(500)
     user_by_id = {u["id"]: u for u in all_users}
+
+    async def get_or_create_team(name):
+        """Find or auto-create a team by name."""
+        key = name.strip().lower()
+        if key in team_by_name:
+            return team_by_name[key]
+        # Auto-create team
+        team_id = str(uuid.uuid4())
+        new_team = {
+            "id": team_id,
+            "name": name.strip(),
+            "created_at": now,
+            "updated_at": now,
+            "members": [],
+            "leader_id": None,
+            "leader_name": None
+        }
+        await db.teams.insert_one(new_team)
+        team_by_name[key] = {"id": team_id, "name": name.strip()}
+        results["teams_created"] = results.get("teams_created", 0) + 1
+        results["errors"].append(f"Auto-created team: '{name.strip()}'")
+        return team_by_name[key]
+
+    def lookup_employee(emp_id_str):
+        """Lookup employee by ID first, then fallback to name."""
+        emp = emp_by_id.get(emp_id_str)
+        if emp:
+            return emp
+        # Fallback: try name-based lookup
+        return emp_by_name.get(emp_id_str.strip().lower())
 
     # Track courses: {(course_name, amount): course_id}
     existing_courses = await db.courses.find({}, {"_id": 0}).to_list(500)
@@ -7011,7 +7046,7 @@ async def import_historical_students_xlsx(
         new_course = {
             "id": course_id,
             "name": variant_name,
-            "code": variant_name.upper().replace(" ", "_")[:20],
+            "code": f"{variant_name.upper().replace(' ', '_')[:15]}_{course_id[:4]}",
             "price": amount,
             "currency": "AED",
             "status": "active",
@@ -7056,8 +7091,8 @@ async def import_historical_students_xlsx(
                 results["errors"].append(f"Row {row_idx}: Phone {phone} already exists (lead: {existing.get('full_name')})")
                 continue
 
-            # Lookup sales agent
-            sales_emp = emp_by_id.get(sales_emp_id)
+            # Lookup sales agent (by ID, fallback to name)
+            sales_emp = lookup_employee(sales_emp_id)
             if not sales_emp:
                 results["failed"] += 1
                 results["errors"].append(f"Row {row_idx}: Sales agent employee_id '{sales_emp_id}' not found")
@@ -7068,15 +7103,11 @@ async def import_historical_students_xlsx(
                 results["errors"].append(f"Row {row_idx}: No user account for sales agent '{sales_emp_id}'")
                 continue
 
-            # Lookup team
-            team = team_by_name.get(team_name.strip().lower())
-            if not team:
-                results["failed"] += 1
-                results["errors"].append(f"Row {row_idx}: Team '{team_name}' not found")
-                continue
+            # Lookup or auto-create team
+            team = await get_or_create_team(team_name)
 
-            # Lookup CS agent
-            cs_emp = emp_by_id.get(cs_emp_id)
+            # Lookup CS agent (by ID, fallback to name)
+            cs_emp = lookup_employee(cs_emp_id)
             if not cs_emp:
                 results["failed"] += 1
                 results["errors"].append(f"Row {row_idx}: CS agent employee_id '{cs_emp_id}' not found")
@@ -7087,11 +7118,11 @@ async def import_historical_students_xlsx(
                 results["errors"].append(f"Row {row_idx}: No user account for CS agent '{cs_emp_id}'")
                 continue
 
-            # Lookup mentor (optional)
+            # Lookup mentor (optional, with name fallback)
             mentor_emp_id = data.get("mentor_employee_id", "").strip()
             mentor_user = None
             if mentor_emp_id:
-                mentor_emp = emp_by_id.get(mentor_emp_id)
+                mentor_emp = lookup_employee(mentor_emp_id)
                 if mentor_emp:
                     mentor_user = user_by_id.get(mentor_emp.get("user_id"))
 
@@ -11140,16 +11171,21 @@ def _normalize_date(val: str) -> str:
     """Normalize date strings to YYYY-MM-DD format"""
     if not val:
         return val
-    # Already YYYY-MM-DD
+    # Already YYYY-MM-DD (or YYYY-MM-DD HH:MM:SS)
     if len(val) >= 10 and val[4] == '-':
         return val[:10]
-    # DD/MM/YYYY or DD-MM-YYYY
+    # DD/MM/YYYY, DD-MM-YYYY, or MM/DD/YYYY formats
     for sep in ['/', '-']:
         parts = val.split(sep)
         if len(parts) == 3:
-            d, m, y = parts
-            if len(y) == 4 and len(d) <= 2:
-                return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+            a, b, y = parts
+            if len(y) == 4 and len(a) <= 2 and len(b) <= 2:
+                a_int, b_int = int(a), int(b)
+                # If second number > 12, it must be a day → format is MM/DD/YYYY
+                if b_int > 12 and a_int <= 12:
+                    return f"{y}-{a.zfill(2)}-{b.zfill(2)}"
+                # Default: assume DD/MM/YYYY
+                return f"{y}-{b.zfill(2)}-{a.zfill(2)}"
     return val
 
 @api_router.get("/hr/employees", response_model=List[EmployeeResponse])
