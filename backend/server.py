@@ -13925,7 +13925,8 @@ async def get_hr_dashboard(user = Depends(require_roles(["super_admin", "admin",
     month_start = now.replace(day=1).strftime("%Y-%m-%d")
     
     # Workforce Insights
-    total_employees = await db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
+    total_employees = await db.hr_employees.count_documents({})
+    active_employees = await db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
     
     gender_pipeline = [
         {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
@@ -13954,7 +13955,7 @@ async def get_hr_dashboard(user = Depends(require_roles(["super_admin", "admin",
     
     # Attendance Insights
     present_today = await db.hr_attendance.count_documents({"date": today, "status": "present"})
-    absent_today = total_employees - present_today
+    absent_today = active_employees - present_today
     late_today = await db.hr_attendance.count_documents({"date": today, "late_minutes": {"$gt": 0}})
     
     # Leave & Regularization
@@ -13998,12 +13999,15 @@ async def get_hr_dashboard(user = Depends(require_roles(["super_admin", "admin",
     return {
         "workforce": {
             "total_employees": total_employees,
+            "active_employees": active_employees,
             "gender_ratio": gender_counts,
             "by_department": dept_counts,
             "company_visa": company_visa,
-            "own_visa": total_employees - company_visa,
+            "own_visa": active_employees - company_visa,
             "probation": await db.hr_employees.count_documents({"employment_status": "probation"}),
-            "active": await db.hr_employees.count_documents({"employment_status": "active"})
+            "active": await db.hr_employees.count_documents({"employment_status": "active"}),
+            "terminated": await db.hr_employees.count_documents({"employment_status": "terminated"}),
+            "resigned": await db.hr_employees.count_documents({"employment_status": "resigned"})
         },
         "document_alerts": expiry_alerts["summary"],
         "attendance": {
