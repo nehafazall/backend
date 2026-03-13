@@ -5953,6 +5953,207 @@ async def get_cs_agent_bifurcation(
         "sla_rate": round(r.get("sla_ok", 0) / max(r["total_students"], 1) * 100, 1),
     } for r in result]
 
+# ==================== CS DASHBOARD ANALYTICS ====================
+
+@api_router.get("/cs/dashboard/stats")
+async def get_cs_dashboard_stats(
+    period: str = "overall",
+    view_mode: str = "team",  # 'individual' or 'team'
+    user=Depends(get_current_user)
+):
+    """CS Dashboard key metrics: commission, revenue, pipeline."""
+    date_filter = _build_date_filter("created_at", period)
+    
+    # Commission query
+    comm_query = {**date_filter}
+    if view_mode == "individual":
+        comm_query["agent_id"] = user["id"]
+    
+    # Total earned commissions (agent type)
+    agent_comms = await db.cs_commissions.aggregate([
+        {"$match": {**comm_query, "type": "cs_upgrade_agent"}},
+        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}}
+    ]).to_list(1)
+    total_agent_commission = agent_comms[0]["total"] if agent_comms else 0
+    total_upgrades_done = agent_comms[0]["count"] if agent_comms else 0
+    
+    # Head commissions
+    head_comms = await db.cs_commissions.aggregate([
+        {"$match": {**comm_query, "type": "cs_upgrade_head"}},
+        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
+    ]).to_list(1)
+    total_head_commission = head_comms[0]["total"] if head_comms else 0
+    
+    # Upgrade revenue (from confirmed upgrades)
+    student_query = {}
+    if view_mode == "individual":
+        student_query["cs_agent_id"] = user["id"]
+    
+    upgrade_rev = await db.students.aggregate([
+        {"$match": {**student_query, "upgrade_history": {"$exists": True, "$ne": []}}},
+        {"$unwind": "$upgrade_history"},
+        {"$match": {**_build_date_filter("upgrade_history.confirmed_at", period)}},
+        {"$group": {"_id": None, "total": {"$sum": "$upgrade_history.amount"}, "count": {"$sum": 1}}}
+    ]).to_list(1)
+    achieved_revenue = upgrade_rev[0]["total"] if upgrade_rev else 0
+    achieved_count = upgrade_rev[0]["count"] if upgrade_rev else 0
+    
+    # Pipeline revenue (from students in pitched_for_upgrade)
+    pitch_query = {"stage": "pitched_for_upgrade", "pitched_upgrade_price": {"$exists": True, "$gt": 0}}
+    if view_mode == "individual":
+        pitch_query["cs_agent_id"] = user["id"]
+    
+    pipeline_rev = await db.students.aggregate([
+        {"$match": pitch_query},
+        {"$group": {"_id": None, "total": {"$sum": "$pitched_upgrade_price"}, "count": {"$sum": 1}}}
+    ]).to_list(1)
+    pipeline_revenue = pipeline_rev[0]["total"] if pipeline_rev else 0
+    pipeline_count = pipeline_rev[0]["count"] if pipeline_rev else 0
+    
+    return {
+        "achieved_revenue": achieved_revenue,
+        "achieved_count": achieved_count,
+        "pipeline_revenue": pipeline_revenue,
+        "pipeline_count": pipeline_count,
+        "total_agent_commission": total_agent_commission,
+        "total_head_commission": total_head_commission,
+        "total_commission": total_agent_commission + total_head_commission,
+        "total_upgrades": total_upgrades_done,
+    }
+
+@api_router.get("/cs/dashboard/agent-revenue")
+async def get_cs_agent_revenue(
+    period: str = "overall",
+    user=Depends(get_current_user)
+):
+    """Revenue closed per CS agent."""
+    pipeline = [
+        {"$match": {"type": "cs_upgrade_agent", **_build_date_filter("created_at", period)}},
+        {"$group": {
+            "_id": "$agent_id",
+            "agent_name": {"$first": "$agent_name"},
+            "total_revenue": {"$sum": "$upgrade_amount"},
+            "total_commission": {"$sum": "$commission_amount"},
+            "count": {"$sum": 1}
+        }},
+        {"$sort": {"total_revenue": -1}}
+    ]
+    result = await db.cs_commissions.aggregate(pipeline).to_list(50)
+    return [{"agent_name": r["agent_name"], "revenue": r["total_revenue"], "commission": r["total_commission"], "upgrades": r["count"]} for r in result]
+
+@api_router.get("/cs/dashboard/monthly-trend")
+async def get_cs_monthly_revenue_trend(user=Depends(get_current_user)):
+    """Monthly upgrade revenue trend."""
+    pipeline = [
+        {"$match": {"upgrade_history": {"$exists": True, "$ne": []}}},
+        {"$unwind": "$upgrade_history"},
+        {"$addFields": {"month_str": {"$substr": ["$upgrade_history.confirmed_at", 0, 7]}}},
+        {"$group": {
+            "_id": "$month_str",
+            "revenue": {"$sum": "$upgrade_history.amount"},
+            "count": {"$sum": 1},
+            "commission": {"$sum": "$upgrade_history.agent_commission"}
+        }},
+        {"$sort": {"_id": 1}}
+    ]
+    result = await db.students.aggregate(pipeline).to_list(24)
+    return [{"month": r["_id"], "revenue": r["revenue"], "upgrades": r["count"], "commission": r["commission"]} for r in result]
+
+@api_router.get("/cs/dashboard/month-comparison")
+async def get_cs_month_comparison(user=Depends(get_current_user)):
+    """This month vs last month daily revenue comparison."""
+    now = datetime.now(timezone.utc)
+    this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_end = this_month_start - timedelta(days=1)
+    last_month_start = last_month_end.replace(day=1)
+    
+    this_month_label = this_month_start.strftime("%B %Y")
+    last_month_label = last_month_start.strftime("%B %Y")
+    
+    # Get this month's daily data
+    this_month_data = {}
+    last_month_data = {}
+    
+    students = await db.students.find(
+        {"upgrade_history": {"$exists": True, "$ne": []}},
+        {"_id": 0, "upgrade_history": 1}
+    ).to_list(10000)
+    
+    for s in students:
+        for uh in (s.get("upgrade_history") or []):
+            confirmed = uh.get("confirmed_at", "")
+            if not confirmed:
+                continue
+            try:
+                dt = datetime.fromisoformat(confirmed.replace("Z", "+00:00"))
+            except:
+                continue
+            day = dt.day
+            amount = uh.get("amount", 0)
+            if dt >= this_month_start:
+                this_month_data[day] = this_month_data.get(day, 0) + amount
+            elif dt >= last_month_start and dt < this_month_start:
+                last_month_data[day] = last_month_data.get(day, 0) + amount
+    
+    max_day = max(now.day, max(last_month_data.keys()) if last_month_data else 1, max(this_month_data.keys()) if this_month_data else 1)
+    data = []
+    this_cum = 0
+    last_cum = 0
+    for d in range(1, max_day + 1):
+        this_cum += this_month_data.get(d, 0)
+        last_cum += last_month_data.get(d, 0)
+        data.append({"day": d, "this_month": this_cum, "last_month": last_cum})
+    
+    return {
+        "this_month_label": this_month_label,
+        "last_month_label": last_month_label,
+        "data": data
+    }
+
+@api_router.get("/cs/dashboard/pipeline")
+async def get_cs_pipeline(
+    view_mode: str = "team",
+    user=Depends(get_current_user)
+):
+    """Pipeline from pitched_for_upgrade students."""
+    query = {"stage": "pitched_for_upgrade", "pitched_upgrade_price": {"$exists": True, "$gt": 0}}
+    if view_mode == "individual":
+        query["cs_agent_id"] = user["id"]
+    
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$pitched_upgrade_path",
+            "label": {"$first": "$pitched_upgrade_label"},
+            "count": {"$sum": 1},
+            "total_revenue": {"$sum": "$pitched_upgrade_price"}
+        }},
+        {"$sort": {"total_revenue": -1}}
+    ]
+    result = await db.students.aggregate(pipeline).to_list(10)
+    return [{"path": r["_id"], "label": r.get("label") or r["_id"], "count": r["count"], "revenue": r["total_revenue"]} for r in result]
+
+@api_router.get("/cs/dashboard/leaderboard")
+async def get_cs_commission_leaderboard(
+    period: str = "overall",
+    user=Depends(get_current_user)
+):
+    """CS agent leaderboard by commission earned."""
+    pipeline = [
+        {"$match": {"type": "cs_upgrade_agent", **_build_date_filter("created_at", period)}},
+        {"$group": {
+            "_id": "$agent_id",
+            "agent_name": {"$first": "$agent_name"},
+            "total_commission": {"$sum": "$commission_amount"},
+            "total_revenue": {"$sum": "$upgrade_amount"},
+            "upgrades": {"$sum": 1}
+        }},
+        {"$sort": {"total_commission": -1}},
+        {"$limit": 10}
+    ]
+    result = await db.cs_commissions.aggregate(pipeline).to_list(10)
+    return [{"agent_name": r["agent_name"], "commission": r["total_commission"], "revenue": r["total_revenue"], "upgrades": r["upgrades"]} for r in result]
+
 @api_router.get("/dashboard/mentor-bifurcation")
 async def get_mentor_bifurcation(
     period: str = "overall",
