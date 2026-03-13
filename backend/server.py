@@ -19339,14 +19339,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    # Auto-seed database if empty (for fresh deployments)
-    from db_seeder import seed_database
-    await seed_database(db)
-    
-    await bootstrap_super_admin()
-    await bootstrap_departments()
-    
-    # Create indexes
+    # Create indexes FIRST (before any data insertion)
     await db.users.create_index("email", unique=True)
     await db.users.create_index("role")
     await db.users.create_index("department")
@@ -19430,6 +19423,15 @@ async def startup_event():
     await db.sheet_connectors.create_index("auto_sync_enabled")
     await db.sheets_oauth_states.create_index("state", unique=True)
     await db.sheets_oauth_states.create_index("expires_at", expireAfterSeconds=0)
+    
+    # Auto-seed database if empty (for fresh deployments)
+    from db_seeder import seed_database
+    seeded = await seed_database(db)
+    
+    # Bootstrap only if seeder didn't run (existing DB or no seed file)
+    if not seeded:
+        await bootstrap_super_admin()
+        await bootstrap_departments()
     
     # Start background scheduler for Google Sheets auto-sync
     asyncio.create_task(sheets_auto_sync_loop())

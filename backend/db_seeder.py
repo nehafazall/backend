@@ -26,6 +26,9 @@ SEED_ORDER = [
     "payments",
     "hr_attendance",
     "call_logs",
+    "hr_payroll_batches",
+    "integrations",
+    "ltv_transactions",
 ]
 
 
@@ -45,7 +48,7 @@ async def seed_database(db):
         logger.info("Database already has data, skipping seeding")
         return False
 
-    logger.info("Empty database detected — starting auto-seed from seed_data.json...")
+    logger.info("Empty database detected - starting auto-seed from seed_data.json...")
 
     try:
         with open(SEED_FILE, "r") as f:
@@ -57,18 +60,36 @@ async def seed_database(db):
             if not docs:
                 continue
 
-            # Clear any existing data in this collection
-            await db[coll_name].delete_many({})
+            try:
+                # Drop existing indexes to prevent conflicts during seeding
+                collection = db[coll_name]
+                try:
+                    await collection.drop_indexes()
+                except Exception:
+                    pass
 
-            # Insert all documents
-            await db[coll_name].insert_many(docs)
-            total_inserted += len(docs)
-            logger.info(f"  Seeded {coll_name}: {len(docs)} documents")
+                # Clear any existing data in this collection
+                await collection.delete_many({})
+
+                # Insert documents one by one to handle any edge cases
+                inserted = 0
+                for doc in docs:
+                    try:
+                        await collection.insert_one(doc)
+                        inserted += 1
+                    except Exception as e:
+                        logger.warning(f"  Skipped duplicate in {coll_name}: {e}")
+
+                total_inserted += inserted
+                logger.info(f"  Seeded {coll_name}: {inserted}/{len(docs)} documents")
+
+            except Exception as e:
+                logger.error(f"  Error seeding {coll_name}: {e}")
 
         meta = seed_data.get("_meta", {})
         logger.info(
-            f"Database seeding complete: {total_inserted} documents across {len(SEED_ORDER)} collections "
-            f"(exported from {meta.get('source', 'unknown')} at {meta.get('exported_at', 'unknown')})"
+            f"Database seeding complete: {total_inserted} documents "
+            f"(source: {meta.get('source', 'unknown')}, exported: {meta.get('exported_at', 'unknown')})"
         )
         return True
 
