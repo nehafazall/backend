@@ -5,39 +5,40 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 13, 2026)
 
-### Completed: Sales Dashboard Enhancements + Bug Fixes
+### Completed: Sales Dashboard Overhaul + UI/UX Improvements
 
-**Fixes Applied:**
-1. Removed "Import Comprehensive Students" and "Import Students XLSX" buttons from Sales CRM
-2. Fixed "Sales by Course" chart — revenue was showing 0 (backend used `sale_amount` instead of `enrollment_amount`)
-3. Fixed "Monthly Revenue Trend" — was using `updated_at` (import timestamp) instead of `enrolled_at` (actual enrollment date). Now shows 12 months of data
-4. Made Sales Leaderboard monthly
-5. Added "Today's Transactions" section on dashboard
-6. Made dashboard elements clickable with drill-down popup modals (Top Agents, Leaderboard, Sales by Course, Pipeline → redirects to Sales CRM)
-7. Fixed Payment Gateway creation error (`Select.Item` with empty string value)
-8. Fixed Finance CLT Dashboard showing AED 0 (added `amount_in_aed` field to receivables)
+**Sales Dashboard (Fully Rebuilt):**
+- Date filters: Today, Yesterday, This Week, This Month, This Quarter, This Year, Overall, Custom Range
+- Key metrics cards: Revenue (AED 2,174,969), Total Leads (1,223), Conversion (73.8%), Avg Deal (AED 2,411), Today's Transactions
+- Top 10 Agents horizontal bar chart (filterable by period)
+- Team-wise Revenue chart with click-to-drill-down (shows individual agent breakdown in modal)
+- Monthly Revenue Trend (dual-axis area chart: revenue + deals)
+- This Month vs Last Month comparison (cumulative line chart)
+- Sales by Course donut chart with drill-down modal
+- Monthly Leaderboard (top 5 agents with "View All" modal)
+- Lead Pipeline (clickable, navigates to Sales CRM)
+- All widgets support date period filtering
 
-**Dashboard Features:**
-- Total Revenue: AED 2,174,969 (902 deals)
-- Top 10 Agents Overall + Top 5 This Month (bar charts)
-- Sales by Course (donut chart with top 8 + "Others")
-- Monthly Revenue Trend (dual-axis: revenue area + deals line)
-- Monthly Leaderboard (top agents with revenue)
-- Today's Transactions (real-time feed)
-- Drill-down modals on all major widgets
+**Global UI/UX Improvements:**
+- All modals/popups now scrollable (max-h-[85vh] overflow-y-auto in base DialogContent)
+- Improved color contrast for both light and dark themes:
+  - Light: muted-foreground 36% (was 45%), borders 85% (was 90%)
+  - Dark: muted-foreground 78% (was 69%), borders 28% (was 25%), card 14% (was 15%)
 
-### Previous: Historical Data Import + Dashboard Bifurcation
+**Data Integrity Fixes:**
+- 68 future-dated records corrected (day/month swapped)
+- DB seed exported with corrected data (5,197 documents)
+- No future-dated revenue remaining (verified: trend ends at March 2026)
 
-**Import Results:**
+### Previous Work
 - 901 students imported with correct US date format (MM/DD/YYYY)
 - 46 courses auto-created with prices
 - 899 LTV transactions, 901 customers, 899 finance receivables
-- All dates distributed correctly: Oct 2024 through Jan 2026
-
-**CS Dashboard:** Agent bifurcation with SLA rates + date filters
-**Mentor Dashboard:** Student counts per mentor + redeposit tracking + date filters
-**Customer Master:** Course column, enrollment date, sorted ascending
-**Finance Receivables:** 899 records, AED 2,174,969, sorted by date
+- CS Dashboard: Agent bifurcation with SLA rates + date filters
+- Mentor Dashboard: Student counts per mentor + redeposit tracking
+- Finance Dashboard: Total receivables AED 2,174,969
+- Import buttons removed from Sales CRM
+- Payment Gateway form crash fixed
 
 ---
 
@@ -58,14 +59,16 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 ## Backlog
 
 ### P1 - Upcoming
+- User Verification for Google Sheets connector
 - Course and Commission Configuration (awaiting user business logic)
-- 51 failed import rows (missing employee IDs: 40003, 40011, 40027)
 
 ### P2 - Future
 - Refactor server.py into domain-specific routes
 - Payslip Generation
 - Google Ads API Integration
 - Mentor Dashboard leaderboard with live data
+- Fix Babel Plugin RangeError (currently mitigated with workaround)
+- 51 failed import rows (missing employee IDs: 40003, 40011, 40027)
 
 ---
 
