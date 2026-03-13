@@ -11,59 +11,37 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 ## Latest Updates (March 13, 2026)
 
 ### Completed: Interactive Drill-Down Analytics V2 (All Dashboards)
-**Sales Dashboard:**
-- Top 10 Agents: Click bar → modal with closed students (name, course, amount, enrolled date)
-- Team Revenue: Click bar → modal with agents breakdown (deals + revenue) → click agent → their students
-- Lead Pipeline: Click stage → modal with agent-wise count + individual lead list (name, agent, team, course)
-- Monthly Trend: Click month → breakdown by course & agent
-- Leaderboard: Click agent → their enrolled students with amounts
+- Sales: Top 10 Agents, Team Revenue, Lead Pipeline, Monthly Trend, Leaderboard — all clickable
+- CS: Agent Revenue, Leaderboard, Pipeline, Bifurcation — all clickable with proper student data
+- Mentor: Bifurcation, Pipeline — all clickable
+- CEO: Department Pie, Revenue/Enrollment trends — all clickable
 
-**CS Dashboard:**
-- Agent Revenue: Click bar → modal with agent's students (name, stage, course, upgrade count, upgrade revenue)
-- Leaderboard: Click agent → student details (Nasida VN → 153 students, 5 upgrades, 17,997 AED)
-- Pipeline: Click item → per-agent breakdown + student list
-- Agent Bifurcation: Click bar → students grouped by stage
-
-**Mentor Dashboard:**
-- Mentor Bifurcation: Click row → students grouped by stage (Ashwin Sudarsh → 224 students)
-- Pipeline: Click stage → mentor-wise breakdown + student list
-- Distribution chart: Click bar → mentor details
-
-**CEO Dashboard:**
-- Department Pie: Click slice → employee list per department
-- Revenue Trend: Click month → course & agent breakdown
-- Enrollments: Click month → detailed breakdown
-
-### Completed: Auto Dark/Light Mode
-- Based on Abu Dhabi timezone (GST+4)
-- Day (6am-7pm) = light, Night (7pm-6am) = dark
-- Theme toggle cycles: Auto(Monitor) → Light(Moon) → Dark(Sun)
-- Re-checks every 60 seconds in auto mode
+### Completed: Auto Dark/Light Mode (GST+4)
+- Auto/Light/Dark cycling with Monitor/Moon/Sun icons
 
 ### Completed: INR Currency
-- Added to Finance Settings > Bank Accounts (AED, USD, EUR, GBP, SAR, INR)
-- Added to Finance Settings > Payment Gateways
+- Added to Finance Settings > Bank Accounts & Payment Gateways
 
-### New Drill-Down API Endpoints (V2 — name-based queries)
-- `GET /api/dashboard/drill/agent-students?agent_name=X`
-- `GET /api/dashboard/drill/team-agents?team_name=X`
-- `GET /api/dashboard/drill/pipeline-stage?stage=X`
-- `GET /api/dashboard/monthly-revenue/{month}/details`
-- `GET /api/dashboard/department/{dept}/employees`
-- `GET /api/cs/drill/agent-students?agent_name=X`
-- `GET /api/cs/drill/pipeline-stage?stage=X`
-- `GET /api/mentor/drill/students?mentor_name=X`
-- `GET /api/mentor/drill/pipeline-stage?stage=X`
+### Completed: Enhanced Lead Pool (Assignment Tracking)
+- Auto-move rejected/not_interested leads to pool
+- Track assignment history: who rejected, which team, when, reason
+- Times assigned counter (how many times reassigned)
+- Team and Agent filters on the pool page
+- Bulk assignment (select multiple → assign to one agent)
+- Assignment history modal per lead
+- Round-robin or manual assign from pool
 
-### Previously Completed
-- CS Dashboard (5 KPIs, charts, leaderboard, bifurcation)
-- Dual-role views (My Students / Team Overview toggle)
-- CEO Pending Approvals widget
-- CS Upgrade Pricing & Commission System
-- Access Control Unification, Sales Dashboard
-- Modals scrollable, color contrast improvements
-- Salary payout method, last working day, Student Code
-- Finance: VAT on Fee %, PSP Bank Mapping dropdown
+### New API Endpoints
+- `POST /api/leads/pool/bulk-assign` — Bulk assign leads from pool
+- `GET /api/leads/pool?team_filter=X&agent_filter=Y` — Enhanced pool with filters
+- Drill-down: /dashboard/drill/agent-students, /dashboard/drill/team-agents, /dashboard/drill/pipeline-stage
+- CS Drill: /cs/drill/agent-students, /cs/drill/pipeline-stage
+- Mentor Drill: /mentor/drill/students, /mentor/drill/pipeline-stage
+
+### Google Sheets Agent Connector (Pre-existing)
+- Marketing > Connectors page: paste URL, assign agent, auto-sync every 5 min
+- Supports column mapping for name, phone, city, etc.
+- Each connector maps one sheet to one agent
 
 ---
 

@@ -3229,6 +3229,26 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
     update_data["updated_at"] = now.isoformat()
     update_data["last_activity"] = now.isoformat()
     
+    # Auto-move rejected/not_interested leads to pool with assignment history
+    if "stage" in update_data and update_data["stage"] in ["rejected", "not_interested"]:
+        update_data["in_pool"] = True
+        prev_agent_name = existing.get("assigned_to_name", "Unknown")
+        prev_team = existing.get("team_name", "")
+        assignment_record = {
+            "agent_id": existing.get("assigned_to"),
+            "agent_name": prev_agent_name,
+            "team_name": prev_team,
+            "action": update_data["stage"],
+            "reason": update_data.get("rejection_reason", ""),
+            "date": now.isoformat(),
+        }
+        # Use $push to append to assignment_history
+        await db.leads.update_one(
+            {"id": lead_id},
+            {"$push": {"assignment_history": assignment_record},
+             "$inc": {"times_assigned": 0}}  # ensure field exists
+        )
+    
     # Capture changes for audit
     changes_for_audit = {}
     for key in update_data:
@@ -3265,18 +3285,32 @@ async def delete_lead(lead_id: str, user = Depends(require_roles(["super_admin",
 # ==================== LEADS POOL (AGENTIC POOL) ====================
 
 @api_router.get("/leads/pool")
-async def get_leads_pool(user = Depends(get_current_user)):
-    """Get all leads in the agentic pool (unassigned or returned)"""
+async def get_leads_pool(
+    team_filter: Optional[str] = None,
+    agent_filter: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get all leads in the agentic pool. Includes rejected/not_interested leads and unassigned."""
     query = {
         "$or": [
             {"in_pool": True},
             {"assigned_to": None},
-            {"assigned_to": ""}
-        ],
-        "stage": {"$nin": ["enrolled", "rejected"]}
+            {"assigned_to": ""},
+            {"stage": {"$in": ["rejected", "not_interested"]}}
+        ]
     }
     
-    leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    # Exclude already enrolled leads
+    query["stage"] = {"$nin": ["enrolled"]}
+    
+    leads = await db.leads.find(query, {"_id": 0}).sort("updated_at", -1).to_list(2000)
+    
+    # Apply team/agent filters on assignment_history
+    if team_filter:
+        leads = [l for l in leads if any(h.get("team_name") == team_filter for h in (l.get("assignment_history") or []))]
+    if agent_filter:
+        leads = [l for l in leads if any(h.get("agent_name") == agent_filter for h in (l.get("assignment_history") or []))]
+    
     return leads
 
 @api_router.post("/leads/pool/{lead_id}/assign")
@@ -3313,16 +3347,34 @@ async def assign_lead_from_pool(lead_id: str, user_id: Optional[str] = None, use
         "assigned_to_name": agent["full_name"],
         "assigned_at": now,
         "in_pool": False,
+        "stage": "new_lead",  # Reset stage for new agent
         "sla_status": "ok",
         "sla_warning_level": 0,
         "sla_warning_at": None,
         "sla_breach": False,
-        "first_contact_at": None,  # Reset for new assignment
+        "first_contact_at": None,
         "updated_at": now,
         "last_activity": now
     }
     
-    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    # Get agent's team name
+    agent_team = agent.get("team_name", "")
+    
+    await db.leads.update_one(
+        {"id": lead_id},
+        {
+            "$set": {**update_data, "team_name": agent_team},
+            "$inc": {"times_assigned": 1},
+            "$push": {"assignment_history": {
+                "agent_id": agent["id"],
+                "agent_name": agent["full_name"],
+                "team_name": agent_team,
+                "action": "assigned_from_pool",
+                "assigned_by": user.get("full_name", "System"),
+                "date": now,
+            }}
+        }
+    )
     await log_activity("lead", lead_id, "assigned_from_pool", user, {"new_agent": agent["full_name"]})
     
     # Notify the agent
@@ -3362,6 +3414,66 @@ async def return_lead_to_pool(lead_id: str, reason: str = "", user = Depends(get
     await log_activity("lead", lead_id, "returned_to_pool", user, {"reason": reason})
     
     return {"message": "Lead returned to pool"}
+
+@api_router.post("/leads/pool/bulk-assign")
+async def bulk_assign_leads_from_pool(
+    data: dict,
+    user=Depends(require_roles(["super_admin", "admin", "sales_manager", "coo"]))
+):
+    """Bulk assign leads from pool to an agent."""
+    lead_ids = data.get("lead_ids", [])
+    agent_id = data.get("agent_id")
+    
+    if not lead_ids or not agent_id:
+        raise HTTPException(status_code=400, detail="lead_ids and agent_id required")
+    
+    agent = await db.users.find_one({"id": agent_id})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    agent_team = agent.get("team_name", "")
+    assigned = 0
+    
+    for lid in lead_ids:
+        lead = await db.leads.find_one({"id": lid})
+        if not lead:
+            continue
+        
+        await db.leads.update_one(
+            {"id": lid},
+            {
+                "$set": {
+                    "assigned_to": agent["id"],
+                    "assigned_to_name": agent["full_name"],
+                    "team_name": agent_team,
+                    "assigned_at": now,
+                    "in_pool": False,
+                    "stage": "new_lead",
+                    "sla_status": "ok",
+                    "sla_warning_level": 0,
+                    "sla_warning_at": None,
+                    "sla_breach": False,
+                    "first_contact_at": None,
+                    "updated_at": now,
+                    "last_activity": now,
+                },
+                "$inc": {"times_assigned": 1},
+                "$push": {"assignment_history": {
+                    "agent_id": agent["id"],
+                    "agent_name": agent["full_name"],
+                    "team_name": agent_team,
+                    "action": "bulk_assigned_from_pool",
+                    "assigned_by": user.get("full_name", "System"),
+                    "date": now,
+                }}
+            }
+        )
+        assigned += 1
+    
+    await log_activity("leads_pool", "bulk", "bulk_assign", user, {"count": assigned, "agent": agent["full_name"]})
+    
+    return {"message": f"{assigned} leads assigned to {agent['full_name']}", "assigned": assigned}
 
 # ==================== REMINDERS & FOLLOW-UPS ====================
 
