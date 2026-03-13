@@ -5,20 +5,23 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 13, 2026)
 
-### Completed: Access Control Unification
-- **Removed Module Access tab** from Role Management — no more contradiction with Access Control
-- **Roles now dynamically populate** Access Control dropdown (custom roles from Role Management appear automatically)
-- **Access Control is the single source of truth** — sidebar navigation uses `canAccess(path)` from the permission system
-- **All pages added to Access Control** — including Company Documents, HR Approval Queue, SSHR paths
+### Completed: Dual-Role Views for CS Head, Academic Master, CEO
+- **CS Page**: "My Students" / "Team Overview" toggle for cs_head, admin, super_admin
+  - My Students: filters by cs_agent_id (only their assigned students)
+  - Team Overview: shows all 902+ students with agent summary badges
+- **Mentor Page**: Same toggle for academic_master, admin, super_admin
+  - My Students: filters by mentor_id (their assigned students)
+  - Team Overview: shows all 899+ students with mentor summary badges
+- **CEO Dashboard**: "Pending Approvals" widget replaces Recent Transactions for super_admin/admin
+  - Shows: Leave Requests, Time Regularization, Payroll Processing, Finance Verifications, Expiring Documents
+  - Each item clickable → navigates to relevant page
 
-### Completed: CS Upgrade Pricing & Commission System
-- Upgrade flow: Pricing modal → Confirm + Payment → Finance verification → Re-activation
-- Commission auto-calculation per price tier (agent 75-350 AED, CS head 30/60 AED)
-- Student Code field on kanban cards and detail modal
-
-### Completed: Sales Dashboard Overhaul + UI/UX
-- Date filters, team revenue drill-down, month comparison chart
+### Previously Completed
+- CS Upgrade Pricing & Commission System (3 paths, 9 price tiers, auto commissions)
+- Access Control Unification (roles from Role Management populate Access Control dropdown)
+- Sales Dashboard Overhaul (date filters, team revenue drill-down, month comparison)
 - All modals scrollable globally, improved color contrast
+- Salary payout method field, last working day for resigned/terminated
 
 ---
 
@@ -27,17 +30,14 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - Backend: FastAPI + Motor (async MongoDB) + Pydantic
 - Database: MongoDB
 
-## Permission System Architecture
-- `PermissionProvider` in api.js loads role permissions from `/api/roles/{role}/permissions`
-- Falls back to `getDefaultPermissions(role)` if no saved permissions
-- `canAccess(path)` → checks PATH_TO_SUBPAGE → SUBPAGE_TO_MODULE → module permissions
-- Layout.jsx sidebar uses `canAccess()` to show/hide sections and items
+## Permission System
+- `canAccess(path)` from PermissionProvider is the single authority for sidebar visibility
 - Super admin always has full access
+- Layout.jsx uses permission system (not hardcoded role arrays)
 
 ---
 
 ## Backlog
-
 ### P1 - Upcoming
 - Sales Commission Configuration
 - User Verification for Google Sheets connector
