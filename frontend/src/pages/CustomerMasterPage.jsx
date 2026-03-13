@@ -147,9 +147,15 @@ const CustomerMasterPage = () => {
             <TableRow key={c.id}>
                 <TableCell>
                     <p className="font-medium">{c.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{c.email || ''}</p>
                 </TableCell>
                 <TableCell>
                     <p className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</p>
+                </TableCell>
+                <TableCell>
+                    {c.transactions && c.transactions.length > 0 ? (
+                        <span className="text-sm">{c.transactions[0].course_name || 'N/A'}</span>
+                    ) : 'N/A'}
                 </TableCell>
                 <TableCell>
                     <Badge variant="secondary">{c.transaction_count || 0}</Badge>
@@ -159,7 +165,7 @@ const CustomerMasterPage = () => {
                 </TableCell>
                 <TableCell>
                     <span className="text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />{formatDate(c.last_transaction_at)}
+                        <Clock className="h-3 w-3" />{formatDate(c.created_at)}
                     </span>
                 </TableCell>
                 <TableCell className="text-right">
@@ -231,16 +237,17 @@ const CustomerMasterPage = () => {
                                 <TableRow>
                                     <TableHead>Customer</TableHead>
                                     <TableHead>Phone</TableHead>
+                                    <TableHead>Course</TableHead>
                                     <TableHead>Transactions</TableHead>
                                     <TableHead>Total Spent</TableHead>
-                                    <TableHead>Last Transaction</TableHead>
+                                    <TableHead>Enrollment Date</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {customers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-8">No customers found</TableCell>
+                                        <TableCell colSpan={7} className="text-center py-8">No customers found</TableCell>
                                     </TableRow>
                                 ) : (
                                     customers.map(renderRow)

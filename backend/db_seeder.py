@@ -34,6 +34,8 @@ SEED_ORDER = [
     "hr_payroll_batches",
     "integrations",
     "ltv_transactions",
+    "customers",
+    "finance_clt_receivables",
 ]
 
 

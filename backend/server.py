@@ -4041,10 +4041,11 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
 @api_router.get("/customers")
 async def get_customers(
     search: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 2000,
+    sort_order: str = "asc",
     user = Depends(get_current_user)
 ):
-    """Get all customers with transaction history"""
+    """Get all customers with transaction history, sorted by date"""
     query = {}
     if search:
         query["$or"] = [
@@ -4053,7 +4054,8 @@ async def get_customers(
             {"email": {"$regex": search, "$options": "i"}}
         ]
     
-    customers = await db.customers.find(query, {"_id": 0}).sort("last_transaction_at", -1).to_list(limit)
+    sort_dir = 1 if sort_order == "asc" else -1
+    customers = await db.customers.find(query, {"_id": 0}).sort("created_at", sort_dir).to_list(limit)
     return customers
 
 @api_router.get("/customers/{customer_id}")
@@ -5519,6 +5521,189 @@ async def get_mentor_dashboard(user = Depends(get_current_user)):
         "student_stages": student_stages,
         "recent_activities": recent_activities
     }
+
+
+# ==================== ENHANCED DASHBOARD ENDPOINTS (Agent Bifurcation + Date Filters) ====================
+
+def _get_date_range(period: str):
+    """Get start date for a given period filter."""
+    now = datetime.now(timezone.utc)
+    if period == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+    elif period == "this_week":
+        start = now - timedelta(days=now.weekday())
+        return start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
+    elif period == "this_month":
+        return now.replace(day=1).isoformat()[:10]
+    elif period == "this_quarter":
+        q_month = ((now.month - 1) // 3) * 3 + 1
+        return now.replace(month=q_month, day=1).isoformat()[:10]
+    elif period == "this_year":
+        return now.replace(month=1, day=1).isoformat()[:10]
+    return None  # "overall" = no filter
+
+@api_router.get("/dashboard/sales-agent-closings")
+async def get_sales_agent_closings(
+    period: str = "overall",
+    limit: int = 10,
+    user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))
+):
+    """Top agents by closings. period: today, this_week, this_month, this_quarter, this_year, overall"""
+    query = {"stage": "enrolled"}
+    start_date = _get_date_range(period)
+    if start_date:
+        query["enrolled_at"] = {"$gte": start_date}
+
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$assigned_to",
+            "name": {"$first": "$assigned_to_name"},
+            "closings": {"$sum": 1},
+            "revenue": {"$sum": "$enrollment_amount"},
+        }},
+        {"$sort": {"closings": -1}},
+        {"$limit": limit}
+    ]
+    result = await db.leads.aggregate(pipeline).to_list(limit)
+    return [{"agent_name": r.get("name", "Unknown"), "closings": r["closings"], "revenue": r.get("revenue", 0)} for r in result]
+
+@api_router.get("/dashboard/cs-agent-bifurcation")
+async def get_cs_agent_bifurcation(
+    period: str = "overall",
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Students per CS agent with SLA rates. period: today, this_week, this_month, this_quarter, this_year, overall"""
+    query = {"cs_agent_id": {"$exists": True, "$ne": None}}
+    start_date = _get_date_range(period)
+    if start_date:
+        query["enrolled_at"] = {"$gte": start_date}
+
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$cs_agent_id",
+            "name": {"$first": "$cs_agent_name"},
+            "total_students": {"$sum": 1},
+            "sla_ok": {"$sum": {"$cond": [{"$eq": ["$sla_status", "ok"]}, 1, 0]}},
+            "sla_warning": {"$sum": {"$cond": [{"$eq": ["$sla_status", "warning"]}, 1, 0]}},
+            "sla_breach": {"$sum": {"$cond": [{"$eq": ["$sla_status", "breach"]}, 1, 0]}},
+            "activated": {"$sum": {"$cond": [{"$eq": ["$stage", "activated"]}, 1, 0]}},
+        }},
+        {"$sort": {"total_students": -1}}
+    ]
+    result = await db.students.aggregate(pipeline).to_list(100)
+    return [{
+        "agent_name": r.get("name", "Unknown"),
+        "total_students": r["total_students"],
+        "activated": r.get("activated", 0),
+        "sla_ok": r.get("sla_ok", 0),
+        "sla_warning": r.get("sla_warning", 0),
+        "sla_breach": r.get("sla_breach", 0),
+        "sla_rate": round(r.get("sla_ok", 0) / max(r["total_students"], 1) * 100, 1),
+    } for r in result]
+
+@api_router.get("/dashboard/mentor-bifurcation")
+async def get_mentor_bifurcation(
+    period: str = "overall",
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Students per mentor with redeposit totals. period: today, this_week, this_month, this_quarter, this_year, overall"""
+    query = {"mentor_id": {"$exists": True, "$ne": None}}
+    start_date = _get_date_range(period)
+    if start_date:
+        query["enrolled_at"] = {"$gte": start_date}
+
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$mentor_id",
+            "name": {"$first": "$mentor_name"},
+            "total_students": {"$sum": 1},
+            "new_students": {"$sum": {"$cond": [{"$eq": ["$mentor_stage", "new_student"]}, 1, 0]}},
+            "connected": {"$sum": {"$cond": [{"$ne": ["$mentor_stage", "new_student"]}, 1, 0]}},
+        }},
+        {"$sort": {"total_students": -1}}
+    ]
+    students_result = await db.students.aggregate(pipeline).to_list(100)
+
+    # Get redeposit totals per mentor from ltv_transactions
+    mentor_data = {}
+    for r in students_result:
+        mentor_data[r["_id"]] = {
+            "mentor_name": r.get("name", "Unknown"),
+            "total_students": r["total_students"],
+            "new_students": r.get("new_students", 0),
+            "connected": r.get("connected", 0),
+            "redeposits": 0,
+            "redeposit_amount": 0,
+        }
+
+    # Get redeposits from mentor_redeposits collection
+    redeposit_pipeline = [
+        {"$group": {
+            "_id": "$mentor_user_id",
+            "count": {"$sum": 1},
+            "total": {"$sum": "$redeposit_amount"}
+        }}
+    ]
+    redeposits = await db.mentor_redeposits.aggregate(redeposit_pipeline).to_list(100)
+    for rd in redeposits:
+        if rd["_id"] in mentor_data:
+            mentor_data[rd["_id"]]["redeposits"] = rd["count"]
+            mentor_data[rd["_id"]]["redeposit_amount"] = rd["total"]
+
+    return list(mentor_data.values())
+
+@api_router.get("/dashboard/activity-summary")
+async def get_activity_summary(
+    period: str = "today",
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Activity summary with date filters for super admin overview."""
+    start_date = _get_date_range(period)
+    date_filter = {"enrolled_at": {"$gte": start_date}} if start_date else {}
+
+    # New enrollments in period
+    new_enrollments = await db.leads.count_documents({"stage": "enrolled", "is_historical": True, **date_filter})
+
+    # New students assigned in period
+    new_students = await db.students.count_documents({"is_historical": True, **date_filter})
+
+    # Revenue in period
+    rev_query = {}
+    if start_date:
+        rev_query["date"] = {"$gte": start_date}
+    rev_pipeline = [
+        {"$match": rev_query},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}
+    ]
+    rev_result = await db.ltv_transactions.aggregate(rev_pipeline).to_list(1)
+    total_revenue = rev_result[0]["total"] if rev_result else 0
+    transaction_count = rev_result[0]["count"] if rev_result else 0
+
+    # Sales by course in period
+    course_pipeline = [
+        {"$match": {"stage": "enrolled", **date_filter}},
+        {"$group": {
+            "_id": "$course_of_interest",
+            "count": {"$sum": 1},
+            "revenue": {"$sum": "$enrollment_amount"}
+        }},
+        {"$sort": {"revenue": -1}},
+        {"$limit": 10}
+    ]
+    sales_by_course = await db.leads.aggregate(course_pipeline).to_list(10)
+
+    return {
+        "period": period,
+        "new_enrollments": new_enrollments,
+        "new_students": new_students,
+        "total_revenue": total_revenue,
+        "transaction_count": transaction_count,
+        "sales_by_course": [{"course": r["_id"], "count": r["count"], "revenue": r.get("revenue", 0)} for r in sales_by_course],
+    }
+
 
 # ==================== BULK IMPORT: COURSES & USERS ====================
 
@@ -7048,8 +7233,11 @@ async def import_historical_students_xlsx(
             "name": variant_name,
             "code": f"{variant_name.upper().replace(' ', '_')[:15]}_{course_id[:4]}",
             "price": amount,
+            "base_price": amount,
+            "category": "imported",
             "currency": "AED",
             "status": "active",
+            "is_active": True,
             "created_at": now,
             "updated_at": now
         }
@@ -7138,7 +7326,8 @@ async def import_historical_students_xlsx(
             if not enrollment_date:
                 enrollment_date = now[:10]
             else:
-                enrollment_date = _normalize_date(enrollment_date)
+                # XLSX dates: datetime objects become "YYYY-MM-DD HH:MM:SS", string dates are MM/DD/YYYY (US format)
+                enrollment_date = _normalize_date_us(enrollment_date)
 
             additional_numbers = []
             if data.get("additional_numbers"):
@@ -7231,6 +7420,53 @@ async def import_historical_students_xlsx(
                 }
                 await db.ltv_transactions.insert_one(ltv_record)
                 results["ltv_transactions"] += 1
+
+            # Create Customer Master record
+            customer_id = str(uuid.uuid4())
+            customer_record = {
+                "id": customer_id,
+                "full_name": student_name,
+                "phone": phone,
+                "email": data.get("email", "").strip() or None,
+                "country": data.get("country", "").strip() or None,
+                "lead_id": lead_id,
+                "student_id": student_id,
+                "total_spent": enrollment_amount,
+                "transaction_count": 1 if enrollment_amount > 0 else 0,
+                "transactions": [{
+                    "amount": enrollment_amount,
+                    "currency": "AED",
+                    "payment_type": "enrollment",
+                    "course_id": course["id"],
+                    "course_name": course["name"],
+                    "date": enrollment_date,
+                    "sales_agent": sales_user["full_name"],
+                }] if enrollment_amount > 0 else [],
+                "last_transaction_at": enrollment_date if enrollment_amount > 0 else None,
+                "created_at": enrollment_date,
+                "updated_at": now
+            }
+            await db.customers.insert_one(customer_record)
+
+            # Create Finance Receivable record
+            if enrollment_amount > 0:
+                receivable_record = {
+                    "id": str(uuid.uuid4()),
+                    "date": enrollment_date,
+                    "description": f"Enrollment - {student_name} ({course['name']})",
+                    "student_name": student_name,
+                    "student_phone": phone,
+                    "course_name": course["name"],
+                    "amount": enrollment_amount,
+                    "currency": "AED",
+                    "status": "received",
+                    "category": "course_enrollment",
+                    "sales_agent": sales_user["full_name"],
+                    "is_historical": True,
+                    "created_by": user["id"],
+                    "created_at": now
+                }
+                await db.finance_clt_receivables.insert_one(receivable_record)
 
             results["imported"] += 1
 
@@ -11186,6 +11422,23 @@ def _normalize_date(val: str) -> str:
                     return f"{y}-{a.zfill(2)}-{b.zfill(2)}"
                 # Default: assume DD/MM/YYYY
                 return f"{y}-{b.zfill(2)}-{a.zfill(2)}"
+    return val
+
+def _normalize_date_us(val: str) -> str:
+    """Normalize date strings to YYYY-MM-DD, assuming US (MM/DD/YYYY) format for ambiguous dates."""
+    if not val:
+        return val
+    # Already YYYY-MM-DD (or YYYY-MM-DD HH:MM:SS) from datetime objects
+    if len(val) >= 10 and val[4] == '-':
+        return val[:10]
+    # MM/DD/YYYY format (US)
+    for sep in ['/', '-']:
+        parts = val.split(sep)
+        if len(parts) == 3:
+            a, b, y = parts
+            if len(y) == 4 and len(a) <= 2 and len(b) <= 2:
+                # Always treat as MM/DD/YYYY (US format)
+                return f"{y}-{a.zfill(2)}-{b.zfill(2)}"
     return val
 
 @api_router.get("/hr/employees", response_model=List[EmployeeResponse])
@@ -16810,8 +17063,8 @@ async def delete_clt_payable(payable_id: str, user = Depends(get_current_user)):
 # --- CLT Receivables ---
 @api_router.get("/finance/clt/receivables")
 async def get_clt_receivables(user = Depends(get_current_user)):
-    """Get all CLT receivables"""
-    receivables = await db.finance_clt_receivables.find({}, {"_id": 0}).to_list(length=1000)
+    """Get all CLT receivables sorted by date"""
+    receivables = await db.finance_clt_receivables.find({}, {"_id": 0}).sort("date", 1).to_list(length=5000)
     return receivables
 
 @api_router.post("/finance/clt/receivables")

@@ -195,7 +195,7 @@ const CoursesPage = () => {
                                 <div className="space-y-2">
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Price</span>
-                                        <span className="text-xl font-bold text-primary">{formatCurrency(c.base_price)}</span>
+                                        <span className="text-xl font-bold text-primary">{formatCurrency(c.base_price || c.price)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Category</span>
