@@ -4766,7 +4766,7 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         # Revenue for this user's leads
         revenue_pipeline = [
             {"$match": {"stage": "enrolled", **lead_query}},
-            {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}}}
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}
         ]
         revenue_result = await db.leads.aggregate(revenue_pipeline).to_list(1)
         stats["total_revenue"] = revenue_result[0]["total"] if revenue_result else 0
@@ -5227,7 +5227,7 @@ async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_
         {"$group": {
             "_id": "$course_id",
             "count": {"$sum": 1},
-            "revenue": {"$sum": "$sale_amount"}
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}
         }}
     ]
     
@@ -5246,22 +5246,23 @@ async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_
 @api_router.get("/dashboard/leaderboard")
 async def get_leaderboard(period: str = "month", user = Depends(get_current_user)):
     # Get current period
+    now = datetime.now(timezone.utc)
     if period == "month":
-        start_date = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
     elif period == "week":
-        start_date = datetime.now(timezone.utc) - timedelta(days=7)
+        start_date = (now - timedelta(days=7)).isoformat()[:10]
     else:
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        start_date = (now - timedelta(days=30)).isoformat()[:10]
     
     pipeline = [
         {"$match": {
             "stage": "enrolled",
-            "updated_at": {"$gte": start_date.isoformat()}
+            "enrolled_at": {"$gte": start_date}
         }},
         {"$group": {
             "_id": "$assigned_to",
             "deals": {"$sum": 1},
-            "revenue": {"$sum": "$sale_amount"}
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}
         }},
         {"$sort": {"revenue": -1}},
         {"$limit": 10}
@@ -5301,7 +5302,7 @@ async def get_payment_summary(user = Depends(get_current_user)):
     return result
 
 @api_router.get("/dashboard/monthly-trend")
-async def get_monthly_trend(months: int = 6, user = Depends(get_current_user)):
+async def get_monthly_trend(months: int = 12, user = Depends(get_current_user)):
     query = {}
     if user["role"] == "sales_executive":
         query["assigned_to"] = user["id"]
@@ -5309,12 +5310,12 @@ async def get_monthly_trend(months: int = 6, user = Depends(get_current_user)):
     pipeline = [
         {"$match": {"stage": "enrolled", **query}},
         {"$addFields": {
-            "month": {"$substr": ["$updated_at", 0, 7]}
+            "month": {"$substr": [{"$ifNull": ["$enrolled_at", "$created_at"]}, 0, 7]}
         }},
         {"$group": {
             "_id": "$month",
             "deals": {"$sum": 1},
-            "revenue": {"$sum": "$sale_amount"}
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}
         }},
         {"$sort": {"_id": -1}},
         {"$limit": months}
@@ -5703,6 +5704,25 @@ async def get_activity_summary(
         "transaction_count": transaction_count,
         "sales_by_course": [{"course": r["_id"], "count": r["count"], "revenue": r.get("revenue", 0)} for r in sales_by_course],
     }
+
+
+@api_router.get("/dashboard/today-transactions")
+async def get_today_transactions(user = Depends(get_current_user)):
+    """Get all transactions that happened today"""
+    today = datetime.now(timezone.utc).isoformat()[:10]
+    
+    transactions = await db.ltv_transactions.find(
+        {"date": today}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    total = sum(t.get("amount", 0) for t in transactions)
+    return {
+        "date": today,
+        "count": len(transactions),
+        "total_amount": total,
+        "transactions": transactions
+    }
+
 
 
 # ==================== BULK IMPORT: COURSES & USERS ====================
@@ -7458,6 +7478,7 @@ async def import_historical_students_xlsx(
                     "student_phone": phone,
                     "course_name": course["name"],
                     "amount": enrollment_amount,
+                    "amount_in_aed": enrollment_amount,
                     "currency": "AED",
                     "status": "received",
                     "category": "course_enrollment",

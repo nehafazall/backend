@@ -682,12 +682,6 @@ const SalesCRMPage = () => {
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="leads" title="Import Leads" onSuccess={fetchLeads} />
-                            {['super_admin', 'admin'].includes(user?.role) && (
-                                <>
-                                    <ImportButton templateType="comprehensive_students" title="Import Historical Students" onSuccess={fetchLeads} />
-                                    <ImportButton templateType="historical_students_xlsx" title="Import Students XLSX" onSuccess={fetchLeads} />
-                                </>
-                            )}
                             <Button onClick={() => setShowCreateModal(true)} data-testid="create-lead-btn">
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Lead

@@ -704,7 +704,7 @@ const PaymentGatewaysSection = () => {
         name: '',
         provider_type: 'card_processor',
         settlement_days: 1,
-        settlement_day_of_week: '',
+        settlement_day_of_week: 'none',
         processing_fee_percent: 0,
         processing_fee_fixed: 0,
         currency: 'AED',
@@ -721,7 +721,7 @@ const PaymentGatewaysSection = () => {
     ];
 
     const DAYS_OF_WEEK = [
-        { id: '', label: 'N/A (Use settlement days)' },
+        { id: 'none', label: 'N/A (Use settlement days)' },
         { id: 'monday', label: 'Monday' },
         { id: 'tuesday', label: 'Tuesday' },
         { id: 'wednesday', label: 'Wednesday' },
@@ -779,7 +779,7 @@ const PaymentGatewaysSection = () => {
     };
 
     const resetForm = () => {
-        setFormData({ code: '', name: '', provider_type: 'card_processor', settlement_days: 1, settlement_day_of_week: '', processing_fee_percent: 0, processing_fee_fixed: 0, currency: 'AED', description: '', is_active: true });
+        setFormData({ code: '', name: '', provider_type: 'card_processor', settlement_days: 1, settlement_day_of_week: 'none', processing_fee_percent: 0, processing_fee_fixed: 0, currency: 'AED', description: '', is_active: true });
         setEditingItem(null);
     };
 
@@ -790,7 +790,7 @@ const PaymentGatewaysSection = () => {
             name: item.name,
             provider_type: item.provider_type || 'card_processor',
             settlement_days: item.settlement_days || 1,
-            settlement_day_of_week: item.settlement_day_of_week || '',
+            settlement_day_of_week: item.settlement_day_of_week || 'none',
             processing_fee_percent: item.processing_fee_percent || 0,
             processing_fee_fixed: item.processing_fee_fixed || 0,
             currency: item.currency || 'AED',
@@ -848,7 +848,7 @@ const PaymentGatewaysSection = () => {
                                     <TableCell>
                                         <div className="flex items-center gap-1 text-sm">
                                             <Clock className="h-3 w-3" />
-                                            {item.settlement_day_of_week ? (
+                                            {item.settlement_day_of_week && item.settlement_day_of_week !== 'none' ? (
                                                 <span className="capitalize">{item.settlement_day_of_week}</span>
                                             ) : (
                                                 <span>T+{item.settlement_days || 1}</span>
