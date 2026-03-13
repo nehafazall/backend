@@ -956,6 +956,9 @@ const PaymentGatewaysSection = () => {
                                             <SelectItem value="AED">AED</SelectItem>
                                             <SelectItem value="USD">USD</SelectItem>
                                             <SelectItem value="EUR">EUR</SelectItem>
+                                            <SelectItem value="GBP">GBP</SelectItem>
+                                            <SelectItem value="SAR">SAR</SelectItem>
+                                            <SelectItem value="INR">INR</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1509,6 +1512,7 @@ const BankAccountsSection = () => {
                                         <SelectItem value="EUR">EUR - Euro</SelectItem>
                                         <SelectItem value="GBP">GBP - British Pound</SelectItem>
                                         <SelectItem value="SAR">SAR - Saudi Riyal</SelectItem>
+                                        <SelectItem value="INR">INR - Indian Rupee</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

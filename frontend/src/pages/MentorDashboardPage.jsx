@@ -84,12 +84,11 @@ function MentorDashboardPage() {
     const drillMentorStudents = async (mentor) => {
         setDrillModal({ open: true, title: `${mentor.mentor_name} - Students`, data: [], type: 'mentor_students', loading: true });
         try {
-            const studentsRes = await apiClient.get(`/mentor/students?limit=500`);
-            const students = (studentsRes.data || []).filter(s => s.mentor_name === mentor.mentor_name);
-            // Group by stage
+            const res = await apiClient.get(`/mentor/drill/students?mentor_name=${encodeURIComponent(mentor.mentor_name)}`);
+            const students = res.data || [];
             const stageGroups = {};
             students.forEach(s => {
-                const stage = s.mentor_stage || 'unknown';
+                const stage = s.mentor_stage || s.stage || 'unknown';
                 if (!stageGroups[stage]) stageGroups[stage] = [];
                 stageGroups[stage].push(s);
             });
@@ -100,7 +99,7 @@ function MentorDashboardPage() {
     const drillPipelineStage = async (stageName, stageKey) => {
         setDrillModal({ open: true, title: `${stageName} - Students`, data: [], type: 'mentor_pipeline_stage', loading: true });
         try {
-            const res = await apiClient.get(`/mentor/dashboard/pipeline/${stageKey}/details`);
+            const res = await apiClient.get(`/mentor/drill/pipeline-stage?stage=${stageKey}`);
             setDrillModal(prev => ({ ...prev, data: res.data || {}, loading: false }));
         } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
     };

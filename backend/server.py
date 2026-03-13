@@ -6425,37 +6425,63 @@ async def get_month_comparison(user = Depends(get_current_user)):
 
 # ==================== DRILL-DOWN ANALYTICS ====================
 
-@api_router.get("/dashboard/agent/{agent_id}/closed-students")
+@api_router.get("/dashboard/drill/agent-students")
 async def get_agent_closed_students(
-    agent_id: str,
+    agent_name: str,
+    team_name: Optional[str] = None,
     period: str = "overall",
     custom_start: Optional[str] = None,
     custom_end: Optional[str] = None,
     user=Depends(get_current_user)
 ):
-    """Get students/leads closed by a specific sales agent."""
-    query = {"stage": "enrolled", "assigned_to": agent_id}
-    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
-    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "email": 1, "course_of_interest": 1, "enrollment_amount": 1, "enrolled_at": 1, "team_name": 1}).sort("enrolled_at", -1).to_list(200)
-    return leads
+    """Get students/leads closed by a specific sales agent (by name)."""
+    query = {"stage": "enrolled", "assigned_to_name": agent_name}
+    if team_name:
+        query["team_name"] = team_name
+    date_filter = _build_date_filter("enrolled_at", period, custom_start, custom_end)
+    if date_filter:
+        query.update(date_filter)
+    leads = await db.leads.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    result = []
+    for l in leads:
+        result.append({
+            "name": l.get("full_name") or l.get("name") or "Unknown",
+            "phone": l.get("phone", ""),
+            "email": l.get("email", ""),
+            "course": l.get("course_name") or l.get("course_of_interest") or "",
+            "enrollment_amount": l.get("enrollment_amount") or l.get("amount") or 0,
+            "enrolled_at": l.get("enrolled_at") or l.get("updated_at") or l.get("created_at") or "",
+            "team_name": l.get("team_name", ""),
+        })
+    return result
 
-@api_router.get("/dashboard/team/{team_name}/agent/{agent_id}/students")
-async def get_team_agent_students(
+@api_router.get("/dashboard/drill/team-agents")
+async def get_team_agents_drill(
     team_name: str,
-    agent_id: str,
     period: str = "overall",
     custom_start: Optional[str] = None,
     custom_end: Optional[str] = None,
     user=Depends(get_current_user)
 ):
-    """Get students an agent brought within a specific team."""
-    query = {"stage": "enrolled", "team_name": team_name, "assigned_to": agent_id}
-    query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
-    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "course_of_interest": 1, "enrollment_amount": 1, "enrolled_at": 1}).sort("enrolled_at", -1).to_list(200)
-    return leads
+    """Get agent breakdown for a specific team."""
+    query = {"stage": "enrolled", "team_name": team_name}
+    date_filter = _build_date_filter("enrolled_at", period, custom_start, custom_end)
+    if date_filter:
+        query.update(date_filter)
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$assigned_to_name",
+            "deals": {"$sum": 1},
+            "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
+        }},
+        {"$sort": {"revenue": -1}}
+    ]
+    agents = await db.leads.aggregate(pipeline).to_list(50)
+    return [{"agent_name": a["_id"] or "Unknown", "deals": a["deals"], "revenue": a["revenue"]} for a in agents]
 
-@api_router.get("/dashboard/lead-pipeline/{stage}/details")
-async def get_lead_pipeline_stage_details(
+@api_router.get("/dashboard/drill/pipeline-stage")
+async def get_pipeline_stage_drill(
     stage: str,
     period: str = "overall",
     custom_start: Optional[str] = None,
@@ -6464,59 +6490,71 @@ async def get_lead_pipeline_stage_details(
 ):
     """Get leads at a specific pipeline stage with agent-wise breakdown."""
     query = {"stage": stage}
-    query.update(_build_date_filter("created_at", period, custom_start, custom_end))
+    date_filter = _build_date_filter("created_at", period, custom_start, custom_end)
+    if date_filter:
+        query.update(date_filter)
     
-    # Agent-wise breakdown
     agent_pipeline = [
         {"$match": query},
         {"$group": {
-            "_id": "$assigned_to",
-            "agent_name": {"$first": "$assigned_to_name"},
+            "_id": "$assigned_to_name",
             "count": {"$sum": 1},
         }},
         {"$sort": {"count": -1}}
     ]
     agent_breakdown = await db.leads.aggregate(agent_pipeline).to_list(100)
     
-    # Individual leads
-    leads = await db.leads.find(query, {"_id": 0, "name": 1, "phone": 1, "email": 1, "assigned_to_name": 1, "course_of_interest": 1, "created_at": 1, "last_activity": 1}).sort("created_at", -1).to_list(200)
+    leads = await db.leads.find(query, {"_id": 0}).sort("updated_at", -1).to_list(200)
+    lead_list = []
+    for l in leads:
+        lead_list.append({
+            "name": l.get("full_name") or l.get("name") or "Unknown",
+            "phone": l.get("phone", ""),
+            "agent": l.get("assigned_to_name") or "Unassigned",
+            "course": l.get("course_name") or l.get("course_of_interest") or "",
+            "team": l.get("team_name") or "",
+            "created_at": l.get("created_at") or "",
+            "last_activity": l.get("last_activity") or l.get("updated_at") or "",
+        })
     
     total = await db.leads.count_documents(query)
     
     return {
         "stage": stage,
         "total": total,
-        "agent_breakdown": [{"agent_name": a.get("agent_name", "Unassigned"), "count": a["count"]} for a in agent_breakdown],
-        "leads": leads
+        "agent_breakdown": [{"agent_name": a["_id"] or "Unassigned", "count": a["count"]} for a in agent_breakdown],
+        "leads": lead_list
     }
 
-@api_router.get("/cs/dashboard/agent/{agent_id}/students")
-async def get_cs_agent_students(
-    agent_id: str,
-    period: str = "overall",
+@api_router.get("/cs/drill/agent-students")
+async def get_cs_agent_students_drill(
+    agent_name: str,
     user=Depends(get_current_user)
 ):
-    """Get students handled by a specific CS agent with upgrade details."""
-    query = {"cs_agent_id": agent_id}
-    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "stage": 1, "course_name": 1, "cs_agent_name": 1, "upgrade_history": 1, "pitched_upgrade_label": 1, "pitched_upgrade_price": 1, "enrolled_at": 1}).sort("enrolled_at", -1).to_list(200)
+    """Get students handled by a specific CS agent (by name) with upgrade details."""
+    query = {"cs_agent_name": agent_name}
+    students = await db.students.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
     
     result = []
     for s in students:
-        total_upgrade_revenue = sum(uh.get("amount", 0) for uh in (s.get("upgrade_history") or []))
+        upgrades = s.get("upgrade_history") or []
+        total_upgrade_revenue = sum(uh.get("amount", 0) for uh in upgrades)
         result.append({
-            "student_name": s.get("student_name", "Unknown"),
-            "student_code": s.get("student_code", ""),
+            "student_name": s.get("full_name") or s.get("student_name") or "Unknown",
+            "student_code": s.get("student_code") or s.get("id", "")[:8],
             "stage": s.get("stage", ""),
-            "course": s.get("course_name", ""),
-            "upgrade_count": len(s.get("upgrade_history") or []),
+            "course": s.get("current_course_name") or s.get("package_bought") or s.get("course_name") or "",
+            "upgrade_count": s.get("upgrade_count") or len(upgrades),
             "upgrade_revenue": total_upgrade_revenue,
+            "upgrades": [{"package": u.get("to_package") or u.get("to_course_name", ""), "amount": u.get("amount", 0), "date": (u.get("confirmed_at") or "")[:10]} for u in upgrades],
             "pitched_label": s.get("pitched_upgrade_label", ""),
             "pitched_price": s.get("pitched_upgrade_price", 0),
+            "phone": s.get("phone", ""),
         })
     return result
 
-@api_router.get("/cs/dashboard/pipeline/{stage}/details")
-async def get_cs_pipeline_stage_details(
+@api_router.get("/cs/drill/pipeline-stage")
+async def get_cs_pipeline_stage_drill(
     stage: str,
     user=Depends(get_current_user)
 ):
@@ -6526,39 +6564,38 @@ async def get_cs_pipeline_stage_details(
     agent_pipeline = [
         {"$match": query},
         {"$group": {
-            "_id": "$cs_agent_id",
-            "agent_name": {"$first": "$cs_agent_name"},
+            "_id": "$cs_agent_name",
             "count": {"$sum": 1},
         }},
         {"$sort": {"count": -1}}
     ]
     agent_breakdown = await db.students.aggregate(agent_pipeline).to_list(100)
     
-    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "cs_agent_name": 1, "course_name": 1, "stage": 1, "pitched_upgrade_label": 1, "pitched_upgrade_price": 1}).sort("enrolled_at", -1).to_list(200)
+    students = await db.students.find(query, {"_id": 0}).sort("updated_at", -1).to_list(200)
     
     total = await db.students.count_documents(query)
     
     return {
         "stage": stage,
         "total": total,
-        "agent_breakdown": [{"agent_name": a.get("agent_name", "Unassigned"), "count": a["count"]} for a in agent_breakdown],
-        "students": students
+        "agent_breakdown": [{"agent_name": a["_id"] or "Unassigned", "count": a["count"]} for a in agent_breakdown],
+        "students": [{"student_name": s.get("full_name") or s.get("student_name") or "Unknown", "student_code": s.get("student_code") or s.get("id", "")[:8], "agent": s.get("cs_agent_name", ""), "course": s.get("current_course_name") or s.get("package_bought") or "", "pitched": s.get("pitched_upgrade_label", "")} for s in students]
     }
 
-@api_router.get("/mentor/dashboard/{mentor_id}/students")
-async def get_mentor_students_detail(
-    mentor_id: str,
+@api_router.get("/mentor/drill/students")
+async def get_mentor_students_drill(
+    mentor_name: str,
     user=Depends(get_current_user)
 ):
-    """Get students assigned to a specific mentor."""
+    """Get students assigned to a specific mentor (by name)."""
     students = await db.students.find(
-        {"mentor_id": mentor_id},
-        {"_id": 0, "student_name": 1, "student_code": 1, "mentor_stage": 1, "course_name": 1, "enrolled_at": 1, "phone": 1}
-    ).sort("enrolled_at", -1).to_list(200)
-    return students
+        {"mentor_name": mentor_name},
+        {"_id": 0}
+    ).sort("updated_at", -1).to_list(500)
+    return [{"student_name": s.get("full_name") or s.get("student_name") or "Unknown", "student_code": s.get("student_code") or s.get("id", "")[:8], "mentor_stage": s.get("mentor_stage", ""), "stage": s.get("stage", ""), "course_name": s.get("current_course_name") or s.get("package_bought") or "", "enrolled_at": s.get("enrolled_at") or "", "phone": s.get("phone", "")} for s in students]
 
-@api_router.get("/mentor/dashboard/pipeline/{stage}/details")
-async def get_mentor_pipeline_stage_details(
+@api_router.get("/mentor/drill/pipeline-stage")
+async def get_mentor_pipeline_stage_drill(
     stage: str,
     user=Depends(get_current_user)
 ):
@@ -6568,23 +6605,22 @@ async def get_mentor_pipeline_stage_details(
     mentor_pipeline = [
         {"$match": query},
         {"$group": {
-            "_id": "$mentor_id",
-            "mentor_name": {"$first": "$mentor_name"},
+            "_id": "$mentor_name",
             "count": {"$sum": 1},
         }},
         {"$sort": {"count": -1}}
     ]
     mentor_breakdown = await db.students.aggregate(mentor_pipeline).to_list(100)
     
-    students = await db.students.find(query, {"_id": 0, "student_name": 1, "student_code": 1, "mentor_name": 1, "course_name": 1, "mentor_stage": 1, "phone": 1}).to_list(200)
+    students = await db.students.find(query, {"_id": 0}).to_list(200)
     
     total = await db.students.count_documents(query)
     
     return {
         "stage": stage,
         "total": total,
-        "mentor_breakdown": [{"mentor_name": m.get("mentor_name", "Unknown"), "count": m["count"]} for m in mentor_breakdown],
-        "students": students
+        "mentor_breakdown": [{"mentor_name": m["_id"] or "Unknown", "count": m["count"]} for m in mentor_breakdown],
+        "students": [{"student_name": s.get("full_name") or s.get("student_name") or "Unknown", "student_code": s.get("student_code") or s.get("id", "")[:8], "mentor": s.get("mentor_name", ""), "course": s.get("current_course_name") or s.get("package_bought") or "", "phone": s.get("phone", "")} for s in students]
     }
 
 @api_router.get("/dashboard/department/{dept_name}/employees")
