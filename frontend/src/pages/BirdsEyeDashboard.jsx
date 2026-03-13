@@ -142,6 +142,7 @@ const BirdsEyeDashboard = () => {
         finance: { revenue: 15100, expenses: 0, pending: 0, todayRevenue: 1500 },
         sales: { todayEnrollments: 0, hotLeads: 0, totalLeads: 269, enrolledTotal: 6, conversionRate: 2.2 },
         hr: { totalEmployees: 9, onLeave: 0, pendingApprovals: 0 },
+        pendingApprovals: { leaves: [], regularizations: [], payrollBatches: [] },
         monthlyTrend: [
             { month: 'Jan', revenue: 8000, enrollments: 1 },
             { month: 'Feb', revenue: 12000, enrollments: 2 },
@@ -180,7 +181,10 @@ const BirdsEyeDashboard = () => {
                 quickStatsRes,
                 payablesRes,
                 receivablesRes,
-                leadsRes
+                leadsRes,
+                pendingLeavesRes,
+                pendingRegularizationsRes,
+                payrollBatchesRes,
             ] = await Promise.all([
                 fetch(`${API_URL}/api/hr/attendance?date=${new Date().toISOString().split('T')[0]}`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${API_URL}/api/hr/company-documents/expiring?days=30`, { headers }).then(r => r.json()).catch(() => ({ documents: [] })),
@@ -189,7 +193,10 @@ const BirdsEyeDashboard = () => {
                 fetch(`${API_URL}/api/dashboard/quick-stats`, { headers }).then(r => r.json()).catch(() => ({})),
                 fetch(`${API_URL}/api/finance/clt/payables`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${API_URL}/api/finance/clt/receivables`, { headers }).then(r => r.json()).catch(() => []),
-                fetch(`${API_URL}/api/leads?limit=10`, { headers }).then(r => r.json()).catch(() => [])
+                fetch(`${API_URL}/api/leads?limit=10`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${API_URL}/api/hr/leave-requests?pending_approval=true`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${API_URL}/api/hr/regularization-requests?pending_approval=true`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${API_URL}/api/hr/payroll/batches`, { headers }).then(r => r.json()).catch(() => []),
             ]);
 
             // Process attendance
@@ -257,6 +264,11 @@ const BirdsEyeDashboard = () => {
                     totalEmployees: activeEmployees,
                     onLeave: 0,
                     pendingApprovals: quickStatsRes.pending_approvals || 0
+                },
+                pendingApprovals: {
+                    leaves: Array.isArray(pendingLeavesRes) ? pendingLeavesRes.filter(l => l.status === 'pending') : [],
+                    regularizations: Array.isArray(pendingRegularizationsRes) ? pendingRegularizationsRes.filter(r => r.status === 'pending') : [],
+                    payrollBatches: Array.isArray(payrollBatchesRes) ? payrollBatchesRes.filter(b => b.status === 'pending' || b.status === 'processing') : [],
                 },
                 monthlyTrend,
                 departmentBreakdown: departmentData.length > 0 ? departmentData : [
@@ -510,39 +522,149 @@ const BirdsEyeDashboard = () => {
                         </ResponsiveContainer>
                     </ChartCard>
 
-                    {/* Recent Transactions */}
+                    {/* Pending Approvals for CEO/Admin, Recent Transactions for others */}
                     <Card 
-                        className="border border-border/50 hover:border-primary/30 transition-all cursor-pointer row-span-2 overflow-hidden"
-                        onClick={() => navigate('/finance/clt/receivables')}
+                        className="border border-border/50 hover:border-primary/30 transition-all row-span-2 overflow-hidden"
                     >
                         <CardContent className="p-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Recent Transactions</p>
-                            <div className="space-y-2 overflow-auto max-h-[180px]">
-                                {loading ? (
-                                    [...Array(4)].map((_, i) => (
-                                        <div key={i} className="animate-pulse h-10 bg-muted rounded"></div>
-                                    ))
-                                ) : data.recentTransactions.length > 0 ? (
-                                    data.recentTransactions.map((tx, i) => (
-                                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                            {user?.role === 'super_admin' || user?.role === 'admin' ? (
+                                <>
+                                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-1">
+                                        <Clock className="h-3 w-3" /> Pending Approvals
+                                    </p>
+                                    <div className="space-y-2 overflow-auto max-h-[180px]">
+                                        {/* Leave Requests */}
+                                        <div 
+                                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                            onClick={() => navigate('/hr/approvals')}
+                                            data-testid="pending-leaves"
+                                        >
                                             <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-md bg-emerald-500/20">
-                                                    <Banknote className="h-3 w-3 text-emerald-500" />
+                                                <div className="p-1.5 rounded-md bg-amber-500/20">
+                                                    <Calendar className="h-3 w-3 text-amber-500" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-medium truncate max-w-[100px]">{tx.account_name || 'Customer'}</p>
-                                                    <p className="text-[10px] text-muted-foreground">{tx.date}</p>
+                                                    <p className="text-xs font-medium">Leave Requests</p>
+                                                    <p className="text-[10px] text-muted-foreground">Awaiting your approval</p>
                                                 </div>
                                             </div>
-                                            <span className="text-xs font-semibold text-emerald-500">
-                                                +{formatCurrency(tx.amount)}
-                                            </span>
+                                            <Badge variant={data.pendingApprovals.leaves.length > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                                                {data.pendingApprovals.leaves.length}
+                                            </Badge>
                                         </div>
-                                    ))
-                                ) : (
-                                    <p className="text-xs text-muted-foreground text-center py-4">No recent transactions</p>
-                                )}
-                            </div>
+
+                                        {/* Time Regularizations */}
+                                        <div 
+                                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                            onClick={() => navigate('/hr/approvals')}
+                                            data-testid="pending-regularizations"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-md bg-blue-500/20">
+                                                    <Clock className="h-3 w-3 text-blue-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium">Time Regularization</p>
+                                                    <p className="text-[10px] text-muted-foreground">Pending review</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant={data.pendingApprovals.regularizations.length > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                                                {data.pendingApprovals.regularizations.length}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Payroll Batches */}
+                                        <div 
+                                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                            onClick={() => navigate('/hr/payroll')}
+                                            data-testid="pending-payroll"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-md bg-emerald-500/20">
+                                                    <DollarSign className="h-3 w-3 text-emerald-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium">Payroll Processing</p>
+                                                    <p className="text-[10px] text-muted-foreground">Batches pending</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant={data.pendingApprovals.payrollBatches.length > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                                                {data.pendingApprovals.payrollBatches.length}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Finance Verifications */}
+                                        <div 
+                                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                            onClick={() => navigate('/finance/verifications')}
+                                            data-testid="pending-verifications"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-md bg-purple-500/20">
+                                                    <FileWarning className="h-3 w-3 text-purple-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium">Finance Verifications</p>
+                                                    <p className="text-[10px] text-muted-foreground">Payments to verify</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant={data.finance.pending > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                                                {data.finance.pending}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Expiring Documents */}
+                                        <div 
+                                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                                            onClick={() => navigate('/hr/documents')}
+                                            data-testid="expiring-docs"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-md bg-rose-500/20">
+                                                    <FileWarning className="h-3 w-3 text-rose-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium">Expiring Documents</p>
+                                                    <p className="text-[10px] text-muted-foreground">Within 30 days</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant={data.expiringDocs.length > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                                                {data.expiringDocs.length}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Recent Transactions</p>
+                                    <div className="space-y-2 overflow-auto max-h-[180px]">
+                                        {loading ? (
+                                            [...Array(4)].map((_, i) => (
+                                                <div key={i} className="animate-pulse h-10 bg-muted rounded"></div>
+                                            ))
+                                        ) : data.recentTransactions.length > 0 ? (
+                                            data.recentTransactions.map((tx, i) => (
+                                                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate('/finance/clt/receivables')}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-1.5 rounded-md bg-emerald-500/20">
+                                                            <Banknote className="h-3 w-3 text-emerald-500" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-medium truncate max-w-[100px]">{tx.account_name || 'Customer'}</p>
+                                                            <p className="text-[10px] text-muted-foreground">{tx.date}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-xs font-semibold text-emerald-500">
+                                                        +{formatCurrency(tx.amount)}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-xs text-muted-foreground text-center py-4">No recent transactions</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

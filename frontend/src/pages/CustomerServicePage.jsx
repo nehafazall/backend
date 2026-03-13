@@ -282,6 +282,8 @@ const CustomerServicePage = () => {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState('my_work'); // 'my_work' | 'team'
+    const [teamAgents, setTeamAgents] = useState([]);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [showActivationModal, setShowActivationModal] = useState(false);
@@ -318,13 +320,30 @@ const CustomerServicePage = () => {
 
     useEffect(() => {
         fetchStudents();
-    }, []);
+    }, [viewMode]);
+
+    const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
 
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const response = await studentApi.getAll({ search: searchTerm || undefined });
+            const params = { search: searchTerm || undefined };
+            // In "my_work" mode for cs_head, show only their students
+            if (viewMode === 'my_work' && isHeadOrAdmin) {
+                params.cs_agent_id = user.id;
+            }
+            const response = await studentApi.getAll(params);
             setStudents(response.data);
+            // Build team agent summary for team view
+            if (viewMode === 'team' && isHeadOrAdmin) {
+                const agentMap = {};
+                response.data.forEach(s => {
+                    const key = s.cs_agent_id || 'unassigned';
+                    if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
+                    agentMap[key].count++;
+                });
+                setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
+            }
         } catch (error) {
             toast.error('Failed to fetch students');
             console.error(error);
@@ -544,6 +563,37 @@ const CustomerServicePage = () => {
                     )}
                 </div>
             </div>
+
+            {/* View Mode Toggle for CS Head / Admin */}
+            {isHeadOrAdmin && (
+                <div className="flex items-center gap-3" data-testid="cs-view-toggle">
+                    <div className="inline-flex rounded-lg border p-1 bg-muted/30">
+                        <button
+                            onClick={() => setViewMode('my_work')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'my_work' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="cs-view-my-work"
+                        >
+                            My Students
+                        </button>
+                        <button
+                            onClick={() => setViewMode('team')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'team' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="cs-view-team"
+                        >
+                            Team Overview
+                        </button>
+                    </div>
+                    {viewMode === 'team' && teamAgents.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {teamAgents.map(agent => (
+                                <Badge key={agent.id} variant="secondary" className="text-xs">
+                                    {agent.name}: {agent.count}
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Kanban Board */}
             {loading ? (

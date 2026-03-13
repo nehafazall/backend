@@ -238,6 +238,8 @@ const MentorCRMPage = () => {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewMode, setViewMode] = useState('my_work'); // 'my_work' | 'team'
+    const [teamMentors, setTeamMentors] = useState([]);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
     const [reminderStudent, setReminderStudent] = useState(null);
@@ -262,7 +264,9 @@ const MentorCRMPage = () => {
     useEffect(() => {
         fetchStudents();
         fetchRevenueSummary();
-    }, []);
+    }, [viewMode]);
+
+    const isHeadOrAdmin = ['academic_master', 'super_admin', 'admin'].includes(user?.role);
 
     const fetchRevenueSummary = async () => {
         try {
@@ -285,16 +289,25 @@ const MentorCRMPage = () => {
             setLoading(true);
             const params = { 
                 search: searchTerm || undefined,
-                activated_only: true  // Only show students who have been activated by CS
+                activated_only: true
             };
-            // For mentors, filter by mentor_id
-            if (user?.role === 'mentor') {
+            // In "my_work" mode, filter by mentor_id
+            if (viewMode === 'my_work' || !isHeadOrAdmin) {
                 params.mentor_id = user.id;
             }
             const response = await studentApi.getAll(params);
-            // Filter students who have mentors assigned (for mentor view)
             const mentorStudents = response.data.filter(s => s.mentor_id || s.mentor_stage);
             setStudents(mentorStudents);
+            // Build team mentor summary for team view
+            if (viewMode === 'team' && isHeadOrAdmin) {
+                const mentorMap = {};
+                mentorStudents.forEach(s => {
+                    const key = s.mentor_id || 'unassigned';
+                    if (!mentorMap[key]) mentorMap[key] = { id: key, name: s.mentor_name || 'Unassigned', count: 0 };
+                    mentorMap[key].count++;
+                });
+                setTeamMentors(Object.values(mentorMap).sort((a, b) => b.count - a.count));
+            }
         } catch (error) {
             toast.error('Failed to fetch students');
             console.error(error);
@@ -472,6 +485,37 @@ const MentorCRMPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* View Mode Toggle for Academic Master / Admin */}
+            {isHeadOrAdmin && (
+                <div className="flex items-center gap-3" data-testid="mentor-view-toggle">
+                    <div className="inline-flex rounded-lg border p-1 bg-muted/30">
+                        <button
+                            onClick={() => setViewMode('my_work')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'my_work' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="mentor-view-my-work"
+                        >
+                            My Students
+                        </button>
+                        <button
+                            onClick={() => setViewMode('team')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'team' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="mentor-view-team"
+                        >
+                            Team Overview
+                        </button>
+                    </div>
+                    {viewMode === 'team' && teamMentors.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {teamMentors.map(mentor => (
+                                <Badge key={mentor.id} variant="secondary" className="text-xs">
+                                    {mentor.name}: {mentor.count}
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Kanban Board */}
             {loading ? (

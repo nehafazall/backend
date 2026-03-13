@@ -4175,7 +4175,7 @@ async def get_students(
     
     if user["role"] == "cs_agent":
         query["cs_agent_id"] = user["id"]
-    elif user["role"] in ["mentor", "academic_master"]:
+    elif user["role"] == "mentor":
         query["mentor_id"] = user["id"]
     
     if stage:
