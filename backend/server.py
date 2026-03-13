@@ -12652,6 +12652,7 @@ async def update_employee_salary(
         "deductions": data.get("deductions", 0),
         "commission": data.get("commission", 0),
         "incentives": data.get("incentives", 0),
+        "salary_payout_method": data.get("salary_payout_method", "bank_transfer"),
         "payment_frequency": "monthly",
         "currency": data.get("currency", "AED"),
         "effective_date": data.get("effective_date", now[:10]),

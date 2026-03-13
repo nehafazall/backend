@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Dialog,
     DialogContent,
@@ -52,7 +53,8 @@ const EmployeeDetailsPage = () => {
         housing_allowance: 0,
         transport_allowance: 0,
         telephone_allowance: 0,
-        other_allowances: 0
+        other_allowances: 0,
+        salary_payout_method: 'bank_transfer'
     });
     
     // Bank Details
@@ -92,7 +94,8 @@ const EmployeeDetailsPage = () => {
                     housing_allowance: res.data.salary_structure.housing_allowance || 0,
                     transport_allowance: res.data.salary_structure.transport_allowance || 0,
                     telephone_allowance: res.data.salary_structure.telephone_allowance || 0,
-                    other_allowances: res.data.salary_structure.other_allowances || 0
+                    other_allowances: res.data.salary_structure.other_allowances || 0,
+                    salary_payout_method: res.data.salary_structure.salary_payout_method || 'bank_transfer'
                 });
             }
             
@@ -644,6 +647,19 @@ const EmployeeDetailsPage = () => {
                                         value={salary.other_allowances || ''}
                                         onChange={(e) => setSalary({ ...salary, other_allowances: parseFloat(e.target.value) || 0 })}
                                     />
+                                </div>
+                                <div className="pt-2 border-t">
+                                    <Label>Salary Payout Method</Label>
+                                    <Select value={salary.salary_payout_method || 'bank_transfer'} onValueChange={v => setSalary({ ...salary, salary_payout_method: v })}>
+                                        <SelectTrigger data-testid="salary-payout-method">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="bank_transfer">Bank Transfer (WPS)</SelectItem>
+                                            <SelectItem value="cash">Cash</SelectItem>
+                                            <SelectItem value="cheque">Cheque</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </CardContent>
                         </Card>
