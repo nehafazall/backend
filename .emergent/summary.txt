@@ -1,184 +1,151 @@
 <analysis>**original_problem_statement:**
-The user's primary goal is to build a comprehensive, integrated business management system. The latest requests focus on correcting data inconsistencies from a large XLSX import and significantly overhauling the Sales Dashboard for better analytics and usability.
+The user is continuing to build out a comprehensive business management system. The latest series of requests focused on implementing several new features and enhancements across the HR, Customer Service, Finance, and Settings modules, along with refactoring core access control logic.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Fix Data Integrity:** Correct revenue data that was incorrectly recorded with future dates.
-2.  **Sales Dashboard Overhaul:**
-    *   Implement comprehensive date filters: Today, Yesterday, This Week, This Month, This Quarter, This Year, and a custom date range selector.
-    *   Replace the Top 5 Agents chart with a Team-wise Revenue chart.
-    *   Enable drill-down functionality on the team revenue chart, showing individual team member performance in a popup.
-    *   Add an XY Scatter plot comparing the current month's daily revenue against the previous month's.
-3.  **Global UI/UX Improvements:**
-    *   Improve color contrast for both light and dark themes to enhance readability across all charts, text, and components.
-    *   Make all popups (modals) throughout the application scrollable to prevent content from being cut off on smaller screens.
+1.  **CS Upgrade & Commission System:**
+    *   Create a pop-up in the CS Kanban board when a student is moved to pitched, allowing the agent to select an upgrade package and price.
+    *   On moving to upgraded, trigger a confirmation modal to verify the package and record payment details (including a screenshot for finance verification).
+    *   Calculate and record commissions for the CS agent and CS head based on a predefined commission structure.
+    *   After a successful upgrade, the student should return to the new_student stage for re-activation.
+    *   Add a  field to the student card and detail modal.
+2.  **CS Dashboard:** Build a new dashboard for the CS team showing:
+    *   KPIs: Achieved Revenue, Pipeline Revenue, Commissions.
+    *   Individual vs. Team view toggle for CS Heads.
+    *   Charts for Agent Revenue, Monthly Revenue Trend, and This Month vs. Last Month comparison.
+    *   A leaderboard for top-performing agents.
+3.  **Employee Master Enhancements:**
+    *   Fix a bug where salary inputs show a leading zero (e.g.,  instead of ).
+    *   Add a  date field for employees with Resigned or Terminated status.
+    *   Add a  (e.g., Bank Transfer, Cash) field to the salary details section.
+4.  **Role & Access Control Refactor:**
+    *   Remove the confusing Module Access controls from the Role Management page.
+    *   Make the Access Control page dynamically pull the list of roles from the API.
+    *   Ensure all sidebar navigation is strictly controlled by the permissions set in the Access Control module.
+5.  **Dual-Role UI:**
+    *   For managers (CS Head, Master of Academics), add a toggle on their respective pages to switch between My Students and Team Overview.
+    *   For CEO/super_admin roles, add a Pending Approvals widget to the main dashboard for quick access to leaves, payroll, etc.
+6.  **Finance Settings Enhancements:**
+    *   Add a VAT on Fee percentage field to the Payment Gateway (PSP) configuration.
+    *   Change the PSP Bank Mapping form to use a dropdown selector of existing bank accounts instead of manual text inputs.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack business management platform (React/FastAPI/MongoDB) with modules for HR, Sales, Finance, CS, and Mentorship. A large volume of historical student data has been imported. The agent has just completed fixing future-dated records in the database and has built and tested all the new backend endpoints required for the requested Sales Dashboard overhaul.
+The application is a full-stack business management system. The agent has successfully implemented a large number of features in this session, including a complete Customer Service upgrade and commission system, a new CS dashboard, a major refactor of the role and permissions system, several enhancements to the Employee Master module, and a new dual-role UI for managers and the CEO. The backend has been extended with numerous new models and API endpoints to support these features, and the frontend has been significantly updated.
 
 **Last working item**:
--   **Last item agent was working:** Building the backend infrastructure for the new Sales Dashboard. This involved creating new API endpoints for team-wise revenue, month-over-month revenue comparison, and integrating a flexible date-filtering mechanism into all relevant dashboard endpoints.
+-   **Last item agent was working:** Refactoring the PSP Bank Mapping page in Finance Settings. The goal was to replace manual text inputs for bank details with a dropdown selector that loads data from the  endpoint.
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** Y (Backend endpoints were successfully tested via ).
--   **Which testing method agent to use?** frontend testing agent (After the frontend dashboard is rebuilt).
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** Frontend testing agent. The agent should instruct the tester to navigate to Finance Settings -> PSP Bank Mapping, click Add New Mapping, and verify that a dropdown for bank accounts is present and functional.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Fix Incorrect Future Revenue Dates (P0)**
-    -   **Description:** 68 records were imported with enrollment dates in the future (Apr-Dec 2026) due to a date format mismatch.
-    -   **Attempted fixes:** The agent successfully ran a database script to swap the day and month for all 68 affected records, correcting the dates.
-    -   **Next debug checklist:**
-        1.  Run the command   Exported departments: 10 documents
-  Exported courses: 46 documents
-  Exported commission_rules: 1 documents
-  Exported system_config: 1 documents
-  Exported users: 72 documents
-  Exported hr_employees: 72 documents
-  Exported teams: 11 documents
-  Exported leads: 1223 documents
-  Exported students: 902 documents
-  Exported sheet_connectors: 1 documents
-  Exported payments: 1 documents
-  Exported hr_attendance: 143 documents
-  Exported call_logs: 14 documents
-  Exported hr_payroll_batches: 1 documents
-  Exported integrations: 0 documents
-  Exported ltv_transactions: 899 documents
-  Exported customers: 901 documents
-  Exported finance_clt_receivables: 899 documents
-
-Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to capture the corrected dates in the  file. This is a critical un-done step.
-        2.  Verify on the frontend Sales Dashboard that no revenue is displayed for future months.
-    -   **Status:** USER VERIFICATION PENDING
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Frontend
+-   There are no outstanding bugs. The only pending item is the completion and verification of the Last working item task.
 
 **In progress Task List**:
--   **Task 1: Rebuild Sales Dashboard Frontend (P0)**
-    -   **Description:** The user has requested a complete redesign of the Sales Dashboard with new charts and filters.
-    -   **Where to resume:** All necessary backend endpoints are now available. The next step is to rewrite the file  to implement the new UI, including date filters, the team revenue chart with drill-down popups, and the month-over-month scatter plot.
-    -   **What will be achieved with this?** A more insightful, interactive, and user-friendly Sales Dashboard that meets specific analytical requirements.
-    -   **Status:** IN PROGRESS
+-   **Task 1: Verify PSP Bank Mapping UI Change (P0)**
+    -   **Description:** The user wants the PSP Bank Mapping form to use a dropdown of existing bank accounts instead of manual text fields. The agent has written the code but has not yet visually verified that the new dropdown appears and functions correctly on the frontend.
+    -   **Where to resume:** The code is implemented in . The next step is to test the change. A screenshot of the Add New Mapping modal showing the bank account dropdown would be sufficient for verification.
+    -   **What will be achieved with this?** This will improve data consistency by ensuring PSPs are mapped to valid, existing bank accounts from the Chart of Accounts.
+    -   **Status:** USER VERIFICATION PENDING
     -   **Should Test frontend/backend/both after fix?** Frontend
-    -   **Blocked on something:** No
+    -   **Blocked on something:** No.
 
 **Upcoming and Future Tasks**
 
 **Upcoming Tasks:**
--   **P1: Make All Popups Scrollable:** Address the user's feedback that modals across the application are not scrollable. This will likely involve modifying a base dialog/modal component to add  CSS styling.
--   **P1: Improve Theme Color Contrast:** Revise the application's global CSS ( or ) to ensure better color contrast between text, charts, and background elements in both light and dark themes.
+-   **P1: User Verification for Google Sheets:** The previously fixed Google Sheets connector is still awaiting user testing and confirmation.
 
 **Future Tasks:**
--   **P1: User Verification for Google Sheets:** The previously fixed Google Sheets connector is still awaiting user testing and confirmation.
--   **P2: Refactor :** Break down the monolithic  into domain-specific route files to improve maintainability.
--   **P2: Course and Commission Configuration:** Implement UI and backend for setting up courses and a multi-level commission structure (currently blocked awaiting business logic from the user).
+-   **P2: Refactor :** Break down the monolithic  into domain-specific route files (e.g., , ) to improve maintainability.
+-   **P2: Course and Commission Configuration:** Implement a dedicated UI for setting up courses and a multi-level commission structure for the sales team (currently blocked awaiting business logic from the user).
 -   **P2: Implement Payslip Generation.**
 -   **P2: Integrate with Google Ads API.**
 -   **P2: Resolve Babel Plugin :** Fix the recurring  in  instead of using the current workaround of disabling it.
 
 **Completed work in this session**
--   **Data Integrity Fixes:**
-    -   Successfully re-imported over 900 historical student records with corrected date parsing logic ().
-    -   Enhanced the import process to create corresponding records in  and  collections.
-    -   Fixed a bug where future-dated revenue was being recorded by running a script to correct 68 invalid dates in the database.
--   **Backend Enhancements:**
-    -   Fixed all dashboard endpoints to correctly calculate revenue from imported data by using  and .
-    -   Created a new, flexible date filtering utility () and integrated it into all dashboard APIs.
-    -   Built new endpoints to support the dashboard overhaul:  and .
--   **UI & Bug Fixes:**
-    -   Removed the Import button from the  as requested.
-    -   Fixed the Finance Dashboard to correctly sum total receivables from imported data.
-    -   Resolved a critical crash in the Payment Gateway creation form caused by an invalid  prop in a Shadcn UI component.
--   **Data Seeding:**
-    -   Updated  to include the new  and  collections in the database seed file, ensuring data persistence.
+-   **CS Upgrade & Commission System:** Implemented the full workflow from pitching an upgrade in the Kanban to payment confirmation and commission calculation. Verified with the testing agent.
+-   **New CS Dashboard:** Built and deployed a new comprehensive dashboard for the Customer Service team with KPIs, charts, and a leaderboard. Verified with the testing agent.
+-   **Role & Access Control Refactor:** Centralized permission management in the Access Control page and updated the UI and navigation to be driven entirely by this system. Verified with screenshots.
+-   **Dual-Role UI (Managers & CEO):** Added My Students/Team view toggles for managers and a Pending Approvals widget for the CEO. Verified with the testing agent.
+-   **Employee Master Fixes & Features:** Fixed a salary input bug, and added  and  fields. Verified with screenshots.
+-   **Finance Settings - PSP VAT:** Added a  field to the Payment Gateway configuration. Verified with .
+-   **Global UI/UX Improvements:** Made all modals in the application scrollable and improved color contrast for themes.
 
 **Earlier issues found/mentioned but not fixed**
 -   The  in  remains unresolved and is only mitigated by disabling the plugin.
 
 **Known issue recurrence from previous fork**
--   **Issue:**  in .
--   **Recurrence count:** High (persistent across multiple forks).
+-   **Issue recurrence in previous fork:**  in .
+-   **Recurrence count:** High.
 -   **Status:** NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Dynamic Dashboarding:** Building complex backend aggregations with MongoDB to power date-filtered, role-based, and team-based dashboard analytics.
--   **Data Remediation:** Running targeted scripts directly against the database to fix data integrity issues (e.g., incorrect dates) from a large data import.
--   **API Refactoring:** Modifying multiple existing API endpoints to accept new parameters (like date filters) while maintaining backward compatibility for other parts of the app.
--   **Component-Level Debugging:** Identifying and fixing UI component library-specific errors (e.g., Shadcn  crash).
+-   **Dynamic UI Rendering:** Conditionally showing/hiding UI elements based on user role (), data state ( field), and user interaction ( toggle).
+-   **Complex Modal-Driven Workflows:** Orchestrating a multi-step user journey (CS Upgrade) through a series of interconnected modals and API calls.
+-   **Centralized Permission Management:** Refactoring the application to use a single source of truth () for dynamic, role-based navigation and feature access.
+-   **API-Driven Components:** Modifying components to fetch their configuration or data dynamically (e.g., loading roles in , loading bank accounts in ).
+-   **Backend Data Aggregation:** Creating new, complex MongoDB aggregation pipelines to power dashboard analytics (e.g., CS commission and revenue calculations).
 
 **key DB schema**
--   **:** Primary collection for imported data. Key fields used for new dashboards: , , , .
--   **:** Master customer records created during import.
--   **:** Revenue records created during import.
--   **:** Used for the new team-based revenue reporting.
-
-**changes in tech stack**
--   None.
+-   **:** The  sub-document now includes . A new top-level field  has been added.
+-   **:** A new field  has been added.
+-   **:** The fields , , and  are being deprecated in favor of  which links to the  collection.
+-   ** (New Collection):** Stores commission records for CS upgrades. Includes , , , , , etc.
+-   ** (New Collection):** Logs each student upgrade event, including , , , , .
 
 **All files of reference**
--   
--   
--   
--    (for color contrast fix)
--    (potential location for scrollable modal fix)
+-    (Last file worked on)
+-    (Contains all new backend logic)
+-    (Contains the complex upgrade flow logic)
+-    (New dashboard implementation)
+-    (Core of the new permissions system)
+-    (Contains CEO widget logic)
+-    (Contains salary form fixes and new fields)
 
 **Areas that need refactoring**:
--   **:** This monolithic file remains a high-priority technical debt item.
--   **Modals/Popups:** A global refactor is needed to create a base scrollable modal component to address the user's UI/UX feedback.
+-   **:** This monolithic file has grown even larger and is a high-priority technical debt item. It should be broken down into smaller, domain-specific router files.
 
 **key api endpoints**
--   **MODIFIED:** , , ,  (all now support date filters).
--   **NEW:**  (Provides data for team-wise revenue chart).
--   **NEW:**  (Provides drill-down data for a specific team).
--   **NEW:**  (Provides data for the This Month vs. Last Month scatter plot).
+-   **NEW:** , , 
+-   **NEW:** , , , , 
+-   **MODIFIED:**  (now accepts )
+-   **MODIFIED:**  (now accepts )
+-   **MODIFIED:** ,  (now accept )
+-   **MODIFIED:** ,  (now accept )
+-   **MODIFIED:** ,  (now accept  query param for team vs. individual views)
+-   **MODIFIED:**  (now used by Access Control page)
 
 **Critical Info for New Agent**
--   Your immediate priority is to rebuild the frontend of the Sales Dashboard () using the new backend endpoints. The backend work is already complete and tested.
--   **Crucial Step:** Before starting the frontend work, you **MUST** run   Exported departments: 10 documents
-  Exported courses: 46 documents
-  Exported commission_rules: 1 documents
-  Exported system_config: 1 documents
-  Exported users: 72 documents
-  Exported hr_employees: 72 documents
-  Exported teams: 11 documents
-  Exported leads: 1223 documents
-  Exported students: 902 documents
-  Exported sheet_connectors: 1 documents
-  Exported payments: 1 documents
-  Exported hr_attendance: 143 documents
-  Exported call_logs: 14 documents
-  Exported hr_payroll_batches: 1 documents
-  Exported integrations: 0 documents
-  Exported ltv_transactions: 899 documents
-  Exported customers: 901 documents
-  Exported finance_clt_receivables: 899 documents
-
-Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to save the recent date corrections to the seed file.
--   After the dashboard is complete, address the two global UI/UX tasks: making all modals scrollable and improving theme color contrast.
--   The  file is extremely large. Make surgical changes using  and be mindful of the broad impact of any modifications.
+-   Your first action should be to verify the last piece of work: the PSP Bank Mapping UI change. Navigate to the page and confirm the text inputs have been replaced by a functional bank account dropdown.
+-   The user has been providing feature requests in rapid succession. Be prepared to plan and implement a new set of tasks after completing the current one.
+-   The agent has been successfully using a combination of , screenshots, and the  for validation. Continue this practice. All major features completed in this fork have been successfully tested.
+-   The  file is becoming critically large. Any new backend work should be done with extreme care, and a refactor should be proposed to the user soon.
 
 **documents and test reports created in this job**
--    (Updated)
--    (Multiple new test reports generated)
--    (Updated with new collections and data fixes)
+-    (Updated multiple times)
+-   Multiple test reports in  from successful test agent runs.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests fixing future revenue dates, a full Sales Dashboard overhaul (filters, new charts, drill-downs), improved color contrast, and scrollable modals.
-2.  **Agent:** Acknowledges the requests and begins investigating the future date issue.
-3.  **Agent:** Discovers 68 records with future dates in the database.
-4.  **Agent:** Runs a script to correct all 68 invalid dates in the  and  collections.
-5.  **Agent:** Confirms the dates are fixed and begins implementing the backend changes for the new dashboard features.
-6.  **Agent:** Creates and modifies all necessary backend endpoints ( helper, team revenue, monthly comparison, and adds filtering to existing endpoints).
-7.  **Agent:** Successfully tests all new and updated endpoints via .
-8.  **Agent:** Is now ready to begin the frontend implementation for the new Sales Dashboard.
+1.  **User:** Requests to add a VAT field to Payment Gateway (PSP) fees.
+2.  **Agent:** Implements the backend and frontend changes for the VAT field.
+3.  **Agent:** Verifies the change with  and confirms the calculation is correct.
+4.  **User:** Requests to change the PSP Bank Mapping to use a dropdown of existing bank accounts, not manual text fields.
+5.  **Agent:** Investigates and finds the necessary  endpoint already exists.
+6.  **Agent:** Plans the change: fetch bank accounts, replace inputs with a Select component.
+7.  **Agent:** Implements all code changes in .
+8.  **Agent:** Compiles the frontend successfully.
+9.  **Agent:** Takes a screenshot to verify, but it shows the parent Finance Settings page, not the mapping form itself.
+10. **Agent:** Realizes the need to click the sidebar link to view the correct page and attempts to do so, but the session ends before the result is shown.
 
 **Project Health Check:**
--   **Broken:** The Sales Dashboard UI is misaligned with user requirements. There are global usability issues with modals (not scrollable) and readability (poor color contrast).
--   **Working:** Core backend logic, all API endpoints (including new ones), data import and seeding mechanisms, and other modules (HR, CS, Finance, Mentor).
+-   **Broken:** None. The application is stable.
+-   **Mocked:** None.
+-   **In Progress:** The PSP Bank Mapping page UI has been updated in code but not yet visually confirmed.
 
 **3rd Party Integrations**
 -   APScheduler
@@ -190,10 +157,10 @@ Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to save 
 -   
 
 **Testing status**
--   **Testing agent used after significant changes:** YES, used to validate the last set of bug fixes.
+-   **Testing agent used after significant changes:** YES. Used multiple times to validate large features like the CS Upgrade Flow, CS Dashboard, and Dual-Role UI, with 100% pass rates.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None permanent.
--   **Known regressions:** The Sales Dashboard UI does not meet the latest user specifications.
+-   **Test files created:** None.
+-   **Known regressions:** None.
 
 **Credentials to test flow:**
 -   **Super Admin:**
@@ -201,24 +168,4 @@ Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB) to save 
     -   Password: 
 
 **What agent forgot to execute**
--   The agent fixed the future-dated records in the database but **did not run   Exported departments: 10 documents
-  Exported courses: 46 documents
-  Exported commission_rules: 1 documents
-  Exported system_config: 1 documents
-  Exported users: 72 documents
-  Exported hr_employees: 72 documents
-  Exported teams: 11 documents
-  Exported leads: 1223 documents
-  Exported students: 902 documents
-  Exported sheet_connectors: 1 documents
-  Exported payments: 1 documents
-  Exported hr_attendance: 143 documents
-  Exported call_logs: 14 documents
-  Exported hr_payroll_batches: 1 documents
-  Exported integrations: 0 documents
-  Exported ltv_transactions: 899 documents
-  Exported customers: 901 documents
-  Exported finance_clt_receivables: 899 documents
-
-Export complete: 5197 documents -> /app/backend/seed_data.json (3.3 MB)** to persist these critical fixes in the  file. This must be done first.
--   The agent has not yet started implementing the requested frontend changes for the Sales Dashboard or the global UI/UX improvements (scrollable modals, color contrast).</analysis>
+-   The agent did not complete the final verification step for the last task. They implemented the code to change the PSP Bank Mapping form but did not take a screenshot or otherwise confirm that the new bank account dropdown is visible and working on the frontend.</analysis>

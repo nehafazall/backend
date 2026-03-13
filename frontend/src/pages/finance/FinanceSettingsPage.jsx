@@ -998,6 +998,7 @@ const PaymentGatewaysSection = () => {
 const PSPBankMappingSection = () => {
     const [items, setItems] = useState([]);
     const [gateways, setGateways] = useState([]);
+    const [bankAccounts, setBankAccounts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showDialog, setShowDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -1005,6 +1006,7 @@ const PSPBankMappingSection = () => {
     const [formData, setFormData] = useState({
         gateway_id: '',
         gateway_name: '',
+        bank_account_id: '',
         bank_name: '',
         bank_account_number: '',
         bank_account_name: '',
@@ -1016,12 +1018,14 @@ const PSPBankMappingSection = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [mappingsRes, gatewaysRes] = await Promise.all([
+            const [mappingsRes, gatewaysRes, bankRes] = await Promise.all([
                 api.get('/finance/settings/psp-bank-mapping'),
                 api.get('/finance/settings/payment-gateways'),
+                api.get('/finance/settings/bank-accounts'),
             ]);
             setItems(mappingsRes.data || []);
             setGateways(gatewaysRes.data || []);
+            setBankAccounts(bankRes.data || []);
         } catch (error) {
             console.error('Failed to fetch PSP bank mappings:', error);
         } finally {
@@ -1069,7 +1073,7 @@ const PSPBankMappingSection = () => {
     };
 
     const resetForm = () => {
-        setFormData({ gateway_id: '', gateway_name: '', bank_name: '', bank_account_number: '', bank_account_name: '', currency: 'AED', description: '', is_active: true });
+        setFormData({ gateway_id: '', gateway_name: '', bank_account_id: '', bank_name: '', bank_account_number: '', bank_account_name: '', currency: 'AED', description: '', is_active: true });
         setEditingItem(null);
     };
 
@@ -1078,6 +1082,7 @@ const PSPBankMappingSection = () => {
         setFormData({
             gateway_id: item.gateway_id,
             gateway_name: item.gateway_name || '',
+            bank_account_id: item.bank_account_id || '',
             bank_name: item.bank_name,
             bank_account_number: item.bank_account_number || '',
             bank_account_name: item.bank_account_name || '',
@@ -1175,29 +1180,43 @@ const PSPBankMappingSection = () => {
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Bank Name *</Label>
-                            <Input value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })} placeholder="e.g., Mashreq Bank" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Account Number</Label>
-                                <Input value={formData.bank_account_number} onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })} placeholder="Account number" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Currency</Label>
-                                <Select value={formData.currency} onValueChange={(v) => setFormData({ ...formData, currency: v })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                            <Label>Bank Account *</Label>
+                            {bankAccounts.length > 0 ? (
+                                <Select value={formData.bank_account_id} onValueChange={(v) => {
+                                    const acc = bankAccounts.find(a => a.id === v);
+                                    if (acc) {
+                                        setFormData({
+                                            ...formData,
+                                            bank_account_id: v,
+                                            bank_name: acc.bank_name,
+                                            bank_account_number: acc.account_number || '',
+                                            bank_account_name: acc.account_name || '',
+                                            currency: acc.currency || 'AED',
+                                        });
+                                    }
+                                }}>
+                                    <SelectTrigger data-testid="bank-account-select"><SelectValue placeholder="Select bank account..." /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="AED">AED</SelectItem>
-                                        <SelectItem value="USD">USD</SelectItem>
-                                        <SelectItem value="EUR">EUR</SelectItem>
+                                        {bankAccounts.filter(a => a.is_active !== false).map(a => (
+                                            <SelectItem key={a.id} value={a.id}>
+                                                {a.bank_name} — {a.account_name} ({a.account_number || a.iban || a.currency})
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Account Name</Label>
-                            <Input value={formData.bank_account_name} onChange={(e) => setFormData({ ...formData, bank_account_name: e.target.value })} placeholder="e.g., CLT Academy LLC" />
+                            ) : (
+                                <div className="p-3 rounded-lg border border-dashed text-center text-sm text-muted-foreground">
+                                    No bank accounts found. Add bank accounts in the Bank Accounts tab first.
+                                </div>
+                            )}
+                            {formData.bank_name && (
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground p-2 rounded bg-muted/30">
+                                    <span>{formData.bank_name}</span>
+                                    <span className="font-mono">{formData.bank_account_number}</span>
+                                    <span>{formData.bank_account_name}</span>
+                                    <span>{formData.currency}</span>
+                                </div>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <Label>Description</Label>
