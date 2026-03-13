@@ -6167,6 +6167,34 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
             },
             "instructions": "For importing historical/closed leads only\nFields marked with * are mandatory\nPhone must include country code\nadditional_numbers: comma-separated list of extra phone numbers\nagent_employee_id MUST match an existing employee ID in the system\nteam_name MUST match an existing team name\nLeads will be imported as ENROLLED (closed) and also created as ACTIVATED students in CS"
         },
+        "historical_students_xlsx": {
+            "filename": "historical_students_template.xlsx",
+            "headers": [
+                "student_name*", "phone*", "additional_numbers", "email*", "country", "city",
+                "enrolled_course*", "enrollment_amount", "enrollment_date",
+                "sales_agent_employee_id*", "team_name*", "cs_agent_employee_id*", "mentor_employee_id"
+            ],
+            "fields": {
+                "required": ["student_name", "phone", "email", "enrolled_course", "sales_agent_employee_id", "team_name", "cs_agent_employee_id"],
+                "optional": ["additional_numbers", "country", "city", "enrollment_amount", "enrollment_date", "mentor_employee_id"]
+            },
+            "example_row": {
+                "student_name": "Ahmed Ali",
+                "phone": "+971501234567",
+                "additional_numbers": "+971502345678",
+                "email": "ahmed@example.com",
+                "country": "UAE",
+                "city": "Dubai",
+                "enrolled_course": "Basic Package",
+                "enrollment_amount": "5000",
+                "enrollment_date": "2025-01-15",
+                "sales_agent_employee_id": "30015",
+                "team_name": "TEAM XLNC",
+                "cs_agent_employee_id": "30020",
+                "mentor_employee_id": "30025"
+            },
+            "instructions": "Upload XLSX file (not CSV) for historical closed students.\nFields marked with * are mandatory.\nCourses are auto-created if they don't exist. Different prices for same course create variants (e.g., 'Basic Package - 2').\nEmployee IDs must match existing Employee Master records.\nTeam names must match exactly (e.g., 'TEAM XLNC').\nStudents auto-assigned to Sales (enrolled list), CS (student list), and Mentor.\nDuplicate phone numbers are skipped."
+        },
         "mentor_redeposits": {
             "filename": "mentor_redeposits_import_template.csv",
             "headers": [
@@ -6892,6 +6920,297 @@ async def import_historical_leads(data: List[Dict], user = Depends(require_roles
             results["errors"].append(f"Row {i+1}: {str(e)}")
     
     return results
+
+@api_router.post("/import/historical-students-xlsx")
+async def import_historical_students_xlsx(
+    file: UploadFile = File(...),
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """
+    Import historical closed students from XLSX.
+    Auto-creates courses, leads (enrolled), students (activated), mentor assignments, and LTV transactions.
+    Columns: student_name*, phone*, additional_numbers, email*, country, city, enrolled_course*,
+    enrollment_amount, enrollment_date, sales_agent_employee_id*, team_name*, cs_agent_employee_id*, mentor_employee_id
+    """
+    import openpyxl
+    import io
+
+    contents = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+        ws = wb.active
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid XLSX file: {str(e)}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    results = {
+        "imported": 0, "skipped": 0, "failed": 0, "errors": [],
+        "leads_created": 0, "students_created": 0, "courses_created": 0,
+        "ltv_transactions": 0
+    }
+
+    # Read headers from row 1
+    headers = []
+    for cell in ws[1]:
+        val = str(cell.value or "").strip().lower().replace("*", "").replace(" ", "_")
+        headers.append(val)
+
+    required_headers = ["student_name", "phone", "enrolled_course", "sales_agent_employee_id", "team_name", "cs_agent_employee_id"]
+    missing_headers = [h for h in required_headers if h not in headers]
+    if missing_headers:
+        raise HTTPException(status_code=400, detail=f"Missing required columns: {missing_headers}")
+
+    # Pre-fetch all employees and teams for batch lookup
+    all_employees = await db.hr_employees.find({}, {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "user_id": 1}).to_list(500)
+    emp_by_id = {str(e["employee_id"]): e for e in all_employees}
+
+    all_teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    team_by_name = {}
+    for t in all_teams:
+        team_by_name[t["name"].strip().lower()] = t
+
+    all_users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1}).to_list(500)
+    user_by_id = {u["id"]: u for u in all_users}
+
+    # Track courses: {(course_name, amount): course_id}
+    existing_courses = await db.courses.find({}, {"_id": 0}).to_list(500)
+    course_map = {}
+    for c in existing_courses:
+        key = (c.get("name", "").strip().lower(), float(c.get("price", 0) or 0))
+        course_map[key] = c
+
+    # Track course name counters for variant naming
+    course_name_counts = {}
+    for c in existing_courses:
+        base = c.get("name", "").strip().lower()
+        course_name_counts[base] = course_name_counts.get(base, 0) + 1
+
+    async def get_or_create_course(course_name, amount):
+        """Find or create a course. Creates variants for different prices."""
+        amount = float(amount or 0)
+        key = (course_name.strip().lower(), amount)
+
+        if key in course_map:
+            return course_map[key]
+
+        # Check if course with same name but different price exists
+        base_name = course_name.strip()
+        base_lower = base_name.lower()
+        existing_same_name = [c for k, c in course_map.items() if k[0] == base_lower and k[1] != amount]
+
+        if existing_same_name:
+            # Create variant: "Basic Package - 2", "Basic Package - 3", etc.
+            count = course_name_counts.get(base_lower, 1) + 1
+            course_name_counts[base_lower] = count
+            variant_name = f"{base_name} - {count}"
+        else:
+            variant_name = base_name
+            course_name_counts[base_lower] = course_name_counts.get(base_lower, 0) + 1
+
+        course_id = str(uuid.uuid4())
+        new_course = {
+            "id": course_id,
+            "name": variant_name,
+            "code": variant_name.upper().replace(" ", "_")[:20],
+            "price": amount,
+            "currency": "AED",
+            "status": "active",
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.courses.insert_one(new_course)
+        course_map[key] = new_course
+        results["courses_created"] += 1
+        return new_course
+
+    # Process rows
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        try:
+            if not row or not row[0]:
+                continue
+
+            data = {}
+            for i, val in enumerate(row):
+                if i < len(headers):
+                    data[headers[i]] = str(val).strip() if val is not None else ""
+
+            # Validate required fields
+            student_name = data.get("student_name", "").strip()
+            phone = data.get("phone", "").strip()
+            enrolled_course = data.get("enrolled_course", "").strip()
+            sales_emp_id = data.get("sales_agent_employee_id", "").strip()
+            team_name = data.get("team_name", "").strip()
+            cs_emp_id = data.get("cs_agent_employee_id", "").strip()
+
+            if not all([student_name, phone, enrolled_course, sales_emp_id, team_name, cs_emp_id]):
+                missing = [f for f in ["student_name", "phone", "enrolled_course", "sales_agent_employee_id", "team_name", "cs_agent_employee_id"]
+                           if not data.get(f, "").strip()]
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: Missing required: {missing}")
+                continue
+
+            # Check duplicate phone
+            existing = await db.leads.find_one({"phone": phone})
+            if existing:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {row_idx}: Phone {phone} already exists (lead: {existing.get('full_name')})")
+                continue
+
+            # Lookup sales agent
+            sales_emp = emp_by_id.get(sales_emp_id)
+            if not sales_emp:
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: Sales agent employee_id '{sales_emp_id}' not found")
+                continue
+            sales_user = user_by_id.get(sales_emp.get("user_id"))
+            if not sales_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: No user account for sales agent '{sales_emp_id}'")
+                continue
+
+            # Lookup team
+            team = team_by_name.get(team_name.strip().lower())
+            if not team:
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: Team '{team_name}' not found")
+                continue
+
+            # Lookup CS agent
+            cs_emp = emp_by_id.get(cs_emp_id)
+            if not cs_emp:
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: CS agent employee_id '{cs_emp_id}' not found")
+                continue
+            cs_user = user_by_id.get(cs_emp.get("user_id"))
+            if not cs_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {row_idx}: No user account for CS agent '{cs_emp_id}'")
+                continue
+
+            # Lookup mentor (optional)
+            mentor_emp_id = data.get("mentor_employee_id", "").strip()
+            mentor_user = None
+            if mentor_emp_id:
+                mentor_emp = emp_by_id.get(mentor_emp_id)
+                if mentor_emp:
+                    mentor_user = user_by_id.get(mentor_emp.get("user_id"))
+
+            # Parse enrollment amount and date
+            enrollment_amount = 0
+            try:
+                amt_str = data.get("enrollment_amount", "0").replace(",", "").strip()
+                enrollment_amount = float(amt_str) if amt_str else 0
+            except:
+                pass
+
+            enrollment_date = data.get("enrollment_date", "").strip()
+            if not enrollment_date:
+                enrollment_date = now[:10]
+            else:
+                enrollment_date = _normalize_date(enrollment_date)
+
+            additional_numbers = []
+            if data.get("additional_numbers"):
+                additional_numbers = [n.strip() for n in data["additional_numbers"].split(",") if n.strip()]
+
+            # Auto-create or find course
+            course = await get_or_create_course(enrolled_course, enrollment_amount)
+
+            # Create lead (enrolled stage)
+            lead_id = str(uuid.uuid4())
+            lead_record = {
+                "id": lead_id,
+                "full_name": student_name,
+                "phone": phone,
+                "additional_numbers": additional_numbers,
+                "email": data.get("email", "").strip() or None,
+                "country": data.get("country", "").strip() or None,
+                "city": data.get("city", "").strip() or None,
+                "course_of_interest": course["name"],
+                "course_id": course["id"],
+                "package_bought": course["name"],
+                "enrollment_amount": enrollment_amount,
+                "stage": "enrolled",
+                "assigned_to": sales_user["id"],
+                "assigned_to_name": sales_user["full_name"],
+                "assigned_at": enrollment_date,
+                "first_contact_at": enrollment_date,
+                "enrolled_at": enrollment_date,
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "source": "Historical Import",
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": enrollment_date,
+                "updated_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            }
+            await db.leads.insert_one(lead_record)
+            results["leads_created"] += 1
+
+            # Create student record (activated, assigned to CS + Mentor)
+            student_id = str(uuid.uuid4())
+            student_record = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": student_name,
+                "phone": phone,
+                "additional_numbers": additional_numbers,
+                "email": data.get("email", "").strip() or None,
+                "country": data.get("country", "").strip() or None,
+                "city": data.get("city", "").strip() or None,
+                "package_bought": course["name"],
+                "course_id": course["id"],
+                "current_course_name": course["name"],
+                "enrollment_amount": enrollment_amount,
+                "stage": "activated",
+                "mentor_stage": "new_student" if mentor_user else None,
+                "onboarding_complete": True,
+                "cs_agent_id": cs_user["id"],
+                "cs_agent_name": cs_user["full_name"],
+                "mentor_id": mentor_user["id"] if mentor_user else None,
+                "mentor_name": mentor_user["full_name"] if mentor_user else None,
+                "sales_agent_id": sales_user["id"],
+                "sales_agent_name": sales_user["full_name"],
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "is_historical": True,
+                "sla_status": "ok",
+                "enrolled_at": enrollment_date,
+                "created_at": enrollment_date,
+                "updated_at": now
+            }
+            await db.students.insert_one(student_record)
+            results["students_created"] += 1
+
+            # Create LTV transaction
+            if enrollment_amount > 0:
+                ltv_record = {
+                    "id": str(uuid.uuid4()),
+                    "student_id": student_id,
+                    "student_name": student_name,
+                    "student_email": data.get("email", "").strip() or phone,
+                    "type": "sale",
+                    "amount": enrollment_amount,
+                    "course_name": course["name"],
+                    "date": enrollment_date,
+                    "created_by_employee_id": sales_emp_id,
+                    "created_at": now
+                }
+                await db.ltv_transactions.insert_one(ltv_record)
+                results["ltv_transactions"] += 1
+
+            results["imported"] += 1
+
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {row_idx}: {str(e)}")
+
+    return {
+        "message": f"Import complete: {results['imported']} students imported, {results['courses_created']} courses auto-created.",
+        **results
+    }
 
 @api_router.post("/import/mentor-redeposits")
 async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master"]))):

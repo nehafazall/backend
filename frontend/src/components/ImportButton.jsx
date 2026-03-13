@@ -19,6 +19,7 @@ const TYPE_CONFIG = {
     leads: { title: 'Leads', endpoint: '/import/leads', useJson: true },
     historical_leads: { title: 'Historical Leads', endpoint: '/import/historical-leads', useJson: true },
     comprehensive_students: { title: 'Comprehensive Students', endpoint: '/import/comprehensive-students', useJson: true },
+    historical_students_xlsx: { title: 'Historical Students (XLSX)', endpoint: '/import/historical-students-xlsx', useJson: false, acceptXlsx: true },
     customers: { title: 'Customers', endpoint: '/import/customers', useJson: true },
     students_cs: { title: 'CS Students', endpoint: '/import/students/cs', useJson: true },
     students_mentor: { title: 'Mentor Students', endpoint: '/import/students/mentor', useJson: true },
@@ -125,6 +126,13 @@ function ImportButton({ type, templateType, onSuccess }) {
         if (!f) return;
         setFile(f);
         
+        if (config.acceptXlsx) {
+            // For XLSX files, just track file info without parsing
+            setData({ rowCount: '(XLSX)', fileName: f.name });
+            toast.success('XLSX file selected: ' + f.name);
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = function(evt) {
             try {
@@ -243,10 +251,10 @@ function ImportButton({ type, templateType, onSuccess }) {
                                 </Button>
 
                                 <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                                    <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" id={`csv-file-${actualType}`} />
+                                    <input type="file" accept={config.acceptXlsx ? ".xlsx,.xls" : ".csv"} onChange={handleFileSelect} className="hidden" id={`csv-file-${actualType}`} />
                                     <label htmlFor={`csv-file-${actualType}`} className="cursor-pointer">
                                         <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                                        <p className="text-sm font-medium">Click to select CSV file</p>
+                                        <p className="text-sm font-medium">Click to select {config.acceptXlsx ? 'XLSX' : 'CSV'} file</p>
                                         <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>
                                     </label>
                                 </div>
