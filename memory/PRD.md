@@ -506,7 +506,7 @@ Added Meta API credentials to backend `.env`:
 **Result:**
 - Meta Ads Service now initialized on server startup
 - Marketing Settings page shows "Meta API: Configured" and "Webhook: Ready"
-- Webhook URL: `https://hr-sync-dashboard.preview.emergentagent.com/api/marketing/webhook`
+- Webhook URL: `https://student-bulk-load.preview.emergentagent.com/api/marketing/webhook`
 - Users can now connect their Meta Ad accounts via OAuth flow
 
 ---
@@ -703,7 +703,7 @@ META_APP_SECRET=""
 META_WEBHOOK_VERIFY_TOKEN="clt_synapse_meta_webhook_2024"
 ```
 
-**Webhook URL:** `https://hr-sync-dashboard.preview.emergentagent.com/api/marketing/webhook`
+**Webhook URL:** `https://student-bulk-load.preview.emergentagent.com/api/marketing/webhook`
 
 **Test Results:** Backend 100% (12/12 passed), Frontend 100% (All features working)
 

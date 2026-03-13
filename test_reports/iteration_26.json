@@ -95,7 +95,7 @@
     "Navigation": "WORKING - Marketing section icon on homepage, sidebar navigation works"
   },
 
-  "meta_integration_notes": "Meta Ads OAuth integration is NOT MOCKED - it requires real META_APP_ID and META_APP_SECRET to be configured in backend/.env. Currently these are empty strings. The webhook URL for Meta App is: https://hr-sync-dashboard.preview.emergentagent.com/api/marketing/webhook with verify token: clt_synapse_meta_webhook_2024",
+  "meta_integration_notes": "Meta Ads OAuth integration is NOT MOCKED - it requires real META_APP_ID and META_APP_SECRET to be configured in backend/.env. Currently these are empty strings. The webhook URL for Meta App is: https://student-bulk-load.preview.emergentagent.com/api/marketing/webhook with verify token: clt_synapse_meta_webhook_2024",
 
   "testing_method": "Backend pytest + Playwright browser automation"
 }
