@@ -707,6 +707,7 @@ const PaymentGatewaysSection = () => {
         settlement_day_of_week: 'none',
         processing_fee_percent: 0,
         processing_fee_fixed: 0,
+        vat_on_fee_percent: 5,
         currency: 'AED',
         description: '',
         is_active: true,
@@ -779,7 +780,7 @@ const PaymentGatewaysSection = () => {
     };
 
     const resetForm = () => {
-        setFormData({ code: '', name: '', provider_type: 'card_processor', settlement_days: 1, settlement_day_of_week: 'none', processing_fee_percent: 0, processing_fee_fixed: 0, currency: 'AED', description: '', is_active: true });
+        setFormData({ code: '', name: '', provider_type: 'card_processor', settlement_days: 1, settlement_day_of_week: 'none', processing_fee_percent: 0, processing_fee_fixed: 0, vat_on_fee_percent: 5, currency: 'AED', description: '', is_active: true });
         setEditingItem(null);
     };
 
@@ -793,6 +794,7 @@ const PaymentGatewaysSection = () => {
             settlement_day_of_week: item.settlement_day_of_week || 'none',
             processing_fee_percent: item.processing_fee_percent || 0,
             processing_fee_fixed: item.processing_fee_fixed || 0,
+            vat_on_fee_percent: item.vat_on_fee_percent ?? 5,
             currency: item.currency || 'AED',
             description: item.description || '',
             is_active: item.is_active !== false,
@@ -861,6 +863,9 @@ const PaymentGatewaysSection = () => {
                                             {item.processing_fee_percent > 0 && item.processing_fee_fixed > 0 && ' + '}
                                             {item.processing_fee_fixed > 0 && <span>{item.currency} {item.processing_fee_fixed}</span>}
                                             {!item.processing_fee_percent && !item.processing_fee_fixed && '-'}
+                                            {item.vat_on_fee_percent > 0 && (
+                                                <span className="text-xs text-muted-foreground ml-1">(+{item.vat_on_fee_percent}% VAT)</span>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -929,14 +934,19 @@ const PaymentGatewaysSection = () => {
 
                         <div className="p-4 bg-muted rounded-lg space-y-4">
                             <h4 className="font-medium flex items-center gap-2"><Percent className="h-4 w-4" /> Processing Fees</h4>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Fee (%)</Label>
-                                    <Input type="number" step="0.01" min="0" value={formData.processing_fee_percent} onChange={(e) => setFormData({ ...formData, processing_fee_percent: parseFloat(e.target.value) || 0 })} />
+                                    <Input type="number" step="0.01" min="0" value={formData.processing_fee_percent || ''} onChange={(e) => setFormData({ ...formData, processing_fee_percent: parseFloat(e.target.value) || 0 })} />
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Fixed Fee</Label>
-                                    <Input type="number" step="0.01" min="0" value={formData.processing_fee_fixed} onChange={(e) => setFormData({ ...formData, processing_fee_fixed: parseFloat(e.target.value) || 0 })} />
+                                    <Input type="number" step="0.01" min="0" value={formData.processing_fee_fixed || ''} onChange={(e) => setFormData({ ...formData, processing_fee_fixed: parseFloat(e.target.value) || 0 })} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>VAT on Fees (%)</Label>
+                                    <Input type="number" step="0.01" min="0" value={formData.vat_on_fee_percent || ''} onChange={(e) => setFormData({ ...formData, vat_on_fee_percent: parseFloat(e.target.value) || 0 })} data-testid="vat-on-fee-input" />
+                                    <p className="text-xs text-muted-foreground">VAT charged on top of processing fees</p>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Currency</Label>
