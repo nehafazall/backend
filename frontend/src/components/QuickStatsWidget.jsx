@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-    Users, Phone, Target, TrendingUp, Bell, Calendar,
-    DollarSign, CheckCircle, AlertCircle, Briefcase
+import {
+    Users, Phone, TrendingUp, Bell, Calendar,
+    DollarSign, CheckCircle, AlertTriangle, GraduationCap, Clock
 } from 'lucide-react';
-import { formatCurrency } from '@/components/finance/utils';
 
 const QuickStatsWidget = ({ className = '' }) => {
     const [stats, setStats] = useState(null);
@@ -15,7 +13,6 @@ const QuickStatsWidget = ({ className = '' }) => {
 
     useEffect(() => {
         fetchStats();
-        // Refresh every 5 minutes
         const interval = setInterval(fetchStats, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
@@ -35,12 +32,7 @@ const QuickStatsWidget = ({ className = '' }) => {
         return (
             <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 ${className}`}>
                 {[1, 2, 3, 4].map(i => (
-                    <Card key={i}>
-                        <CardContent className="p-4">
-                            <Skeleton className="h-4 w-20 mb-2" />
-                            <Skeleton className="h-8 w-16" />
-                        </CardContent>
-                    </Card>
+                    <Card key={i}><CardContent className="p-4"><Skeleton className="h-4 w-20 mb-2" /><Skeleton className="h-8 w-16" /></CardContent></Card>
                 ))}
             </div>
         );
@@ -48,133 +40,51 @@ const QuickStatsWidget = ({ className = '' }) => {
 
     if (!stats) return null;
 
-    const statItems = [];
+    const fmt = (v) => {
+        if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+        return v;
+    };
+
+    const items = [];
 
     // Sales stats
-    if (stats.total_leads !== undefined) {
-        statItems.push({
-            label: 'Total Leads',
-            value: stats.total_leads,
-            icon: Users,
-            color: 'text-blue-500',
-            bgColor: 'bg-blue-100 dark:bg-blue-900/30'
-        });
-    }
-    if (stats.new_leads_today !== undefined) {
-        statItems.push({
-            label: 'New Today',
-            value: stats.new_leads_today,
-            icon: Phone,
-            color: 'text-green-500',
-            bgColor: 'bg-green-100 dark:bg-green-900/30'
-        });
-    }
-    if (stats.hot_leads !== undefined) {
-        statItems.push({
-            label: 'Hot Leads',
-            value: stats.hot_leads,
-            icon: Target,
-            color: 'text-red-500',
-            bgColor: 'bg-red-100 dark:bg-red-900/30'
-        });
-    }
-    if (stats.enrolled_this_month !== undefined) {
-        statItems.push({
-            label: 'Enrolled MTD',
-            value: stats.enrolled_this_month,
-            icon: CheckCircle,
-            color: 'text-emerald-500',
-            bgColor: 'bg-emerald-100 dark:bg-emerald-900/30'
-        });
-    }
+    if (stats.active_pipeline !== undefined) items.push({ label: 'Active Pipeline', value: fmt(stats.active_pipeline), icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' });
+    if (stats.new_leads_today !== undefined) items.push({ label: 'New Leads Today', value: stats.new_leads_today, icon: Phone, color: 'text-emerald-500', bg: 'bg-emerald-500/10' });
+    if (stats.enrolled_mtd !== undefined) items.push({ label: 'Enrolled MTD', value: stats.enrolled_mtd, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' });
+    if (stats.sla_breaches !== undefined && stats.sla_breaches > 0) items.push({ label: 'SLA Alerts', value: stats.sla_breaches, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' });
 
     // CS stats
-    if (stats.total_students !== undefined) {
-        statItems.push({
-            label: 'Students',
-            value: stats.total_students,
-            icon: Users,
-            color: 'text-indigo-500',
-            bgColor: 'bg-indigo-100 dark:bg-indigo-900/30'
-        });
-    }
-    if (stats.pending_activation !== undefined) {
-        statItems.push({
-            label: 'Pending Activation',
-            value: stats.pending_activation,
-            icon: AlertCircle,
-            color: 'text-amber-500',
-            bgColor: 'bg-amber-100 dark:bg-amber-900/30'
-        });
-    }
+    if (stats.total_students !== undefined) items.push({ label: 'Total Students', value: fmt(stats.total_students), icon: GraduationCap, color: 'text-indigo-500', bg: 'bg-indigo-500/10' });
+    if (stats.pending_activation !== undefined && stats.pending_activation > 0) items.push({ label: 'Pending Activation', value: stats.pending_activation, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' });
 
     // Mentor stats
-    if (stats.mentor_students !== undefined) {
-        statItems.push({
-            label: 'My Students',
-            value: stats.mentor_students,
-            icon: Briefcase,
-            color: 'text-purple-500',
-            bgColor: 'bg-purple-100 dark:bg-purple-900/30'
-        });
-    }
-    if (stats.upgrade_opportunities !== undefined) {
-        statItems.push({
-            label: 'Upgrade Opps',
-            value: stats.upgrade_opportunities,
-            icon: TrendingUp,
-            color: 'text-cyan-500',
-            bgColor: 'bg-cyan-100 dark:bg-cyan-900/30'
-        });
-    }
+    if (stats.mentor_students !== undefined) items.push({ label: 'Mentor Students', value: fmt(stats.mentor_students), icon: Users, color: 'text-purple-500', bg: 'bg-purple-500/10' });
+    if (stats.upgrade_opportunities !== undefined && stats.upgrade_opportunities > 0) items.push({ label: 'Upgrade Opps', value: stats.upgrade_opportunities, icon: TrendingUp, color: 'text-cyan-500', bg: 'bg-cyan-500/10' });
 
     // Finance stats
-    if (stats.mtd_revenue !== undefined) {
-        statItems.push({
-            label: 'MTD Revenue',
-            value: formatCurrency(stats.mtd_revenue),
-            icon: DollarSign,
-            color: 'text-green-500',
-            bgColor: 'bg-green-100 dark:bg-green-900/30',
-            isFormatted: true
-        });
-    }
+    if (stats.mtd_revenue !== undefined && stats.mtd_revenue > 0) items.push({ label: 'Revenue MTD', value: `${(stats.mtd_revenue / 1000).toFixed(0)}k`, icon: DollarSign, color: 'text-green-500', bg: 'bg-green-500/10' });
+    if (stats.pending_payments !== undefined && stats.pending_payments > 0) items.push({ label: 'Pending Payments', value: stats.pending_payments, icon: DollarSign, color: 'text-amber-500', bg: 'bg-amber-500/10' });
 
-    // Common stats
-    if (stats.pending_followups !== undefined && stats.pending_followups > 0) {
-        statItems.push({
-            label: 'Follow-ups Due',
-            value: stats.pending_followups,
-            icon: Calendar,
-            color: 'text-orange-500',
-            bgColor: 'bg-orange-100 dark:bg-orange-900/30'
-        });
-    }
-    if (stats.unread_notifications !== undefined && stats.unread_notifications > 0) {
-        statItems.push({
-            label: 'Notifications',
-            value: stats.unread_notifications,
-            icon: Bell,
-            color: 'text-rose-500',
-            bgColor: 'bg-rose-100 dark:bg-rose-900/30'
-        });
-    }
+    // Common
+    if (stats.pending_followups > 0) items.push({ label: 'Follow-ups Due', value: stats.pending_followups, icon: Calendar, color: 'text-orange-500', bg: 'bg-orange-500/10' });
+    if (stats.unread_notifications > 0) items.push({ label: 'Notifications', value: stats.unread_notifications, icon: Bell, color: 'text-rose-500', bg: 'bg-rose-500/10' });
 
-    // Show top 4-6 stats based on role
-    const displayStats = statItems.slice(0, 6);
+    const display = items.slice(0, 6);
+
+    if (display.length === 0) return null;
 
     return (
         <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 ${className}`} data-testid="quick-stats-widget">
-            {displayStats.map((stat, index) => (
-                <Card key={index} className="hover:shadow-md transition-shadow">
+            {display.map((s, i) => (
+                <Card key={i} className="hover:shadow-md transition-shadow border-border/50">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                            <div className={`p-2 rounded-lg ${s.bg}`}>
+                                <s.icon className={`h-5 w-5 ${s.color}`} />
                             </div>
                             <div>
-                                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                                <p className="text-xl font-bold">{stat.value}</p>
+                                <p className="text-xs text-muted-foreground">{s.label}</p>
+                                <p className="text-xl font-bold">{s.value}</p>
                             </div>
                         </div>
                     </CardContent>

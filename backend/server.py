@@ -12946,7 +12946,7 @@ async def get_mentor_leaderboard(
 
 @api_router.get("/dashboard/quick-stats")
 async def get_quick_stats(user = Depends(get_current_user)):
-    """Get quick stats for home launcher widget"""
+    """Get quick stats for home launcher widget - accurate, role-based"""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -12954,9 +12954,8 @@ async def get_quick_stats(user = Depends(get_current_user)):
     stats = {}
     role = user.get("role")
     
-    # Role-specific stats
+    # Role-specific lead scope
     if role in ["super_admin", "admin", "sales_manager", "team_leader", "sales_executive"]:
-        # Sales stats
         if role == "sales_executive":
             lead_query = {"assigned_to": user["id"]}
         elif role == "team_leader":
@@ -12966,37 +12965,47 @@ async def get_quick_stats(user = Depends(get_current_user)):
         else:
             lead_query = {}
         
-        stats["total_leads"] = await db.leads.count_documents(lead_query)
+        # Active pipeline (excludes enrolled, rejected, pool)
+        stats["active_pipeline"] = await db.leads.count_documents({
+            **lead_query,
+            "stage": {"$nin": ["enrolled", "rejected", "not_interested"]},
+            "in_pool": {"$ne": True}
+        })
+        
+        # New leads today (only valid timestamps, skip bad data like "N")
         stats["new_leads_today"] = await db.leads.count_documents({
             **lead_query,
-            "created_at": {"$gte": today_start.isoformat()}
+            "created_at": {"$gte": today_start.isoformat(), "$regex": "^20"}
         })
-        stats["hot_leads"] = await db.leads.count_documents({**lead_query, "stage": "hot_lead"})
-        stats["enrolled_this_month"] = await db.leads.count_documents({
+        
+        # Enrolled this month — use students created_at (student is created on enrollment)
+        student_month_query = {"created_at": {"$gte": month_start.isoformat(), "$regex": "^20"}}
+        stats["enrolled_mtd"] = await db.students.count_documents(student_month_query)
+        
+        # SLA breaches (active)
+        stats["sla_breaches"] = await db.leads.count_documents({
             **lead_query,
-            "stage": "enrolled",
-            "updated_at": {"$gte": month_start.isoformat()}
+            "sla_status": {"$in": ["breach", "warning"]},
+            "stage": {"$nin": ["enrolled", "rejected"]}
         })
     
     if role in ["super_admin", "admin", "cs_head", "cs_agent"]:
-        # CS stats
         if role == "cs_agent":
             student_query = {"cs_agent_id": user["id"]}
         else:
             student_query = {}
         
         stats["total_students"] = await db.students.count_documents(student_query)
-        stats["new_students_today"] = await db.students.count_documents({
-            **student_query,
-            "created_at": {"$gte": today_start.isoformat()}
-        })
         stats["pending_activation"] = await db.students.count_documents({
             **student_query,
             "stage": "new_student"
         })
+        stats["new_students_today"] = await db.students.count_documents({
+            **student_query,
+            "created_at": {"$gte": today_start.isoformat(), "$regex": "^20"}
+        })
     
     if role in ["super_admin", "admin", "mentor", "academic_master"]:
-        # Mentor stats
         if role in ["mentor", "academic_master"]:
             mentor_query = {"mentor_id": user["id"]}
         else:
@@ -13010,11 +13019,9 @@ async def get_quick_stats(user = Depends(get_current_user)):
         })
     
     if role in ["super_admin", "admin", "finance"]:
-        # Finance stats
         stats["pending_payments"] = await db.payments.count_documents({"stage": "pending_verification"})
-        stats["pending_settlements"] = await db.settlement_batches.count_documents({"status": "pending"})
         
-        # MTD Revenue
+        # MTD Revenue (verified payments)
         revenue_pipeline = [
             {"$match": {
                 "stage": "verified",
@@ -13025,13 +13032,11 @@ async def get_quick_stats(user = Depends(get_current_user)):
         revenue_result = await db.payments.aggregate(revenue_pipeline).to_list(1)
         stats["mtd_revenue"] = revenue_result[0]["total"] if revenue_result else 0
     
-    # Common stats for all
+    # Common stats
     stats["pending_followups"] = await db.leads.count_documents({
         "reminder_date": {"$lte": now.isoformat()},
         "reminder_completed": {"$ne": True}
     })
-    
-    # Unread notifications
     stats["unread_notifications"] = await db.notifications.count_documents({
         "user_id": user["id"],
         "read": False
