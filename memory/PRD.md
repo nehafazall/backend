@@ -10,11 +10,23 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 14, 2026)
 
+### Completed: SLA Management System
+- **SLA Management Page** (`/sla-management`) under Operations
+- Full CRUD for SLA rules: create, edit, toggle active/inactive, delete
+- Multi-level escalation builder: each rule can have unlimited escalation levels
+- Per-level config: name, time threshold (hours), action (warning/breach/reassign/notify), in-app & email notification toggles, notify roles selection
+- Department filter tabs: All, Sales, CS, HR, Mentor, Operations, Finance
+- 6 default rules seeded: New Lead First Contact, Inactive Lead Warning, Pipeline Stale Lead, CS Activation Call, HR Leave Approval, HR Regularization Approval
+- SLA rules stored in DB (`sla_rules` collection) with in-memory cache for performance
+- Changes effective immediately (cache refreshes on any CRUD operation)
+
 ### Completed: Operational Controls Frontend (P0)
-- **Round Robin Controls Page** (`/round-robin`): CS Distribution Window status (10AM-10PM GST+4), agent pause/resume toggles with reason modal, tabs for CS/Sales/Mentor agents, process queue button, stats cards (Total/Active/Paused/Window)
-- **Transfer Requests Page** (`/transfer-requests`): Dual-approval workflow UI, tabs for Pending 1st Approval/Awaiting CEO/Approved/Rejected, new transfer request modal (Lead/Student/Mentor Student), approval chain display, approve/reject modal with comments
-- **Salary Estimation Widget** on HR Dashboard: Total Gross/Net/Deductions/Employees, department breakdown, detailed employee drill-down modal
-- **Navigation**: Both pages added to Operations sidebar section in Layout
+- **Round Robin Controls** (`/round-robin`): CS window status, agent pause/resume toggles
+- **Transfer Requests** (`/transfer-requests`): Dual-approval workflow UI
+- **Salary Estimation Widget** on HR Dashboard
+
+### Completed: Connector Fix
+- Fixed "Failed to create connector" error (MongoDB `_id` serialization bug)
 
 ### Previously Completed
 - Interactive Drill-Down Analytics V2 (All Dashboards)
@@ -22,21 +34,14 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - INR Currency in Finance Settings
 - Enhanced Lead Pool (Assignment Tracking, Bulk Assign, History)
 - Google Sheets Agent Connector (5-min sync)
-- Backend for Dual-Approval Reassignments, CS Round Robin Time Window, Email Notifications on Assignment
-- Salary Estimation API endpoint
+- Backend for Dual-Approval Reassignments, CS Round Robin Time Window, Email Notifications
 
-### New Routes Added
-- `/transfer-requests` → TransferRequestsPage
-- `/round-robin` → RoundRobinPage
-
-### Key API Endpoints
-- `GET /api/round-robin/status` — Agent list with pause status, CS window info
-- `POST /api/round-robin/toggle-agent` — Pause/resume agent
-- `POST /api/round-robin/process-cs-queue` — Process queued students
-- `GET /api/transfers/requests` — Transfer requests filtered by status
-- `POST /api/transfers/request` — Create new transfer request
-- `POST /api/transfers/{request_id}/approve` — Approve/reject transfer
-- `GET /api/hr/salary-estimation` — Salary breakdown by dept/team/employee
+### Key API Endpoints (New)
+- `GET /api/sla/rules` — All SLA rules (optional `?department=X` filter)
+- `POST /api/sla/rules` — Create new SLA rule
+- `PUT /api/sla/rules/{id}` — Update SLA rule
+- `PATCH /api/sla/rules/{id}/toggle` — Toggle active/inactive
+- `DELETE /api/sla/rules/{id}` — Delete SLA rule
 
 ---
 
