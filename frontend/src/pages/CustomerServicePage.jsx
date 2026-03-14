@@ -84,14 +84,23 @@ const CS_STAGES = [
 const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const isUpgradedStudent = student.is_upgraded_student;
+    const isNewImport = student.is_new_from_import;
     const courseLevel = student.course_level || '';
     const courseName = courseLevel || student.current_course_name || student.package_bought;
     const courseColors = getCourseColor(courseName);
     const nextLevel = courseColors.next;
 
+    // New imported students get a distinct cyan/teal highlight
+    const cardBorder = isNewImport
+        ? 'border-2 border-cyan-400 dark:border-cyan-600 ring-1 ring-cyan-400/30'
+        : isUpgradedStudent ? `${courseColors.border} border-2` : '';
+    const cardBg = isNewImport
+        ? 'bg-cyan-50/50 dark:bg-cyan-900/20'
+        : isUpgradedStudent ? courseColors.bg : '';
+
     return (
         <div
-            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${isUpgradedStudent ? `${courseColors.bg} ${courseColors.border} border-2` : ''}`}
+            className={`kanban-card stage-${student.stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${cardBg} ${cardBorder}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`student-card-${student.id}`}
         >
@@ -100,12 +109,15 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                     <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
                         <GripVertical className="h-4 w-4" />
                     </div>
-                    <div className={`w-8 h-8 rounded-full ${isUpgradedStudent ? courseColors.bg + ' ' + courseColors.text : 'bg-emerald-600 text-white'} flex items-center justify-center text-sm font-medium`}>
+                    <div className={`w-8 h-8 rounded-full ${isNewImport ? 'bg-cyan-500 text-white' : isUpgradedStudent ? courseColors.bg + ' ' + courseColors.text : 'bg-emerald-600 text-white'} flex items-center justify-center text-sm font-medium`}>
                         {student.full_name?.charAt(0) || '?'}
                     </div>
                     <div>
                         <div className="flex items-center gap-1">
                             <p className="font-medium text-sm">{student.full_name}</p>
+                            {isNewImport && (
+                                <Badge className="bg-cyan-500 text-white text-[10px] px-1 py-0">NEW</Badge>
+                            )}
                             {isUpgradedStudent && (
                                 <Badge className="bg-emerald-500 text-white text-[10px] px-1 py-0">
                                     <ArrowUp className="h-2 w-2 mr-0.5" />

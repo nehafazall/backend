@@ -6457,16 +6457,14 @@ async def get_cs_leaderboard(user = Depends(get_current_user)):
         # Count completed onboarding
         onboarded = await db.students.count_documents({"cs_agent_id": agent_id, "onboarding_complete": True})
         
-        # Count upgrades
-        upgrades = await db.students.count_documents({"cs_agent_id": agent_id, "upgrade_closed": True})
-        
-        # Sum upgrade revenue
-        revenue_pipeline = [
-            {"$match": {"cs_agent_id": agent_id, "upgrade_closed": True}},
-            {"$group": {"_id": None, "total": {"$sum": "$upgrade_amount"}}}
+        # Count upgrades from cs_upgrades collection (accurate per-agent)
+        upgrade_pipeline = [
+            {"$match": {"cs_agent_id": agent_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}
         ]
-        revenue_result = await db.students.aggregate(revenue_pipeline).to_list(1)
-        revenue = revenue_result[0]["total"] if revenue_result else 0
+        upgrade_result = await db.cs_upgrades.aggregate(upgrade_pipeline).to_list(1)
+        upgrade_count = upgrade_result[0]["count"] if upgrade_result else 0
+        revenue = upgrade_result[0]["total"] if upgrade_result else 0
         
         onboarding_rate = round((onboarded / students * 100) if students > 0 else 0, 1)
         
@@ -6475,7 +6473,7 @@ async def get_cs_leaderboard(user = Depends(get_current_user)):
             "name": agent.get("full_name"),
             "role": agent.get("role"),
             "students": students,
-            "upgrades": upgrades,
+            "upgrades": upgrade_count,
             "revenue": revenue,
             "onboarding_rate": onboarding_rate
         })
