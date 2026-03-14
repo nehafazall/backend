@@ -231,7 +231,7 @@ const CSDashboard = () => {
             </div>
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className={`grid grid-cols-2 ${isHeadOrAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-3'} gap-4`}>
                 <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20">
                     <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Achieved Revenue</p><p className="text-2xl font-bold font-mono text-emerald-500 mt-1" data-testid="achieved-revenue">{fmtCur(stats.achieved_revenue)}</p><p className="text-xs text-muted-foreground mt-1">{stats.achieved_count || 0} upgrades</p></div><div className="p-2.5 rounded-xl bg-emerald-500/20"><DollarSign className="h-6 w-6 text-emerald-500" /></div></div></CardContent>
                 </Card>
@@ -241,12 +241,16 @@ const CSDashboard = () => {
                 <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
                     <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Agent Commission</p><p className="text-2xl font-bold font-mono text-blue-500 mt-1" data-testid="agent-commission">{fmtCur(stats.total_agent_commission)}</p></div><div className="p-2.5 rounded-xl bg-blue-500/20"><Award className="h-6 w-6 text-blue-500" /></div></div></CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
-                    <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Head Commission</p><p className="text-2xl font-bold font-mono text-purple-500 mt-1" data-testid="head-commission">{fmtCur(stats.total_head_commission)}</p></div><div className="p-2.5 rounded-xl bg-purple-500/20"><ShieldCheck className="h-6 w-6 text-purple-500" /></div></div></CardContent>
-                </Card>
-                <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-                    <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Commission</p><p className="text-2xl font-bold font-mono text-primary mt-1" data-testid="total-commission">{fmtCur(stats.total_commission)}</p></div><div className="p-2.5 rounded-xl bg-primary/20"><Zap className="h-6 w-6 text-primary" /></div></div></CardContent>
-                </Card>
+                {isHeadOrAdmin && (
+                    <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
+                        <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Head Commission</p><p className="text-2xl font-bold font-mono text-purple-500 mt-1" data-testid="head-commission">{fmtCur(stats.total_head_commission)}</p></div><div className="p-2.5 rounded-xl bg-purple-500/20"><ShieldCheck className="h-6 w-6 text-purple-500" /></div></div></CardContent>
+                    </Card>
+                )}
+                {isHeadOrAdmin && (
+                    <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+                        <CardContent className="pt-5 pb-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Commission</p><p className="text-2xl font-bold font-mono text-primary mt-1" data-testid="total-commission">{fmtCur(stats.total_commission)}</p></div><div className="p-2.5 rounded-xl bg-primary/20"><Zap className="h-6 w-6 text-primary" /></div></div></CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* Agent Revenue + Leaderboard */}

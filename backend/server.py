@@ -6748,6 +6748,20 @@ async def get_cs_dashboard_stats(
     pipeline_revenue = pipeline_rev[0]["total"] if pipeline_rev else 0
     pipeline_count = pipeline_rev[0]["count"] if pipeline_rev else 0
     
+    # Hide head commission from regular CS agents
+    role = user.get("role", "")
+    if role == "cs_agent":
+        return {
+            "achieved_revenue": achieved_revenue,
+            "achieved_count": achieved_count,
+            "pipeline_revenue": pipeline_revenue,
+            "pipeline_count": pipeline_count,
+            "total_agent_commission": total_agent_commission,
+            "total_head_commission": 0,
+            "total_commission": total_agent_commission,
+            "total_upgrades": achieved_count,
+        }
+    
     return {
         "achieved_revenue": achieved_revenue,
         "achieved_count": achieved_count,
