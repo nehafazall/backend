@@ -12,6 +12,7 @@ import {
     GenderRatioCard,
     LeaveSummaryCard
 } from './HRDashboardCards';
+import { SalaryEstimationWidget } from '@/components/hr/SalaryEstimationWidget';
 
 const HRDashboard = () => {
     const [dashboard, setDashboard] = useState(null);
@@ -52,6 +53,8 @@ const HRDashboard = () => {
                     <RefreshCw className="h-4 w-4 mr-2" />Refresh
                 </Button>
             </div>
+
+            <SalaryEstimationWidget />
 
             <WorkforceCards workforce={dashboard.workforce} />
 

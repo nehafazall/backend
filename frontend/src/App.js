@@ -93,6 +93,10 @@ import MarketingConnectorsPage from "@/pages/marketing/MarketingConnectorsPage";
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
 
+// Operational Controls
+import TransferRequestsPage from "@/pages/TransferRequestsPage";
+import RoundRobinPage from "@/pages/RoundRobinPage";
+
 import Layout from "@/components/Layout";
 
 // Protected Route Component
@@ -444,6 +448,20 @@ function AppRoutes() {
                 <Route path="password-resets" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <PasswordResetPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Transfer Requests (Dual Approval) */}
+                <Route path="transfer-requests" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master']}>
+                        <TransferRequestsPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Round Robin Controls */}
+                <Route path="round-robin" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'cs_head']}>
+                        <RoundRobinPage />
                     </ProtectedRoute>
                 } />
                 
