@@ -1,77 +1,69 @@
 <analysis>**original_problem_statement:**
-The user is continuing to build out a comprehensive business management system. The latest series of requests focused on implementing several new features and enhancements across the HR, Customer Service, Finance, and Settings modules, along with refactoring core access control logic.
-
-**PRODUCT REQUIREMENTS:**
-1.  **CS Upgrade & Commission System:**
-    *   Create a pop-up in the CS Kanban board when a student is moved to pitched, allowing the agent to select an upgrade package and price.
-    *   On moving to upgraded, trigger a confirmation modal to verify the package and record payment details (including a screenshot for finance verification).
-    *   Calculate and record commissions for the CS agent and CS head based on a predefined commission structure.
-    *   After a successful upgrade, the student should return to the new_student stage for re-activation.
-    *   Add a  field to the student card and detail modal.
-2.  **CS Dashboard:** Build a new dashboard for the CS team showing:
-    *   KPIs: Achieved Revenue, Pipeline Revenue, Commissions.
-    *   Individual vs. Team view toggle for CS Heads.
-    *   Charts for Agent Revenue, Monthly Revenue Trend, and This Month vs. Last Month comparison.
-    *   A leaderboard for top-performing agents.
-3.  **Employee Master Enhancements:**
-    *   Fix a bug where salary inputs show a leading zero (e.g.,  instead of ).
-    *   Add a  date field for employees with Resigned or Terminated status.
-    *   Add a  (e.g., Bank Transfer, Cash) field to the salary details section.
-4.  **Role & Access Control Refactor:**
-    *   Remove the confusing Module Access controls from the Role Management page.
-    *   Make the Access Control page dynamically pull the list of roles from the API.
-    *   Ensure all sidebar navigation is strictly controlled by the permissions set in the Access Control module.
-5.  **Dual-Role UI:**
-    *   For managers (CS Head, Master of Academics), add a toggle on their respective pages to switch between My Students and Team Overview.
-    *   For CEO/super_admin roles, add a Pending Approvals widget to the main dashboard for quick access to leaves, payroll, etc.
-6.  **Finance Settings Enhancements:**
-    *   Add a VAT on Fee percentage field to the Payment Gateway (PSP) configuration.
-    *   Change the PSP Bank Mapping form to use a dropdown selector of existing bank accounts instead of manual text inputs.
+The user requested a series of new features and operational enhancements for their business management system:
+1.  **Salary Estimation:** A feature to calculate the total estimated gross salary payout based on employee data.
+2.  **Customer Service (CS) Operations:**
+    *   Implement a time window for the round-robin distribution of enrolled students to CS agents, active only from 10:00 AM to 10:00 PM (GST+4). Students enrolled outside this window should be queued and distributed the next day.
+    *   Provide the ability to pause or disable the round-robin for specific agents (e.g., if they are on vacation).
+3.  **Lead/Student Reassignment Workflows:**
+    *   **CS:** A user can request to reassign a student to another CS agent with a reason. The request requires approval from the CS Head, followed by a final approval from the CEO.
+    *   **Sales:** A Team Leader can request to reassign a lead within their team. This requires a dual approval: first from the Team Leader, then final approval from the CEO. Cross-functional reassignments are handled by the CEO/super\_admin.
+    *   **Mentors:** Reassignment requests can be initiated, requiring approval from the Master of Academics (with a toggle to enable/disable this permission) and a final approval from the CEO.
+4.  **Email Notifications:** Send an email notification to an agent (Sales, CS, or Mentor) whenever a new lead or student is assigned to them.
+5.  **Dashboard Drill-Downs (Follow-up):** The initial implementation of dashboard drill-downs was not working as expected. Users were unable to click on chart elements (Top 10 Agents, Team Revenue, etc.) to see detailed data. The data displayed in modals was also incorrect or incomplete.
+6.  **Finance Currency:** Add 'INR' as a currency option in the Bank Accounts and Payment Gateway sections of the Finance Settings.
+7.  **Google Sheets Integration:** Connect 17 individual agent Google Sheets to their respective agent profiles in the CRM. Leads should sync from these sheets into the CRM every 5 minutes. Rejected leads in the CRM should automatically move to a Lead Pool for later reassignment, with tracking of who rejected the lead and how many times it has been assigned.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack business management system. The agent has successfully implemented a large number of features in this session, including a complete Customer Service upgrade and commission system, a new CS dashboard, a major refactor of the role and permissions system, several enhancements to the Employee Master module, and a new dual-role UI for managers and the CEO. The backend has been extended with numerous new models and API endpoints to support these features, and the frontend has been significantly updated.
+The agent has successfully implemented the backend logic for most of the user's recent requests. This includes new API endpoints for a dual-approval reassignment system, controls for a time-windowed round-robin, an endpoint for salary estimation, and email notifications on lead assignment. The dashboard drill-down bugs have been fixed and verified. The advanced Google Sheets sync and enhanced Lead Pool are also complete. However, the frontend for several of the new backend features (reassignments, round-robin controls, salary estimation) has only just been started, with placeholder files created but not yet implemented or integrated into the application's navigation.
 
 **Last working item**:
--   **Last item agent was working:** Refactoring the PSP Bank Mapping page in Finance Settings. The goal was to replace manual text inputs for bank details with a dropdown selector that loads data from the  endpoint.
+-   **Last item agent was working:** Creating the frontend pages for the new operational controls. The agent created skeleton files for a  and .
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend testing agent. The agent should instruct the tester to navigate to Finance Settings -> PSP Bank Mapping, click Add New Mapping, and verify that a dropdown for bank accounts is present and functional.
+-   **Which testing method agent to use?** both.
+    -   **Backend:** Use  to test all the new endpoints created in  for salary estimation, transfer requests (CS, Sales, Mentor), and round-robin controls.
+    -   **Frontend:** Use the frontend testing agent to verify the new pages (, ) and the new Salary Estimation widget once they are fully implemented and integrated.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   There are no outstanding bugs. The only pending item is the completion and verification of the Last working item task.
+-   There are no outstanding bugs. The work is focused on completing the in-progress feature implementation.
 
 **In progress Task List**:
--   **Task 1: Verify PSP Bank Mapping UI Change (P0)**
-    -   **Description:** The user wants the PSP Bank Mapping form to use a dropdown of existing bank accounts instead of manual text fields. The agent has written the code but has not yet visually verified that the new dropdown appears and functions correctly on the frontend.
-    -   **Where to resume:** The code is implemented in . The next step is to test the change. A screenshot of the Add New Mapping modal showing the bank account dropdown would be sufficient for verification.
-    -   **What will be achieved with this?** This will improve data consistency by ensuring PSPs are mapped to valid, existing bank accounts from the Chart of Accounts.
-    -   **Status:** USER VERIFICATION PENDING
-    -   **Should Test frontend/backend/both after fix?** Frontend
+-   **Task 1: Complete and Integrate New Frontend Features (P0)**
+    -   **Description:** The backend for salary estimation, reassignments, and round-robin controls is complete, but the user cannot access these features. The agent needs to build out the UI, connect it to the new APIs, and integrate it into the application.
+    -   **Where to resume:**
+        1.  **Salary Estimation:** Create a new widget and add it to a relevant dashboard (e.g., ) that calls the  endpoint and displays the total gross salary.
+        2.  **Transfer Requests Page:** Fully implement  to fetch data from , display pending requests, and allow authorized users (Heads, CEO) to approve or reject them by calling the approval endpoints.
+        3.  **Round Robin Controls Page:** Fully implement  to display the CS round-robin status (active/inactive time window) and a list of agents with toggles to pause/resume them using the  endpoint.
+        4.  **Navigation:** Add links to the new Transfer Requests and Round Robin Controls pages in the main application layout, likely within the Settings menu in .
+    -   **What will be achieved with this?** This will make the newly developed backend features accessible and usable for administrators and team leads.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Both
     -   **Blocked on something:** No.
 
 **Upcoming and Future Tasks**
-
 **Upcoming Tasks:**
--   **P1: User Verification for Google Sheets:** The previously fixed Google Sheets connector is still awaiting user testing and confirmation.
+-   **P1: User Verification for Google Sheets:** The complex Google Sheets connector and Lead Pool enhancements have been implemented but are awaiting user testing and confirmation.
 
 **Future Tasks:**
 -   **P2: Refactor :** Break down the monolithic  into domain-specific route files (e.g., , ) to improve maintainability.
--   **P2: Course and Commission Configuration:** Implement a dedicated UI for setting up courses and a multi-level commission structure for the sales team (currently blocked awaiting business logic from the user).
+-   **P2: Course and Commission Configuration:** Implement a dedicated UI for setting up courses and a multi-level commission structure.
 -   **P2: Implement Payslip Generation.**
 -   **P2: Integrate with Google Ads API.**
--   **P2: Resolve Babel Plugin :** Fix the recurring  in  instead of using the current workaround of disabling it.
+-   **P2: Resolve Babel Plugin :** Fix the recurring  in .
 
 **Completed work in this session**
--   **CS Upgrade & Commission System:** Implemented the full workflow from pitching an upgrade in the Kanban to payment confirmation and commission calculation. Verified with the testing agent.
--   **New CS Dashboard:** Built and deployed a new comprehensive dashboard for the Customer Service team with KPIs, charts, and a leaderboard. Verified with the testing agent.
--   **Role & Access Control Refactor:** Centralized permission management in the Access Control page and updated the UI and navigation to be driven entirely by this system. Verified with screenshots.
--   **Dual-Role UI (Managers & CEO):** Added My Students/Team view toggles for managers and a Pending Approvals widget for the CEO. Verified with the testing agent.
--   **Employee Master Fixes & Features:** Fixed a salary input bug, and added  and  fields. Verified with screenshots.
--   **Finance Settings - PSP VAT:** Added a  field to the Payment Gateway configuration. Verified with .
--   **Global UI/UX Improvements:** Made all modals in the application scrollable and improved color contrast for themes.
+-   **Dashboard Drill-Downs (Fixed):** Reworked and fixed the interactive charts on the Sales, CS, Mentor, and CEO dashboards. Users can now click on chart elements to open a modal with accurate, detailed drill-down data. Validated with the testing agent.
+-   **Advanced Lead Pool & Google Sheets Sync:** Implemented a system to connect multiple agent-specific Google Sheets for lead syncing. Created an enhanced Lead Pool page with bulk assignment, team/agent filters, and assignment history tracking. Implemented the logic to automatically move rejected leads to this pool.
+-   **Backend for Operational Controls:**
+    -   **Dual-Approval Reassignments:** Created the complete backend workflow and API endpoints for multi-step approval for reassigning leads and students across Sales, CS, and Mentor teams.
+    -   **CS Round Robin Management:** Implemented the backend logic for a time-windowed (10 AM - 10 PM) CS round-robin system, including a student queue and endpoints to pause/resume individual agents.
+    -   **Email Notifications:** Integrated  utility to automatically notify agents upon assignment of a lead or student.
+-   **Salary Estimation API:** Created the  endpoint to calculate total gross salary.
+-   **Auto Dark/Light Theme:** Implemented an automatic theme switcher based on the user's timezone (GMT+4), with a manual override toggle.
+-   **Finance Currency Update:** Added 'INR' to the currency dropdowns in the Finance Settings.
 
 **Earlier issues found/mentioned but not fixed**
 -   The  in  remains unresolved and is only mitigated by disabling the plugin.
@@ -85,79 +77,90 @@ The application is a full-stack business management system. The agent has succes
 
 
 **Key Technical Concepts**
--   **Dynamic UI Rendering:** Conditionally showing/hiding UI elements based on user role (), data state ( field), and user interaction ( toggle).
--   **Complex Modal-Driven Workflows:** Orchestrating a multi-step user journey (CS Upgrade) through a series of interconnected modals and API calls.
--   **Centralized Permission Management:** Refactoring the application to use a single source of truth () for dynamic, role-based navigation and feature access.
--   **API-Driven Components:** Modifying components to fetch their configuration or data dynamically (e.g., loading roles in , loading bank accounts in ).
--   **Backend Data Aggregation:** Creating new, complex MongoDB aggregation pipelines to power dashboard analytics (e.g., CS commission and revenue calculations).
+-   **Dual-Approval Workflow:** Implementing a multi-step, stateful approval process involving different user roles (Team Lead, Head, CEO).
+-   **Time-based Job Queuing:** Using a temporary in-memory queue () to hold tasks (student assignments) that fall outside a specified time window.
+-   **Background Task Processing:** Leveraging the existing  background job to periodically process the student queue.
+-   **Dynamic API-driven UI:** Building frontend interfaces that reflect and control backend states, such as pausing/resuming agents in the round-robin system.
+-   **SMTP Integration:** Utilizing the existing email service to send automated notifications for key business events.
+-   **Interactive Data Visualization:** Fixing and enhancing  components to support reliable  events for drill-down functionality.
+-   **Complex Data Aggregation:** Creating backend endpoints to aggregate data for analytics (e.g., Salary Estimation, Lead Pool stats).
 
 **key DB schema**
--   **:** The  sub-document now includes . A new top-level field  has been added.
--   **:** A new field  has been added.
--   **:** The fields , , and  are being deprecated in favor of  which links to the  collection.
--   ** (New Collection):** Stores commission records for CS upgrades. Includes , , , , , etc.
--   ** (New Collection):** Logs each student upgrade event, including , , , , .
+-   **:** Modified to include  to track each assignment and its outcome, and .
+-   **:** Modified to include  to control participation in distribution logic.
+-   ** (New Collection):** Implicitly created to store the state of pending reassignments, including  (lead/student), , , , , , , and .
 
 **All files of reference**
--    (Last file worked on)
--    (Contains all new backend logic)
--    (Contains the complex upgrade flow logic)
--    (New dashboard implementation)
--    (Core of the new permissions system)
--    (Contains CEO widget logic)
--    (Contains salary form fixes and new fields)
+-    (Contains all new backend logic for the last set of features)
+-    (New file, needs implementation)
+-    (New file, needs implementation)
+-    (Contains the enhanced Lead Pool UI)
+-    (Example of fixed drill-down implementation)
+-    (Example of fixed drill-down implementation)
+-    (Contains the new auto-theme logic)
 
 **Areas that need refactoring**:
--   **:** This monolithic file has grown even larger and is a high-priority technical debt item. It should be broken down into smaller, domain-specific router files.
+-   **:** This monolithic file has become critically large and complex after adding dozens of new endpoints for approvals, operational controls, and notifications. It is a high-priority technical debt item and should be broken down into smaller, domain-specific router files.
 
 **key api endpoints**
--   **NEW:** , , 
--   **NEW:** , , , , 
--   **MODIFIED:**  (now accepts )
--   **MODIFIED:**  (now accepts )
--   **MODIFIED:** ,  (now accept )
--   **MODIFIED:** ,  (now accept )
--   **MODIFIED:** ,  (now accept  query param for team vs. individual views)
--   **MODIFIED:**  (now used by Access Control page)
+-   **NEW (Salary):** 
+-   **NEW (Reassignments):**
+    -   , , 
+    -   
+    -   
+-   **NEW (Round Robin):**
+    -   
+    -   
+    -   
+-   **NEW (Lead Pool):** 
+-   **MODIFIED (Drill-Downs):**
+    -   
+    -   
+    -   
+-   **MODIFIED (Leads):**
+    -    (Auto-moves to pool on 'Rejected')
+    -    (Sends email notification)
+-   **MODIFIED (Students):**
+    -    (Queues student if outside hours, sends email)
 
 **Critical Info for New Agent**
--   Your first action should be to verify the last piece of work: the PSP Bank Mapping UI change. Navigate to the page and confirm the text inputs have been replaced by a functional bank account dropdown.
--   The user has been providing feature requests in rapid succession. Be prepared to plan and implement a new set of tasks after completing the current one.
--   The agent has been successfully using a combination of , screenshots, and the  for validation. Continue this practice. All major features completed in this fork have been successfully tested.
--   The  file is becoming critically large. Any new backend work should be done with extreme care, and a refactor should be proposed to the user soon.
+-   Your immediate task is to build the frontend interfaces for the recently completed backend features. The backend logic is in place, but there is no way for a user to interact with the new reassignment, round-robin, or salary estimation features.
+-   Start by implementing the functionality in the placeholder files:  and . Then, create the salary widget. Finally, add links to these new pages in the main navigation layout.
+-   The user is highly engaged and provides detailed, multi-part requests. It is crucial to create a clear plan, get user approval via , and then execute.
+-   The  file is extremely large. Be cautious when adding new logic and strongly consider proposing a refactor to break it into smaller route files as the next major technical task.
 
 **documents and test reports created in this job**
--    (Updated multiple times)
--   Multiple test reports in  from successful test agent runs.
+-    (Updated)
+-   Multiple test reports in  from validating the dashboard drill-down fixes.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests to add a VAT field to Payment Gateway (PSP) fees.
-2.  **Agent:** Implements the backend and frontend changes for the VAT field.
-3.  **Agent:** Verifies the change with  and confirms the calculation is correct.
-4.  **User:** Requests to change the PSP Bank Mapping to use a dropdown of existing bank accounts, not manual text fields.
-5.  **Agent:** Investigates and finds the necessary  endpoint already exists.
-6.  **Agent:** Plans the change: fetch bank accounts, replace inputs with a Select component.
-7.  **Agent:** Implements all code changes in .
-8.  **Agent:** Compiles the frontend successfully.
-9.  **Agent:** Takes a screenshot to verify, but it shows the parent Finance Settings page, not the mapping form itself.
-10. **Agent:** Realizes the need to click the sidebar link to view the correct page and attempts to do so, but the session ends before the result is shown.
+1.  **User:** Requests a total estimated gross salary feature.
+2.  **User:** Requests a time window (10 AM-10 PM) for CS round-robin and the ability to pause agents.
+3.  **User:** Requests email notifications on lead/student assignments.
+4.  **User:** Details a dual-approval reassignment workflow for CS (CS Head -> CEO).
+5.  **User:** Details a reassignment workflow for Sales and Mentors with CEO approval.
+6.  **Agent:** Presents a consolidated plan covering all new requests (Salary, CS Ops, Reassignments, Emails).
+7.  **User:** Approves the plan, clarifying that Sales reassignments also need dual approval (Team Leader -> CEO).
+8.  **Agent:** Explores existing code for approvals, emails, and round-robin.
+9.  **Agent:** Implements all backend changes: adds new models, modifies  with all new endpoints and logic for queuing, notifications, and approvals.
+10. **Agent:** Creates skeleton frontend files  and  before the session ended.
 
 **Project Health Check:**
 -   **Broken:** None. The application is stable.
 -   **Mocked:** None.
--   **In Progress:** The PSP Bank Mapping page UI has been updated in code but not yet visually confirmed.
+-   **In Progress:** The entire feature suite for HR/Ops controls (Salary Estimation, Reassignments, Round Robin Management) is in progress. The backend is mostly implemented, while the frontend is in the initial creation stage.
 
 **3rd Party Integrations**
--   APScheduler
+-   **Google Sheets API:** Central to the lead ingestion workflow.
+-   **APScheduler:** Used for background tasks, including the 5-minute sheet sync and the new CS student queue processing.
+-   **SMTP (via Gmail):** Actively used for sending email notifications on assignments.
 -   Meta Ads API
--   Google Sheets API
 -   ZK BioCloud (via web scraping)
--   SMTP (via Gmail)
 -   
 -   
 
 **Testing status**
--   **Testing agent used after significant changes:** YES. Used multiple times to validate large features like the CS Upgrade Flow, CS Dashboard, and Dual-Role UI, with 100% pass rates.
+-   **Testing agent used after significant changes:** YES. Used to validate the fix for the dashboard drill-down feature.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** None.
 -   **Known regressions:** None.
@@ -168,4 +171,7 @@ The application is a full-stack business management system. The agent has succes
     -   Password: 
 
 **What agent forgot to execute**
--   The agent did not complete the final verification step for the last task. They implemented the code to change the PSP Bank Mapping form but did not take a screenshot or otherwise confirm that the new bank account dropdown is visible and working on the frontend.</analysis>
+-   The agent created the component files for the new frontend pages (, ) but did not implement their UI or logic.
+-   The new pages have not been added to the application's navigation/routing, making them inaccessible.
+-   The Salary Estimation widget for the frontend was planned but not created.
+-   No functional testing ( or otherwise) was performed on any of the newly created backend endpoints in . Only a syntax check was done.</analysis>

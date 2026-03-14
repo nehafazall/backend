@@ -1163,6 +1163,23 @@ async def get_round_robin_agent(role: str, region: str = None, department: str =
     """Get next available agent using round-robin with fallback to any agent if regional match not found"""
     query = {"role": role, "is_active": True}
     
+    # Check if round robin is paused for this role
+    # Exclude agents with round_robin_paused = True
+    query["$or"] = [
+        {"round_robin_paused": {"$exists": False}},
+        {"round_robin_paused": False}
+    ]
+    
+    # For CS agents: check time window (10 AM - 10 PM Abu Dhabi / GST+4)
+    if role in ["cs_agent", "cs_head"]:
+        from datetime import timezone as tz, timedelta
+        abu_dhabi_tz = tz(timedelta(hours=4))
+        now_ad = datetime.now(abu_dhabi_tz)
+        current_hour = now_ad.hour
+        if current_hour < 10 or current_hour >= 22:
+            # Outside 10 AM - 10 PM window; queue for later
+            return None
+    
     # First try with region filter if provided
     if region:
         query["region"] = region
@@ -3030,6 +3047,15 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
             entity_type="lead",
             entity_id=new_lead["id"]
         )
+        # Send email notification to sales agent
+        if is_email_configured() and assigned_agent.get("email"):
+            try:
+                await send_email_async(
+                    assigned_agent["email"],
+                    f"New Lead Assigned: {data.full_name}",
+                    f"<h3>New Lead Assigned to You</h3><p>Lead <b>{data.full_name}</b> has been assigned to you.</p><p>Phone: {data.phone}</p><p>Please make first contact within 60 minutes.</p>"
+                )
+            except: pass
     
     return {k: v for k, v in new_lead.items() if k != "_id"}
 
@@ -3145,6 +3171,19 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                     "warning",
                     f"/cs/students/{student_data['id']}"
                 )
+                # Send email notification to the CS agent
+                if is_email_configured() and cs_agent.get("email"):
+                    try:
+                        await send_email_async(
+                            cs_agent["email"],
+                            f"New Student Assigned: {existing['full_name']}",
+                            f"<h3>New Student Assigned to You</h3><p>Student <b>{existing['full_name']}</b> has been enrolled and assigned to you.</p><p>Please make the activation call within 15 minutes.</p><p>Phone: {existing.get('phone','N/A')}</p>"
+                        )
+                    except: pass
+            else:
+                # Outside CS hours (10 PM - 10 AM GST+4) or no agents: queue for later
+                student_data["cs_queued"] = True
+                student_data["cs_queued_at"] = now.isoformat()
             
             await db.students.insert_one(student_data)
             
@@ -3474,6 +3513,394 @@ async def bulk_assign_leads_from_pool(
     await log_activity("leads_pool", "bulk", "bulk_assign", user, {"count": assigned, "agent": agent["full_name"]})
     
     return {"message": f"{assigned} leads assigned to {agent['full_name']}", "assigned": assigned}
+
+# ==================== TRANSFER REQUESTS (DUAL APPROVAL) ====================
+
+@api_router.post("/transfers/request")
+async def create_transfer_request(
+    data: dict,
+    user=Depends(get_current_user)
+):
+    """Create a transfer request for lead/student between agents. Requires dual approval."""
+    entity_type = data.get("entity_type")  # "lead", "student", "mentor_student"
+    entity_id = data.get("entity_id")
+    to_agent_id = data.get("to_agent_id")
+    reason = data.get("reason", "")
+    
+    if not entity_type or not entity_id or not to_agent_id:
+        raise HTTPException(status_code=400, detail="entity_type, entity_id, and to_agent_id required")
+    
+    to_agent = await db.users.find_one({"id": to_agent_id})
+    if not to_agent:
+        raise HTTPException(status_code=404, detail="Target agent not found")
+    
+    # Get entity details
+    if entity_type == "lead":
+        entity = await db.leads.find_one({"id": entity_id})
+        entity_name = entity.get("full_name", "Unknown") if entity else "Unknown"
+        from_agent_name = entity.get("assigned_to_name", "Unknown") if entity else "Unknown"
+        from_team = entity.get("team_name", "") if entity else ""
+    elif entity_type in ["student", "mentor_student"]:
+        entity = await db.students.find_one({"id": entity_id})
+        entity_name = entity.get("full_name", "Unknown") if entity else "Unknown"
+        if entity_type == "student":
+            from_agent_name = entity.get("cs_agent_name", "Unknown") if entity else "Unknown"
+        else:
+            from_agent_name = entity.get("mentor_name", "Unknown") if entity else "Unknown"
+        from_team = ""
+    else:
+        raise HTTPException(status_code=400, detail="entity_type must be lead, student, or mentor_student")
+    
+    if not entity:
+        raise HTTPException(status_code=404, detail=f"{entity_type} not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Determine approval chain based on type
+    if entity_type == "lead":
+        # Sales: Team Leader first, then CEO
+        first_approver_role = "team_leader"
+        final_approver_role = "super_admin"
+    elif entity_type == "student":
+        # CS: CS Head first, then CEO
+        first_approver_role = "cs_head"
+        final_approver_role = "super_admin"
+    elif entity_type == "mentor_student":
+        # Mentor: CEO only (Master of Academics toggle future)
+        first_approver_role = "super_admin"
+        final_approver_role = "super_admin"
+    
+    transfer_request = {
+        "id": str(uuid.uuid4()),
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "entity_name": entity_name,
+        "from_agent_id": entity.get("assigned_to") or entity.get("cs_agent_id") or entity.get("mentor_id"),
+        "from_agent_name": from_agent_name,
+        "from_team": from_team,
+        "to_agent_id": to_agent_id,
+        "to_agent_name": to_agent["full_name"],
+        "to_team": to_agent.get("team_name", ""),
+        "reason": reason,
+        "requested_by_id": user.get("id"),
+        "requested_by_name": user.get("full_name"),
+        "status": "pending_first_approval",
+        "first_approver_role": first_approver_role,
+        "final_approver_role": final_approver_role,
+        "first_approval": None,
+        "final_approval": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    
+    await db.transfer_requests.insert_one(transfer_request)
+    del transfer_request["_id"]
+    
+    await log_activity("transfer", transfer_request["id"], "request_created", user, {
+        "entity_type": entity_type, "entity_name": entity_name,
+        "from": from_agent_name, "to": to_agent["full_name"],
+        "reason": reason
+    })
+    
+    # Notify first approvers
+    first_approvers = await db.users.find({"role": {"$in": [first_approver_role, "super_admin", "admin"]}, "is_active": True}).to_list(20)
+    for approver in first_approvers:
+        await create_notification(
+            approver["id"],
+            f"Transfer Request: {entity_name}",
+            f"{user.get('full_name')} requests transfer of {entity_name} from {from_agent_name} to {to_agent['full_name']}. Reason: {reason}",
+            "warning",
+            f"/approvals/transfers"
+        )
+    
+    return transfer_request
+
+@api_router.get("/transfers/requests")
+async def get_transfer_requests(
+    status: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get transfer requests. Filtered by role access."""
+    query = {}
+    if status:
+        query["status"] = status
+    if entity_type:
+        query["entity_type"] = entity_type
+    
+    requests = await db.transfer_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return requests
+
+@api_router.post("/transfers/{request_id}/approve")
+async def approve_transfer(
+    request_id: str,
+    data: dict,
+    user=Depends(get_current_user)
+):
+    """Approve a transfer request. Handles first and final approvals."""
+    req = await db.transfer_requests.find_one({"id": request_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="Transfer request not found")
+    
+    action = data.get("action", "approve")  # approve or reject
+    comment = data.get("comment", "")
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if action == "reject":
+        await db.transfer_requests.update_one({"id": request_id}, {"$set": {
+            "status": "rejected",
+            "rejected_by": user.get("full_name"),
+            "rejection_comment": comment,
+            "updated_at": now,
+        }})
+        await log_activity("transfer", request_id, "rejected", user, {"comment": comment})
+        return {"message": "Transfer request rejected"}
+    
+    user_role = user.get("role", "")
+    
+    if req["status"] == "pending_first_approval":
+        # Check if user can do first approval
+        allowed_first = [req["first_approver_role"], "super_admin", "admin"]
+        if user_role not in allowed_first:
+            raise HTTPException(status_code=403, detail=f"First approval requires role: {req['first_approver_role']}")
+        
+        # For mentor transfers where first == final approver
+        if req["first_approver_role"] == req["final_approver_role"]:
+            # Single approval - execute transfer
+            await execute_transfer(req, user, now)
+            await db.transfer_requests.update_one({"id": request_id}, {"$set": {
+                "status": "approved",
+                "first_approval": {"by": user.get("full_name"), "at": now, "comment": comment},
+                "final_approval": {"by": user.get("full_name"), "at": now, "comment": comment},
+                "updated_at": now,
+            }})
+            return {"message": "Transfer approved and executed"}
+        else:
+            # Move to pending final approval
+            await db.transfer_requests.update_one({"id": request_id}, {"$set": {
+                "status": "pending_final_approval",
+                "first_approval": {"by": user.get("full_name"), "at": now, "comment": comment},
+                "updated_at": now,
+            }})
+            # Notify CEO/super_admin
+            ceos = await db.users.find({"role": {"$in": ["super_admin", "admin"]}, "is_active": True}).to_list(10)
+            for ceo in ceos:
+                await create_notification(
+                    ceo["id"],
+                    f"Transfer Pending Final Approval: {req['entity_name']}",
+                    f"First approved by {user.get('full_name')}. {req['entity_name']} from {req['from_agent_name']} to {req['to_agent_name']}.",
+                    "warning",
+                    f"/approvals/transfers"
+                )
+            return {"message": "First approval done. Pending CEO approval."}
+    
+    elif req["status"] == "pending_final_approval":
+        # Final approval - must be CEO/super_admin
+        if user_role not in ["super_admin", "admin"]:
+            raise HTTPException(status_code=403, detail="Final approval requires CEO/Super Admin")
+        
+        await execute_transfer(req, user, now)
+        await db.transfer_requests.update_one({"id": request_id}, {"$set": {
+            "status": "approved",
+            "final_approval": {"by": user.get("full_name"), "at": now, "comment": comment},
+            "updated_at": now,
+        }})
+        return {"message": "Transfer approved and executed"}
+    else:
+        raise HTTPException(status_code=400, detail=f"Cannot approve request with status: {req['status']}")
+
+async def execute_transfer(req, approver, now):
+    """Execute the actual transfer after all approvals."""
+    entity_type = req["entity_type"]
+    entity_id = req["entity_id"]
+    to_agent = await db.users.find_one({"id": req["to_agent_id"]})
+    
+    if entity_type == "lead":
+        await db.leads.update_one({"id": entity_id}, {"$set": {
+            "assigned_to": req["to_agent_id"],
+            "assigned_to_name": req["to_agent_name"],
+            "team_name": to_agent.get("team_name", "") if to_agent else "",
+            "updated_at": now,
+        }, "$push": {"assignment_history": {
+            "agent_id": req["to_agent_id"],
+            "agent_name": req["to_agent_name"],
+            "team_name": to_agent.get("team_name", "") if to_agent else "",
+            "action": "transferred",
+            "from_agent": req["from_agent_name"],
+            "reason": req.get("reason", ""),
+            "approved_by": approver.get("full_name"),
+            "date": now,
+        }}, "$inc": {"times_assigned": 1}})
+    elif entity_type == "student":
+        await db.students.update_one({"id": entity_id}, {"$set": {
+            "cs_agent_id": req["to_agent_id"],
+            "cs_agent_name": req["to_agent_name"],
+            "updated_at": now,
+        }})
+    elif entity_type == "mentor_student":
+        await db.students.update_one({"id": entity_id}, {"$set": {
+            "mentor_id": req["to_agent_id"],
+            "mentor_name": req["to_agent_name"],
+            "updated_at": now,
+        }})
+    
+    # Email notify both agents
+    if is_email_configured() and to_agent and to_agent.get("email"):
+        try:
+            await send_email_async(
+                to_agent["email"],
+                f"Transfer: {req['entity_name']} assigned to you",
+                f"<h3>Transfer Approved</h3><p><b>{req['entity_name']}</b> has been transferred to you from {req['from_agent_name']}.</p><p>Reason: {req.get('reason', 'N/A')}</p>"
+            )
+        except: pass
+    
+    # Notify the requesting user
+    await create_notification(
+        req["requested_by_id"],
+        f"Transfer Approved: {req['entity_name']}",
+        f"Your transfer request for {req['entity_name']} to {req['to_agent_name']} has been approved.",
+        "success",
+        None
+    )
+
+# ==================== ROUND ROBIN CONTROLS ====================
+
+@api_router.post("/round-robin/toggle-agent")
+async def toggle_agent_round_robin(
+    data: dict,
+    user=Depends(require_roles(["super_admin", "admin", "sales_manager", "cs_head"]))
+):
+    """Pause/resume an agent's round robin participation (e.g., vacation/off)."""
+    agent_id = data.get("agent_id")
+    paused = data.get("paused", True)
+    reason = data.get("reason", "")
+    
+    if not agent_id:
+        raise HTTPException(status_code=400, detail="agent_id required")
+    
+    agent = await db.users.find_one({"id": agent_id})
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    await db.users.update_one({"id": agent_id}, {"$set": {
+        "round_robin_paused": paused,
+        "round_robin_pause_reason": reason if paused else "",
+        "round_robin_paused_at": datetime.now(timezone.utc).isoformat() if paused else None,
+    }})
+    
+    action = "paused" if paused else "resumed"
+    await log_activity("user", agent_id, f"round_robin_{action}", user, {"reason": reason})
+    
+    return {"message": f"Round robin {action} for {agent['full_name']}", "paused": paused}
+
+@api_router.get("/round-robin/status")
+async def get_round_robin_status(user=Depends(get_current_user)):
+    """Get round robin status for all agents."""
+    agents = await db.users.find(
+        {"role": {"$in": ["sales_executive", "cs_agent", "mentor"]}, "is_active": True},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "team_name": 1, "round_robin_paused": 1, "round_robin_pause_reason": 1, "round_robin_paused_at": 1}
+    ).to_list(200)
+    
+    # CS time window check
+    from datetime import timezone as tz, timedelta
+    abu_dhabi_tz = tz(timedelta(hours=4))
+    now_ad = datetime.now(abu_dhabi_tz)
+    cs_active = 10 <= now_ad.hour < 22
+    
+    return {
+        "agents": agents,
+        "cs_window": {
+            "active": cs_active,
+            "current_time_gst4": now_ad.strftime("%H:%M"),
+            "window": "10:00 AM - 10:00 PM GST+4",
+        }
+    }
+
+@api_router.post("/round-robin/process-cs-queue")
+async def process_cs_queue(user=Depends(require_roles(["super_admin", "admin"]))):
+    """Manually process queued CS students (assigned during off-hours)."""
+    queued = await db.students.find({"cs_queued": True, "cs_agent_id": {"$exists": False}}).to_list(100)
+    assigned_count = 0
+    
+    for student in queued:
+        cs_agent = await get_round_robin_agent("cs_agent")
+        if not cs_agent:
+            break
+        
+        await db.students.update_one({"id": student["id"]}, {"$set": {
+            "cs_agent_id": cs_agent["id"],
+            "cs_agent_name": cs_agent["full_name"],
+            "cs_queued": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+        await create_notification(
+            cs_agent["id"],
+            "New Student Assigned - URGENT",
+            f"Student {student.get('full_name', 'Unknown')} assigned to you. Make activation call!",
+            "warning",
+            f"/cs/students/{student['id']}"
+        )
+        assigned_count += 1
+    
+    return {"message": f"Processed {assigned_count} queued students", "processed": assigned_count, "remaining": len(queued) - assigned_count}
+
+# ==================== SALARY ESTIMATION ====================
+
+@api_router.get("/hr/salary-estimation")
+async def get_salary_estimation(user=Depends(get_current_user)):
+    """Get total estimated monthly gross salary outflow."""
+    employees = await db.employees.find({"status": "active"}, {"_id": 0}).to_list(500)
+    
+    total_gross = 0
+    total_net = 0
+    by_department = {}
+    by_team = {}
+    employee_details = []
+    
+    for emp in employees:
+        salary = emp.get("salary_structure", {})
+        if isinstance(salary, dict):
+            basic = float(salary.get("basic_salary") or salary.get("basic") or 0)
+            housing = float(salary.get("housing_allowance") or 0)
+            transport = float(salary.get("transport_allowance") or salary.get("transportation_allowance") or 0)
+            other = float(salary.get("other_allowance") or salary.get("other_allowances") or 0)
+            deductions = float(salary.get("deductions") or 0)
+        else:
+            basic = float(emp.get("basic_salary", 0) or 0)
+            housing = 0; transport = 0; other = 0; deductions = 0
+        
+        gross = basic + housing + transport + other
+        net = gross - deductions
+        total_gross += gross
+        total_net += net
+        
+        dept = emp.get("department", "Other")
+        by_department[dept] = by_department.get(dept, 0) + gross
+        
+        team = emp.get("team_name", "No Team")
+        by_team[team] = by_team.get(team, 0) + gross
+        
+        if gross > 0:
+            employee_details.append({
+                "name": emp.get("full_name", "Unknown"),
+                "department": dept,
+                "team": team,
+                "designation": emp.get("designation", ""),
+                "gross": gross,
+                "net": net,
+            })
+    
+    employee_details.sort(key=lambda x: x["gross"], reverse=True)
+    
+    return {
+        "total_employees": len(employees),
+        "total_gross": total_gross,
+        "total_net": total_net,
+        "total_deductions": total_gross - total_net,
+        "by_department": [{"department": k, "amount": v} for k, v in sorted(by_department.items(), key=lambda x: x[1], reverse=True)],
+        "by_team": [{"team": k, "amount": v} for k, v in sorted(by_team.items(), key=lambda x: x[1], reverse=True)],
+        "employees": employee_details,
+    }
 
 # ==================== REMINDERS & FOLLOW-UPS ====================
 
@@ -10302,7 +10729,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://hr-finance-ops.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://round-robin-mgmt.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -21158,8 +21585,43 @@ async def sheets_auto_sync_loop():
         try:
             await asyncio.sleep(60)  # Check every minute
             await run_auto_sync()
+            # Also process CS queue if in window
+            await process_cs_student_queue()
         except Exception as e:
             logger.error(f"Sheets auto-sync loop error: {e}")
+
+async def process_cs_student_queue():
+    """Process students queued for CS assignment during off-hours."""
+    from datetime import timezone as tz
+    abu_dhabi_tz = tz(timedelta(hours=4))
+    now_ad = datetime.now(abu_dhabi_tz)
+    if 10 <= now_ad.hour < 22:
+        queued = await db.students.find({"cs_queued": True, "cs_agent_id": {"$exists": False}}).to_list(50)
+        for student in queued:
+            cs_agent = await get_round_robin_agent("cs_agent")
+            if not cs_agent:
+                break
+            await db.students.update_one({"id": student["id"]}, {"$set": {
+                "cs_agent_id": cs_agent["id"],
+                "cs_agent_name": cs_agent["full_name"],
+                "cs_queued": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }})
+            await create_notification(
+                cs_agent["id"],
+                "New Student Assigned",
+                f"Student {student.get('full_name', 'Unknown')} assigned to you.",
+                "info",
+                f"/cs/students/{student['id']}"
+            )
+            if is_email_configured() and cs_agent.get("email"):
+                try:
+                    await send_email_async(
+                        cs_agent["email"],
+                        f"New Student Assigned: {student.get('full_name', 'Unknown')}",
+                        f"<h3>New Student Assigned</h3><p>Student <b>{student.get('full_name','Unknown')}</b> has been assigned to you.</p><p>Please make the activation call.</p>"
+                    )
+                except: pass
 
 async def daily_finance_report_loop():
     """Background loop for daily finance report at 12:00 AM UAE Time"""
