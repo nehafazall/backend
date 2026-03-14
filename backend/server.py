@@ -19907,7 +19907,8 @@ async def create_sheet_connector(data: SheetConnectorCreate, user = Depends(requ
                     {"sheet_url": data.sheet_url, "agents": data.assigned_agent_ids})
     
     # Return without sensitive data
-    del connector["oauth_tokens"]
+    connector.pop("_id", None)
+    connector.pop("oauth_tokens", None)
     return connector
 
 @api_router.put("/connectors/google-sheets/{connector_id}")
