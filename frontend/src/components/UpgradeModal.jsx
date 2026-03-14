@@ -29,20 +29,24 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Course color mapping
 export const COURSE_COLORS = {
-    'starter': { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-700', label: 'Starter' },
-    'basic': { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-700', label: 'Basic' },
-    'intermediate': { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-700', label: 'Intermediate' },
-    'advanced': { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-700', label: 'Advanced' },
-    'mastery': { bg: 'bg-emerald-600', border: 'border-emerald-700', text: 'text-white', label: 'Mastery' },
+    'starter': { bg: 'bg-sky-100 dark:bg-sky-900/30', border: 'border-sky-300 dark:border-sky-700', text: 'text-sky-700 dark:text-sky-300', label: 'Starter', next: 'Basic' },
+    'basic': { bg: 'bg-rose-100 dark:bg-rose-900/30', border: 'border-rose-300 dark:border-rose-700', text: 'text-rose-700 dark:text-rose-300', label: 'Basic', next: 'Intermediate' },
+    'intermediate': { bg: 'bg-violet-100 dark:bg-violet-900/30', border: 'border-violet-300 dark:border-violet-700', text: 'text-violet-700 dark:text-violet-300', label: 'Intermediate', next: 'Advanced' },
+    'advanced': { bg: 'bg-teal-100 dark:bg-teal-900/30', border: 'border-teal-300 dark:border-teal-700', text: 'text-teal-700 dark:text-teal-300', label: 'Advanced', next: 'Mastery' },
+    'mastery': { bg: 'bg-amber-100 dark:bg-amber-900/30', border: 'border-amber-300 dark:border-amber-700', text: 'text-amber-700 dark:text-amber-300', label: 'Mastery', next: null },
 };
 
-export const getCourseColor = (courseName) => {
-    if (!courseName) return COURSE_COLORS.starter;
-    const name = courseName.toLowerCase();
+export const getCourseColor = (courseNameOrLevel) => {
+    if (!courseNameOrLevel) return COURSE_COLORS.starter;
+    const name = courseNameOrLevel.toLowerCase();
+    // Direct level match first
+    if (COURSE_COLORS[name]) return COURSE_COLORS[name];
+    // Then substring match for course names
     if (name.includes('mastery')) return COURSE_COLORS.mastery;
-    if (name.includes('advanced')) return COURSE_COLORS.advanced;
+    if (name.includes('advanced') || name.includes('advance')) return COURSE_COLORS.advanced;
     if (name.includes('intermediate')) return COURSE_COLORS.intermediate;
     if (name.includes('basic')) return COURSE_COLORS.basic;
+    if (name.includes('starter')) return COURSE_COLORS.starter;
     return COURSE_COLORS.starter;
 };
 

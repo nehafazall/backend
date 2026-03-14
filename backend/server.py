@@ -466,6 +466,7 @@ class StudentUpdate(BaseModel):
     upgrade_to_amount: Optional[float] = None
     wallet_transfer_confirmed: Optional[bool] = None
     mt5_account_number: Optional[str] = None  # Current MT5 account
+    course_level: Optional[str] = None  # Starter, Basic, Intermediate, Advanced, Mastery
 
 class StudentResponse(StudentBase):
     id: str
@@ -508,6 +509,7 @@ class StudentResponse(StudentBase):
     pitched_upgrade_label: Optional[str] = None
     pitched_upgrade_price: Optional[float] = None
     last_upgrade_amount: Optional[float] = None
+    course_level: Optional[str] = None  # Starter, Basic, Intermediate, Advanced, Mastery
     last_upgrade_path: Optional[str] = None
     last_upgrade_at: Optional[str] = None
     created_at: Optional[str] = None
@@ -8122,11 +8124,11 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
             "filename": "cs_upgrades_import_template.csv",
             "headers": [
                 "month*", "date*", "cs_employee_id*", 
-                "student_email*", "upgrade_amount*", "upgrade_to_course"
+                "student_email*", "upgrade_amount*", "upgrade_to_course", "course_level"
             ],
             "fields": {
                 "required": ["month", "date", "cs_employee_id", "student_email", "upgrade_amount"],
-                "optional": ["upgrade_to_course"]
+                "optional": ["upgrade_to_course", "course_level"]
             },
             "example_row": {
                 "month": "2026-03",
@@ -8134,9 +8136,10 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "cs_employee_id": "CLT-EMP-003",
                 "student_email": "student@example.com",
                 "upgrade_amount": "10000",
-                "upgrade_to_course": "Advanced Trading Mastery"
+                "upgrade_to_course": "Advanced Trading Mastery",
+                "course_level": "Advanced"
             },
-            "instructions": "For importing CS upgrades\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\ncs_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\nStudent can have multiple upgrades\nAll upgrades tracked for LTV calculation"
+            "instructions": "For importing CS upgrades\nFields marked with * are mandatory\nmonth format: YYYY-MM (e.g., 2026-03)\ndate format: YYYY-MM-DD\ncs_employee_id MUST match an existing employee ID\nstudent_email MUST match an existing student's email\ncourse_level: Starter, Basic, Intermediate, Advanced, or Mastery\nStudent can have multiple upgrades\nAll upgrades tracked for LTV calculation"
         },
         "mentor_withdrawals": {
             "filename": "mentor_withdrawals_import_template.csv",
@@ -8347,8 +8350,8 @@ async def download_import_template(template_type: str, token: Optional[str] = No
         },
         "cs_upgrades": {
             "filename": "cs_upgrades_import_template.csv",
-            "headers": ["month*", "date*", "cs_employee_id*", "student_email*", "upgrade_amount*", "upgrade_to_course"],
-            "example_row": ["2026-03", "2026-03-10", "CLT-EMP-003", "student@example.com", "10000", "Advanced Trading Mastery"]
+            "headers": ["month*", "date*", "cs_employee_id*", "student_email*", "upgrade_amount*", "upgrade_to_course", "course_level"],
+            "example_row": ["2026-03", "2026-03-10", "CLT-EMP-003", "student@example.com", "10000", "Advanced Trading Mastery", "Advanced"]
         },
         "mentor_redeposits": {
             "filename": "mentor_redeposits_import_template.csv",
@@ -9609,7 +9612,9 @@ async def import_cs_upgrades(data: List[Dict], user = Depends(require_roles(["su
                 "student_email": row["student_email"],
                 "amount": amount,
                 "upgrade_to_course": row.get("upgrade_to_course"),
+                "course_level": row.get("course_level", "").strip().capitalize() if row.get("course_level") else None,
                 "previous_course": student.get("current_course_name"),
+                "previous_level": student.get("course_level"),
                 "created_at": now,
                 "created_by": user["id"]
             })
@@ -9623,6 +9628,13 @@ async def import_cs_upgrades(data: List[Dict], user = Depends(require_roles(["su
             }
             if row.get("upgrade_to_course"):
                 update_fields["current_course_name"] = row["upgrade_to_course"]
+            if row.get("course_level"):
+                valid_levels = ["starter", "basic", "intermediate", "advanced", "mastery"]
+                level = row["course_level"].strip().lower()
+                if level in valid_levels:
+                    update_fields["course_level"] = level.capitalize()
+                else:
+                    results["errors"].append(f"Row {i+1}: Invalid course_level '{row['course_level']}', must be one of: Starter, Basic, Intermediate, Advanced, Mastery. Upgrade still recorded.")
             
             await db.students.update_one(
                 {"id": student["id"]},
@@ -9636,7 +9648,9 @@ async def import_cs_upgrades(data: List[Dict], user = Depends(require_roles(["su
                     "upgrade_history": {
                         "id": upgrade_id,
                         "from_course": student.get("current_course_name"),
+                        "from_level": student.get("course_level"),
                         "to_course": row.get("upgrade_to_course"),
+                        "to_level": row.get("course_level", "").strip().capitalize() if row.get("course_level") else None,
                         "amount": amount,
                         "date": row["date"],
                         "cs_agent_id": cs_user["id"],

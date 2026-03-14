@@ -84,8 +84,10 @@ const CS_STAGES = [
 const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const isUpgradedStudent = student.is_upgraded_student;
-    const courseName = student.current_course_name || student.package_bought;
+    const courseLevel = student.course_level || '';
+    const courseName = courseLevel || student.current_course_name || student.package_bought;
     const courseColors = getCourseColor(courseName);
+    const nextLevel = courseColors.next;
 
     return (
         <div
@@ -168,12 +170,17 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                     </div>
                 )}
                 {courseName && (
-                    <p className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <GraduationCap className="h-3 w-3 text-muted-foreground" />
-                        <Badge className={`${courseColors.bg} ${courseColors.text} text-xs`}>
-                            {courseName}
+                        <Badge className={`${courseColors.bg} ${courseColors.text} ${courseColors.border} border text-xs`}>
+                            {courseColors.label || courseName}
                         </Badge>
-                    </p>
+                        {nextLevel && (
+                            <span className="text-[10px] text-muted-foreground">
+                                <ArrowUp className="inline h-2.5 w-2.5" /> {nextLevel}
+                            </span>
+                        )}
+                    </div>
                 )}
             </div>
             

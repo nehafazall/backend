@@ -25,6 +25,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
+import { getCourseColor, COURSE_COLORS } from '@/components/UpgradeModal';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -75,10 +76,14 @@ const MENTOR_STAGES = [
 
 const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
+    const courseLevel = student.course_level || '';
+    const courseName = courseLevel || student.current_course_name || student.package_bought;
+    const courseColors = getCourseColor(courseName);
+    const hasCourse = !!courseName;
 
     return (
         <div
-            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''}`}
+            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${hasCourse ? `${courseColors.border} border-l-4` : ''}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`mentor-card-${student.id}`}
         >
@@ -87,14 +92,20 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
                     <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
                         <GripVertical className="h-4 w-4" />
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-sm font-medium">
+                    <div className={`w-8 h-8 rounded-full ${hasCourse ? courseColors.bg + ' ' + courseColors.text : 'bg-orange-600 text-white'} flex items-center justify-center text-sm font-medium`}>
                         {student.full_name?.charAt(0) || '?'}
                     </div>
                     <div>
                         <p className="font-medium text-sm">{student.full_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {student.trading_level || 'Beginner'}
-                        </p>
+                        {hasCourse ? (
+                            <Badge className={`${courseColors.bg} ${courseColors.text} ${courseColors.border} border text-[10px] px-1.5 py-0`}>
+                                {courseColors.label}
+                            </Badge>
+                        ) : (
+                            <p className="text-xs text-muted-foreground">
+                                {student.trading_level || 'Beginner'}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <DropdownMenu>
