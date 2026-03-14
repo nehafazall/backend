@@ -8,40 +8,35 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - Backend: FastAPI + Motor (async MongoDB) + Pydantic
 - Database: MongoDB
 
-## Latest Updates (March 13, 2026)
+## Latest Updates (March 14, 2026)
 
-### Completed: Interactive Drill-Down Analytics V2 (All Dashboards)
-- Sales: Top 10 Agents, Team Revenue, Lead Pipeline, Monthly Trend, Leaderboard — all clickable
-- CS: Agent Revenue, Leaderboard, Pipeline, Bifurcation — all clickable with proper student data
-- Mentor: Bifurcation, Pipeline — all clickable
-- CEO: Department Pie, Revenue/Enrollment trends — all clickable
+### Completed: Operational Controls Frontend (P0)
+- **Round Robin Controls Page** (`/round-robin`): CS Distribution Window status (10AM-10PM GST+4), agent pause/resume toggles with reason modal, tabs for CS/Sales/Mentor agents, process queue button, stats cards (Total/Active/Paused/Window)
+- **Transfer Requests Page** (`/transfer-requests`): Dual-approval workflow UI, tabs for Pending 1st Approval/Awaiting CEO/Approved/Rejected, new transfer request modal (Lead/Student/Mentor Student), approval chain display, approve/reject modal with comments
+- **Salary Estimation Widget** on HR Dashboard: Total Gross/Net/Deductions/Employees, department breakdown, detailed employee drill-down modal
+- **Navigation**: Both pages added to Operations sidebar section in Layout
 
-### Completed: Auto Dark/Light Mode (GST+4)
-- Auto/Light/Dark cycling with Monitor/Moon/Sun icons
+### Previously Completed
+- Interactive Drill-Down Analytics V2 (All Dashboards)
+- Auto Dark/Light Mode (GST+4)
+- INR Currency in Finance Settings
+- Enhanced Lead Pool (Assignment Tracking, Bulk Assign, History)
+- Google Sheets Agent Connector (5-min sync)
+- Backend for Dual-Approval Reassignments, CS Round Robin Time Window, Email Notifications on Assignment
+- Salary Estimation API endpoint
 
-### Completed: INR Currency
-- Added to Finance Settings > Bank Accounts & Payment Gateways
+### New Routes Added
+- `/transfer-requests` → TransferRequestsPage
+- `/round-robin` → RoundRobinPage
 
-### Completed: Enhanced Lead Pool (Assignment Tracking)
-- Auto-move rejected/not_interested leads to pool
-- Track assignment history: who rejected, which team, when, reason
-- Times assigned counter (how many times reassigned)
-- Team and Agent filters on the pool page
-- Bulk assignment (select multiple → assign to one agent)
-- Assignment history modal per lead
-- Round-robin or manual assign from pool
-
-### New API Endpoints
-- `POST /api/leads/pool/bulk-assign` — Bulk assign leads from pool
-- `GET /api/leads/pool?team_filter=X&agent_filter=Y` — Enhanced pool with filters
-- Drill-down: /dashboard/drill/agent-students, /dashboard/drill/team-agents, /dashboard/drill/pipeline-stage
-- CS Drill: /cs/drill/agent-students, /cs/drill/pipeline-stage
-- Mentor Drill: /mentor/drill/students, /mentor/drill/pipeline-stage
-
-### Google Sheets Agent Connector (Pre-existing)
-- Marketing > Connectors page: paste URL, assign agent, auto-sync every 5 min
-- Supports column mapping for name, phone, city, etc.
-- Each connector maps one sheet to one agent
+### Key API Endpoints
+- `GET /api/round-robin/status` — Agent list with pause status, CS window info
+- `POST /api/round-robin/toggle-agent` — Pause/resume agent
+- `POST /api/round-robin/process-cs-queue` — Process queued students
+- `GET /api/transfers/requests` — Transfer requests filtered by status
+- `POST /api/transfers/request` — Create new transfer request
+- `POST /api/transfers/{request_id}/approve` — Approve/reject transfer
+- `GET /api/hr/salary-estimation` — Salary breakdown by dept/team/employee
 
 ---
 
