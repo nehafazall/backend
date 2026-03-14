@@ -536,7 +536,7 @@ class CustomerResponse(CustomerBase):
     
     model_config = ConfigDict(extra="ignore")
 
-# SLA Configuration
+# SLA Configuration (defaults, overridden by DB sla_rules)
 SLA_CONFIG = {
     "new_lead_contact_mins": 60,  # Must contact new lead within 60 mins
     "inactive_lead_days": 7,  # Warning after 7 days inactive
@@ -544,6 +544,31 @@ SLA_CONFIG = {
     "inactive_reassign_hours": 72,  # Reassign after another 72 hours
     "cs_activation_mins": 15,  # CS must make activation call within 15 mins
 }
+
+# In-memory SLA rules cache (loaded from DB on startup, refreshed on changes)
+SLA_RULES_CACHE = []
+
+async def load_sla_rules_cache():
+    """Load SLA rules from DB into cache and update SLA_CONFIG"""
+    global SLA_RULES_CACHE, SLA_CONFIG
+    rules = await db.sla_rules.find({"is_active": True}, {"_id": 0}).to_list(200)
+    SLA_RULES_CACHE = rules
+    # Update SLA_CONFIG from DB rules for backward compatibility
+    for rule in rules:
+        code = rule.get("config_key")
+        if code and rule.get("levels"):
+            first_level = rule["levels"][0]
+            th = first_level.get("time_threshold_hours", 0)
+            if code == "new_lead_contact_mins":
+                SLA_CONFIG["new_lead_contact_mins"] = th * 60
+            elif code == "inactive_lead_days":
+                SLA_CONFIG["inactive_lead_days"] = th / 24
+            elif code == "inactive_warning_hours":
+                SLA_CONFIG["inactive_warning_hours"] = th
+            elif code == "inactive_reassign_hours":
+                SLA_CONFIG["inactive_reassign_hours"] = th
+            elif code == "cs_activation_mins":
+                SLA_CONFIG["cs_activation_mins"] = th * 60
 
 class PaymentBase(BaseModel):
     student_id: Optional[str] = None
@@ -4650,6 +4675,181 @@ async def trigger_sla_check(user = Depends(require_roles(["super_admin", "admin"
 async def get_sla_config(user = Depends(get_current_user)):
     """Get current SLA configuration"""
     return SLA_CONFIG
+
+# ==================== SLA RULES CRUD ====================
+
+DEFAULT_SLA_RULES = [
+    {
+        "name": "New Lead First Contact",
+        "department": "Sales",
+        "description": "Sales agent must make first contact with a new lead within the time limit",
+        "applies_to": "leads",
+        "trigger_condition": "no_first_contact",
+        "config_key": "new_lead_contact_mins",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "Warning", "time_threshold_hours": 1, "action": "warning", "notify_in_app": True, "notify_email": False, "notify_roles": ["sales_executive"]},
+            {"level": 2, "name": "SLA Breach", "time_threshold_hours": 1, "action": "breach", "notify_in_app": True, "notify_email": True, "notify_roles": ["sales_executive", "team_leader"]},
+        ],
+    },
+    {
+        "name": "Inactive Lead Warning",
+        "department": "Sales",
+        "description": "Lead has no activity for extended period — escalation chain",
+        "applies_to": "leads",
+        "trigger_condition": "no_activity",
+        "config_key": "inactive_lead_days",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "Warning Mail", "time_threshold_hours": 168, "action": "warning", "notify_in_app": True, "notify_email": True, "notify_roles": ["sales_executive"]},
+            {"level": 2, "name": "Notify Team Leader", "time_threshold_hours": 240, "action": "notify_manager", "notify_in_app": True, "notify_email": True, "notify_roles": ["sales_executive", "team_leader"]},
+            {"level": 3, "name": "Reassign to Pool", "time_threshold_hours": 312, "action": "reassign_to_pool", "notify_in_app": True, "notify_email": True, "notify_roles": ["sales_executive", "team_leader", "sales_manager"]},
+        ],
+    },
+    {
+        "name": "Pipeline Stale Lead",
+        "department": "Sales",
+        "description": "Lead in sales pipeline without activity for over 20 days",
+        "applies_to": "leads",
+        "trigger_condition": "pipeline_stale",
+        "config_key": "pipeline_stale_days",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "Warning Mail", "time_threshold_hours": 480, "action": "warning", "notify_in_app": True, "notify_email": True, "notify_roles": ["sales_executive"]},
+            {"level": 2, "name": "Escalate to TL & COO", "time_threshold_hours": 480, "action": "notify_manager", "notify_in_app": True, "notify_email": True, "notify_roles": ["team_leader", "sales_manager", "admin"]},
+        ],
+    },
+    {
+        "name": "CS Activation Call",
+        "department": "Customer Service",
+        "description": "CS agent must make activation call to new student within time limit",
+        "applies_to": "students",
+        "trigger_condition": "no_activation_call",
+        "config_key": "cs_activation_mins",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "SLA Breach", "time_threshold_hours": 0.25, "action": "breach", "notify_in_app": True, "notify_email": True, "notify_roles": ["cs_agent", "cs_head"]},
+        ],
+    },
+    {
+        "name": "HR Leave Approval",
+        "department": "HR",
+        "description": "Leave requests must be approved within time limit",
+        "applies_to": "leave_requests",
+        "trigger_condition": "pending_approval",
+        "config_key": "leave_approval_hours",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "Reminder", "time_threshold_hours": 24, "action": "warning", "notify_in_app": True, "notify_email": False, "notify_roles": ["hr"]},
+            {"level": 2, "name": "Escalate", "time_threshold_hours": 48, "action": "notify_manager", "notify_in_app": True, "notify_email": True, "notify_roles": ["hr", "admin"]},
+        ],
+    },
+    {
+        "name": "HR Regularization Approval",
+        "department": "HR",
+        "description": "Regularization requests must be processed within time limit",
+        "applies_to": "regularization_requests",
+        "trigger_condition": "pending_approval",
+        "config_key": "regularization_approval_hours",
+        "is_active": True,
+        "levels": [
+            {"level": 1, "name": "Reminder", "time_threshold_hours": 48, "action": "warning", "notify_in_app": True, "notify_email": False, "notify_roles": ["hr"]},
+        ],
+    },
+]
+
+async def seed_sla_rules():
+    """Seed default SLA rules if none exist"""
+    count = await db.sla_rules.count_documents({})
+    if count > 0:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    for rule_data in DEFAULT_SLA_RULES:
+        rule = {
+            "id": str(uuid.uuid4()),
+            **rule_data,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": "system",
+        }
+        await db.sla_rules.insert_one(rule)
+    logger.info(f"Seeded {len(DEFAULT_SLA_RULES)} default SLA rules")
+
+@api_router.get("/sla/rules")
+async def get_sla_rules(department: Optional[str] = None, user=Depends(get_current_user)):
+    """Get all SLA rules, optionally filtered by department"""
+    query = {}
+    if department:
+        query["department"] = department
+    rules = await db.sla_rules.find(query, {"_id": 0}).sort("department", 1).to_list(200)
+    return rules
+
+@api_router.post("/sla/rules")
+async def create_sla_rule(data: Dict, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Create a new SLA rule"""
+    now = datetime.now(timezone.utc).isoformat()
+    rule = {
+        "id": str(uuid.uuid4()),
+        "name": data.get("name", ""),
+        "department": data.get("department", ""),
+        "description": data.get("description", ""),
+        "applies_to": data.get("applies_to", ""),
+        "trigger_condition": data.get("trigger_condition", "custom"),
+        "config_key": data.get("config_key", ""),
+        "is_active": data.get("is_active", True),
+        "levels": data.get("levels", []),
+        "created_at": now,
+        "updated_at": now,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name", ""),
+    }
+    await db.sla_rules.insert_one(rule)
+    rule.pop("_id", None)
+    await load_sla_rules_cache()
+    await log_audit(user, "create", "sla_rule", rule["id"], rule["name"], {"department": rule["department"]})
+    return rule
+
+@api_router.put("/sla/rules/{rule_id}")
+async def update_sla_rule(rule_id: str, data: Dict, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Update an SLA rule"""
+    existing = await db.sla_rules.find_one({"id": rule_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SLA rule not found")
+    allowed = ["name", "department", "description", "applies_to", "trigger_condition",
+               "config_key", "is_active", "levels"]
+    update = {k: v for k, v in data.items() if k in allowed}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.sla_rules.update_one({"id": rule_id}, {"$set": update})
+    await load_sla_rules_cache()
+    await log_audit(user, "update", "sla_rule", rule_id, existing.get("name"), update)
+    updated = await db.sla_rules.find_one({"id": rule_id}, {"_id": 0})
+    return updated
+
+@api_router.patch("/sla/rules/{rule_id}/toggle")
+async def toggle_sla_rule(rule_id: str, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Toggle SLA rule active/inactive"""
+    existing = await db.sla_rules.find_one({"id": rule_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SLA rule not found")
+    new_state = not existing.get("is_active", True)
+    await db.sla_rules.update_one({"id": rule_id}, {"$set": {
+        "is_active": new_state,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }})
+    await load_sla_rules_cache()
+    await log_audit(user, "toggle", "sla_rule", rule_id, existing.get("name"), {"is_active": new_state})
+    return {"id": rule_id, "is_active": new_state}
+
+@api_router.delete("/sla/rules/{rule_id}")
+async def delete_sla_rule(rule_id: str, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Delete an SLA rule"""
+    existing = await db.sla_rules.find_one({"id": rule_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SLA rule not found")
+    await db.sla_rules.delete_one({"id": rule_id})
+    await load_sla_rules_cache()
+    await log_audit(user, "delete", "sla_rule", rule_id, existing.get("name"), {})
+    return {"message": "SLA rule deleted"}
 
 @api_router.get("/sla/breaches")
 async def get_sla_breaches(user = Depends(get_current_user)):
@@ -21571,6 +21771,10 @@ async def startup_event():
     
     # Start background scheduler for Google Sheets auto-sync
     asyncio.create_task(sheets_auto_sync_loop())
+    
+    # Seed SLA rules and load cache
+    await seed_sla_rules()
+    await load_sla_rules_cache()
     
     # Start background scheduler for daily finance report
     asyncio.create_task(daily_finance_report_loop())

@@ -58,6 +58,7 @@ import {
     FileCheck,
     ArrowRightLeft,
     Shuffle,
+    Timer,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
@@ -163,6 +164,7 @@ const SECTIONS = {
             { title: 'Approvals', icon: CheckSquare, path: '/approvals', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
             { title: 'Transfer Requests', icon: ArrowRightLeft, path: '/transfer-requests', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master'] },
             { title: 'Round Robin', icon: Shuffle, path: '/round-robin', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head'] },
+            { title: 'SLA Management', icon: Timer, path: '/sla-management', roles: ['super_admin', 'admin'] },
             { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },

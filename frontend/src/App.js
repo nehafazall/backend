@@ -96,6 +96,7 @@ import ApprovalsPage from "@/pages/ApprovalsPage";
 // Operational Controls
 import TransferRequestsPage from "@/pages/TransferRequestsPage";
 import RoundRobinPage from "@/pages/RoundRobinPage";
+import SLAManagementPage from "@/pages/SLAManagementPage";
 
 import Layout from "@/components/Layout";
 
@@ -462,6 +463,13 @@ function AppRoutes() {
                 <Route path="round-robin" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'cs_head']}>
                         <RoundRobinPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* SLA Management */}
+                <Route path="sla-management" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <SLAManagementPage />
                     </ProtectedRoute>
                 } />
                 
