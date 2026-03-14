@@ -263,8 +263,6 @@ const CSDashboard = () => {
                                     <Tooltip content={<ChartTooltip formatter={fmtCur} />} />
                                     <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} name="Revenue" cursor="pointer"
                                         onClick={(data) => { if (data?.agent_name) drillCsAgent(data.agent_name); }} />
-                                    <Bar dataKey="commission" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Commission" cursor="pointer"
-                                        onClick={(data) => { if (data?.agent_name) drillCsAgent(data.agent_name); }} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (<div className="h-64 flex items-center justify-center text-muted-foreground">No revenue data yet</div>)}
@@ -284,7 +282,7 @@ const CSDashboard = () => {
                                         <p className="text-xs text-muted-foreground">{agent.upgrades} upgrades</p>
                                     </div>
                                     <div className="text-right flex items-center gap-1">
-                                        <div><p className="text-sm font-bold font-mono text-emerald-500">{fmtCur(agent.commission)}</p><p className="text-[10px] text-muted-foreground">{fmtCur(agent.revenue)} rev</p></div>
+                                        <div><p className="text-sm font-bold font-mono text-emerald-500">{fmtCur(agent.revenue)}</p><p className="text-[10px] text-muted-foreground">{agent.upgrades} upgrades</p></div>
                                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                 </div>
@@ -309,7 +307,6 @@ const CSDashboard = () => {
                                     <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
                                     <Tooltip content={<ChartTooltip formatter={fmtCur} />} />
                                     <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#csRevGrad)" strokeWidth={2} name="Revenue" />
-                                    <Area type="monotone" dataKey="commission" stroke="#3b82f6" fill="transparent" strokeWidth={2} strokeDasharray="5 5" name="Commission" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (<div className="h-52 flex items-center justify-center text-muted-foreground">No monthly data</div>)}
