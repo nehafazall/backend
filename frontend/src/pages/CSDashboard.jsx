@@ -43,11 +43,10 @@ const CSDashboard = () => {
     const [leaderboard, setLeaderboard] = useState([]);
     const [agentBifurcation, setAgentBifurcation] = useState([]);
     const [period, setPeriod] = useState('overall');
-    const [viewMode, setViewMode] = useState('team');
+    const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
+    const [viewMode, setViewMode] = useState(isHeadOrAdmin ? 'team' : 'individual');
     const [loading, setLoading] = useState(true);
     const [drill, setDrill] = useState({ open: false, title: '', content: null, loading: false });
-
-    const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
 
     useEffect(() => { fetchAll(); }, [period, viewMode]);
 
