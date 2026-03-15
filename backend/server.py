@@ -6644,7 +6644,7 @@ async def get_sales_agent_closings(
     limit: int = 10,
     custom_start: Optional[str] = None,
     custom_end: Optional[str] = None,
-    user = Depends(require_roles(["super_admin", "admin", "sales_manager"]))
+    user = Depends(get_current_user)
 ):
     query = {"stage": "enrolled"}
     query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
