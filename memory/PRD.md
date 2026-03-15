@@ -10,38 +10,39 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ## Latest Updates (March 15, 2026)
 
-### Completed: P0 Role-Based Dashboard Visibility Fix
-- **Root Cause:** `Promise.all` in frontend caused entire dashboard to fail when a single API returned 403 (permission denied). The `/api/dashboard/sales-agent-closings` endpoint was restricted to admin/manager roles only.
-- **Fix Applied:**
-  1. Frontend already used `Promise.allSettled` (fix from previous session) to gracefully handle partial API failures
-  2. Backend: Changed `sales-agent-closings` endpoint from `require_roles(['super_admin', 'admin', 'sales_manager'])` to `get_current_user` (all authenticated users)
-- **Verification:** All 5 role-specific scenarios verified via automated testing (19 backend tests + Playwright frontend tests)
-- **Visibility Rules Implemented:**
-  - CS/Sales Agents: Individual stats in top-line cards, team-wide data in charts/leaderboards, drill-down disabled
-  - CS Head / Team Leaders: Team-level stats and charts with drill-down enabled
-  - CEO/Admins: Full unrestricted access with drill-down
-  - Head Commission card hidden for non-managerial roles
+### Completed: Top 10 Agents Chart Fix + Performance Insight Banner
+- **Bug Fix:** `/api/dashboard/sales-agent-closings` was restricted to admin/manager roles, returning 403 for `sales_executive` and `team_leader`. Changed to `get_current_user` to allow all authenticated users. Top 10 Agents chart now shows data for all roles.
+- **Enhancement: Performance Insight Banner** — New role-specific banner on both CS and Sales dashboards:
+  - **Agents:** Individual deal/upgrade count, revenue, rank, and comparison to team average (e.g., "+30% vs avg")
+  - **Team Leaders:** Team name, team deals, revenue, agent count, and company totals
+  - **Admins:** Company-wide totals, active agents, and per-agent averages
+  - CS dashboard uses "upgrades" terminology; Sales uses "deals"
+  - Handles zero activity with motivational message
+- **New endpoints:** `GET /api/dashboard/performance-insight`, `GET /api/cs/dashboard/performance-insight`
+- **New component:** `/app/frontend/src/components/PerformanceInsightBanner.jsx`
+- **Testing:** 100% pass — 11 backend + 5 frontend tests across all roles
 
-### Previously Completed (March 14, 2026)
-- SLA Management System (full CRUD, multi-level escalation, department filters)
-- Operational Controls Frontend (Round Robin, Transfer Requests, Salary Estimation)
-- Google Sheets Connector Fix (redirect_uri_mismatch + UI error)
+### Previously Completed: P0 Role-Based Dashboard Visibility Fix
+- Frontend `Promise.allSettled` to gracefully handle partial API failures
+- Backend role-based filtering on all dashboard endpoints
+- Visibility rules: Agents (individual stats, team charts, no drill-down), Leaders (team-level), Admins (full access)
+- Head Commission card hidden for non-managerial roles
+
+### Earlier Completed
+- SLA Management System (full CRUD, multi-level escalation)
+- Operational Controls (Round Robin, Transfer Requests, Salary Estimation)
+- Google Sheets Connector Fix
 - Dashboard Quick Stats Fix (Enrolled MTD accuracy)
-- CS Data Import & Enhancement (147 upgrade records, course_level tracking, commission backfill)
-- Role-Based Commission Visibility (Head Commission hidden for agents)
-
-### Previously Completed (Earlier)
-- Interactive Drill-Down Analytics V2 (All Dashboards)
+- CS Data Import & Enhancement (147 records, course_level tracking, commission backfill)
+- Interactive Drill-Down Analytics V2
 - Auto Dark/Light Mode (GST+4)
-- INR Currency in Finance Settings
-- Enhanced Lead Pool (Assignment Tracking, Bulk Assign, History)
-- Google Sheets Agent Connector (5-min sync)
-- Backend for Dual-Approval Reassignments, CS Round Robin Time Window, Email Notifications
 
 ## Key API Endpoints
+- **NEW:** `GET /api/dashboard/performance-insight`, `GET /api/cs/dashboard/performance-insight`
+- **FIXED:** `GET /api/dashboard/sales-agent-closings` (now open to all authenticated users)
 - SLA: `GET/POST/PUT/DELETE /api/sla/rules`
-- CS Dashboard: `/api/cs/dashboard/stats`, `/api/cs/dashboard/agent-revenue`, `/api/cs/dashboard/monthly-trend`, `/api/cs/dashboard/month-comparison`, `/api/cs/dashboard/pipeline`, `/api/cs/dashboard/leaderboard`
-- Sales Dashboard: `/api/dashboard/filtered-stats`, `/api/dashboard/monthly-trend`, `/api/dashboard/sales-agent-closings`, `/api/dashboard/team-revenue`, `/api/dashboard/leaderboard`, `/api/dashboard/month-comparison`
+- CS Dashboard: `/api/cs/dashboard/stats`, `/agent-revenue`, `/monthly-trend`, `/month-comparison`, `/pipeline`, `/leaderboard`
+- Sales Dashboard: `/api/dashboard/filtered-stats`, `/monthly-trend`, `/sales-agent-closings`, `/team-revenue`, `/leaderboard`, `/month-comparison`
 
 ## Test Credentials
 - Super Admin: aqib@clt-academy.com / @Aqib1234
