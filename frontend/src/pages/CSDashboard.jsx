@@ -53,25 +53,24 @@ const CSDashboard = () => {
     const fetchAll = async () => {
         try {
             setLoading(true);
-            // Stats & trend = always individual for agents, respects viewMode for heads/admins
-            // Charts (agent-revenue, leaderboard, bifurcation) = always team-wide
             const myViewMode = isHeadOrAdmin ? viewMode : 'individual';
-            const [statsRes, agentRevRes, trendRes, compRes, pipeRes, leadRes, bifRes] = await Promise.all([
+            const results = await Promise.allSettled([
                 apiClient.get(`/cs/dashboard/stats?period=${period}&view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/agent-revenue?period=${period}`),
                 apiClient.get(`/cs/dashboard/monthly-trend?view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/month-comparison?view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/pipeline?view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/leaderboard?period=${period}`),
-                apiClient.get(`/dashboard/cs-agent-bifurcation?period=${period}`),
+                isHeadOrAdmin ? apiClient.get(`/dashboard/cs-agent-bifurcation?period=${period}`) : Promise.resolve({ data: [] }),
             ]);
-            setStats(statsRes.data);
-            setAgentRevenue(agentRevRes.data || []);
-            setMonthlyTrend(trendRes.data || []);
-            setMonthComparison(compRes.data || { data: [], this_month_label: '', last_month_label: '' });
-            setPipeline(pipeRes.data || []);
-            setLeaderboard(leadRes.data || []);
-            setAgentBifurcation(bifRes.data || []);
+            const val = (i, fallback = {}) => results[i].status === 'fulfilled' ? results[i].value.data : fallback;
+            setStats(val(0, {}));
+            setAgentRevenue(val(1, []) || []);
+            setMonthlyTrend(val(2, []) || []);
+            setMonthComparison(val(3, { data: [], this_month_label: '', last_month_label: '' }));
+            setPipeline(val(4, []) || []);
+            setLeaderboard(val(5, []) || []);
+            setAgentBifurcation(val(6, []) || []);
         } catch (error) { console.error('Failed to fetch CS dashboard:', error); }
         finally { setLoading(false); }
     };

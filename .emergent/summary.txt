@@ -1,72 +1,86 @@
 <analysis>**original_problem_statement:**
-The user requested a series of new features and operational enhancements for their business management system:
-1.  **Salary Estimation:** A feature to calculate the total estimated gross salary payout based on employee data.
-2.  **Customer Service (CS) Operations:**
-    *   Implement a time window for the round-robin distribution of enrolled students to CS agents, active only from 10:00 AM to 10:00 PM (GST+4). Students enrolled outside this window should be queued and distributed the next day.
-    *   Provide the ability to pause or disable the round-robin for specific agents (e.g., if they are on vacation).
-3.  **Lead/Student Reassignment Workflows:**
-    *   **CS:** A user can request to reassign a student to another CS agent with a reason. The request requires approval from the CS Head, followed by a final approval from the CEO.
-    *   **Sales:** A Team Leader can request to reassign a lead within their team. This requires a dual approval: first from the Team Leader, then final approval from the CEO. Cross-functional reassignments are handled by the CEO/super\_admin.
-    *   **Mentors:** Reassignment requests can be initiated, requiring approval from the Master of Academics (with a toggle to enable/disable this permission) and a final approval from the CEO.
-4.  **Email Notifications:** Send an email notification to an agent (Sales, CS, or Mentor) whenever a new lead or student is assigned to them.
-5.  **Dashboard Drill-Downs (Follow-up):** The initial implementation of dashboard drill-downs was not working as expected. Users were unable to click on chart elements (Top 10 Agents, Team Revenue, etc.) to see detailed data. The data displayed in modals was also incorrect or incomplete.
-6.  **Finance Currency:** Add 'INR' as a currency option in the Bank Accounts and Payment Gateway sections of the Finance Settings.
-7.  **Google Sheets Integration:** Connect 17 individual agent Google Sheets to their respective agent profiles in the CRM. Leads should sync from these sheets into the CRM every 5 minutes. Rejected leads in the CRM should automatically move to a Lead Pool for later reassignment, with tracking of who rejected the lead and how many times it has been assigned.
+The user's primary goal is to enhance their business management system with role-specific dashboards, operational controls, and data management features.
+
+**PRODUCT REQUIREMENTS:**
+1.  **Dashboard Visibility & Accuracy:**
+    *   **CS/Sales Agents:** Should see their *individual* performance in top-line stat cards and trend charts. The main leaderboard and team revenue charts should show *team-wide* data. Drill-down functionality on charts must be disabled for this role.
+    *   **Team Leaders:** Should see stats and charts reflecting their *entire team's* performance.
+    *   **CEO/Admins:** Should have a full, unrestricted view of all data, including drill-downs.
+    *   **Data Accuracy:** The Enrolled MTD stat card was showing all-time data and needed to be fixed to reflect the current month's total.
+2.  **CS Operations & Data Management:**
+    *   **Data Import:** The user provided a CSV file with historical upgrade data. This data needed to be imported, with each transaction recorded, commissions calculated, and LTV updated in the customer master.
+    *   **Course Level Tracking:** Implement a system to track a student's course level (e.g., Starter, Basic, Intermediate). This should be updated via the CSV import.
+    *   **UI Enhancements:** The UI for CS and Mentor dashboards must visually distinguish students by their course level using distinct pastel colors and badges. Newly imported students should also be visually identifiable.
+    *   **Commission Visibility:** The Head Commission stat on the CS dashboard should only be visible to users with  or  roles.
+3.  **SLA Management:**
+    *   Create a centralized page in Operations to manage all Service Level Agreements (SLAs).
+    *   This system must be dynamic, allowing admins to create, edit, and toggle SLAs for different departments (Sales, CS, HR) with configurable time limits and escalation levels.
+4.  **Google Sheets Connector:**
+    *   Fix a  error preventing the connection of new agent Google Sheets.
+    *   Fix a UI bug where creating a new connector incorrectly displayed a failed to create error message.
+5.  **Test Data Cleanup:**
+    *   The user requested the deletion of any test data created during development (no such data was found).
 
 **User's preferred language**: English
 
 **what currently exists?**
-The agent has successfully implemented the backend logic for most of the user's recent requests. This includes new API endpoints for a dual-approval reassignment system, controls for a time-windowed round-robin, an endpoint for salary estimation, and email notifications on lead assignment. The dashboard drill-down bugs have been fixed and verified. The advanced Google Sheets sync and enhanced Lead Pool are also complete. However, the frontend for several of the new backend features (reassignments, round-robin controls, salary estimation) has only just been started, with placeholder files created but not yet implemented or integrated into the application's navigation.
+The agent has implemented a significant number of features. The full-featured, database-driven SLA Management system is complete and tested. The Google Sheets connector issues ( and the UI error) have been resolved. The CS Upgrade data from the user's CSV has been successfully imported, commissions have been calculated and backfilled, and the UI now reflects student course levels with distinct colors and badges. Role-based commission visibility on the CS dashboard is also implemented. The core of the application is stable, but the main dashboards are currently broken for non-admin roles.
 
 **Last working item**:
--   **Last item agent was working:** Creating the frontend pages for the new operational controls. The agent created skeleton files for a  and .
+-   **Last item agent was working:** Fixing a critical bug where CS agents, Sales agents, and Team Leaders saw blank dashboards. The user specified a complex set of visibility rules for what each role should see (e.g., individual stats vs. team charts).
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
--   **Which testing method agent to use?** both.
-    -   **Backend:** Use  to test all the new endpoints created in  for salary estimation, transfer requests (CS, Sales, Mentor), and round-robin controls.
-    -   **Frontend:** Use the frontend testing agent to verify the new pages (, ) and the new Salary Estimation widget once they are fully implemented and integrated.
+-   **Agent Testing Done:** Y (Backend API calls were verified with ).
+-   **Which testing method agent to use?** Frontend testing agent. The test must cover logging in as multiple roles (, , , ) to verify that the dashboard data is displayed with the correct scope and granularity for each role, and that drill-down functionality is correctly disabled for non-managerial roles.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   There are no outstanding bugs. The work is focused on completing the in-progress feature implementation.
+-   **Issue 1: Role-Based Dashboard Visibility is Broken (P0)**
+    -   **Description:** Non-admin users (Agents, Team Leaders) see blank dashboards. This is because a  on the frontend fails when a single API call is rejected due to role permissions (403 Forbidden). The agent implemented a fix to catch these errors and adjust backend queries, but it requires thorough verification.
+    -   **Attempted fixes:**
+        1.  Wrapped data-fetching calls in  blocks within the frontend  to prevent one failed call from breaking the entire page load.
+        2.  Modified backend dashboard endpoints (, ) to correctly filter data based on the user's role and the requested  ( vs. ).
+    -   **Next debug checklist:**
+        1.  Log in as a  (e.g., , pw: ). Verify CS Dashboard shows Della's individual stats and trends, but team-wide leaderboards.
+        2.  Log in as a . Verify Sales Dashboard shows their individual stats and trends, but team-wide charts. Confirm drill-downs are disabled.
+        3.  Log in as a  (e.g., , pw: ). Verify they see data for their *entire team* in both stats and charts.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a critical bug preventing key user roles from accessing essential data and performing their jobs. Fixing it will restore core application functionality.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** both
+    -   **Blocked on other issue:** No
 
 **In progress Task List**:
--   **Task 1: Complete and Integrate New Frontend Features (P0)**
-    -   **Description:** The backend for salary estimation, reassignments, and round-robin controls is complete, but the user cannot access these features. The agent needs to build out the UI, connect it to the new APIs, and integrate it into the application.
-    -   **Where to resume:**
-        1.  **Salary Estimation:** Create a new widget and add it to a relevant dashboard (e.g., ) that calls the  endpoint and displays the total gross salary.
-        2.  **Transfer Requests Page:** Fully implement  to fetch data from , display pending requests, and allow authorized users (Heads, CEO) to approve or reject them by calling the approval endpoints.
-        3.  **Round Robin Controls Page:** Fully implement  to display the CS round-robin status (active/inactive time window) and a list of agents with toggles to pause/resume them using the  endpoint.
-        4.  **Navigation:** Add links to the new Transfer Requests and Round Robin Controls pages in the main application layout, likely within the Settings menu in .
-    -   **What will be achieved with this?** This will make the newly developed backend features accessible and usable for administrators and team leads.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on something:** No.
+-   There are no other tasks in progress. The entire focus is on fixing the dashboard visibility issue.
 
 **Upcoming and Future Tasks**
 **Upcoming Tasks:**
--   **P1: User Verification for Google Sheets:** The complex Google Sheets connector and Lead Pool enhancements have been implemented but are awaiting user testing and confirmation.
+-   **P1: User Verification for Google Sheets:** The  error was fixed by providing the user with the correct URI for their Google Cloud Console. The user has not yet confirmed if they have successfully connected all 17 of their agent sheets.
 
 **Future Tasks:**
--   **P2: Refactor :** Break down the monolithic  into domain-specific route files (e.g., , ) to improve maintainability.
--   **P2: Course and Commission Configuration:** Implement a dedicated UI for setting up courses and a multi-level commission structure.
--   **P2: Implement Payslip Generation.**
--   **P2: Integrate with Google Ads API.**
--   **P2: Resolve Babel Plugin :** Fix the recurring  in .
+-   **P2: Refactor :** Decompose the monolithic  into a more maintainable, domain-driven route structure (e.g., , ).
+-   **P2: Course and Commission Configuration UI:** Build a dedicated interface for administrators to configure courses and their associated multi-level commission structures.
+-   **P2: Payslip Generation:** Implement a feature to generate payslips for employees.
+-   **P2: Google Ads API Integration.**
+-   **P2: Fix Babel Plugin :** Address the persistent  error originating from .
 
 **Completed work in this session**
--   **Dashboard Drill-Downs (Fixed):** Reworked and fixed the interactive charts on the Sales, CS, Mentor, and CEO dashboards. Users can now click on chart elements to open a modal with accurate, detailed drill-down data. Validated with the testing agent.
--   **Advanced Lead Pool & Google Sheets Sync:** Implemented a system to connect multiple agent-specific Google Sheets for lead syncing. Created an enhanced Lead Pool page with bulk assignment, team/agent filters, and assignment history tracking. Implemented the logic to automatically move rejected leads to this pool.
--   **Backend for Operational Controls:**
-    -   **Dual-Approval Reassignments:** Created the complete backend workflow and API endpoints for multi-step approval for reassigning leads and students across Sales, CS, and Mentor teams.
-    -   **CS Round Robin Management:** Implemented the backend logic for a time-windowed (10 AM - 10 PM) CS round-robin system, including a student queue and endpoints to pause/resume individual agents.
-    -   **Email Notifications:** Integrated  utility to automatically notify agents upon assignment of a lead or student.
--   **Salary Estimation API:** Created the  endpoint to calculate total gross salary.
--   **Auto Dark/Light Theme:** Implemented an automatic theme switcher based on the user's timezone (GMT+4), with a manual override toggle.
--   **Finance Currency Update:** Added 'INR' to the currency dropdowns in the Finance Settings.
+-   **P0 Operational Controls (Completed):** The frontend for Salary Estimation, Transfer Requests, and Round Robin Controls was fully implemented, integrated with navigation, and successfully tested.
+-   **SLA Management System (Completed):** A new, fully functional, database-driven SLA management system was built from scratch, including backend CRUD APIs and a frontend management page.
+-   **Google Sheets Connector Fixes (Completed):** Resolved the  OAuth error and fixed a frontend bug that incorrectly reported a failure on connector creation.
+-   **Dashboard Quick Stats Fix (Completed):** Corrected the Enrolled MTD metric on the homepage to display accurate current-month data instead of all-time data.
+-   **CS Data Import & Enhancement (Completed):**
+    -   Successfully processed a user-provided CSV to import 147 historical upgrade records.
+    -   Implemented a  tracking system with corresponding UI updates (distinct pastel colors and badges) on CS and Mentor dashboards.
+    -   Authored and executed a script to backfill commission data for all imported records, ensuring accurate dashboard reporting.
+    -   Fixed multiple CS dashboard bugs to ensure all five agents and their correct revenue/upgrade data were displayed in charts and leaderboards.
+-   **Role-Based Commission Visibility (Completed):** Implemented logic to hide the Head Commission card on the CS dashboard for non-managerial roles.
 
 **Earlier issues found/mentioned but not fixed**
--   The  in  remains unresolved and is only mitigated by disabling the plugin.
+-   **Issue 1: **
+    -   **Debug checklist:** This error originates in . The next step is to investigate the plugin's interaction with the frontend code, possibly by disabling it to confirm it's the source and then analyzing the components it struggles with.
+    -   **Why to solve this issue and what will be achieved with this?** This error can cause instability in the frontend build process. Fixing it will improve development stability and reliability.
+    -   **Should Test frontend/backend/both after fix:** frontend
+    -   **Is recurring issue?** Y
 
 **Known issue recurrence from previous fork**
 -   **Issue recurrence in previous fork:**  in .
@@ -77,101 +91,97 @@ The agent has successfully implemented the backend logic for most of the user's 
 
 
 **Key Technical Concepts**
--   **Dual-Approval Workflow:** Implementing a multi-step, stateful approval process involving different user roles (Team Lead, Head, CEO).
--   **Time-based Job Queuing:** Using a temporary in-memory queue () to hold tasks (student assignments) that fall outside a specified time window.
--   **Background Task Processing:** Leveraging the existing  background job to periodically process the student queue.
--   **Dynamic API-driven UI:** Building frontend interfaces that reflect and control backend states, such as pausing/resuming agents in the round-robin system.
--   **SMTP Integration:** Utilizing the existing email service to send automated notifications for key business events.
--   **Interactive Data Visualization:** Fixing and enhancing  components to support reliable  events for drill-down functionality.
--   **Complex Data Aggregation:** Creating backend endpoints to aggregate data for analytics (e.g., Salary Estimation, Lead Pool stats).
+-   **Role-Based Access Control (RBAC):** Implementing granular data visibility on dashboards based on user roles (, , ). This involves frontend conditional rendering and backend data filtering.
+-   **Graceful Frontend Error Handling:** Using  within  to prevent a single failed (but optional) API call from breaking an entire page, which was the root cause of the blank dashboards.
+-   **Dynamic DB-Driven Configuration:** Migrating the hardcoded  to a new  MongoDB collection with a full CRUD UI, making the system configurable by admins.
+-   **Data Backfilling & Scripting:** Authoring a one-off script to process imported CSV data, calculate historical commissions based on existing business logic, and insert the results into the  collection.
+-   **Complex MongoDB Aggregations:** Refactoring numerous dashboard endpoints to perform complex lookups and aggregations across multiple collections (, , ) to provide accurate, role-specific analytics.
 
 **key DB schema**
--   **:** Modified to include  to track each assignment and its outcome, and .
--   **:** Modified to include  to control participation in distribution logic.
--   ** (New Collection):** Implicitly created to store the state of pending reassignments, including  (lead/student), , , , , , , and .
+-   ** (New):** 
+-   **:** Modified to include  and .
+-   **:** Modified to add/reset passwords for CS agents to enable login.
+-   **:** Heavily modified by a backfilling script that inserted 147 new commission records.
+-   **:** Heavily used as the source of truth for new CS dashboard aggregations.
 
 **All files of reference**
--    (Contains all new backend logic for the last set of features)
--    (New file, needs implementation)
--    (New file, needs implementation)
--    (Contains the enhanced Lead Pool UI)
--    (Example of fixed drill-down implementation)
--    (Example of fixed drill-down implementation)
--    (Contains the new auto-theme logic)
+-   
+-   
+-   
+-   
+-   
+-   
 
 **Areas that need refactoring**:
--   **:** This monolithic file has become critically large and complex after adding dozens of new endpoints for approvals, operational controls, and notifications. It is a high-priority technical debt item and should be broken down into smaller, domain-specific router files.
+-   **:** The file's size and complexity continue to grow, making it difficult to maintain. Breaking it into domain-specific routers is a high-priority technical debt item.
+-   ** & :** These components contain complex, sprawling data-fetching logic and state management. Refactoring them to use custom hooks could significantly improve readability and maintainability.
 
 **key api endpoints**
--   **NEW (Salary):** 
--   **NEW (Reassignments):**
-    -   , , 
-    -   
-    -   
--   **NEW (Round Robin):**
+-   **NEW (SLA):** 
+-   **MODIFIED (Dashboards):** All CS and Sales dashboard endpoints were heavily modified to support  ( vs. ) for role-based data filtering and to fix underlying data aggregation logic.
     -   
     -   
     -   
--   **NEW (Lead Pool):** 
--   **MODIFIED (Drill-Downs):**
     -   
     -   
     -   
--   **MODIFIED (Leads):**
-    -    (Auto-moves to pool on 'Rejected')
-    -    (Sends email notification)
--   **MODIFIED (Students):**
-    -    (Queues student if outside hours, sends email)
+-   **MODIFIED (Data Import):**
+    -    (Logic updated to handle ).
+-   **MODIFIED (Quick Stats):**
+    -    (Aggregation logic fixed for 'Enrolled MTD').
 
 **Critical Info for New Agent**
--   Your immediate task is to build the frontend interfaces for the recently completed backend features. The backend logic is in place, but there is no way for a user to interact with the new reassignment, round-robin, or salary estimation features.
--   Start by implementing the functionality in the placeholder files:  and . Then, create the salary widget. Finally, add links to these new pages in the main navigation layout.
--   The user is highly engaged and provides detailed, multi-part requests. It is crucial to create a clear plan, get user approval via , and then execute.
--   The  file is extremely large. Be cautious when adding new logic and strongly consider proposing a refactor to break it into smaller route files as the next major technical task.
+-   Your highest priority (P0) is to verify the fix for the blank dashboards affecting all non-admin users. The previous agent identified the root cause ( failure) and implemented a fix, but it has not been confirmed from a user's perspective.
+-   You MUST test by logging in as multiple different roles (, , ) to ensure the data visibility rules specified by the user in their last message are perfectly implemented.
+-   **User's Desired Visibility:**
+    -   **Agents (CS/Sales):** Individual stats/trends, Team charts, No drill-down.
+    -   **Team Leaders:** Team-level stats and charts.
+    -   **Admins:** Full access.
+-   Use the provided credentials. For example, log in as CS Agent  with password  and verify the CS Dashboard.
 
 **documents and test reports created in this job**
 -    (Updated)
--   Multiple test reports in  from validating the dashboard drill-down fixes.
+-   
+-   
+-   User-provided data file: 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests a total estimated gross salary feature.
-2.  **User:** Requests a time window (10 AM-10 PM) for CS round-robin and the ability to pause agents.
-3.  **User:** Requests email notifications on lead/student assignments.
-4.  **User:** Details a dual-approval reassignment workflow for CS (CS Head -> CEO).
-5.  **User:** Details a reassignment workflow for Sales and Mentors with CEO approval.
-6.  **Agent:** Presents a consolidated plan covering all new requests (Salary, CS Ops, Reassignments, Emails).
-7.  **User:** Approves the plan, clarifying that Sales reassignments also need dual approval (Team Leader -> CEO).
-8.  **Agent:** Explores existing code for approvals, emails, and round-robin.
-9.  **Agent:** Implements all backend changes: adds new models, modifies  with all new endpoints and logic for queuing, notifications, and approvals.
-10. **Agent:** Creates skeleton frontend files  and  before the session ended.
+1.  **User:** Requests fix for CS dashboard: only 2/5 agents are shown, charts are wrong.
+2.  **Agent:** Fixes dashboard endpoints to use correct data source (), showing all 5 agents and correct trends.
+3.  **User:** Asks why commissions were not calculated for the newly imported data.
+4.  **Agent:** Creates and runs a script to backfill commissions for all 147 imported upgrades. Verifies dashboard now shows correct total commission.
+5.  **User:** Requests Head Commission be visible only to CS Heads and Admins.
+6.  **Agent:** Implements the role-based visibility for the commission card.
+7.  **User:** Reports CS Agents now see a completely blank dashboard (all data is zero).
+8.  **Agent:** Investigates and finds CS Agents default to a view they can't access. Implements a fix.
+9.  **User:** Reports the ENTIRE dashboard is now gone for CS Agents, not just zeroed out. Specifies detailed visibility rules for all roles on both CS and Sales dashboards.
+10. **Agent:** Identifies the root cause (a  failure due to a single permission-denied API call). Implements a more robust fix by catching errors on the frontend and refining backend filters for all roles. This fix is pending verification.
 
 **Project Health Check:**
--   **Broken:** None. The application is stable.
+-   **Broken:** The Sales and CS dashboards are critically broken for all , , and  roles, preventing them from seeing any data.
 -   **Mocked:** None.
--   **In Progress:** The entire feature suite for HR/Ops controls (Salary Estimation, Reassignments, Round Robin Management) is in progress. The backend is mostly implemented, while the frontend is in the initial creation stage.
+-   **In Progress:** The fix for the broken dashboards.
 
 **3rd Party Integrations**
--   **Google Sheets API:** Central to the lead ingestion workflow.
--   **APScheduler:** Used for background tasks, including the 5-minute sheet sync and the new CS student queue processing.
--   **SMTP (via Gmail):** Actively used for sending email notifications on assignments.
+-   **Google Sheets API:** Used for lead ingestion.
+-   **APScheduler:** Used for background tasks (sheet sync, student queue).
+-   **SMTP (via Gmail):** Used for email notifications.
 -   Meta Ads API
 -   ZK BioCloud (via web scraping)
 -   
 -   
 
 **Testing status**
--   **Testing agent used after significant changes:** YES. Used to validate the fix for the dashboard drill-down feature.
+-   **Testing agent used after significant changes:** YES, for the initial P0 features and the SLA Management system.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** None.
--   **Known regressions:** None.
+-   **Known regressions:** The dashboard visibility for non-admin roles has regressed significantly and is currently broken.
 
 **Credentials to test flow:**
--   **Super Admin:**
-    -   Email: 
-    -   Password: 
+-   **Super Admin:**  / 
+-   **CS Agent:**  / 
+-   **CS Head / Team Leader:**  / 
+-   **Sales Agent:**  / 
 
 **What agent forgot to execute**
--   The agent created the component files for the new frontend pages (, ) but did not implement their UI or logic.
--   The new pages have not been added to the application's navigation/routing, making them inaccessible.
--   The Salary Estimation widget for the frontend was planned but not created.
--   No functional testing ( or otherwise) was performed on any of the newly created backend endpoints in . Only a syntax check was done.</analysis>
+-   The agent did not complete the final verification (e.g., via screenshot or testing agent) after implementing the latest fix for the broken dashboards. The fix is in place but unconfirmed from a UI perspective.</analysis>

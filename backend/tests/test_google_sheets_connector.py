@@ -17,7 +17,7 @@ import uuid
 # Get BASE_URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://round-robin-mgmt.preview.emergentagent.com"
+    BASE_URL = "https://multi-role-analytics.preview.emergentagent.com"
 
 # Test credentials
 TEST_EMAIL = "aqib@clt-academy.com"

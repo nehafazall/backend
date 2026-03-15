@@ -6380,6 +6380,10 @@ async def get_monthly_trend(months: int = 12, view_mode: str = "team", user = De
     query = {}
     if view_mode == "individual" or user["role"] == "sales_executive":
         query["assigned_to"] = user["id"]
+    elif user["role"] == "team_leader":
+        team_members = await db.users.find({"team_id": user.get("team_id")}).to_list(100)
+        team_ids = [t["id"] for t in team_members] + [user["id"]]
+        query["assigned_to"] = {"$in": team_ids}
     
     pipeline = [
         {"$match": {"stage": "enrolled", **query}},
@@ -7096,6 +7100,11 @@ async def get_filtered_dashboard_stats(
     agent_filter = {}
     if view_mode == "individual" or user["role"] == "sales_executive":
         agent_filter["assigned_to"] = user["id"]
+    elif user["role"] == "team_leader":
+        # Team leader sees their team's data
+        team_members = await db.users.find({"team_id": user.get("team_id")}).to_list(100)
+        team_ids = [t["id"] for t in team_members] + [user["id"]]
+        agent_filter["assigned_to"] = {"$in": team_ids}
 
     # Count enrolled leads in period
     enrolled_query = {"stage": "enrolled", **date_filter, **agent_filter}
@@ -7145,6 +7154,10 @@ async def get_month_comparison(view_mode: str = "team", user = Depends(get_curre
     agent_filter = {}
     if view_mode == "individual" or user["role"] == "sales_executive":
         agent_filter["assigned_to"] = user["id"]
+    elif user["role"] == "team_leader":
+        team_members = await db.users.find({"team_id": user.get("team_id")}).to_list(100)
+        team_ids = [t["id"] for t in team_members] + [user["id"]]
+        agent_filter["assigned_to"] = {"$in": team_ids}
 
     # This month daily
     this_pipeline = [
@@ -10971,7 +10984,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://round-robin-mgmt.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://multi-role-analytics.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

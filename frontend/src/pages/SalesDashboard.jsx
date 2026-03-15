@@ -30,6 +30,7 @@ const SalesDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const isManagerOrAbove = ['sales_manager', 'team_leader', 'admin', 'super_admin'].includes(user?.role);
+    const isTeamLeader = user?.role === 'team_leader';
     const canDrillDown = isManagerOrAbove;
     const [period, setPeriod] = useState('overall');
     const [customStart, setCustomStart] = useState('');
@@ -60,22 +61,26 @@ const SalesDashboard = () => {
         setLoading(true);
         const vm = isManagerOrAbove ? 'team' : 'individual';
         try {
-            const [funnelRes, courseRes, trendRes, todayRes, compRes] = await Promise.all([
+            const results = await Promise.allSettled([
                 apiClient.get('/dashboard/lead-funnel'),
                 apiClient.get('/dashboard/sales-by-course'),
                 apiClient.get(`/dashboard/monthly-trend?view_mode=${vm}`),
                 apiClient.get(`/dashboard/today-transactions?view_mode=${vm}`),
                 apiClient.get(`/dashboard/month-comparison?view_mode=${vm}`),
             ]);
-            setLeadFunnel(funnelRes.data.map(item => ({ name: fmtStage(item._id), value: item.count, stage: item._id })));
-            const rawCourses = courseRes.data.map(item => ({ name: item.course_name || 'Unknown', sales: item.count, revenue: item.revenue || 0 })).sort((a, b) => b.revenue - a.revenue);
+            const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
+            const funnelData = val(0, []);
+            setLeadFunnel(Array.isArray(funnelData) ? funnelData.map(item => ({ name: fmtStage(item._id), value: item.count, stage: item._id })) : []);
+            const courseData = val(1, []);
+            const rawCourses = Array.isArray(courseData) ? courseData.map(item => ({ name: item.course_name || 'Unknown', sales: item.count, revenue: item.revenue || 0 })).sort((a, b) => b.revenue - a.revenue) : [];
             const top8 = rawCourses.slice(0, 8);
             const others = rawCourses.slice(8);
             if (others.length > 0) top8.push({ name: `Others (${others.length})`, sales: others.reduce((s, c) => s + c.sales, 0), revenue: others.reduce((s, c) => s + c.revenue, 0) });
             setSalesByCourse(top8.map((c, i) => ({ ...c, fill: COLORS[i % COLORS.length] })));
-            setMonthlyTrend(trendRes.data.map(item => ({ month: item._id, deals: item.deals, revenue: item.revenue })));
-            setTodayTxns(todayRes.data || { count: 0, total_amount: 0, transactions: [] });
-            setMonthComparison(compRes.data || null);
+            const trendData = val(2, []);
+            setMonthlyTrend(Array.isArray(trendData) ? trendData.map(item => ({ month: item._id, deals: item.deals, revenue: item.revenue })) : []);
+            setTodayTxns(val(3, { count: 0, total_amount: 0, transactions: [] }));
+            setMonthComparison(val(4, null));
         } catch (err) { console.error(err); }
         setLoading(false);
     };
@@ -84,16 +89,17 @@ const SalesDashboard = () => {
         try {
             const pq = periodQuery();
             const vm = isManagerOrAbove ? 'team' : 'individual';
-            const [statsRes, agentsRes, leaderRes, teamRes] = await Promise.all([
+            const results = await Promise.allSettled([
                 apiClient.get(`/dashboard/filtered-stats?${pq}&view_mode=${vm}`),
                 apiClient.get(`/dashboard/sales-agent-closings?${pq}&limit=10`),
                 apiClient.get('/dashboard/leaderboard'),
                 apiClient.get(`/dashboard/team-revenue?${pq}`),
             ]);
-            setFilteredStats(statsRes.data || {});
-            setTopAgentsOverall(agentsRes.data || []);
-            setLeaderboard(leaderRes.data || []);
-            setTeamRevenue(teamRes.data || []);
+            const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
+            setFilteredStats(val(0, {}) || {});
+            setTopAgentsOverall(val(1, []) || []);
+            setLeaderboard(val(2, []) || []);
+            setTeamRevenue(val(3, []) || []);
         } catch (err) { console.error(err); }
     };
 
