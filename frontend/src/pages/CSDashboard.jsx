@@ -13,6 +13,7 @@ import {
     Users, TrendingUp, Award, Target, DollarSign,
     Filter, ShieldCheck, Trophy, Zap, ChevronRight,
 } from 'lucide-react';
+import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
 const PERIOD_OPTIONS = [
@@ -231,6 +232,8 @@ const CSDashboard = () => {
                     </Select>
                 </div>
             </div>
+
+            <PerformanceInsightBanner endpoint="/cs/dashboard/performance-insight" />
 
             {/* Key Metrics */}
             <div className={`grid grid-cols-2 ${isHeadOrAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-3'} gap-4`}>

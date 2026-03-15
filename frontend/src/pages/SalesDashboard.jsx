@@ -17,6 +17,7 @@ import {
     DollarSign, TrendingUp, Users, Target, Award, Eye, Filter,
     BarChart3, PieChart as PieChartIcon, Layers, ChevronRight,
 } from 'lucide-react';
+import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
 const PERIOD_OPTIONS = [
@@ -287,6 +288,8 @@ const SalesDashboard = () => {
                     )}
                 </div>
             </div>
+
+            <PerformanceInsightBanner endpoint="/dashboard/performance-insight" />
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

@@ -7087,6 +7087,121 @@ async def get_team_agent_details(
     result = await db.leads.aggregate(pipeline).to_list(50)
     return [{"agent_name": r.get("agent_name", "Unknown"), "deals": r["deals"], "revenue": r["revenue"]} for r in result]
 
+
+@api_router.get("/dashboard/performance-insight")
+async def get_performance_insight(user=Depends(get_current_user)):
+    """Return current-month performance insight for the logged-in user vs team/company."""
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1).isoformat()[:10]
+    role = user["role"]
+    user_name = user.get("full_name") or user.get("name") or "there"
+
+    # Get all enrolled leads this month
+    base_match = {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}
+
+    # All agents' monthly closings
+    all_agents_pipeline = [
+        {"$match": base_match},
+        {"$group": {"_id": "$assigned_to", "deals": {"$sum": 1},
+                     "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}}},
+    ]
+    all_agents = await db.leads.aggregate(all_agents_pipeline).to_list(200)
+
+    total_agents = len(all_agents) if all_agents else 1
+    total_deals = sum(a["deals"] for a in all_agents)
+    total_revenue = sum(a["revenue"] for a in all_agents)
+    avg_deals = round(total_deals / total_agents, 1) if total_agents else 0
+    avg_revenue = round(total_revenue / total_agents, 0) if total_agents else 0
+
+    # Sort by revenue descending for ranking
+    all_agents.sort(key=lambda x: x["revenue"], reverse=True)
+
+    if role in ("sales_executive",):
+        my = next((a for a in all_agents if a["_id"] == user["id"]), None)
+        my_deals = my["deals"] if my else 0
+        my_revenue = my["revenue"] if my else 0
+        rank = next((i + 1 for i, a in enumerate(all_agents) if a["_id"] == user["id"]), 0)
+        delta_pct = round((my_revenue - avg_revenue) / avg_revenue * 100, 0) if avg_revenue else 0
+        return {
+            "type": "agent", "name": user_name, "role": role,
+            "your_deals": my_deals, "your_revenue": my_revenue,
+            "team_avg_deals": avg_deals, "team_avg_revenue": avg_revenue,
+            "rank": rank, "total_agents": total_agents, "delta_pct": delta_pct,
+            "month": now.strftime("%B %Y"),
+        }
+    elif role == "team_leader":
+        team_members = await db.users.find({"team_id": user.get("team_id")}).to_list(100)
+        team_ids = set(t["id"] for t in team_members) | {user["id"]}
+        team_agents = [a for a in all_agents if a["_id"] in team_ids]
+        team_deals = sum(a["deals"] for a in team_agents)
+        team_revenue = sum(a["revenue"] for a in team_agents)
+        team_name = user.get("team_name") or ""
+        if not team_name and user.get("team_id"):
+            team_doc = await db.teams.find_one({"id": user["team_id"]}, {"_id": 0, "name": 1})
+            team_name = team_doc["name"] if team_doc else "Your Team"
+        team_name = team_name or "Your Team"
+        return {
+            "type": "leader", "name": user_name, "role": role,
+            "team_deals": team_deals, "team_revenue": team_revenue,
+            "team_agent_count": len(team_agents),
+            "company_deals": total_deals, "company_revenue": total_revenue,
+            "team_name": team_name, "month": now.strftime("%B %Y"),
+        }
+    else:
+        return {
+            "type": "admin", "name": user_name, "role": role,
+            "total_deals": total_deals, "total_revenue": total_revenue,
+            "active_agents": total_agents, "avg_deals": avg_deals,
+            "avg_revenue": avg_revenue, "month": now.strftime("%B %Y"),
+        }
+
+@api_router.get("/cs/dashboard/performance-insight")
+async def get_cs_performance_insight(user=Depends(get_current_user)):
+    """Return current-month CS performance insight for the logged-in user."""
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1).isoformat()[:10]
+    role = user["role"]
+    user_name = user.get("full_name") or user.get("name") or "there"
+
+    base_match = {"created_at": {"$gte": month_start}}
+    all_agents_pipeline = [
+        {"$match": base_match},
+        {"$group": {"_id": "$agent_id", "name": {"$first": "$agent_name"},
+                     "upgrades": {"$sum": 1},
+                     "revenue": {"$sum": {"$ifNull": ["$amount", 0]}}}},
+    ]
+    all_agents = await db.cs_upgrades.aggregate(all_agents_pipeline).to_list(200)
+
+    total_agents = len(all_agents) if all_agents else 1
+    total_upgrades = sum(a["upgrades"] for a in all_agents)
+    total_revenue = sum(a["revenue"] for a in all_agents)
+    avg_upgrades = round(total_upgrades / total_agents, 1) if total_agents else 0
+    avg_revenue = round(total_revenue / total_agents, 0) if total_agents else 0
+
+    all_agents.sort(key=lambda x: x["revenue"], reverse=True)
+
+    if role == "cs_agent":
+        my = next((a for a in all_agents if a["_id"] == user["id"]), None)
+        my_upgrades = my["upgrades"] if my else 0
+        my_revenue = my["revenue"] if my else 0
+        rank = next((i + 1 for i, a in enumerate(all_agents) if a["_id"] == user["id"]), 0)
+        delta_pct = round((my_revenue - avg_revenue) / avg_revenue * 100, 0) if avg_revenue else 0
+        return {
+            "type": "agent", "name": user_name, "role": role,
+            "your_upgrades": my_upgrades, "your_revenue": my_revenue,
+            "team_avg_upgrades": avg_upgrades, "team_avg_revenue": avg_revenue,
+            "rank": rank, "total_agents": total_agents, "delta_pct": delta_pct,
+            "month": now.strftime("%B %Y"),
+        }
+    else:
+        return {
+            "type": "admin", "name": user_name, "role": role,
+            "total_upgrades": total_upgrades, "total_revenue": total_revenue,
+            "active_agents": total_agents, "avg_upgrades": avg_upgrades,
+            "avg_revenue": avg_revenue, "month": now.strftime("%B %Y"),
+        }
+
+
 @api_router.get("/dashboard/filtered-stats")
 async def get_filtered_dashboard_stats(
     period: str = "overall",
