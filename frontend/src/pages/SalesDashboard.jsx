@@ -29,6 +29,8 @@ const PERIOD_OPTIONS = [
 const SalesDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const isManagerOrAbove = ['sales_manager', 'team_leader', 'admin', 'super_admin'].includes(user?.role);
+    const canDrillDown = isManagerOrAbove;
     const [period, setPeriod] = useState('overall');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
@@ -56,13 +58,14 @@ const SalesDashboard = () => {
 
     const fetchAllData = async () => {
         setLoading(true);
+        const vm = isManagerOrAbove ? 'team' : 'individual';
         try {
             const [funnelRes, courseRes, trendRes, todayRes, compRes] = await Promise.all([
                 apiClient.get('/dashboard/lead-funnel'),
                 apiClient.get('/dashboard/sales-by-course'),
-                apiClient.get('/dashboard/monthly-trend'),
-                apiClient.get('/dashboard/today-transactions'),
-                apiClient.get('/dashboard/month-comparison'),
+                apiClient.get(`/dashboard/monthly-trend?view_mode=${vm}`),
+                apiClient.get(`/dashboard/today-transactions?view_mode=${vm}`),
+                apiClient.get(`/dashboard/month-comparison?view_mode=${vm}`),
             ]);
             setLeadFunnel(funnelRes.data.map(item => ({ name: fmtStage(item._id), value: item.count, stage: item._id })));
             const rawCourses = courseRes.data.map(item => ({ name: item.course_name || 'Unknown', sales: item.count, revenue: item.revenue || 0 })).sort((a, b) => b.revenue - a.revenue);
@@ -80,8 +83,9 @@ const SalesDashboard = () => {
     const fetchFilteredData = async () => {
         try {
             const pq = periodQuery();
+            const vm = isManagerOrAbove ? 'team' : 'individual';
             const [statsRes, agentsRes, leaderRes, teamRes] = await Promise.all([
-                apiClient.get(`/dashboard/filtered-stats?${pq}`),
+                apiClient.get(`/dashboard/filtered-stats?${pq}&view_mode=${vm}`),
                 apiClient.get(`/dashboard/sales-agent-closings?${pq}&limit=10`),
                 apiClient.get('/dashboard/leaderboard'),
                 apiClient.get(`/dashboard/team-revenue?${pq}`),
@@ -300,7 +304,7 @@ const SalesDashboard = () => {
             {/* Top 10 Agents + Team Revenue */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Top 10 Agents</CardTitle></div><CardDescription>Click any bar to see their closed students</CardDescription></CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Top 10 Agents</CardTitle></div>{canDrillDown && <CardDescription>Click any bar to see their closed students</CardDescription>}</CardHeader>
                     <CardContent>
                         {topAgentsOverall.length > 0 ? (
                             <ResponsiveContainer width="100%" height={320}>
@@ -309,8 +313,8 @@ const SalesDashboard = () => {
                                     <XAxis type="number" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} />
                                     <YAxis dataKey="agent_name" type="category" tick={{ className: 'fill-foreground', fontSize: 10 }} width={110} />
                                     <Tooltip formatter={(v, n) => [n === 'Revenue' ? fmtCur(v) : v, n]} contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                                    <Bar dataKey="closings" fill="#EF3340" radius={[0, 4, 4, 0]} name="Closings" cursor="pointer"
-                                        onClick={(data) => { if (data?.agent_name) drillAgent(data.agent_name); }} />
+                                    <Bar dataKey="closings" fill="#EF3340" radius={[0, 4, 4, 0]} name="Closings" cursor={canDrillDown ? "pointer" : "default"}
+                                        onClick={(data) => { if (canDrillDown && data?.agent_name) drillAgent(data.agent_name); }} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (<div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>)}
@@ -318,7 +322,7 @@ const SalesDashboard = () => {
                 </Card>
 
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Layers className="h-5 w-5 text-blue-500" /><CardTitle className="text-base">Team-wise Revenue</CardTitle></div><CardDescription>Click a team bar to see their agents</CardDescription></CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Layers className="h-5 w-5 text-blue-500" /><CardTitle className="text-base">Team-wise Revenue</CardTitle></div>{canDrillDown && <CardDescription>Click a team bar to see their agents</CardDescription>}</CardHeader>
                     <CardContent>
                         {teamRevenue.length > 0 ? (
                             <ResponsiveContainer width="100%" height={320}>
@@ -327,8 +331,8 @@ const SalesDashboard = () => {
                                     <XAxis dataKey="team_name" tick={{ className: 'fill-foreground', fontSize: 10 }} angle={-15} textAnchor="end" height={55} />
                                     <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                                     <Tooltip formatter={(v) => fmtCur(v)} contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} name="Revenue" cursor="pointer"
-                                        onClick={(data) => { if (data?.team_name) drillTeam(data.team_name); }}>
+                                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} name="Revenue" cursor={canDrillDown ? "pointer" : "default"}
+                                        onClick={(data) => { if (canDrillDown && data?.team_name) drillTeam(data.team_name); }}>
                                         {teamRevenue.map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
                                     </Bar>
                                 </BarChart>
@@ -341,11 +345,11 @@ const SalesDashboard = () => {
             {/* Monthly Trend + Month Comparison */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /><CardTitle className="text-base">Monthly Revenue Trend</CardTitle></div><CardDescription>Click any month for detailed breakdown</CardDescription></CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /><CardTitle className="text-base">Monthly Revenue Trend</CardTitle></div>{canDrillDown && <CardDescription>Click any month for detailed breakdown</CardDescription>}</CardHeader>
                     <CardContent>
                         {monthlyTrend.length > 0 ? (
                             <ResponsiveContainer width="100%" height={280}>
-                                <AreaChart data={monthlyTrend} onClick={(e) => { if (e?.activePayload?.[0]?.payload?.month) drillMonth(e.activePayload[0].payload.month); }}>
+                                <AreaChart data={monthlyTrend} onClick={(e) => { if (canDrillDown && e?.activePayload?.[0]?.payload?.month) drillMonth(e.activePayload[0].payload.month); }}>
                                     <defs>
                                         <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#EF3340" stopOpacity={0.4} /><stop offset="95%" stopColor="#EF3340" stopOpacity={0} /></linearGradient>
                                         <linearGradient id="gDeals" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
@@ -403,13 +407,13 @@ const SalesDashboard = () => {
                 </Card>
 
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Monthly Leaderboard</CardTitle></div></div><CardDescription>Click agent to see their students</CardDescription></CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Monthly Leaderboard</CardTitle></div></div>{canDrillDown && <CardDescription>Click agent to see their students</CardDescription>}</CardHeader>
                     <CardContent>
                         {leaderboard.length > 0 ? (
                             <div className="space-y-2">
                                 {leaderboard.slice(0, 5).map((entry, i) => (
-                                    <div key={entry.user_id} className={`flex items-center justify-between p-3 rounded-lg transition-colors cursor-pointer ${entry.user_id === user?.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50 hover:bg-muted'}`}
-                                        onClick={() => drillAgent(entry.name, [{ label: 'Leaderboard' }])} data-testid={`leaderboard-agent-${i}`}>
+                                    <div key={entry.user_id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${canDrillDown ? 'cursor-pointer' : ''} ${entry.user_id === user?.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50 hover:bg-muted'}`}
+                                        onClick={() => canDrillDown && drillAgent(entry.name, [{ label: 'Leaderboard' }])} data-testid={`leaderboard-agent-${i}`}>
                                         <div className="flex items-center gap-3">
                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-orange-600 text-white' : 'bg-muted text-muted-foreground'}`}>{entry.rank}</div>
                                             <div><p className="font-medium text-sm">{entry.name}</p><p className="text-xs text-muted-foreground">{entry.deals} deals</p></div>
@@ -429,7 +433,7 @@ const SalesDashboard = () => {
             {/* Pipeline + Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /><CardTitle className="text-base">Lead Pipeline</CardTitle></div><CardDescription>Click any stage to see lead & agent breakdown</CardDescription></CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" /><CardTitle className="text-base">Lead Pipeline</CardTitle></div>{canDrillDown && <CardDescription>Click any stage to see lead & agent breakdown</CardDescription>}</CardHeader>
                     <CardContent>
                         {leadFunnel.length > 0 ? (
                             <ResponsiveContainer width="100%" height={220}>
@@ -438,8 +442,8 @@ const SalesDashboard = () => {
                                     <XAxis type="number" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} />
                                     <YAxis dataKey="name" type="category" tick={{ className: 'fill-foreground', fontSize: 10 }} width={95} />
                                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} cursor="pointer"
-                                        onClick={(data) => { if (data?.stage) drillPipeline(data.name, data.stage); }}>
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} cursor={canDrillDown ? "pointer" : "default"}
+                                        onClick={(data) => { if (canDrillDown && data?.stage) drillPipeline(data.name, data.stage); }}>
                                         {leadFunnel.map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
                                     </Bar>
                                 </BarChart>

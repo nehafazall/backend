@@ -53,12 +53,15 @@ const CSDashboard = () => {
     const fetchAll = async () => {
         try {
             setLoading(true);
+            // Stats & trend = always individual for agents, respects viewMode for heads/admins
+            // Charts (agent-revenue, leaderboard, bifurcation) = always team-wide
+            const myViewMode = isHeadOrAdmin ? viewMode : 'individual';
             const [statsRes, agentRevRes, trendRes, compRes, pipeRes, leadRes, bifRes] = await Promise.all([
-                apiClient.get(`/cs/dashboard/stats?period=${period}&view_mode=${viewMode}`),
+                apiClient.get(`/cs/dashboard/stats?period=${period}&view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/agent-revenue?period=${period}`),
-                apiClient.get('/cs/dashboard/monthly-trend'),
-                apiClient.get('/cs/dashboard/month-comparison'),
-                apiClient.get(`/cs/dashboard/pipeline?view_mode=${viewMode}`),
+                apiClient.get(`/cs/dashboard/monthly-trend?view_mode=${myViewMode}`),
+                apiClient.get(`/cs/dashboard/month-comparison?view_mode=${myViewMode}`),
+                apiClient.get(`/cs/dashboard/pipeline?view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/leaderboard?period=${period}`),
                 apiClient.get(`/dashboard/cs-agent-bifurcation?period=${period}`),
             ]);
@@ -73,6 +76,7 @@ const CSDashboard = () => {
         finally { setLoading(false); }
     };
 
+    const canDrillDown = isHeadOrAdmin;
     const closeDrill = () => setDrill({ open: false, title: '', content: null, loading: false });
     const openDrillLoading = (title) => setDrill({ open: true, title, content: null, loading: true });
 
@@ -264,8 +268,8 @@ const CSDashboard = () => {
                                     <XAxis type="number" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
                                     <YAxis dataKey="agent_name" type="category" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} width={100} />
                                     <Tooltip content={<ChartTooltip formatter={fmtCur} />} />
-                                    <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} name="Revenue" cursor="pointer"
-                                        onClick={(data) => { if (data?.agent_name) drillCsAgent(data.agent_name); }} />
+                                    <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} name="Revenue" cursor={canDrillDown ? "pointer" : "default"}
+                                        onClick={(data) => { if (canDrillDown && data?.agent_name) drillCsAgent(data.agent_name); }} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (<div className="h-64 flex items-center justify-center text-muted-foreground">No revenue data yet</div>)}

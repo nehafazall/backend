@@ -6376,9 +6376,9 @@ async def get_payment_summary(user = Depends(get_current_user)):
     return result
 
 @api_router.get("/dashboard/monthly-trend")
-async def get_monthly_trend(months: int = 12, user = Depends(get_current_user)):
+async def get_monthly_trend(months: int = 12, view_mode: str = "team", user = Depends(get_current_user)):
     query = {}
-    if user["role"] == "sales_executive":
+    if view_mode == "individual" or user["role"] == "sales_executive":
         query["assigned_to"] = user["id"]
     
     pipeline = [
@@ -6796,9 +6796,13 @@ async def get_cs_agent_revenue(
     return [{"agent_name": r["agent_name"], "revenue": r["total_revenue"], "upgrades": r["count"]} for r in result]
 
 @api_router.get("/cs/dashboard/monthly-trend")
-async def get_cs_monthly_revenue_trend(user=Depends(get_current_user)):
+async def get_cs_monthly_revenue_trend(view_mode: str = "team", user=Depends(get_current_user)):
     """Monthly upgrade revenue trend from cs_upgrades collection."""
+    match_filter = {}
+    if view_mode == "individual":
+        match_filter["cs_agent_id"] = user["id"]
     pipeline = [
+        {"$match": match_filter},
         {"$addFields": {"month_str": {"$substr": ["$date", 0, 7]}}},
         {"$group": {
             "_id": "$month_str",
@@ -6811,7 +6815,7 @@ async def get_cs_monthly_revenue_trend(user=Depends(get_current_user)):
     return [{"month": r["_id"], "revenue": r["revenue"], "upgrades": r["count"]} for r in result]
 
 @api_router.get("/cs/dashboard/month-comparison")
-async def get_cs_month_comparison(user=Depends(get_current_user)):
+async def get_cs_month_comparison(view_mode: str = "team", user=Depends(get_current_user)):
     """This month vs last month daily revenue comparison from cs_upgrades."""
     now = datetime.now(timezone.utc)
     this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -6827,8 +6831,12 @@ async def get_cs_month_comparison(user=Depends(get_current_user)):
     last_month_data = {}
     
     # Query cs_upgrades for both months
+    match_filter = {"date": {"$gte": last_month_start.strftime("%Y-%m-01")}}
+    if view_mode == "individual":
+        match_filter["cs_agent_id"] = user["id"]
+    
     upgrades = await db.cs_upgrades.find(
-        {"date": {"$gte": last_month_start.strftime("%Y-%m-01")}},
+        match_filter,
         {"_id": 0, "date": 1, "amount": 1}
     ).to_list(5000)
     
@@ -7080,13 +7088,17 @@ async def get_filtered_dashboard_stats(
     period: str = "overall",
     custom_start: Optional[str] = None,
     custom_end: Optional[str] = None,
+    view_mode: str = "team",
     user = Depends(get_current_user)
 ):
     """Dashboard summary stats with date filters."""
     date_filter = _build_date_filter("enrolled_at", period, custom_start, custom_end)
+    agent_filter = {}
+    if view_mode == "individual" or user["role"] == "sales_executive":
+        agent_filter["assigned_to"] = user["id"]
 
     # Count enrolled leads in period
-    enrolled_query = {"stage": "enrolled", **date_filter}
+    enrolled_query = {"stage": "enrolled", **date_filter, **agent_filter}
     total_enrolled = await db.leads.count_documents(enrolled_query)
 
     # Revenue in period
@@ -7099,7 +7111,7 @@ async def get_filtered_dashboard_stats(
 
     # Total leads in period
     leads_date_filter = _build_date_filter("created_at", period, custom_start, custom_end)
-    total_leads = await db.leads.count_documents(leads_date_filter)
+    total_leads = await db.leads.count_documents({**leads_date_filter, **agent_filter})
 
     # Avg deal size
     avg_deal = total_revenue / total_enrolled if total_enrolled > 0 else 0
@@ -7117,7 +7129,7 @@ async def get_filtered_dashboard_stats(
     }
 
 @api_router.get("/dashboard/month-comparison")
-async def get_month_comparison(user = Depends(get_current_user)):
+async def get_month_comparison(view_mode: str = "team", user = Depends(get_current_user)):
     """Compare this month vs last month revenue on daily basis for XY scatter."""
     now = datetime.now(timezone.utc)
     this_month_start = now.replace(day=1).isoformat()[:10]
@@ -7130,9 +7142,13 @@ async def get_month_comparison(user = Depends(get_current_user)):
         last_month_start = now.replace(month=now.month - 1, day=1).isoformat()[:10]
         last_month_end = this_month_start
 
+    agent_filter = {}
+    if view_mode == "individual" or user["role"] == "sales_executive":
+        agent_filter["assigned_to"] = user["id"]
+
     # This month daily
     this_pipeline = [
-        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}}},
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}, **agent_filter}},
         {"$addFields": {"day": {"$substr": ["$enrolled_at", 8, 2]}}},
         {"$group": {"_id": "$day", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "count": {"$sum": 1}}},
         {"$sort": {"_id": 1}}
@@ -7141,7 +7157,7 @@ async def get_month_comparison(user = Depends(get_current_user)):
 
     # Last month daily
     last_pipeline = [
-        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": last_month_start, "$lt": last_month_end}}},
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": last_month_start, "$lt": last_month_end}, **agent_filter}},
         {"$addFields": {"day": {"$substr": ["$enrolled_at", 8, 2]}}},
         {"$group": {"_id": "$day", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "count": {"$sum": 1}}},
         {"$sort": {"_id": 1}}
