@@ -12,7 +12,7 @@ import {
 import {
     Users, DollarSign, TrendingUp, TrendingDown, CheckCircle, Clock,
     Wallet, ArrowUpRight, ArrowDownRight, GraduationCap, Phone,
-    Target, Trophy, Zap, Star, ChevronRight,
+    Target, Trophy, Zap, Star, ChevronRight, Eye, EyeOff,
 } from 'lucide-react';
 
 const PERIOD_OPTIONS = [
@@ -24,7 +24,7 @@ const PERIOD_OPTIONS = [
 const USD_TO_AED = 3.674;
 const fmtAED = (v) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(v || 0);
 const fmtUSD = (v) => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-
+const MASKED = '••••••';
 /* ───────── Stat Card ───────── */
 function StatCard({ title, value, subtitle, icon: Icon, colorClass = 'bg-blue-500/10 text-blue-500', trend, trendUp }) {
     return (
@@ -72,6 +72,7 @@ function MentorDashboardPage() {
     const [revenueChart, setRevenueChart] = useState([]);
     const [period, setPeriod] = useState('overall');
     const [loading, setLoading] = useState(true);
+    const [showSensitive, setShowSensitive] = useState(false);
 
     const isMaster = user?.role === 'master_of_academics';
     const isAdmin = ['super_admin', 'admin'].includes(user?.role);
@@ -185,25 +186,32 @@ function MentorDashboardPage() {
 
                 {/* Commission Card */}
                 <Card data-testid="commission-card">
-                    <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />Commission</CardTitle></CardHeader>
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />Commission</CardTitle>
+                            <button onClick={() => setShowSensitive(!showSensitive)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-sensitive-btn" aria-label={showSensitive ? 'Hide sensitive data' : 'Show sensitive data'}>
+                                {showSensitive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                            </button>
+                        </div>
+                    </CardHeader>
                     <CardContent className="space-y-3">
                         <div className="flex justify-between items-center">
                             <span className="text-sm text-muted-foreground">Flat (1% of deposits)</span>
-                            <span className="font-semibold text-emerald-500 font-mono">{fmtAED(d.flat_commission_aed)}</span>
+                            <span className="font-semibold text-emerald-500 font-mono">{showSensitive ? fmtAED(d.flat_commission_aed) : MASKED}</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-sm text-muted-foreground">Net (1% of net)</span>
-                            <span className={`font-semibold font-mono ${d.net_commission_aed >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtAED(d.net_commission_aed)}</span>
+                            <span className={`font-semibold font-mono ${d.net_commission_aed >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{showSensitive ? fmtAED(d.net_commission_aed) : MASKED}</span>
                         </div>
                         {isMaster && (
                             <div className="flex justify-between items-center border-t border-border/50 pt-2">
                                 <span className="text-sm text-muted-foreground">Team Override (0.5%)</span>
-                                <span className="font-semibold text-blue-500 font-mono">{fmtAED(d.team_override_aed)}</span>
+                                <span className="font-semibold text-blue-500 font-mono">{showSensitive ? fmtAED(d.team_override_aed) : MASKED}</span>
                             </div>
                         )}
                         <div className="flex justify-between items-center border-t border-border pt-2">
                             <span className="font-medium">Total</span>
-                            <span className="text-lg font-bold font-mono text-primary">{fmtAED(d.total_commission_aed)}</span>
+                            <span className="text-lg font-bold font-mono text-primary">{showSensitive ? fmtAED(d.total_commission_aed) : MASKED}</span>
                         </div>
                         {d.net_commission_aed < 0 && (
                             <p className="text-xs text-red-400 bg-red-500/10 p-2 rounded">Commission on hold — net is negative. Payout withheld until recovered.</p>
@@ -221,6 +229,12 @@ function MentorDashboardPage() {
                         <CardDescription>This month: {fmtUSD(monthNetUSD)} net deposits</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                        {bonus.salary_aed > 0 && (
+                            <div className="flex justify-between items-center text-sm bg-muted/40 rounded-lg px-3 py-2">
+                                <span className="text-muted-foreground">Base Salary</span>
+                                <span className="font-semibold font-mono">{showSensitive ? fmtAED(bonus.salary_aed) : MASKED}</span>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <div className="flex justify-between text-xs">
                                 <span>{currentSlab ? `${currentSlab.bonus_pct}% slab achieved` : 'No slab reached yet'}</span>
@@ -232,9 +246,9 @@ function MentorDashboardPage() {
                             <div className="bg-amber-500/10 rounded-lg p-3 flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium">Current Bonus</p>
-                                    <p className="text-xs text-muted-foreground">{currentSlab.bonus_pct}% of AED {bonus.salary_aed} salary</p>
+                                    <p className="text-xs text-muted-foreground">{currentSlab.bonus_pct}% of salary</p>
                                 </div>
-                                <p className="text-xl font-bold text-amber-500 font-mono">{fmtAED(bonusAED)}</p>
+                                <p className="text-xl font-bold text-amber-500 font-mono">{showSensitive ? fmtAED(bonusAED) : MASKED}</p>
                             </div>
                         )}
                         <div className="grid grid-cols-5 gap-1 text-center">

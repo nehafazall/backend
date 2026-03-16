@@ -40,7 +40,11 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - FIXED: Edwin's net commission was 1.5% → corrected to 1% (backend line 6595)
 - FIXED: Leaderboard + charts were hidden when empty → always render with empty states
 - FIXED: Team Overview invisible → now uses canDrillDown flag, not teamData truthy check
-- Seeded 14 deposits + 3 withdrawals for 6 mentors on Atlas DB for testing
+- ADDED: Eye toggle (show/hide) for sensitive data — commission amounts, salary, bonus
+- ADDED: Base Salary row in Bonus Progress card (fetched from Employee Master / hr_employees)
+- ENFORCED: Team Override (0.5%) visible ONLY to Edwin (master_of_academics), not regular mentors
+- ENFORCED: Team Overview section ONLY visible to Edwin/Admin, regular mentors see individual + leaderboard
+- CLEANED: All test data removed from mentor_redeposits and mentor_withdrawals on Atlas DB
 
 ## Test Credentials
 - Super Admin: aqib@clt-academy.com / @Aqib1234
