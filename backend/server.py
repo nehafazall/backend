@@ -6655,9 +6655,12 @@ async def get_mentor_dashboard(
             next_slab = slab
             break
 
-    # Get salary for bonus calc
-    hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary": 1})
-    salary_aed = hr_emp.get("salary", 0) if hr_emp else 0
+    # Get net salary from salary_structure for bonus calc (fallback to top-level salary)
+    hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
+    salary_aed = 0
+    if hr_emp:
+        ss = hr_emp.get("salary_structure") or {}
+        salary_aed = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
     bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
 
     return {
