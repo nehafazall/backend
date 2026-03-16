@@ -63,6 +63,7 @@ import DataManagementPage from "@/pages/finance/DataManagementPage";
 // Finance Suite - Settings & Vendors
 import FinanceSettingsPage from "@/pages/finance/FinanceSettingsPage";
 import VendorManagementPage from "@/pages/finance/VendorManagementPage";
+import WithdrawalsPage from "@/pages/finance/WithdrawalsPage";
 import UnifiedTransactionsPage from "@/pages/finance/UnifiedTransactionsPage";
 // Finance Dashboard Router
 import FinanceDashboardRouter from "@/pages/FinanceDashboardRouter";
@@ -181,7 +182,7 @@ function AppRoutes() {
                 
                 {/* Today's Follow-ups */}
                 <Route path="followups" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics']}>
                         <FollowupsPage />
                     </ProtectedRoute>
                 } />
@@ -233,17 +234,17 @@ function AppRoutes() {
                 
                 {/* Mentor CRM */}
                 <Route path="mentor" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
                         <MentorCRMPage />
                     </ProtectedRoute>
                 } />
                 <Route path="mentor/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
                         <MentorDashboardPage />
                     </ProtectedRoute>
                 } />
                 <Route path="mentor/leaderboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
                         <MentorLeaderboard />
                     </ProtectedRoute>
                 } />
@@ -297,6 +298,13 @@ function AppRoutes() {
                     {/* Unified Transactions */}
                     <Route path="transactions" element={<UnifiedTransactionsPage />} />
                 </Route>
+                
+                {/* Finance - Mentor Withdrawals (standalone) */}
+                <Route path="finance/mentor-withdrawals" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                        <WithdrawalsPage />
+                    </ProtectedRoute>
+                } />
                 
                 {/* HR Module */}
                 <Route path="hr/dashboard" element={
@@ -454,7 +462,7 @@ function AppRoutes() {
                 
                 {/* Transfer Requests (Dual Approval) */}
                 <Route path="transfer-requests" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics']}>
                         <TransferRequestsPage />
                     </ProtectedRoute>
                 } />

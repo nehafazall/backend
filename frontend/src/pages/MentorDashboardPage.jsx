@@ -1,45 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth, apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, Legend, ComposedChart, Area,
 } from 'recharts';
 import {
-    Users, DollarSign, TrendingUp, CheckCircle, Clock, Wallet,
-    GraduationCap, Phone, Target, Filter, ChevronRight,
+    Users, DollarSign, TrendingUp, TrendingDown, Wallet, ArrowUpRight,
+    GraduationCap, Target, Filter, ChevronRight, Trophy, Zap, Star,
 } from 'lucide-react';
 
 const PERIOD_OPTIONS = [
-    { value: 'today', label: 'Today' },
-    { value: 'this_week', label: 'This Week' },
     { value: 'this_month', label: 'This Month' },
     { value: 'this_quarter', label: 'This Quarter' },
     { value: 'this_year', label: 'This Year' },
     { value: 'overall', label: 'Overall' },
 ];
+const USD_TO_AED = 3.674;
+const fmtAED = (v) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(v || 0);
+const fmtUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v || 0);
 
-function StatCard({ title, value, subtitle, icon, color }) {
-    const Icon = icon;
-    const colorClasses = {
-        blue: 'bg-blue-500/10 text-blue-500', green: 'bg-emerald-500/10 text-emerald-500',
-        orange: 'bg-orange-500/10 text-orange-500', purple: 'bg-purple-500/10 text-purple-500',
-    };
+function StatCard({ title, value, subtitle, icon: Icon, colorClass = 'bg-blue-500/10 text-blue-500' }) {
     return (
-        <Card>
+        <Card data-testid={`stat-${title.toLowerCase().replace(/\s+/g, '-')}`}>
             <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                     <div>
-                        <p className="text-sm text-muted-foreground">{title}</p>
-                        <p className="text-3xl font-bold mt-1">{value}</p>
+                        <p className="text-xs uppercase tracking-wider text-muted-foreground">{title}</p>
+                        <p className="text-2xl font-bold mt-1 font-mono">{value}</p>
                         {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
                     </div>
-                    <div className={`p-3 rounded-xl ${colorClasses[color] || colorClasses.blue}`}><Icon className="h-6 w-6" /></div>
+                    <div className={`p-2.5 rounded-xl ${colorClass}`}><Icon className="h-5 w-5" /></div>
                 </div>
             </CardContent>
         </Card>
@@ -49,331 +45,239 @@ function StatCard({ title, value, subtitle, icon, color }) {
 function MentorDashboardPage() {
     const { user } = useAuth();
     const [data, setData] = useState(null);
-    const [mentorBifurcation, setMentorBifurcation] = useState([]);
+    const [trend, setTrend] = useState([]);
+    const [leaderboard, setLeaderboard] = useState([]);
+    const [revenueChart, setRevenueChart] = useState([]);
     const [period, setPeriod] = useState('overall');
+    const [viewMode, setViewMode] = useState('team');
     const [loading, setLoading] = useState(true);
-    const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], type: '', loading: false });
 
-    useEffect(() => { loadDashboardData(); }, []);
-    useEffect(() => { fetchMentorBifurcation(); }, [period]);
+    const isMaster = user?.role === 'master_of_academics';
+    const isAdmin = ['super_admin', 'admin'].includes(user?.role);
+    const canToggleView = isMaster || isAdmin;
+    const canDrillDown = isMaster || isAdmin;
 
-    async function loadDashboardData() {
+    const effectiveView = canToggleView ? viewMode : 'individual';
+
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await apiClient.get('/mentor/dashboard');
-            setData(res.data);
-            fetchMentorBifurcation();
-        } catch (err) {
-            toast.error('Failed to load dashboard data');
-        }
+            const results = await Promise.allSettled([
+                apiClient.get(`/mentor/dashboard?period=${period}&view_mode=${effectiveView}`),
+                apiClient.get(`/mentor/dashboard/monthly-trend?view_mode=${effectiveView}`),
+                apiClient.get(`/mentor/dashboard/leaderboard?period=${period}`),
+                apiClient.get(`/mentor/dashboard/revenue-chart?period=${period}`),
+            ]);
+            const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
+            setData(val(0, null));
+            setTrend(val(1, []));
+            setLeaderboard(val(2, []));
+            setRevenueChart(val(3, []));
+        } catch (err) { console.error(err); }
         setLoading(false);
-    }
+    }, [period, effectiveView]);
 
-    async function fetchMentorBifurcation() {
-        try {
-            const res = await apiClient.get(`/dashboard/mentor-bifurcation?period=${period}`);
-            setMentorBifurcation(res.data || []);
-        } catch (err) {
-            console.error('Failed to fetch mentor bifurcation:', err);
-        }
-    }
+    useEffect(() => { loadData(); }, [loadData]);
 
-    const formatCurrency = (amount) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amount || 0);
-
-    // ====== DRILL-DOWN HANDLERS ======
-    const drillMentorStudents = async (mentor) => {
-        setDrillModal({ open: true, title: `${mentor.mentor_name} - Students`, data: [], type: 'mentor_students', loading: true });
-        try {
-            const res = await apiClient.get(`/mentor/drill/students?mentor_name=${encodeURIComponent(mentor.mentor_name)}`);
-            const students = res.data || [];
-            const stageGroups = {};
-            students.forEach(s => {
-                const stage = s.mentor_stage || s.stage || 'unknown';
-                if (!stageGroups[stage]) stageGroups[stage] = [];
-                stageGroups[stage].push(s);
-            });
-            setDrillModal(prev => ({ ...prev, data: { students, stageGroups, mentor }, loading: false }));
-        } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
-    };
-
-    const drillPipelineStage = async (stageName, stageKey) => {
-        setDrillModal({ open: true, title: `${stageName} - Students`, data: [], type: 'mentor_pipeline_stage', loading: true });
-        try {
-            const res = await apiClient.get(`/mentor/drill/pipeline-stage?stage=${stageKey}`);
-            setDrillModal(prev => ({ ...prev, data: res.data || {}, loading: false }));
-        } catch { setDrillModal(prev => ({ ...prev, loading: false })); }
-    };
-
-    if (loading) {
+    if (loading || !data) {
         return (<div className="flex items-center justify-center h-96"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>);
     }
 
-    const stats = data || { total_students: 0, total_revenue: 0, total_withdrawn: 0, current_net: 0, total_commission: 0, commission_received: 0, commission_balance: 0, upgrades_helped: 0, students_connected: 0, students_balance: 0, recent_activities: [], student_stages: {} };
-    const connectionRate = stats.total_students > 0 ? Math.round((stats.students_connected / stats.total_students) * 100) : 0;
-    const totalMentorStudents = mentorBifurcation.reduce((s, m) => s + m.total_students, 0);
-    const totalRedeposits = mentorBifurcation.reduce((s, m) => s + (m.redeposit_amount || 0), 0);
+    const bonus = data.bonus || {};
+    const slabs = bonus.slabs || [];
+    const monthNetUSD = bonus.month_net_usd || 0;
+    const currentSlab = bonus.current_slab;
+    const nextSlab = bonus.next_slab;
+    const bonusAED = bonus.bonus_amount_aed || 0;
+    const progressPct = nextSlab ? Math.min(100, (monthNetUSD / nextSlab.threshold) * 100) : 100;
+    const toNextSlab = nextSlab ? nextSlab.threshold - monthNetUSD : 0;
 
-    const pipelineStages = [
-        { stage: 'New Student', key: 'new_student', count: stats.student_stages?.new_student || 0, color: 'bg-blue-500' },
-        { stage: 'Discussion Started', key: 'discussion_started', count: stats.student_stages?.discussion_started || 0, color: 'bg-purple-500' },
-        { stage: 'Pitched Redeposit', key: 'pitched_for_redeposit', count: stats.student_stages?.pitched_for_redeposit || 0, color: 'bg-orange-500' },
-        { stage: 'Interested', key: 'interested', count: stats.student_stages?.interested || 0, color: 'bg-yellow-500' },
-        { stage: 'Closed (Deposit)', key: 'closed', count: stats.student_stages?.closed || 0, color: 'bg-emerald-500' },
-    ];
+    const netNegative = data.net_aed < 0;
 
     return (
         <div className="space-y-6" data-testid="mentor-dashboard-page">
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                         <GraduationCap className="h-8 w-8 text-orange-500" />
                         Mentor Dashboard
                     </h1>
-                    <p className="text-muted-foreground">Welcome back, {user?.full_name}! Click charts for details.</p>
+                    <p className="text-muted-foreground">
+                        {isMaster ? 'Team overview — click charts to drill down' : `Welcome back, ${user?.full_name?.split(' ')[0]}`}
+                    </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-muted-foreground" />
-                        <Select value={period} onValueChange={setPeriod}>
-                            <SelectTrigger className="w-[160px]" data-testid="mentor-period-filter"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Badge className="bg-orange-500 text-white px-4 py-2 text-sm">{user?.role?.replace(/_/g, ' ').toUpperCase()}</Badge>
+                    {canToggleView && (
+                        <Tabs value={viewMode} onValueChange={setViewMode} data-testid="view-toggle">
+                            <TabsList><TabsTrigger value="individual">Individual</TabsTrigger><TabsTrigger value="team">Team</TabsTrigger></TabsList>
+                        </Tabs>
+                    )}
+                    <Select value={period} onValueChange={setPeriod}>
+                        <SelectTrigger className="w-[140px]" data-testid="period-filter"><SelectValue /></SelectTrigger>
+                        <SelectContent>{PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
                 </div>
+            </div>
+
+            {/* Deposits / Withdrawals / Net */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="revenue-cards">
+                <StatCard title="Total Deposits" value={fmtAED(data.total_deposits_aed)} subtitle={`${fmtUSD(data.total_deposits_usd)} USD`} icon={ArrowUpRight} colorClass="bg-emerald-500/10 text-emerald-500" />
+                <StatCard title="Total Withdrawals" value={fmtAED(data.total_withdrawals_aed)} subtitle={`${fmtUSD(data.total_withdrawals_usd)} USD`} icon={TrendingDown} colorClass="bg-red-500/10 text-red-500" />
+                <StatCard title="Net Revenue" value={fmtAED(data.net_aed)} subtitle={netNegative ? 'Withdrawals exceed deposits' : `${fmtUSD(data.net_usd)} USD`} icon={netNegative ? TrendingDown : TrendingUp} colorClass={netNegative ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'} />
+            </div>
+
+            {/* Commission + Bonus row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Commission Card */}
+                <Card data-testid="commission-card">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />Commission Breakdown</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Flat Commission (1% of deposits)</span>
+                            <span className="font-semibold text-emerald-500 font-mono">{fmtAED(data.flat_commission_aed)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Net Commission ({isMaster ? '1.5%' : '1%'} of net)</span>
+                            <span className={`font-semibold font-mono ${data.net_commission_aed >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtAED(data.net_commission_aed)}</span>
+                        </div>
+                        {isMaster && (
+                            <div className="flex justify-between items-center border-t border-border/50 pt-2">
+                                <span className="text-sm text-muted-foreground">Team Override (0.5% team net)</span>
+                                <span className="font-semibold text-blue-500 font-mono">{fmtAED(data.team_override_aed)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center border-t border-border pt-3">
+                            <span className="font-medium">Total Commission</span>
+                            <span className="text-lg font-bold font-mono text-primary">{fmtAED(data.total_commission_aed)}</span>
+                        </div>
+                        {data.net_commission_aed < 0 && (
+                            <p className="text-xs text-red-400 bg-red-500/10 p-2 rounded">Commission hold: Net is negative. Next payout will be withheld until the deficit is recovered.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Bonus Slab Card */}
+                <Card data-testid="bonus-card">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base"><Star className="h-5 w-5 text-amber-500" />Bonus Progress</CardTitle>
+                        <CardDescription>This month: {fmtUSD(monthNetUSD)} net deposits</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {/* Slab progress bar */}
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between text-xs">
+                                <span>{currentSlab ? `${currentSlab.bonus_pct}% slab achieved` : 'No slab reached'}</span>
+                                {nextSlab && <span className="text-muted-foreground">{fmtUSD(toNextSlab)} to {nextSlab.bonus_pct}%</span>}
+                            </div>
+                            <Progress value={progressPct} className="h-2.5 [&>div]:bg-amber-500" />
+                        </div>
+                        {currentSlab && (
+                            <div className="bg-amber-500/10 rounded-lg p-3 flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium">Current Bonus</p>
+                                    <p className="text-xs text-muted-foreground">{currentSlab.bonus_pct}% of AED {bonus.salary_aed} salary</p>
+                                </div>
+                                <p className="text-xl font-bold text-amber-500 font-mono">{fmtAED(bonusAED)}</p>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-5 gap-1 text-center">
+                            {slabs.map((s) => {
+                                const reached = monthNetUSD >= s.threshold;
+                                return (
+                                    <div key={s.threshold} className={`p-1.5 rounded text-[10px] ${reached ? 'bg-amber-500/20 text-amber-500' : 'bg-muted/50 text-muted-foreground'}`}>
+                                        <p className="font-bold">{s.bonus_pct}%</p>
+                                        <p>{fmtUSD(s.threshold).replace('$', '').replace(',', 'k').slice(0, -4)}k</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Student Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Students" value={stats.total_students} subtitle="Assigned to you" icon={Users} color="blue" />
-                <StatCard title="Students Connected" value={stats.students_connected} subtitle={`${connectionRate}% connection rate`} icon={Phone} color="green" />
-                <StatCard title="Pending Connection" value={stats.students_balance} subtitle="Need follow-up" icon={Clock} color="orange" />
-                <StatCard title="Upgrades Helped" value={stats.upgrades_helped} subtitle="Successful upsells" icon={TrendingUp} color="purple" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard title="Total Students" value={data.total_students} subtitle="Assigned" icon={Users} colorClass="bg-blue-500/10 text-blue-500" />
+                <StatCard title="Connected" value={data.students_connected} subtitle={`${data.total_students > 0 ? Math.round(data.students_connected / data.total_students * 100) : 0}% connection rate`} icon={Target} colorClass="bg-emerald-500/10 text-emerald-500" />
+                <StatCard title="Pending" value={data.students_balance} subtitle="Need follow-up" icon={Zap} colorClass="bg-orange-500/10 text-orange-500" />
             </div>
 
-            {/* Revenue Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-500" />Revenue Overview</CardTitle></CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="space-y-2"><p className="text-sm text-muted-foreground">Total Revenue Brought</p><p className="text-2xl font-bold text-emerald-500">{formatCurrency(stats.total_revenue)}</p></div>
-                            <div className="space-y-2"><p className="text-sm text-muted-foreground">Already Withdrawn</p><p className="text-2xl font-bold text-orange-500">{formatCurrency(stats.total_withdrawn)}</p></div>
-                            <div className="space-y-2"><p className="text-sm text-muted-foreground">Current Net</p><p className="text-2xl font-bold text-blue-500">{formatCurrency(stats.current_net)}</p></div>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-purple-500" />Commission</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <div className="flex justify-between text-sm mb-1"><span className="text-muted-foreground">Total</span><span className="font-semibold">{formatCurrency(stats.total_commission)}</span></div>
-                            <Progress value={100} className="h-2" />
-                        </div>
-                        <div>
-                            <div className="flex justify-between text-sm mb-1"><span className="text-muted-foreground">Received</span><span className="font-semibold text-emerald-500">{formatCurrency(stats.commission_received)}</span></div>
-                            <Progress value={stats.total_commission > 0 ? (stats.commission_received / stats.total_commission) * 100 : 0} className="h-2 bg-muted [&>div]:bg-emerald-500" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Mentor Bifurcation - clickable rows */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Target className="h-5 w-5 text-orange-500" />
-                            <CardTitle>Mentor Bifurcation</CardTitle>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <Badge variant="secondary">{totalMentorStudents} students</Badge>
-                            <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">{formatCurrency(totalRedeposits)} redeposits</Badge>
-                        </div>
-                    </div>
-                    <CardDescription>Click any mentor to see their students in detail</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {mentorBifurcation.length > 0 ? (
-                        <div className="space-y-4">
-                            {mentorBifurcation.map((mentor, idx) => (
-                                <div key={idx} className="p-4 rounded-lg bg-muted/50 border border-border/50 cursor-pointer hover:bg-muted/70 hover:border-primary/30 transition-all"
-                                    onClick={() => drillMentorStudents(mentor)} data-testid={`mentor-row-${idx}`}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-500 font-bold text-sm">
-                                                {mentor.mentor_name?.charAt(0) || '?'}
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold">{mentor.mentor_name}</p>
-                                                <p className="text-xs text-muted-foreground">{mentor.total_students} students total</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="text-right">
-                                                <p className="text-lg font-bold font-mono text-emerald-500">{formatCurrency(mentor.redeposit_amount)}</p>
-                                                <p className="text-xs text-muted-foreground">{mentor.redeposits} redeposits</p>
-                                            </div>
-                                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2 mt-2">
-                                        <div className="text-center p-2 rounded bg-blue-500/10"><p className="text-lg font-bold text-blue-500">{mentor.total_students}</p><p className="text-[10px] text-muted-foreground">Total</p></div>
-                                        <div className="text-center p-2 rounded bg-yellow-500/10"><p className="text-lg font-bold text-yellow-500">{mentor.new_students}</p><p className="text-[10px] text-muted-foreground">New</p></div>
-                                        <div className="text-center p-2 rounded bg-emerald-500/10"><p className="text-lg font-bold text-emerald-500">{mentor.connected}</p><p className="text-[10px] text-muted-foreground">Connected</p></div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center text-muted-foreground py-8">No mentor data for this period</div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Mentor Distribution Chart */}
-            {mentorBifurcation.length > 0 && (
-                <Card>
-                    <CardHeader><CardTitle>Mentor Student Distribution</CardTitle><CardDescription>Click a bar to see mentor details</CardDescription></CardHeader>
+            {/* Monthly Trend */}
+            {trend.length > 0 && (
+                <Card data-testid="monthly-trend-chart">
+                    <CardHeader><CardTitle className="text-base">Monthly Trend</CardTitle><CardDescription>Deposits, withdrawals, and net revenue</CardDescription></CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={mentorBifurcation}
-                                onClick={(e) => { if (e?.activePayload) drillMentorStudents(e.activePayload[0].payload); }}>
+                            <ComposedChart data={trend}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="mentor_name" tick={{ fill: '#9ca3af', fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
-                                <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }} />
-                                <Bar dataKey="total_students" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Students" cursor="pointer" />
-                                <Bar dataKey="redeposits" fill="#10b981" radius={[4, 4, 0, 0]} name="Redeposits" cursor="pointer" />
-                            </BarChart>
+                                <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                    formatter={(v) => fmtAED(v)} />
+                                <Legend />
+                                <Bar dataKey="deposits_aed" name="Deposits" fill="#10b981" radius={[4,4,0,0]} />
+                                <Bar dataKey="withdrawals_aed" name="Withdrawals" fill="#ef4444" radius={[4,4,0,0]} />
+                                <Line type="monotone" dataKey="net_aed" name="Net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
             )}
 
-            {/* Student Pipeline & Recent Activities */}
+            {/* Revenue Chart + Leaderboard */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-cyan-500" />Student Pipeline</CardTitle><CardDescription>Click any stage for details</CardDescription></CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {pipelineStages.map((item) => (
-                                <div key={item.key} className="flex items-center justify-between cursor-pointer hover:bg-muted/30 p-2 rounded-lg transition-colors"
-                                    onClick={() => drillPipelineStage(item.stage, item.key)}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                                        <span className="text-sm">{item.stage}</span>
+                {/* Revenue by Mentor */}
+                {revenueChart.length > 0 && (
+                    <Card data-testid="mentor-revenue-chart">
+                        <CardHeader><CardTitle className="text-base">Mentor-wise Revenue</CardTitle>
+                            {canDrillDown && <CardDescription>Click a bar for details</CardDescription>}
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={revenueChart} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                    <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                                    <YAxis type="category" dataKey="mentor_name" width={100} tick={{ fill: '#9ca3af', fontSize: 10 }} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                        formatter={(v) => fmtAED(v)} />
+                                    <Bar dataKey="deposits_aed" name="Deposits (AED)" fill="#f59e0b" radius={[0,4,4,0]} cursor={canDrillDown ? 'pointer' : 'default'} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Leaderboard */}
+                {leaderboard.length > 0 && (
+                    <Card data-testid="mentor-leaderboard">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-5 w-5 text-amber-500" />Leaderboard</CardTitle>
+                            <CardDescription>Ranked by net revenue</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {leaderboard.map((m, idx) => (
+                                <div key={m.mentor_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors" data-testid={`leaderboard-row-${idx}`}>
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500/20 text-amber-500' : idx === 1 ? 'bg-gray-400/20 text-gray-400' : idx === 2 ? 'bg-amber-700/20 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
+                                        {idx + 1}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{item.count}</Badge>
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{m.mentor_name}</p>
+                                        <p className="text-xs text-muted-foreground">{m.deposit_count} deposits</p>
                                     </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-bold font-mono text-emerald-500">{fmtAED(m.net_aed)}</p>
+                                        <p className="text-[10px] text-muted-foreground">net</p>
+                                    </div>
+                                    {canDrillDown && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                 </div>
                             ))}
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle className="h-5 w-5 text-emerald-500" />Recent Activities</CardTitle></CardHeader>
-                    <CardContent>
-                        {stats.recent_activities?.length > 0 ? (
-                            <div className="space-y-4">
-                                {stats.recent_activities.slice(0, 5).map((activity, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 pb-3 border-b border-border last:border-0">
-                                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 text-xs font-medium">
-                                            {activity.student_name?.charAt(0) || '?'}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-medium">{activity.student_name}</p>
-                                            <p className="text-xs text-muted-foreground">{activity.action}</p>
-                                        </div>
-                                        {activity.amount && <span className="text-sm font-semibold text-emerald-500">+{formatCurrency(activity.amount)}</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center text-muted-foreground py-8">
-                                <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                <p>No recent activities</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
-
-            {/* Drill-Down Modal */}
-            <Dialog open={drillModal.open} onOpenChange={(o) => setDrillModal(prev => ({ ...prev, open: o }))}>
-                <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col" data-testid="mentor-drill-modal">
-                    <DialogHeader><DialogTitle>{drillModal.title}</DialogTitle></DialogHeader>
-                    <div className="overflow-y-auto flex-1">
-                        {drillModal.loading && <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}
-
-                        {/* Mentor Students with stage groups */}
-                        {!drillModal.loading && drillModal.type === 'mentor_students' && drillModal.data?.stageGroups && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <Badge variant="secondary">{drillModal.data.students.length} students</Badge>
-                                    <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">
-                                        {drillModal.data.mentor.redeposits || 0} redeposits ({formatCurrency(drillModal.data.mentor.redeposit_amount)})
-                                    </Badge>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-semibold mb-2">By Stage</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-                                        {Object.entries(drillModal.data.stageGroups).map(([stage, students]) => (
-                                            <div key={stage} className="p-3 rounded-lg bg-muted/50 text-center">
-                                                <p className="text-lg font-bold">{students.length}</p>
-                                                <p className="text-xs text-muted-foreground capitalize">{stage.replace(/_/g, ' ')}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Stage</TableHead><TableHead>Course</TableHead><TableHead>Enrolled</TableHead></TableRow></TableHeader>
-                                    <TableBody>{drillModal.data.students.slice(0, 100).map((s, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell className="font-medium">{s.student_name}</TableCell>
-                                            <TableCell><Badge variant="outline" className="text-xs capitalize">{(s.mentor_stage || s.stage || '').replace(/_/g, ' ')}</Badge></TableCell>
-                                            <TableCell className="text-muted-foreground">{s.course_name}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{s.enrolled_at?.substring(0, 10)}</TableCell>
-                                        </TableRow>
-                                    ))}</TableBody>
-                                </Table>
-                            </div>
-                        )}
-
-                        {/* Mentor Pipeline Stage Detail */}
-                        {!drillModal.loading && drillModal.type === 'mentor_pipeline_stage' && drillModal.data?.mentor_breakdown && (
-                            <div className="space-y-4">
-                                <Badge variant="outline" className="text-lg px-3 py-1">{drillModal.data.total} students</Badge>
-                                <div>
-                                    <h4 className="text-sm font-semibold mb-2">Mentor-wise Breakdown</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                        {drillModal.data.mentor_breakdown.map((m, i) => (
-                                            <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                                                <span className="text-sm font-medium truncate">{m.mentor_name}</span>
-                                                <Badge variant="secondary">{m.count}</Badge>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Mentor</TableHead><TableHead>Course</TableHead></TableRow></TableHeader>
-                                    <TableBody>{(drillModal.data.students || []).slice(0, 50).map((s, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell className="font-medium">{s.student_name}</TableCell>
-                                            <TableCell className="text-muted-foreground">{s.mentor_name || 'Unknown'}</TableCell>
-                                            <TableCell className="text-muted-foreground">{s.course_name}</TableCell>
-                                        </TableRow>
-                                    ))}</TableBody>
-                                </Table>
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

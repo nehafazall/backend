@@ -132,7 +132,7 @@ logger.info(f"🔧 Environment: {CURRENT_APP_ENV} | Database: {CURRENT_DB_NAME}"
 ROLES = [
     "super_admin", "admin", "sales_manager", "team_leader", 
     "sales_executive", "cs_head", "cs_agent", "mentor", 
-    "academic_master", "finance", "hr", "marketing", "operations", "quality_control",
+    "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control",
     # Finance-specific roles
     "finance_manager", "finance_admin", "finance_treasurer", 
     "finance_verifier", "financier", "accounts"
@@ -1248,7 +1248,7 @@ async def get_round_robin_agent(role: str, region: str = None, department: str =
         ]).to_list(len(agent_ids))
         for item in cs_counts:
             assignment_counts[item["_id"]] = item["count"]
-    elif role in ["mentor", "academic_master"]:
+    elif role in ["mentor", "academic_master", "master_of_academics"]:
         # Get student counts for mentors
         mentor_counts = await db.students.aggregate([
             {"$match": {"mentor_id": {"$in": agent_ids}}},
@@ -2482,7 +2482,7 @@ def get_default_permissions(role: str) -> Dict[str, str]:
         permissions["dashboard"] = "view"
         permissions["customer_service"] = "edit"
         permissions["settings"] = "view"
-    elif role in ["mentor", "academic_master"]:
+    elif role in ["mentor", "academic_master", "master_of_academics"]:
         permissions["dashboard"] = "view"
         permissions["mentor_crm"] = "edit"
         permissions["settings"] = "view"
@@ -4450,14 +4450,14 @@ async def get_todays_followups(user = Depends(get_current_user)):
         lead_query = {**query_base, "assigned_to": user["id"]}
     elif user["role"] in ["cs_agent", "cs_head"]:
         lead_query = {**query_base}  # CS doesn't have leads
-    elif user["role"] in ["mentor", "academic_master"]:
+    elif user["role"] in ["mentor", "academic_master", "master_of_academics"]:
         lead_query = {**query_base}  # Mentors don't have leads
     else:
         lead_query = query_base
     
     # Get leads with reminders
     leads = []
-    if user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master"]:
+    if user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics"]:
         if user["role"] == "sales_executive":
             leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
         else:
@@ -4476,7 +4476,7 @@ async def get_todays_followups(user = Depends(get_current_user)):
             students = await db.students.find({**student_query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
             students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
-    elif user["role"] in ["mentor", "academic_master"]:
+    elif user["role"] in ["mentor", "academic_master", "master_of_academics"]:
         if user["role"] == "mentor":
             students = await db.students.find({**student_query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
@@ -4574,7 +4574,7 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
     leads = []
     if user["role"] == "sales_executive":
         leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
-    elif user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master"]:
+    elif user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics"]:
         leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
     
     # Get students
@@ -4583,7 +4583,7 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
         students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
     elif user["role"] == "mentor":
         students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
-    elif user["role"] in ["super_admin", "admin", "cs_head", "academic_master"]:
+    elif user["role"] in ["super_admin", "admin", "cs_head", "academic_master", "master_of_academics"]:
         students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
     
     # Group by date
@@ -5741,7 +5741,7 @@ async def get_viewable_users(user = Depends(get_current_user)):
             {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
         ).to_list(100)
         viewable_users = cs_agents
-    elif user_role == "academic_master":
+    elif user_role in ("academic_master", "master_of_academics"):
         # Academic master can view mentors
         mentors = await db.users.find(
             {"is_active": True, "role": "mentor"},
@@ -5794,7 +5794,7 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         elif current_role == "cs_head":
             target = await db.users.find_one({"id": view_as, "role": "cs_agent"}, {"_id": 0})
             can_view = target is not None
-        elif current_role == "academic_master":
+        elif current_role in ("academic_master", "master_of_academics"):
             target = await db.users.find_one({"id": view_as, "role": "mentor"}, {"_id": 0})
             can_view = target is not None
         
@@ -5933,9 +5933,9 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         stats["avg_satisfaction_score"] = round(sat_result[0]["avg"], 1) if sat_result else 0
     
     # Mentor stats
-    if user_role in ["super_admin", "admin", "mentor", "academic_master"]:
+    if user_role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics"]:
         mentor_query = {}
-        if user_role in ["mentor", "academic_master"]:
+        if user_role in ["mentor", "academic_master", "master_of_academics"]:
             mentor_query["mentor_id"] = user_id
         
         stats["mentor_students"] = await db.students.count_documents(mentor_query)
@@ -6517,87 +6517,411 @@ async def get_google_sheets_config(user = Depends(require_roles(["super_admin", 
 # ==================== MENTOR DASHBOARD ====================
 
 @api_router.get("/mentor/dashboard")
-async def get_mentor_dashboard(user = Depends(get_current_user)):
-    """Get mentor's comprehensive dashboard data"""
-    # Determine which mentor's data to show
-    if user.get("role") in ["mentor", "academic_master"]:
-        mentor_id = user["id"]
-    elif user.get("role") in ["super_admin", "admin"]:
-        # Admins can see aggregate or specify mentor_id via query param
-        mentor_id = None  # Show aggregate for all mentors
-    else:
+async def get_mentor_dashboard(
+    period: str = "overall",
+    view_mode: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Enhanced mentor dashboard with role-based views, commissions, and bonus slabs."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    role = user.get("role")
+    is_master = role == "master_of_academics"
+    is_admin = role in ["super_admin", "admin"]
+
+    if role not in ["mentor", "master_of_academics", "super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
-    
-    # Build query
-    query = {"mentor_id": mentor_id} if mentor_id else {"mentor_id": {"$exists": True, "$ne": None}}
-    
-    # Get all students assigned to this mentor
-    students = await db.students.find(query, {"_id": 0}).to_list(10000)
+
+    # Determine effective view
+    if is_admin or is_master:
+        effective_view = view_mode or "team"
+    else:
+        effective_view = "individual"
+
+    # Build mentor filter
+    if effective_view == "individual" and not is_admin:
+        mentor_ids = [user["id"]]
+    elif is_master and effective_view == "team":
+        team_mentors = await db.users.find(
+            {"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")},
+            {"_id": 0, "id": 1}
+        ).to_list(100)
+        mentor_ids = [m["id"] for m in team_mentors] if team_mentors else [user["id"]]
+    else:
+        mentor_ids = None  # all mentors
+
+    # Date filter
+    date_start, date_end = _get_date_range(period)
+    date_q = {}
+    if date_start:
+        date_q["date"] = {"$gte": date_start}
+        if date_end:
+            date_q["date"]["$lt"] = date_end
+
+    # ---------- DEPOSITS ----------
+    dep_match = {**date_q}
+    if mentor_ids:
+        dep_match["mentor_id"] = {"$in": mentor_ids}
+    deposits = await db.mentor_redeposits.find(dep_match, {"_id": 0}).to_list(50000)
+    total_deposits_usd = sum(d.get("amount", 0) for d in deposits)
+    total_deposits_aed = round(total_deposits_usd * USD_TO_AED, 2)
+
+    # ---------- WITHDRAWALS ----------
+    wd_match = {**date_q}
+    if mentor_ids:
+        wd_match["mentor_id"] = {"$in": mentor_ids}
+    withdrawals = await db.mentor_withdrawals.find(wd_match, {"_id": 0}).to_list(50000)
+    total_withdrawals_usd = sum(w.get("amount", 0) for w in withdrawals)
+    total_withdrawals_aed = round(total_withdrawals_usd * USD_TO_AED, 2)
+
+    net_usd = total_deposits_usd - total_withdrawals_usd
+    net_aed = round(net_usd * USD_TO_AED, 2)
+
+    # ---------- STUDENTS ----------
+    student_q = {}
+    if mentor_ids:
+        student_q["mentor_id"] = {"$in": mentor_ids}
+    students = await db.students.find(student_q, {"_id": 0, "id": 1, "mentor_stage": 1, "full_name": 1}).to_list(50000)
     total_students = len(students)
-    
-    # Count by mentor_stage
     student_stages = {}
-    for student in students:
-        stage = student.get("mentor_stage", "new_student")
+    for s in students:
+        stage = s.get("mentor_stage", "new_student")
         student_stages[stage] = student_stages.get(stage, 0) + 1
-    
-    # Students connected (had at least one interaction - stage changed from new_student)
     students_connected = sum(1 for s in students if s.get("mentor_stage") != "new_student")
-    students_balance = total_students - students_connected
-    
-    # Upgrades helped (closed stage)
-    upgrades_helped = student_stages.get("closed", 0)
-    
-    # Get commissions for this mentor
-    commission_query = {"user_id": mentor_id} if mentor_id else {}
-    commissions = await db.commissions.find(commission_query, {"_id": 0}).to_list(10000)
-    
-    total_commission = sum(c.get("commission_amount", 0) for c in commissions)
-    commission_received = sum(c.get("commission_amount", 0) for c in commissions if c.get("status") == "paid")
-    commission_balance = total_commission - commission_received
-    
-    # Get payments/revenue brought in (from upgrades and redeposits)
-    student_ids = [s["id"] for s in students]
-    payment_query = {"student_id": {"$in": student_ids}, "payment_type": {"$in": ["upgrade", "redeposit"]}}
-    payments = await db.payments.find(payment_query, {"_id": 0}).to_list(10000)
-    
-    total_revenue = sum(p.get("amount", 0) for p in payments)
-    
-    # Calculate withdrawn (this would come from a withdrawals collection or commission status)
-    total_withdrawn = commission_received  # For now, withdrawn equals received commissions
-    current_net = total_revenue - total_withdrawn
-    
-    # Get recent activities (last 10 stage changes or actions)
-    recent_activities = []
-    activity_logs = await db.activity_logs.find({
-        "entity_type": "student",
-        "entity_id": {"$in": student_ids}
-    }, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
-    
-    for log in activity_logs:
-        student = next((s for s in students if s["id"] == log.get("entity_id")), None)
-        if student:
-            recent_activities.append({
-                "student_name": student.get("full_name", "Unknown"),
-                "action": log.get("action", "").replace("_", " ").title(),
-                "time": log.get("created_at", ""),
-                "amount": log.get("details", {}).get("amount") if log.get("details") else None
-            })
-    
+
+    # ---------- COMMISSIONS ----------
+    # Flat commission = 1% of each deposit in AED
+    flat_commission_aed = round(total_deposits_aed * 0.01, 2)
+    # Net commission = 1% of net (deposits - withdrawals) in AED
+    net_commission_rate = 0.01
+    if is_master and effective_view == "individual":
+        net_commission_rate = 0.015  # Edwin gets 1% + 0.5% team override on his own
+    net_commission_aed = round(net_aed * net_commission_rate, 2)
+
+    # Edwin's team override (0.5% on entire team net)
+    team_override_aed = 0
+    if is_master:
+        all_team_dep_q = {**date_q}
+        team_m = await db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
+        all_team_ids = [m["id"] for m in team_m]
+        if all_team_ids:
+            all_team_dep_q["mentor_id"] = {"$in": all_team_ids}
+        all_team_deposits_usd = 0
+        all_team_withdrawals_usd = 0
+        async for d in db.mentor_redeposits.find(all_team_dep_q, {"_id": 0, "amount": 1}):
+            all_team_deposits_usd += d.get("amount", 0)
+        wd_q2 = {**date_q}
+        if all_team_ids:
+            wd_q2["mentor_id"] = {"$in": all_team_ids}
+        async for w in db.mentor_withdrawals.find(wd_q2, {"_id": 0, "amount": 1}):
+            all_team_withdrawals_usd += w.get("amount", 0)
+        team_net_usd = all_team_deposits_usd - all_team_withdrawals_usd
+        team_override_aed = round(team_net_usd * USD_TO_AED * 0.005, 2)
+
+    total_commission_aed = flat_commission_aed + net_commission_aed + team_override_aed
+
+    # ---------- BONUS SLAB ----------
+    # Current month net deposits in USD for bonus calculation
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1).isoformat()[:10]
+    bonus_dep_q = {"date": {"$gte": month_start}}
+    bonus_wd_q = {"date": {"$gte": month_start}}
+    if effective_view == "individual" and not is_admin:
+        bonus_dep_q["mentor_id"] = user["id"]
+        bonus_wd_q["mentor_id"] = user["id"]
+    elif mentor_ids:
+        bonus_dep_q["mentor_id"] = {"$in": mentor_ids}
+        bonus_wd_q["mentor_id"] = {"$in": mentor_ids}
+
+    month_deposits_usd = 0
+    async for d in db.mentor_redeposits.find(bonus_dep_q, {"_id": 0, "amount": 1}):
+        month_deposits_usd += d.get("amount", 0)
+    month_withdrawals_usd = 0
+    async for w in db.mentor_withdrawals.find(bonus_wd_q, {"_id": 0, "amount": 1}):
+        month_withdrawals_usd += w.get("amount", 0)
+    month_net_usd = month_deposits_usd - month_withdrawals_usd
+
+    slabs = [
+        {"threshold": 10000, "bonus_pct": 10},
+        {"threshold": 20000, "bonus_pct": 15},
+        {"threshold": 30000, "bonus_pct": 17.5},
+        {"threshold": 40000, "bonus_pct": 20},
+        {"threshold": 50000, "bonus_pct": 25},
+    ]
+    current_slab = None
+    next_slab = None
+    for i, slab in enumerate(slabs):
+        if month_net_usd >= slab["threshold"]:
+            current_slab = slab
+            next_slab = slabs[i+1] if i+1 < len(slabs) else None
+        else:
+            next_slab = slab
+            break
+
+    # Get salary for bonus calc
+    hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary": 1})
+    salary_aed = hr_emp.get("salary", 0) if hr_emp else 0
+    bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
+
     return {
         "total_students": total_students,
-        "total_revenue": total_revenue,
-        "total_withdrawn": total_withdrawn,
-        "current_net": current_net,
-        "total_commission": total_commission,
-        "commission_received": commission_received,
-        "commission_balance": commission_balance,
-        "upgrades_helped": upgrades_helped,
         "students_connected": students_connected,
-        "students_balance": students_balance,
+        "students_balance": total_students - students_connected,
         "student_stages": student_stages,
-        "recent_activities": recent_activities
+        "total_deposits_usd": total_deposits_usd,
+        "total_deposits_aed": total_deposits_aed,
+        "total_withdrawals_usd": total_withdrawals_usd,
+        "total_withdrawals_aed": total_withdrawals_aed,
+        "net_usd": net_usd,
+        "net_aed": net_aed,
+        "flat_commission_aed": flat_commission_aed,
+        "net_commission_aed": net_commission_aed,
+        "team_override_aed": team_override_aed,
+        "total_commission_aed": total_commission_aed,
+        "is_master": is_master,
+        "effective_view": effective_view,
+        "bonus": {
+            "month_net_usd": month_net_usd,
+            "current_slab": current_slab,
+            "next_slab": next_slab,
+            "salary_aed": salary_aed,
+            "bonus_amount_aed": bonus_amount_aed,
+            "slabs": slabs,
+        },
     }
+
+
+@api_router.get("/mentor/dashboard/monthly-trend")
+async def get_mentor_monthly_trend(view_mode: str = "individual", user=Depends(get_current_user)):
+    """Monthly deposit/withdrawal trend for mentors."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    role = user.get("role")
+    is_master = role == "master_of_academics"
+    is_admin = role in ["super_admin", "admin"]
+
+    if role not in ["mentor", "master_of_academics", "super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    mentor_filter = {}
+    if view_mode == "individual" and not is_admin:
+        mentor_filter = {"mentor_id": user["id"]}
+    elif is_master and view_mode == "team":
+        tm = await db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
+        mentor_filter = {"mentor_id": {"$in": [m["id"] for m in tm]}} if tm else {"mentor_id": user["id"]}
+
+    dep_pipeline = [
+        {"$match": mentor_filter},
+        {"$group": {"_id": {"$substr": ["$date", 0, 7]}, "deposits": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    wd_pipeline = [
+        {"$match": mentor_filter},
+        {"$group": {"_id": {"$substr": ["$date", 0, 7]}, "withdrawals": {"$sum": "$amount"}}},
+    ]
+    dep_data = {d["_id"]: d for d in await db.mentor_redeposits.aggregate(dep_pipeline).to_list(100)}
+    wd_data = {w["_id"]: w for w in await db.mentor_withdrawals.aggregate(wd_pipeline).to_list(100)}
+    all_months = sorted(set(list(dep_data.keys()) + list(wd_data.keys())))
+
+    result = []
+    for m in all_months:
+        dep_usd = dep_data.get(m, {}).get("deposits", 0)
+        wd_usd = wd_data.get(m, {}).get("withdrawals", 0)
+        result.append({
+            "month": m,
+            "deposits_usd": dep_usd, "deposits_aed": round(dep_usd * USD_TO_AED, 2),
+            "withdrawals_usd": wd_usd, "withdrawals_aed": round(wd_usd * USD_TO_AED, 2),
+            "net_usd": dep_usd - wd_usd, "net_aed": round((dep_usd - wd_usd) * USD_TO_AED, 2),
+            "deposit_count": dep_data.get(m, {}).get("count", 0),
+        })
+    return result
+
+
+@api_router.get("/mentor/dashboard/leaderboard")
+async def get_mentor_leaderboard_v2(period: str = "overall", user=Depends(get_current_user)):
+    """Mentor leaderboard by net deposits."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    date_start, date_end = _get_date_range(period)
+    date_q = {}
+    if date_start:
+        date_q["date"] = {"$gte": date_start}
+        if date_end:
+            date_q["date"]["$lt"] = date_end
+
+    dep_pipeline = [
+        {"$match": date_q},
+        {"$group": {"_id": "$mentor_id", "name": {"$first": "$mentor_name"}, "deposits": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+    ]
+    wd_pipeline = [
+        {"$match": date_q},
+        {"$group": {"_id": "$mentor_id", "withdrawals": {"$sum": "$amount"}}},
+    ]
+    dep_map = {d["_id"]: d for d in await db.mentor_redeposits.aggregate(dep_pipeline).to_list(100)}
+    wd_map = {w["_id"]: w for w in await db.mentor_withdrawals.aggregate(wd_pipeline).to_list(100)}
+
+    all_ids = set(list(dep_map.keys()) + list(wd_map.keys()))
+    board = []
+    for mid in all_ids:
+        dep = dep_map.get(mid, {})
+        wd = wd_map.get(mid, {})
+        dep_usd = dep.get("deposits", 0)
+        wd_usd = wd.get("withdrawals", 0)
+        board.append({
+            "mentor_id": mid,
+            "mentor_name": dep.get("name") or wd.get("name", "Unknown"),
+            "deposits_usd": dep_usd,
+            "deposits_aed": round(dep_usd * USD_TO_AED, 2),
+            "withdrawals_usd": wd_usd,
+            "net_usd": dep_usd - wd_usd,
+            "net_aed": round((dep_usd - wd_usd) * USD_TO_AED, 2),
+            "deposit_count": dep.get("count", 0),
+        })
+    board.sort(key=lambda x: x["net_usd"], reverse=True)
+    return board
+
+
+@api_router.get("/mentor/dashboard/revenue-chart")
+async def get_mentor_revenue_chart(period: str = "overall", user=Depends(get_current_user)):
+    """Revenue bar chart data by mentor."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    date_start, date_end = _get_date_range(period)
+    date_q = {}
+    if date_start:
+        date_q["date"] = {"$gte": date_start}
+        if date_end:
+            date_q["date"]["$lt"] = date_end
+
+    pipeline = [
+        {"$match": date_q},
+        {"$group": {"_id": "$mentor_id", "name": {"$first": "$mentor_name"}, "deposits": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"deposits": -1}},
+    ]
+    data = await db.mentor_redeposits.aggregate(pipeline).to_list(100)
+    return [{"mentor_name": d["name"], "deposits_usd": d["deposits"], "deposits_aed": round(d["deposits"] * USD_TO_AED, 2), "count": d["count"]} for d in data]
+
+
+# ============ FINANCE WITHDRAWAL MANAGEMENT ============
+
+@api_router.get("/finance/mentor-student-deposits")
+async def get_mentor_student_deposits(
+    page: int = 1, limit: int = 50, search: str = "",
+    user=Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """List students with their deposit/withdrawal summary for financier."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+
+    # Aggregate deposits by student
+    dep_pipeline = [
+        {"$group": {
+            "_id": "$student_id",
+            "student_name": {"$first": "$student_name"},
+            "student_email": {"$first": "$student_email"},
+            "mentor_id": {"$first": "$mentor_id"},
+            "mentor_name": {"$first": "$mentor_name"},
+            "total_deposits_usd": {"$sum": "$amount"},
+            "deposit_count": {"$sum": 1},
+            "last_deposit_date": {"$max": "$date"},
+            "deposits": {"$push": {"id": "$id", "amount": "$amount", "date": "$date", "month": "$month"}},
+        }},
+    ]
+    dep_data = {d["_id"]: d for d in await db.mentor_redeposits.aggregate(dep_pipeline).to_list(5000)}
+
+    # Aggregate withdrawals by student
+    wd_pipeline = [
+        {"$group": {
+            "_id": "$student_id",
+            "total_withdrawals_usd": {"$sum": "$amount"},
+            "withdrawal_count": {"$sum": 1},
+            "last_withdrawal_date": {"$max": "$date"},
+        }},
+    ]
+    wd_data = {w["_id"]: w for w in await db.mentor_withdrawals.aggregate(wd_pipeline).to_list(5000)}
+
+    results = []
+    for sid, dep in dep_data.items():
+        wd = wd_data.get(sid, {})
+        dep_usd = dep["total_deposits_usd"]
+        wd_usd = wd.get("total_withdrawals_usd", 0)
+        name = dep["student_name"] or ""
+        email = dep.get("student_email", "")
+        if search and search.lower() not in name.lower() and search.lower() not in email.lower():
+            continue
+        results.append({
+            "student_id": sid,
+            "student_name": name,
+            "student_email": email,
+            "mentor_id": dep["mentor_id"],
+            "mentor_name": dep["mentor_name"],
+            "total_deposits_usd": dep_usd,
+            "total_deposits_aed": round(dep_usd * USD_TO_AED, 2),
+            "deposit_count": dep["deposit_count"],
+            "total_withdrawals_usd": wd_usd,
+            "total_withdrawals_aed": round(wd_usd * USD_TO_AED, 2),
+            "withdrawal_count": wd.get("withdrawal_count", 0),
+            "net_usd": dep_usd - wd_usd,
+            "net_aed": round((dep_usd - wd_usd) * USD_TO_AED, 2),
+            "last_deposit_date": dep.get("last_deposit_date"),
+            "last_withdrawal_date": wd.get("last_withdrawal_date"),
+        })
+    results.sort(key=lambda x: x["total_deposits_usd"], reverse=True)
+    total = len(results)
+    start = (page - 1) * limit
+    return {"items": results[start:start+limit], "total": total, "page": page, "pages": (total + limit - 1) // limit}
+
+
+@api_router.post("/finance/mentor-withdrawal")
+async def record_mentor_withdrawal(data: Dict, user=Depends(require_roles(["super_admin", "admin", "finance"]))):
+    """Record a single withdrawal by financier."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    required = ["student_id", "amount_usd"]
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing: {missing}")
+
+    student = await db.students.find_one({"id": data["student_id"]}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "mentor_id": 1})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    amount_usd = float(data["amount_usd"])
+    amount_aed = round(amount_usd * USD_TO_AED, 2)
+    now_str = datetime.now(timezone.utc).isoformat()
+    date_str = data.get("date") or now_str[:10]
+    month_str = date_str[:7]
+
+    mentor_user = await db.users.find_one({"id": student.get("mentor_id")}, {"_id": 0, "id": 1, "full_name": 1})
+    mentor_name = mentor_user["full_name"] if mentor_user else "Unknown"
+    mentor_id = student.get("mentor_id", "")
+
+    wd_id = str(uuid.uuid4())
+    await db.mentor_withdrawals.insert_one({
+        "id": wd_id,
+        "date": date_str,
+        "month": month_str,
+        "mentor_id": mentor_id,
+        "mentor_name": mentor_name,
+        "student_id": student["id"],
+        "student_name": student["full_name"],
+        "student_email": student.get("email", ""),
+        "amount": amount_usd,
+        "amount_aed": amount_aed,
+        "notes": data.get("notes", ""),
+        "created_at": now_str,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+    })
+    return {"id": wd_id, "amount_usd": amount_usd, "amount_aed": amount_aed, "student_name": student["full_name"]}
+
+
+@api_router.get("/finance/mentor-withdrawals")
+async def list_mentor_withdrawals(
+    page: int = 1, limit: int = 50, month: Optional[str] = None,
+    user=Depends(require_roles(["super_admin", "admin", "finance"]))
+):
+    """List all withdrawals for finance view."""
+    query = {}
+    if month:
+        query["month"] = month
+    total = await db.mentor_withdrawals.count_documents(query)
+    items = await db.mentor_withdrawals.find(query, {"_id": 0}).sort("date", -1).skip((page-1)*limit).limit(limit).to_list(limit)
+    return {"items": items, "total": total, "page": page, "pages": (total + limit - 1) // limit}
 
 
 # ==================== ENHANCED DASHBOARD ENDPOINTS (Agent Bifurcation + Date Filters) ====================
@@ -7671,7 +7995,7 @@ Notes:
             "required": ["email", "full_name", "role", "password"],
             "optional": ["department", "phone", "region", "team_leader_email"]
         },
-        "valid_roles": ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "finance", "hr", "marketing", "operations", "quality_control"],
+        "valid_roles": ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control"],
         "valid_departments": ["Sales", "Customer Service", "Mentorship", "Finance", "HR", "Marketing", "Operations", "Management"],
         "valid_regions": ["UAE", "India", "International"]
     }
@@ -7770,7 +8094,7 @@ async def import_users(file: UploadFile, user = Depends(require_roles(["super_ad
     results = {"created": 0, "skipped": 0, "errors": []}
     now = datetime.now(timezone.utc).isoformat()
     
-    valid_roles = ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "finance", "hr", "marketing", "operations", "quality_control"]
+    valid_roles = ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control"]
     
     for row_num, row in enumerate(reader, start=2):
         try:
@@ -8797,7 +9121,7 @@ async def import_students_cs(data: List[Dict], user = Depends(require_roles(["su
     return results
 
 @api_router.post("/import/students/mentor")
-async def import_students_mentor(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master"]))):
+async def import_students_mentor(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics"]))):
     """Import students for Mentor CRM"""
     results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
     now = datetime.now(timezone.utc).isoformat()
@@ -9358,7 +9682,7 @@ async def import_historical_students_xlsx(
     }
 
 @api_router.post("/import/mentor-redeposits")
-async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master"]))):
+async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics"]))):
     """
     Import mentor redeposits.
     After import, student moves to 'discussion_started' in mentor kanban.
@@ -9479,7 +9803,7 @@ async def get_mentor_redeposits_summary(
     """
     # If not admin/super_admin, only show own data
     target_mentor_id = mentor_id
-    if user.get("role") not in ["super_admin", "admin", "academic_master"]:
+    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics"]:
         if user.get("role") in ["mentor"]:
             target_mentor_id = user["id"]
         else:
@@ -9957,7 +10281,7 @@ async def import_employees(data: List[Dict], user = Depends(require_roles(["supe
     
     # Valid role options
     valid_roles = ["super_admin", "admin", "hr", "finance", "sales_manager", "team_leader", 
-                   "sales_agent", "cs_head", "cs_agent", "academic_master", "mentor", 
+                   "sales_agent", "cs_head", "cs_agent", "academic_master", "master_of_academics", "mentor", 
                    "operations", "marketing", "employee"]
     
     for i, row in enumerate(data):
@@ -10220,7 +10544,7 @@ async def get_mentor_revenue_summary(
     Get revenue summary for mentors including redeposits, withdrawals, and net
     """
     target_mentor_id = mentor_id
-    if user.get("role") not in ["super_admin", "admin", "academic_master", "finance"]:
+    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics", "finance"]:
         if user.get("role") == "mentor":
             target_mentor_id = user["id"]
         else:
@@ -13035,7 +13359,7 @@ async def get_mentor_leaderboard(
     
     # Get all mentors
     mentors = await db.users.find(
-        {"role": {"$in": ["mentor", "academic_master"]}, "is_active": True},
+        {"role": {"$in": ["mentor", "academic_master", "master_of_academics"]}, "is_active": True},
         {"_id": 0, "password": 0}
     ).to_list(100)
     
@@ -13175,8 +13499,8 @@ async def get_quick_stats(user = Depends(get_current_user)):
             "created_at": {"$gte": today_start.isoformat(), "$regex": "^20"}
         })
     
-    if role in ["super_admin", "admin", "mentor", "academic_master"]:
-        if role in ["mentor", "academic_master"]:
+    if role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics"]:
+        if role in ["mentor", "academic_master", "master_of_academics"]:
             mentor_query = {"mentor_id": user["id"]}
         else:
             mentor_query = {}
@@ -13420,6 +13744,7 @@ async def get_employee_sync_options(user = Depends(require_roles(["super_admin",
         {"value": "cs_agent", "label": "CS Agent", "description": "Customer service access"},
         {"value": "mentor", "label": "Mentor", "description": "Academic mentoring"},
         {"value": "academic_master", "label": "Academic Master", "description": "Academic management"},
+        {"value": "master_of_academics", "label": "Master of Academics", "description": "Academic team leader"},
         {"value": "finance", "label": "Finance", "description": "Finance access"},
         {"value": "hr", "label": "HR", "description": "Human resources access"},
         {"value": "marketing", "label": "Marketing", "description": "Marketing access"},
@@ -18132,7 +18457,7 @@ async def get_pending_approvals_for_me(user = Depends(get_current_user)):
         # HR sees pending_hr
         leave_query = {"status": "pending_hr"}
         reg_query = {"status": "pending_hr"}
-    elif user_role in ["sales_manager", "team_leader", "cs_head", "academic_master"]:
+    elif user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics"]:
         # Managers see requests from their team members
         # Check if they are the assigned manager in approval chain
         leave_query = {
@@ -18173,7 +18498,7 @@ async def action_leave_request(
     can_act = False
     current_level = None
     
-    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "admin", "super_admin"]:
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "admin", "super_admin"]:
         # Check if user is the assigned manager
         for chain in request["approval_chain"]:
             if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
@@ -18482,7 +18807,7 @@ async def action_regularization_request(
     can_act = False
     current_level = None
     
-    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "admin", "super_admin"]:
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "admin", "super_admin"]:
         for chain in request["approval_chain"]:
             if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
                 can_act = True

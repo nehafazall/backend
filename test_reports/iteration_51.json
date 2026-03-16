@@ -1,0 +1,105 @@
+{
+  "summary": "Comprehensive testing of Mentor Dashboard and Finance Withdrawals feature. All 19 backend API tests passed. All frontend UI tests passed including Edwin's master_of_academics view (Individual/Team toggle, Team Override commission) and Ashwin's regular mentor view (no toggle, no team override). Finance withdrawals page fully functional with withdrawal recording verified end-to-end.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Edwin (master_of_academics) can access /api/mentor/dashboard with individual view",
+    "Backend: Edwin can access /api/mentor/dashboard?view_mode=team with team data",
+    "Backend: Edwin has team_override_aed commission (0.5% of team net)",
+    "Backend: Bonus slab structure returns 5 slabs ($10K=10%, $20K=15%, $30K=17.5%, $40K=20%, $50K=25%)",
+    "Backend: /api/mentor/dashboard/monthly-trend returns monthly deposit/withdrawal data",
+    "Backend: /api/mentor/dashboard/leaderboard returns ranked mentors by net revenue",
+    "Backend: /api/mentor/dashboard/revenue-chart returns deposits by mentor",
+    "Backend: Ashwin (regular mentor) gets individual view only (effective_view=individual)",
+    "Backend: Regular mentor has team_override_aed=0",
+    "Backend: Regular mentor has 1% net commission (not 1.5%)",
+    "Backend: Period filters work (this_month, this_quarter, this_year, overall)",
+    "Backend: Finance user can access /api/finance/mentor-student-deposits",
+    "Backend: Finance user can access /api/finance/mentor-withdrawals",
+    "Backend: Mentor gets 403 when accessing /api/finance/mentor-student-deposits",
+    "Backend: Mentor gets 403 when trying to POST /api/finance/mentor-withdrawal",
+    "Backend: Finance role gets 403 when accessing /api/mentor/dashboard",
+    "Frontend: Edwin sees Individual/Team toggle on Mentor Dashboard",
+    "Frontend: Edwin sees Team Override (0.5% team net) in Commission Breakdown",
+    "Frontend: Edwin sees Net Commission (1.5% of net) for master role",
+    "Frontend: Edwin sees 'Team overview — click charts to drill down' hint text",
+    "Frontend: Ashwin (regular mentor) does NOT see Individual/Team toggle",
+    "Frontend: Ashwin does NOT see Team Override commission line",
+    "Frontend: Ashwin sees Net Commission (1% of net) - correct for regular mentor",
+    "Frontend: Ashwin sees 'Welcome back, Ashwin' personalized greeting",
+    "Frontend: Finance Withdrawals page loads with summary cards",
+    "Frontend: Student Deposits tab shows 142 students with Withdraw buttons",
+    "Frontend: Withdrawal History tab shows recent withdrawals",
+    "Frontend: Withdrawal modal opens with student info (Deposits/Withdrawn/Net badges)",
+    "Frontend: Recording withdrawal works - toast shows 'Withdrawal of $75 recorded'",
+    "Frontend: New withdrawal appears in history after submission",
+    "Frontend: Period filter changes dashboard data (Overall vs Quarter showed different values)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_mentor_dashboard_finance.py",
+    "/app/test_reports/pytest/pytest_mentor_dashboard.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Commission calculation correctly implemented: 1% flat on deposits, 1% net for regular mentors, 1.5% net for Edwin, 0.5% team override for Edwin",
+    "Role-based view logic correct: canToggleView = isMaster || isAdmin",
+    "Team Override commission line correctly hidden for non-master roles using isMaster && conditional rendering",
+    "Bonus slabs correctly display 5 indicators at bottom with highlighting for achieved slabs",
+    "Finance endpoints properly secured with require_roles(['super_admin', 'admin', 'finance'])",
+    "data-testid attributes present on all key interactive elements"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_mentor_dashboard_finance.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "100% (All UI features verified)"
+  },
+
+  "test_credentials": {
+    "master_of_academics": {"email": "edwin@clt-academy.com", "password": "Edwin@123"},
+    "regular_mentor": {"email": "ashwin@clt-academy.com", "password": "@Aqib1234"},
+    "finance": {"email": "finance@clt-academy.com", "password": "@Aqib1234"},
+    "admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "Created one test withdrawal of $75 for 'Muhammed shereef cholayil' with notes 'Playwright test withdrawal' during testing. This appears in the withdrawal history.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Mentor Dashboard feature fully tested. Key features: 1) Edwin (master_of_academics) sees Individual/Team toggle, Team Override commission (0.5%), Net commission shows 1.5%. 2) Regular mentors (like Ashwin) see individual data only, no toggle, no team override, Net commission is 1%. 3) Finance Withdrawals page at /finance/mentor-withdrawals allows finance role to record student withdrawals. 4) Both dashboards have period filters (This Month, This Quarter, This Year, Overall). 5) Bonus Progress shows current month net deposits in USD with 5 slab indicators.",
+
+  "testing_method": "Backend pytest (19 tests) + Playwright browser automation for frontend verification",
+
+  "feature_summary": {
+    "mentor_dashboard": {
+      "url": "/mentor/dashboard",
+      "roles": {
+        "master_of_academics": "Team view with Individual/Team toggle, Team Override commission, drill-down hints",
+        "mentor": "Individual view only, no toggle, no team override, 1% net commission"
+      },
+      "components": ["Revenue cards (Deposits/Withdrawals/Net)", "Commission Breakdown", "Bonus Progress", "Student Stats", "Monthly Trend chart", "Leaderboard", "Revenue chart"]
+    },
+    "finance_withdrawals": {
+      "url": "/finance/mentor-withdrawals",
+      "roles": ["finance", "admin", "super_admin"],
+      "components": ["Summary cards", "Student Deposits tab with Withdraw buttons", "Withdrawal History tab", "Record Withdrawal modal"]
+    }
+  }
+}

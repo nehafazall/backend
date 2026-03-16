@@ -59,6 +59,7 @@ import {
     ArrowRightLeft,
     Shuffle,
     Timer,
+    ArrowDownRight,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
@@ -124,7 +125,7 @@ const SECTIONS = {
         title: 'Academics',
         icon: GraduationCap,
         color: 'bg-orange-500',
-        roles: ['super_admin', 'admin', 'mentor', 'academic_master'],
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'],
         items: [
             { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor' },
             { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard' },
@@ -194,6 +195,7 @@ const SECTIONS = {
         items: [
             { title: 'Finance', icon: DollarSign, path: '/finance' },
             { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications' },
+            { title: 'Mentor Withdrawals', icon: ArrowDownRight, path: '/finance/mentor-withdrawals' },
             { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
         ],
     },
