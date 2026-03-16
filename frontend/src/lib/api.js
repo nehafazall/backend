@@ -360,11 +360,12 @@ const getDefaultPermissions = (role) => {
         permissions['customer_service'] = { enabled: true, level: 'edit', subPages: { 
             cs_kanban: 'edit', cs_dashboard: 'view', customer_master: 'view' 
         }};
-    } else if (role === 'mentor' || role === 'academic_master') {
+    } else if (role === 'mentor' || role === 'academic_master' || role === 'master_of_academics') {
         permissions['dashboard'] = { enabled: true, level: 'view', subPages: { main_dashboard: 'view', qc_dashboard: 'none' } };
-        permissions['mentor'] = { enabled: true, level: role === 'academic_master' ? 'full' : 'edit', subPages: { 
-            mentor_crm: role === 'academic_master' ? 'full' : 'edit', 
-            mentor_dashboard: 'view', 
+        const isMaster = role === 'academic_master' || role === 'master_of_academics';
+        permissions['mentor'] = { enabled: true, level: isMaster ? 'full' : 'edit', subPages: { 
+            mentor_crm: isMaster ? 'full' : 'edit', 
+            mentor_dashboard: isMaster ? 'full' : 'view', 
             leaderboard: 'view' 
         }};
     } else if (role === 'hr') {
