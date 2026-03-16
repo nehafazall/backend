@@ -31,10 +31,16 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 
 ### Commission & Bonus System
 - 1% flat commission on deposits (AED)
-- 1% net commission monthly (deposits - withdrawals)
-- Edwin: 1.5% net (1% + 0.5% team override)
+- 1% net commission monthly (deposits - withdrawals) — same for ALL mentors including Edwin
+- Edwin: additional 0.5% team override on entire team's net deposit (separate line item)
 - Negative net carries forward — payout withheld
 - Bonus slabs: $10K=10%, $20K=15%, $30K=17.5%, $40K=20%, $50K=25% of salary
+
+### P0 Bug Fixes (March 16, 2026)
+- FIXED: Edwin's net commission was 1.5% → corrected to 1% (backend line 6595)
+- FIXED: Leaderboard + charts were hidden when empty → always render with empty states
+- FIXED: Team Overview invisible → now uses canDrillDown flag, not teamData truthy check
+- Seeded 14 deposits + 3 withdrawals for 6 mentors on Atlas DB for testing
 
 ## Test Credentials
 - Super Admin: aqib@clt-academy.com / @Aqib1234
