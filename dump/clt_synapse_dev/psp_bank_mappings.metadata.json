@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"93ad30e177d5401280899a37de7b0d73","collectionName":"psp_bank_mappings","type":"collection"}

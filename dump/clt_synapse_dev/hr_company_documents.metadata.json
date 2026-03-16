@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"4fc80206b0fe419c8e697b6c9d16084d","collectionName":"hr_company_documents","type":"collection"}

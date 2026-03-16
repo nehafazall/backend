@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"2c499e78cc10430eb682f6f12bde38a4","collectionName":"cost_centers","type":"collection"}

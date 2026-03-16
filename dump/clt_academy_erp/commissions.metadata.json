@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"user_id":{"$numberInt":"1"},"month":{"$numberInt":"1"}},"name":"user_id_1_month_1"}],"uuid":"fbbdf36c7a2f4c748d05ab5c21d06f0a","collectionName":"commissions","type":"collection"}

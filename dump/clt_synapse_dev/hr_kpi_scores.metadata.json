@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"employee_id":{"$numberInt":"1"},"period_year":{"$numberInt":"1"},"period_month":{"$numberInt":"1"}},"name":"employee_id_1_period_year_1_period_month_1"}],"uuid":"8367e3f865b54b24834328f2bdf62de8","collectionName":"hr_kpi_scores","type":"collection"}

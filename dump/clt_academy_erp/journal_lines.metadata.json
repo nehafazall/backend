@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"journal_entry_id":{"$numberInt":"1"}},"name":"journal_entry_id_1"},{"v":{"$numberInt":"2"},"key":{"account_id":{"$numberInt":"1"}},"name":"account_id_1"}],"uuid":"78c4b5b1e0f94618ae009680880486db","collectionName":"journal_lines","type":"collection"}

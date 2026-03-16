@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"asset_id":{"$numberInt":"1"},"returned_at":{"$numberInt":"1"}},"name":"asset_id_1_returned_at_1"}],"uuid":"84df703ef7a84a66b03849113e6a1333","collectionName":"hr_asset_assignments","type":"collection"}

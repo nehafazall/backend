@@ -6592,9 +6592,7 @@ async def get_mentor_dashboard(
     # Flat commission = 1% of each deposit in AED
     flat_commission_aed = round(total_deposits_aed * 0.01, 2)
     # Net commission = 1% of net (deposits - withdrawals) in AED
-    net_commission_rate = 0.01
-    if is_master and effective_view == "individual":
-        net_commission_rate = 0.015  # Edwin gets 1% + 0.5% team override on his own
+    net_commission_rate = 0.01  # All mentors (including Edwin) get 1% net commission
     net_commission_aed = round(net_aed * net_commission_rate, 2)
 
     # Edwin's team override (0.5% on entire team net)
@@ -11423,7 +11421,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://multi-role-analytics.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://commission-debug-2.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

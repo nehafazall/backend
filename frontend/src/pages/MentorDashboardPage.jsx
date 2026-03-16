@@ -192,7 +192,7 @@ function MentorDashboardPage() {
                             <span className="font-semibold text-emerald-500 font-mono">{fmtAED(d.flat_commission_aed)}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Net ({isMaster ? '1.5%' : '1%'} of net)</span>
+                            <span className="text-sm text-muted-foreground">Net (1% of net)</span>
                             <span className={`font-semibold font-mono ${d.net_commission_aed >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtAED(d.net_commission_aed)}</span>
                         </div>
                         {isMaster && (
@@ -274,10 +274,10 @@ function MentorDashboardPage() {
             </div>
 
             {/* Monthly Trend (individual) */}
-            {trend.length > 0 && (
-                <Card data-testid="monthly-trend-chart">
-                    <CardHeader><CardTitle className="text-base">My Monthly Trend</CardTitle><CardDescription>Deposits, withdrawals, and net revenue over time</CardDescription></CardHeader>
-                    <CardContent>
+            <Card data-testid="monthly-trend-chart">
+                <CardHeader><CardTitle className="text-base">My Monthly Trend</CardTitle><CardDescription>Deposits, withdrawals, and net revenue over time</CardDescription></CardHeader>
+                <CardContent>
+                    {trend.length > 0 ? (
                         <ResponsiveContainer width="100%" height={280}>
                             <ComposedChart data={trend}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -290,82 +290,112 @@ function MentorDashboardPage() {
                                 <Line type="monotone" dataKey="net_aed" name="Net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
                             </ComposedChart>
                         </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-            )}
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                            <TrendingUp className="h-10 w-10 mb-3 opacity-30" />
+                            <p className="text-sm font-medium">No monthly data yet</p>
+                            <p className="text-xs mt-1">Trend data will appear once deposits are recorded</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* ═══════ TEAM OVERVIEW (Edwin / Admin only) ═══════ */}
-            {t && (
+            {canDrillDown && (
                 <>
-                    <SectionLabel icon={Users} title="Team Overview" subtitle={`All mentors — ${t.total_students} students`} color="text-blue-500" />
+                    <SectionLabel icon={Users} title="Team Overview" subtitle={`All mentors${t ? ` — ${t.total_students} students` : ''}`} color="text-blue-500" />
 
                     {/* Team Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="team-revenue-cards">
-                        <StatCard title="Team Deposits" value={fmtAED(t.total_deposits_aed)} subtitle={`${fmtUSD(t.total_deposits_usd)} USD`} icon={ArrowUpRight} colorClass="bg-emerald-500/10 text-emerald-500" />
-                        <StatCard title="Team Withdrawals" value={fmtAED(t.total_withdrawals_aed)} subtitle={`${fmtUSD(t.total_withdrawals_usd)} USD`} icon={TrendingDown} colorClass="bg-red-500/10 text-red-500" />
-                        <StatCard title="Team Net" value={fmtAED(t.net_aed)} subtitle={`${fmtUSD(t.net_usd)} USD`} icon={t.net_aed >= 0 ? TrendingUp : TrendingDown} colorClass={t.net_aed >= 0 ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'} />
+                        <StatCard title="Team Deposits" value={fmtAED(t?.total_deposits_aed)} subtitle={`${fmtUSD(t?.total_deposits_usd)} USD`} icon={ArrowUpRight} colorClass="bg-emerald-500/10 text-emerald-500" />
+                        <StatCard title="Team Withdrawals" value={fmtAED(t?.total_withdrawals_aed)} subtitle={`${fmtUSD(t?.total_withdrawals_usd)} USD`} icon={TrendingDown} colorClass="bg-red-500/10 text-red-500" />
+                        <StatCard title="Team Net" value={fmtAED(t?.net_aed)} subtitle={`${fmtUSD(t?.net_usd)} USD`} icon={(t?.net_aed || 0) >= 0 ? TrendingUp : TrendingDown} colorClass={(t?.net_aed || 0) >= 0 ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'} />
                     </div>
 
                     {/* Revenue Chart + Leaderboard */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {revenueChart.length > 0 && (
-                            <Card data-testid="mentor-revenue-chart">
-                                <CardHeader><CardTitle className="text-base">Mentor-wise Revenue</CardTitle>
-                                    {canDrillDown && <CardDescription>Click a bar for details</CardDescription>}
-                                </CardHeader>
-                                <CardContent>
+                        <Card data-testid="mentor-revenue-chart">
+                            <CardHeader><CardTitle className="text-base">Mentor-wise Revenue</CardTitle>
+                                <CardDescription>{revenueChart.length > 0 ? 'Click a bar for details' : 'Revenue comparison will appear with data'}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {revenueChart.length > 0 ? (
                                     <ResponsiveContainer width="100%" height={280}>
                                         <BarChart data={revenueChart} layout="vertical">
                                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                             <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
                                             <YAxis type="category" dataKey="mentor_name" width={100} tick={{ fill: '#9ca3af', fontSize: 10 }} />
                                             <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }} formatter={(v) => fmtAED(v)} />
-                                            <Bar dataKey="deposits_aed" name="Deposits (AED)" fill="#f59e0b" radius={[0,4,4,0]} cursor={canDrillDown ? 'pointer' : 'default'} />
+                                            <Bar dataKey="deposits_aed" name="Deposits (AED)" fill="#f59e0b" radius={[0,4,4,0]} cursor="pointer" />
                                         </BarChart>
                                     </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        )}
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                        <Zap className="h-10 w-10 mb-3 opacity-30" />
+                                        <p className="text-sm font-medium">No mentor revenue data yet</p>
+                                        <p className="text-xs mt-1">Chart populates when deposits are recorded</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
-                        {leaderboard.length > 0 && (
-                            <Card data-testid="mentor-leaderboard">
-                                <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-5 w-5 text-amber-500" />Leaderboard</CardTitle><CardDescription>Ranked by net revenue</CardDescription></CardHeader>
-                                <CardContent className="space-y-2.5">
-                                    {leaderboard.map((m, idx) => (
-                                        <div key={m.mentor_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors" data-testid={`leaderboard-row-${idx}`}>
-                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500/20 text-amber-500' : idx === 1 ? 'bg-gray-400/20 text-gray-400' : idx === 2 ? 'bg-amber-700/20 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
-                                                {idx + 1}
+                        <Card data-testid="mentor-leaderboard">
+                            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-5 w-5 text-amber-500" />Leaderboard</CardTitle><CardDescription>Ranked by net revenue</CardDescription></CardHeader>
+                            <CardContent>
+                                {leaderboard.length > 0 ? (
+                                    <div className="space-y-2.5">
+                                        {leaderboard.map((m, idx) => (
+                                            <div key={m.mentor_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors" data-testid={`leaderboard-row-${idx}`}>
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500/20 text-amber-500' : idx === 1 ? 'bg-gray-400/20 text-gray-400' : idx === 2 ? 'bg-amber-700/20 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{m.mentor_name}</p>
+                                                    <p className="text-xs text-muted-foreground">{m.deposit_count} deposits</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-bold font-mono text-emerald-500">{fmtAED(m.net_aed)}</p>
+                                                    <p className="text-[10px] text-muted-foreground">net</p>
+                                                </div>
+                                                {canDrillDown && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{m.mentor_name}</p>
-                                                <p className="text-xs text-muted-foreground">{m.deposit_count} deposits</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold font-mono text-emerald-500">{fmtAED(m.net_aed)}</p>
-                                                <p className="text-[10px] text-muted-foreground">net</p>
-                                            </div>
-                                            {canDrillDown && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        )}
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                        <Trophy className="h-10 w-10 mb-3 opacity-30" />
+                                        <p className="text-sm font-medium">No leaderboard data yet</p>
+                                        <p className="text-xs mt-1">Rankings appear when mentors record deposits</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </>
             )}
 
-            {/* Leaderboard for regular mentors (team chart, no drill-down) */}
-            {!t && leaderboard.length > 0 && (
+            {/* Leaderboard for regular mentors */}
+            {!canDrillDown && (
                 <Card data-testid="mentor-leaderboard">
                     <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-5 w-5 text-amber-500" />Leaderboard</CardTitle><CardDescription>Ranked by net revenue</CardDescription></CardHeader>
-                    <CardContent className="space-y-2.5">
-                        {leaderboard.map((m, idx) => (
-                            <div key={m.mentor_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50" data-testid={`leaderboard-row-${idx}`}>
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500/20 text-amber-500' : idx === 1 ? 'bg-gray-400/20 text-gray-400' : idx === 2 ? 'bg-amber-700/20 text-amber-700' : 'bg-muted text-muted-foreground'}`}>{idx + 1}</div>
-                                <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{m.mentor_name}</p><p className="text-xs text-muted-foreground">{m.deposit_count} deposits</p></div>
-                                <div className="text-right"><p className="text-sm font-bold font-mono text-emerald-500">{fmtAED(m.net_aed)}</p></div>
+                    <CardContent>
+                        {leaderboard.length > 0 ? (
+                            <div className="space-y-2.5">
+                                {leaderboard.map((m, idx) => (
+                                    <div key={m.mentor_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50" data-testid={`leaderboard-row-${idx}`}>
+                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-500/20 text-amber-500' : idx === 1 ? 'bg-gray-400/20 text-gray-400' : idx === 2 ? 'bg-amber-700/20 text-amber-700' : 'bg-muted text-muted-foreground'}`}>{idx + 1}</div>
+                                        <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{m.mentor_name}</p><p className="text-xs text-muted-foreground">{m.deposit_count} deposits</p></div>
+                                        <div className="text-right"><p className="text-sm font-bold font-mono text-emerald-500">{fmtAED(m.net_aed)}</p></div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                <Trophy className="h-10 w-10 mb-3 opacity-30" />
+                                <p className="text-sm font-medium">No leaderboard data yet</p>
+                                <p className="text-xs mt-1">Rankings appear when mentors record deposits</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}

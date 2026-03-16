@@ -1,0 +1,94 @@
+{
+  "summary": "Verified Mentor Dashboard commission fix - Edwin's net commission correctly shows 1% (not 1.5%). All 3 critical issues confirmed fixed: (1) Net commission rate is 1%, (2) Leaderboard and charts working with 6 mentors, (3) Team Overview visible for Edwin with Team Deposits/Withdrawals/Net cards.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Edwin's net commission = 1% of net (line 6595: net_commission_rate = 0.01)",
+    "Backend: Team override for Edwin = 0.5% of team net (line 6616: 0.005)",
+    "Backend: Leaderboard API returns 6 mentors ranked by net revenue",
+    "Backend: Revenue chart API returns 6 mentors with deposits",
+    "Backend: Monthly trend API returns 2 months of data (2026-01, 2026-02)",
+    "Backend: Team view aggregates all team mentors' data correctly",
+    "Backend: Regular mentor (Ashwin) gets individual view only (effective_view=individual)",
+    "Backend: Regular mentor has team_override_aed = 0",
+    "Backend: Bonus slabs correctly structured (5 slabs: $10K-10%, $20K-15%, $30K-17.5%, $40K-20%, $50K-25%)",
+    "Backend: Student pipeline stages included in response",
+    "Frontend: Edwin's Commission card shows 'Net (1% of net)' - CORRECT",
+    "Frontend: Edwin's Commission card shows 'Team Override (0.5%)' - CORRECT",
+    "Frontend: No incorrect '1.5%' label present on dashboard",
+    "Frontend: Leaderboard displays 6 mentors (Ashwin Sudarsh, Edwin Joy, Rahim Gilani, etc.)",
+    "Frontend: Mentor-wise Revenue horizontal bar chart displays 6 mentors",
+    "Frontend: Monthly Trend chart shows 2 months with deposits/withdrawals/net line",
+    "Frontend: Team Overview section visible for Edwin (master_of_academics)",
+    "Frontend: Team Deposits card: AED 225,951",
+    "Frontend: Team Withdrawals card: AED 16,533",
+    "Frontend: Team Net card: AED 209,418",
+    "Frontend: Ashwin (regular mentor) does NOT see Team Override",
+    "Frontend: Ashwin does NOT see Team Overview section",
+    "Frontend: Ashwin's Commission card shows 'Net (1% of net)'"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_mentor_dashboard_commission_fix.py",
+    "/app/test_reports/pytest/pytest_mentor_commission_fix.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Line 6595: net_commission_rate = 0.01 - CORRECT (1% not 1.5%)",
+    "Line 6616: team_override_aed = round(team_net_usd * USD_TO_AED * 0.005, 2) - CORRECT (0.5%)",
+    "Frontend line 195: 'Net (1% of net)' label - CORRECT",
+    "Role-based view logic correct: canDrillDown = isMaster || isAdmin",
+    "Team Override conditionally rendered only for isMaster users"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_mentor_dashboard_commission_fix.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (All UI features verified via Playwright)"
+  },
+
+  "test_credentials": {
+    "master_of_academics": {"email": "edwin@clt-academy.com", "password": "Edwin@123"},
+    "regular_mentor": {"email": "ashwin@clt-academy.com", "password": "@Aqib1234"},
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "Test data previously seeded with 14 deposits and 3 withdrawals for 6 mentors",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Mentor Dashboard commission fix verified. Key confirmations: (1) Backend net_commission_rate = 0.01 (1%), (2) Frontend label shows 'Net (1% of net)', (3) Team override = 0.5% for master_of_academics, (4) All charts and leaderboard working with 6 mentors, (5) Team Overview section visible only for master_of_academics/admin roles.",
+
+  "verified_fix_details": {
+    "issue_1_commission_rate": {
+      "description": "Edwin's net commission was 1.5% instead of 1%",
+      "fix_location": "/app/backend/server.py line 6595",
+      "fix_code": "net_commission_rate = 0.01",
+      "verification": "Backend test confirms net_commission_aed = net_aed * 0.01"
+    },
+    "issue_2_leaderboard_charts": {
+      "description": "Leaderboard and charts were missing",
+      "verification": "Leaderboard returns 6 mentors, Revenue chart shows 6 mentors, Monthly trend shows 2 months"
+    },
+    "issue_3_team_overview": {
+      "description": "Team Overview showed no data",
+      "verification": "Team Overview visible for Edwin with Team Deposits (AED 225,951), Team Withdrawals (AED 16,533), Team Net (AED 209,418)"
+    }
+  }
+}

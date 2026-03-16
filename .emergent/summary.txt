@@ -1,84 +1,89 @@
 <analysis>**original_problem_statement:**
-The user's primary goal is to enhance their business management system with role-specific dashboards, operational controls, and data management features.
+The user requested a new Mentor Dashboard with role-based views, where team leaders see team data and mentors see individual data. This included implementing a complex commission and bonus structure based on deposits. A 'financier' role was also required to manage student withdrawals via a dedicated page.
+
+Subsequently, the user requested to connect their external MongoDB Atlas database, migrate all existing data, and then clear specific collections (Mentor deposits/withdrawals, Sales, CS, and Students) to start fresh post-deployment. During this process, a bug was found and fixed where mentors couldn't see the 'Academics' navigation link.
+
+After the data cleanup, the user reported the Mentor Dashboard was not functioning as expected and requested a rebuild. The agent rebuilt it, but the user has now reported several critical issues with the new version.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Dashboard Visibility & Accuracy:**
-    *   **CS/Sales Agents:** Should see their *individual* performance in top-line stat cards and trend charts. The main leaderboard and team revenue charts should show *team-wide* data. Drill-down functionality on charts must be disabled for this role.
-    *   **Team Leaders:** Should see stats and charts reflecting their *entire team's* performance.
-    *   **CEO/Admins:** Should have a full, unrestricted view of all data, including drill-downs.
-    *   **Data Accuracy:** The Enrolled MTD stat card was showing all-time data and needed to be fixed to reflect the current month's total.
-2.  **CS Operations & Data Management:**
-    *   **Data Import:** The user provided a CSV file with historical upgrade data. This data needed to be imported, with each transaction recorded, commissions calculated, and LTV updated in the customer master.
-    *   **Course Level Tracking:** Implement a system to track a student's course level (e.g., Starter, Basic, Intermediate). This should be updated via the CSV import.
-    *   **UI Enhancements:** The UI for CS and Mentor dashboards must visually distinguish students by their course level using distinct pastel colors and badges. Newly imported students should also be visually identifiable.
-    *   **Commission Visibility:** The Head Commission stat on the CS dashboard should only be visible to users with  or  roles.
-3.  **SLA Management:**
-    *   Create a centralized page in Operations to manage all Service Level Agreements (SLAs).
-    *   This system must be dynamic, allowing admins to create, edit, and toggle SLAs for different departments (Sales, CS, HR) with configurable time limits and escalation levels.
-4.  **Google Sheets Connector:**
-    *   Fix a  error preventing the connection of new agent Google Sheets.
-    *   Fix a UI bug where creating a new connector incorrectly displayed a failed to create error message.
-5.  **Test Data Cleanup:**
-    *   The user requested the deletion of any test data created during development (no such data was found).
+1.  **Mentor Dashboard:**
+    *   **Role-Based Views:**  (Edwin) has a team view with drill-down capabilities. Regular mentors have an individual view without drill-down. For Edwin, the dashboard must show both his individual performance and the team's performance simultaneously.
+    *   **Key Metrics:** Display Deposits, Withdrawals, and Net Deposits.
+    *   **Commission Logic:**
+        *   Mentors: 1% flat commission on deposits, 1% on net month-end deposits.
+        *   Edwin (Lead): Standard 1% on his own deposits, 1% net, plus a 0.5% override on the team's net deposit. *User Correction: Edwin's net commission should only be 1%, not 1.5%.*
+    *   **Bonus Slabs:** A visual progress tracker for bonus tiers based on deposit amounts (0k-0k).
+    *   **Charts & Leaderboard:** The dashboard must include a leaderboard and charts for monthly performance comparison.
+2.  **Financier Role:**
+    *   A dedicated page for a 'financier' user to record student withdrawals. This action should reflect on the corresponding mentor's dashboard.
+3.  **Database Management:**
+    *   Migrate the application from the internal Emergent DB to the user's external MongoDB Atlas instance.
+    *   Clear all test and operational data from specific collections (, , , , , etc.) on the user's DB.
+4.  **Bug Fixes & Regressions:**
+    *   Fix navigation issue preventing mentors from seeing the Academics section.
+    *   Fix new issues on the Mentor Dashboard: incorrect commission, missing components, and no team data.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The agent has implemented a significant number of features. The full-featured, database-driven SLA Management system is complete and tested. The Google Sheets connector issues ( and the UI error) have been resolved. The CS Upgrade data from the user's CSV has been successfully imported, commissions have been calculated and backfilled, and the UI now reflects student course levels with distinct colors and badges. Role-based commission visibility on the CS dashboard is also implemented. The core of the application is stable, but the main dashboards are currently broken for non-admin roles.
+The application is now fully connected to and running on the user's external MongoDB Atlas database. All data from the development environment has been migrated, and per the user's request, specific collections containing operational/test data have been cleared.
+
+A comprehensive Mentor Dashboard and a Financier Withdrawals page have been built. The agent also fixed a bug preventing mentors from accessing the 'Academics' section. However, the most recent version of the Mentor Dashboard, which was rebuilt after the data cleanup, is not working correctly and has several bugs.
 
 **Last working item**:
--   **Last item agent was working:** Fixing a critical bug where CS agents, Sales agents, and Team Leaders saw blank dashboards. The user specified a complex set of visibility rules for what each role should see (e.g., individual stats vs. team charts).
+-   **Last item agent was working:** Addressing user feedback on the newly rebuilt Mentor Dashboard. The user reported that it's missing key components and showing incorrect data.
 -   **Status:** IN PROGRESS
--   **Agent Testing Done:** Y (Backend API calls were verified with ).
--   **Which testing method agent to use?** Frontend testing agent. The test must cover logging in as multiple roles (, , , ) to verify that the dashboard data is displayed with the correct scope and granularity for each role, and that drill-down functionality is correctly disabled for non-managerial roles.
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** both
+    -   **Backend Testing:** First, seed the empty  collection with test data for multiple mentors. Then, use  to test the  endpoints as both a regular mentor and the team lead (Edwin) to validate the data aggregation and commission logic.
+    -   **Frontend Testing:** Use the screenshot tool to log in as Edwin and a regular mentor to visually confirm that the leaderboard and charts appear correctly with the new test data, and that Edwin's dashboard displays both individual and team metrics accurately.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Role-Based Dashboard Visibility is Broken (P0)**
-    -   **Description:** Non-admin users (Agents, Team Leaders) see blank dashboards. This is because a  on the frontend fails when a single API call is rejected due to role permissions (403 Forbidden). The agent implemented a fix to catch these errors and adjust backend queries, but it requires thorough verification.
-    -   **Attempted fixes:**
-        1.  Wrapped data-fetching calls in  blocks within the frontend  to prevent one failed call from breaking the entire page load.
-        2.  Modified backend dashboard endpoints (, ) to correctly filter data based on the user's role and the requested  ( vs. ).
+-   **Issue 1: Mentor Dashboard is Incorrect and Incomplete (P0)**
+    -   **Description:** The current Mentor Dashboard, rebuilt after a data cleanup, has three critical flaws:
+        1.  **Incorrect Commission:** The team lead's (Edwin) net commission is calculated at 1.5% instead of the corrected 1%.
+        2.  **Missing Components:** The leaderboard and monthly performance comparison charts are not visible on the dashboard.
+        3.  **No Team Data:** The Team Overview section for the team lead is empty and does not display aggregated team data. This is likely because the database was cleared of all test data.
+    -   **Attempted fixes:** The agent rebuilt the UI, but the underlying data fetching logic appears to be flawed or failing silently, especially without any data in the database.
     -   **Next debug checklist:**
-        1.  Log in as a  (e.g., , pw: ). Verify CS Dashboard shows Della's individual stats and trends, but team-wide leaderboards.
-        2.  Log in as a . Verify Sales Dashboard shows their individual stats and trends, but team-wide charts. Confirm drill-downs are disabled.
-        3.  Log in as a  (e.g., , pw: ). Verify they see data for their *entire team* in both stats and charts.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a critical bug preventing key user roles from accessing essential data and performing their jobs. Fixing it will restore core application functionality.
+        1.  **CRITICAL: Re-seed Data.** The database is empty. Add new sample documents to the  collection for several mentors on Edwin's team to enable proper testing.
+        2.  **Fix Commission Logic:** In , find the  endpoint and correct the net commission calculation for the  role from  to .
+        3.  **Investigate Missing Components:** In , examine the data fetching logic () to ensure API calls to  and  are being executed and are not failing.
+        4.  **Debug Team Data Aggregation:** In , add logging to the  endpoint's aggregation pipeline to trace how team data is being calculated for the team lead and ensure it's functioning correctly now that there will be test data.
+    -   **Why fix this issue and what will be achieved with the fix?** The Mentor Dashboard is a core feature for a key user group. Fixing it is essential for the application to be usable and ready for deployment.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** Y
+    -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on other issue:** No
 
 **In progress Task List**:
--   There are no other tasks in progress. The entire focus is on fixing the dashboard visibility issue.
+*   There are no other tasks in progress. The entire focus is on fixing the Mentor Dashboard.
 
 **Upcoming and Future Tasks**
 **Upcoming Tasks:**
--   **P1: User Verification for Google Sheets:** The  error was fixed by providing the user with the correct URI for their Google Cloud Console. The user has not yet confirmed if they have successfully connected all 17 of their agent sheets.
+-   **P1: User Verification for Google Sheets:** The user has not yet confirmed if they have successfully connected all 17 of their agent sheets after the  fix.
+-   **P1: Historic Data Import Strategy:** The user plans to add historic enrolled student data post-deployment. A strategy or a simple import tool may be needed to facilitate this without disrupting financial data.
 
 **Future Tasks:**
--   **P2: Refactor :** Decompose the monolithic  into a more maintainable, domain-driven route structure (e.g., , ).
--   **P2: Course and Commission Configuration UI:** Build a dedicated interface for administrators to configure courses and their associated multi-level commission structures.
--   **P2: Payslip Generation:** Implement a feature to generate payslips for employees.
+-   **P2: Refactor :** Decompose the monolithic  into a more maintainable, domain-driven route structure.
+-   **P2: Course and Commission Configuration UI:** Build an interface for admins to configure courses and commission structures.
+-   **P2: Payslip Generation:** Implement a feature to generate employee payslips.
 -   **P2: Google Ads API Integration.**
--   **P2: Fix Babel Plugin :** Address the persistent  error originating from .
+-   **P2: Fix Babel Plugin :** Address the persistent  error.
 
 **Completed work in this session**
--   **P0 Operational Controls (Completed):** The frontend for Salary Estimation, Transfer Requests, and Round Robin Controls was fully implemented, integrated with navigation, and successfully tested.
--   **SLA Management System (Completed):** A new, fully functional, database-driven SLA management system was built from scratch, including backend CRUD APIs and a frontend management page.
--   **Google Sheets Connector Fixes (Completed):** Resolved the  OAuth error and fixed a frontend bug that incorrectly reported a failure on connector creation.
--   **Dashboard Quick Stats Fix (Completed):** Corrected the Enrolled MTD metric on the homepage to display accurate current-month data instead of all-time data.
--   **CS Data Import & Enhancement (Completed):**
-    -   Successfully processed a user-provided CSV to import 147 historical upgrade records.
-    -   Implemented a  tracking system with corresponding UI updates (distinct pastel colors and badges) on CS and Mentor dashboards.
-    -   Authored and executed a script to backfill commission data for all imported records, ensuring accurate dashboard reporting.
-    -   Fixed multiple CS dashboard bugs to ensure all five agents and their correct revenue/upgrade data were displayed in charts and leaderboards.
--   **Role-Based Commission Visibility (Completed):** Implemented logic to hide the Head Commission card on the CS dashboard for non-managerial roles.
+-   **Role-Based Dashboard Visibility (Completed):** Fixed the critical bug where non-admin users saw blank Sales/CS dashboards, ensuring correct data scoping for all roles.
+-   **Personalized Welcome Banners (Completed):** Added dynamic welcome banners to CS and Sales dashboards with role-specific performance insights.
+-   **Mentor Dashboard & Finance Withdrawals (Completed):** Built the initial version of the Mentor Dashboard with complex commission/bonus logic and the 'financier' withdrawal management page.
+-   **External DB Migration (Completed):** Successfully connected the user's external MongoDB Atlas database and migrated over 10,000 documents from 59 collections. The application now runs exclusively on the user's DB.
+-   **Data Cleanup on Production DB (Completed):** Cleared all test/operational data for Sales, CS, Students, and Mentor finances from the user's Atlas DB as requested.
+-   **Mentor Navigation Bug (Completed):** Fixed a permissions issue that prevented mentors from seeing the Academics section in the navigation sidebar.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: **
-    -   **Debug checklist:** This error originates in . The next step is to investigate the plugin's interaction with the frontend code, possibly by disabling it to confirm it's the source and then analyzing the components it struggles with.
-    -   **Why to solve this issue and what will be achieved with this?** This error can cause instability in the frontend build process. Fixing it will improve development stability and reliability.
+    -   **Debug checklist:** This error originates in . The next step is to investigate the plugin's interaction with the frontend code.
+    -   **Why to solve this issue and what will be achieved with this?** This error can cause instability in the frontend build process.
     -   **Should Test frontend/backend/both after fix:** frontend
     -   **Is recurring issue?** Y
 
@@ -91,80 +96,75 @@ The agent has implemented a significant number of features. The full-featured, d
 
 
 **Key Technical Concepts**
--   **Role-Based Access Control (RBAC):** Implementing granular data visibility on dashboards based on user roles (, , ). This involves frontend conditional rendering and backend data filtering.
--   **Graceful Frontend Error Handling:** Using  within  to prevent a single failed (but optional) API call from breaking an entire page, which was the root cause of the blank dashboards.
--   **Dynamic DB-Driven Configuration:** Migrating the hardcoded  to a new  MongoDB collection with a full CRUD UI, making the system configurable by admins.
--   **Data Backfilling & Scripting:** Authoring a one-off script to process imported CSV data, calculate historical commissions based on existing business logic, and insert the results into the  collection.
--   **Complex MongoDB Aggregations:** Refactoring numerous dashboard endpoints to perform complex lookups and aggregations across multiple collections (, , ) to provide accurate, role-specific analytics.
+-   **External Database Migration:** Connecting to a user-provided MongoDB Atlas instance, using  and  to migrate all data, and updating the  file.
+-   **Live Data Management:** Writing and executing scripts to perform destructive operations (data clearing) on a user's live database upon request.
+-   **Complex Data Aggregation:** Building backend endpoints that perform multi-stage aggregations for role-specific commissions, bonuses, and team-level reporting.
+-   **UI State Management for Roles:** Designing a single dashboard component that conditionally renders different layouts and data (individual vs. team) based on the logged-in user's role.
 
 **key DB schema**
--   ** (New):** 
--   **:** Modified to include  and .
--   **:** Modified to add/reset passwords for CS agents to enable login.
--   **:** Heavily modified by a backfilling script that inserted 147 new commission records.
--   **:** Heavily used as the source of truth for new CS dashboard aggregations.
+-   ** (Emptied):** 
+-   ** (Emptied):** 
+-   **:** Permissions for  and  were updated to grant access to the 'Academics' section.
+-   Many collections like , , ,  were cleared.
+
+**changes in tech stack**
+-   The backend database has been permanently switched from the internal Emergent-managed MongoDB to the user's external MongoDB Atlas instance.
 
 **All files of reference**
 -   
 -   
 -   
 -   
--   
--   
 
 **Areas that need refactoring**:
--   **:** The file's size and complexity continue to grow, making it difficult to maintain. Breaking it into domain-specific routers is a high-priority technical debt item.
--   ** & :** These components contain complex, sprawling data-fetching logic and state management. Refactoring them to use custom hooks could significantly improve readability and maintainability.
+-   **:** The file's size and complexity are now a significant liability. It urgently needs to be broken down into domain-specific route files (e.g., , ).
+-   **:** This component has become overly complex. It should be refactored into smaller, more manageable child components and custom hooks to separate data-fetching logic from the UI.
 
 **key api endpoints**
--   **NEW (SLA):** 
--   **MODIFIED (Dashboards):** All CS and Sales dashboard endpoints were heavily modified to support  ( vs. ) for role-based data filtering and to fix underlying data aggregation logic.
+-   **NEW (Mentor & Finance):**
     -   
     -   
     -   
     -   
     -   
-    -   
--   **MODIFIED (Data Import):**
-    -    (Logic updated to handle ).
--   **MODIFIED (Quick Stats):**
-    -    (Aggregation logic fixed for 'Enrolled MTD').
+-   **MODIFIED:**
+    -   All mentor-related endpoints had permissions updated to include .
 
 **Critical Info for New Agent**
--   Your highest priority (P0) is to verify the fix for the blank dashboards affecting all non-admin users. The previous agent identified the root cause ( failure) and implemented a fix, but it has not been confirmed from a user's perspective.
--   You MUST test by logging in as multiple different roles (, , ) to ensure the data visibility rules specified by the user in their last message are perfectly implemented.
--   **User's Desired Visibility:**
-    -   **Agents (CS/Sales):** Individual stats/trends, Team charts, No drill-down.
-    -   **Team Leaders:** Team-level stats and charts.
-    -   **Admins:** Full access.
--   Use the provided credentials. For example, log in as CS Agent  with password  and verify the CS Dashboard.
+-   **You are working directly on the user's production MongoDB Atlas database.** This database was intentionally cleared of test data. You **must** re-seed sample data into the  collection before attempting to debug or test the Mentor Dashboard.
+-   **Your highest priority (P0) is to fix the three issues on the Mentor Dashboard:**
+    1.  Edwin's net commission is calculated incorrectly (1.5% -> should be 1%).
+    2.  The leaderboard and comparison charts are missing.
+    3.  The team overview section for Edwin shows no data.
+-   Start by writing a script to add test data for multiple mentors. Then, fix the backend commission logic. Finally, debug the frontend and backend to resolve the missing components and data aggregation issues.
 
 **documents and test reports created in this job**
 -    (Updated)
 -   
 -   
--   User-provided data file: 
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests fix for CS dashboard: only 2/5 agents are shown, charts are wrong.
-2.  **Agent:** Fixes dashboard endpoints to use correct data source (), showing all 5 agents and correct trends.
-3.  **User:** Asks why commissions were not calculated for the newly imported data.
-4.  **Agent:** Creates and runs a script to backfill commissions for all 147 imported upgrades. Verifies dashboard now shows correct total commission.
-5.  **User:** Requests Head Commission be visible only to CS Heads and Admins.
-6.  **Agent:** Implements the role-based visibility for the commission card.
-7.  **User:** Reports CS Agents now see a completely blank dashboard (all data is zero).
-8.  **Agent:** Investigates and finds CS Agents default to a view they can't access. Implements a fix.
-9.  **User:** Reports the ENTIRE dashboard is now gone for CS Agents, not just zeroed out. Specifies detailed visibility rules for all roles on both CS and Sales dashboards.
-10. **Agent:** Identifies the root cause (a  failure due to a single permission-denied API call). Implements a more robust fix by catching errors on the frontend and refining backend filters for all roles. This fix is pending verification.
+1.  **User:** Asks to connect their external MongoDB.
+2.  **Agent:** Confirms it's possible and explains the rollback safety net.
+3.  **User:** Provides their MongoDB Atlas connection string.
+4.  **Agent:** Connects to the Atlas DB, migrates all 59 collections (10,680 documents), and updates the environment.
+5.  **User:** Asks if they can deploy.
+6.  **Agent:** Confirms the app is ready for deployment.
+7.  **User:** Before deploying, asks to clear all Mentor, Sales, CS, and Student test data. Also reports mentors can't see the Academics link.
+8.  **Agent:** Fixes the navigation bug by updating mentor permissions and clears all requested data from the user's Atlas DB.
+9.  **User:** Reports that the Mentor Dashboard is now broken/different and asks for it to be restored, ensuring the team lead (Edwin) can see both his and the team's data.
+10. **User:** (Pending) Reports the newly rebuilt dashboard has several issues: Edwin's commission is wrong, the leaderboard and charts are missing, and no team data is visible.
 
 **Project Health Check:**
--   **Broken:** The Sales and CS dashboards are critically broken for all , , and  roles, preventing them from seeing any data.
+-   **Broken:** The Mentor Dashboard is critically broken. It displays incorrect data, is missing essential UI components, and fails to show aggregated team data, making it unusable.
 -   **Mocked:** None.
--   **In Progress:** The fix for the broken dashboards.
+-   **In Progress:** The fix for the broken Mentor Dashboard.
 
 **3rd Party Integrations**
+-   **MongoDB Atlas:** The primary database for the application, hosted on the user's account.
 -   **Google Sheets API:** Used for lead ingestion.
--   **APScheduler:** Used for background tasks (sheet sync, student queue).
+-   **APScheduler:** Used for background tasks.
 -   **SMTP (via Gmail):** Used for email notifications.
 -   Meta Ads API
 -   ZK BioCloud (via web scraping)
@@ -172,16 +172,16 @@ The agent has implemented a significant number of features. The full-featured, d
 -   
 
 **Testing status**
--   **Testing agent used after significant changes:** YES, for the initial P0 features and the SLA Management system.
+-   **Testing agent used after significant changes:** YES
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None.
--   **Known regressions:** The dashboard visibility for non-admin roles has regressed significantly and is currently broken.
+-   **Test files created:** None
+-   **Known regressions:** The Mentor Dashboard has significantly regressed after the data cleanup and subsequent rebuild.
 
 **Credentials to test flow:**
 -   **Super Admin:**  / 
--   **CS Agent:**  / 
--   **CS Head / Team Leader:**  / 
--   **Sales Agent:**  / 
+-   **Master of Academics (Mentor Lead):**  / 
+-   **Mentor:**  / 
+-   **Financier:**  / 
 
 **What agent forgot to execute**
--   The agent did not complete the final verification (e.g., via screenshot or testing agent) after implementing the latest fix for the broken dashboards. The fix is in place but unconfirmed from a UI perspective.</analysis>
+- The agent failed to anticipate that clearing all database records would render the dashboard's data-driven components (charts, leaderboards, aggregations) non-functional. The agent should have immediately re-seeded test data after the cleanup to properly validate the dashboard's state before presenting it to the user, which would have caught the current bugs earlier.</analysis>

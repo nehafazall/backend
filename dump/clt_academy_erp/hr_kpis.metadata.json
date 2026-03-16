@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"category":{"$numberInt":"1"}},"name":"category_1"}],"uuid":"ccc4faee96fb4acbabb7158d693c02a2","collectionName":"hr_kpis","type":"collection"}

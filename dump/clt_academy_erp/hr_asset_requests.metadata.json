@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"status":{"$numberInt":"1"}},"name":"status_1"}],"uuid":"bc245f12784d42009faba641cc4b82be","collectionName":"hr_asset_requests","type":"collection"}
