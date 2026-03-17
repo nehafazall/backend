@@ -1,0 +1,103 @@
+{
+  "summary": "Sales Commission/Category System Testing Complete. All features working correctly - commission info endpoint returns proper data for sales_executive (Kiran), team_leader, and super_admin roles. Frontend displays commission card, category progress, eye toggle, and Import Historical Sales button as expected. Fixed a bug in ImportButton.jsx where template endpoint was using wrong URL path.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: GET /api/dashboard/sales-commission-info returns correct data for sales_executive (Kiran) - role, month_revenue, month_accounts, category_name, all 8 categories with thresholds",
+    "Backend: GET /api/dashboard/sales-commission-info returns 'not applicable' message for super_admin",
+    "Backend: GET /api/import/templates/historical-sales returns template definition with required/optional fields",
+    "Backend: POST /api/import/historical-sales-xlsx endpoint exists and requires file upload",
+    "Backend: POST /api/import/historical-sales-xlsx correctly restricted to admin/super_admin roles (returns 403 for sales_executive)",
+    "Backend: Existing dashboard endpoints still work - lead-funnel, monthly-trend, sales-by-course, leaderboard, filtered-stats",
+    "Backend: SALES_CATEGORIES has 8 categories (D through Diamond) with correct thresholds and salaries",
+    "Backend: Commission logic correctly returns has_commission=false when revenue < 18,000 AED",
+    "Frontend: Commission card visible on Sales Dashboard for sales_executive (Kiran)",
+    "Frontend: Commission card shows Current Salary, Revised Salary, Gain/Loss, Earned Commission fields",
+    "Frontend: Eye toggle button hides/shows sensitive earnings data",
+    "Frontend: Eye toggle reveals actual salary value (AED 2,750) when clicked",
+    "Frontend: Category Progress card shows all 8 categories (D, C, B, A, A+, Silver, Gold, Diamond)",
+    "Frontend: Category badge displays 'D' correctly based on current month revenue (0 AED)",
+    "Frontend: Commission unlock message shown when revenue < 18,000 AED",
+    "Frontend: Import Historical Sales button visible ONLY for admin/super_admin",
+    "Frontend: Import Historical Sales button NOT visible for sales_executive (Kiran)",
+    "Frontend: Import dialog opens correctly with Required/Optional Fields, Instructions, Download Template button",
+    "Frontend: All existing dashboard components render correctly (Revenue, Total Leads, Conversion, Top Agents, Team Revenue, Monthly Trend, Leaderboard, Pipeline)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_sales_commission_system.py",
+    "/app/test_reports/pytest/pytest_sales_commission_system.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "SALES_CATEGORIES constant properly defined in server.py lines 7609-7618 with 8 categories",
+    "Commission info endpoint (line 7620) correctly handles sales_executive, team_leader, and super_admin roles",
+    "Historical sales import template endpoint (line 8693) properly defined in generic templates dict",
+    "Import button visibility correctly conditioned on ['super_admin', 'admin'].includes(user?.role)"
+  ],
+
+  "updated_files": [
+    "/app/frontend/src/components/ImportButton.jsx"
+  ],
+
+  "bug_fixed": {
+    "description": "ImportButton.jsx was using wrong template URL path for historical-sales-xlsx type",
+    "root_cause": "actualType preferred 'type' prop over 'templateType', causing /import/templates/historical-sales-xlsx to be called instead of /import/templates/historical-sales",
+    "fix": "Added templateActualType variable that prioritizes templateType over type for template fetching",
+    "lines_changed": "Lines 57-86 in /app/frontend/src/components/ImportButton.jsx"
+  },
+
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (All UI features verified via Playwright)"
+  },
+
+  "test_credentials": {
+    "sales_executive": {"email": "kiran@clt-academy.com", "password": "@Aqib1234"},
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "No new seed data created - tested with existing data",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Sales Commission/Category system fully tested and working. Key features: (1) sales_executive sees My Earnings card with category-based salary info and Category Progress card with all 8 categories, (2) super_admin/admin see Import Historical Sales button, (3) Eye toggle hides/shows sensitive salary data. Fixed a bug in ImportButton.jsx template URL path. Kiran's current_net_salary is 2750 AED, currently in Category D with 0 revenue this month.",
+
+  "feature_verification_details": {
+    "sales_executive_commission_card": {
+      "current_salary": "2750 AED",
+      "category": "D (0 revenue)",
+      "has_commission": "false (revenue < 18k)",
+      "all_fields_visible": ["Current Salary", "Revised Salary", "Gain/Loss", "Earned Commission"]
+    },
+    "category_thresholds": {
+      "D": {"min_revenue": 0, "salary": 0},
+      "C": {"min_revenue": 10000, "salary": 2000},
+      "B": {"min_revenue": 18000, "salary": 2500},
+      "A": {"min_revenue": 22000, "salary": 3000},
+      "A+": {"min_revenue": 26000, "salary": 3500},
+      "Silver": {"min_revenue": 32000, "salary": 4000},
+      "Gold": {"min_revenue": 40000, "salary": 4500, "min_accounts": 15},
+      "Diamond": {"min_revenue": 50000, "salary": 6000, "min_accounts": 15}
+    },
+    "import_button": {
+      "visible_for": ["super_admin", "admin"],
+      "hidden_for": ["sales_executive", "team_leader"],
+      "type": "historical-sales-xlsx",
+      "template_type": "historical-sales"
+    }
+  }
+}

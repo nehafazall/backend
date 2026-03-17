@@ -7605,6 +7605,110 @@ async def get_filtered_dashboard_stats(
         "period": period,
     }
 
+# ==================== SALES COMMISSION / CATEGORY INFO ====================
+SALES_CATEGORIES = [
+    {"name": "Diamond", "min_revenue": 50000, "salary": 6000, "min_accounts": 15},
+    {"name": "Gold", "min_revenue": 40000, "salary": 4500, "min_accounts": 15},
+    {"name": "Silver", "min_revenue": 32000, "salary": 4000, "min_accounts": 0},
+    {"name": "A+", "min_revenue": 26000, "salary": 3500, "min_accounts": 0},
+    {"name": "A", "min_revenue": 22000, "salary": 3000, "min_accounts": 0},
+    {"name": "B", "min_revenue": 18000, "salary": 2500, "min_accounts": 0},
+    {"name": "C", "min_revenue": 10000, "salary": 2000, "min_accounts": 0},
+    {"name": "D", "min_revenue": 0, "salary": 0, "min_accounts": 0},
+]
+
+@api_router.get("/dashboard/sales-commission-info")
+async def get_sales_commission_info(user=Depends(get_current_user)):
+    """
+    Returns commission/category info for the logged-in sales user.
+    - Sales Executive: Full category breakdown with salary, gain/loss, pipeline
+    - Team Leader / Sales Manager: Commission + salary = total on hand
+    """
+    role = user.get("role", "")
+    now = datetime.now(timezone.utc)
+    this_month_start = now.replace(day=1).strftime("%Y-%m-%d")
+
+    # Get current net salary from HR
+    hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
+    current_net_salary = 0
+    if hr_emp:
+        ss = hr_emp.get("salary_structure") or {}
+        current_net_salary = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+
+    if role == "sales_executive":
+        # This month's enrolled revenue for this agent
+        rev_pipeline = [
+            {"$match": {"stage": "enrolled", "assigned_to": user["id"], "enrolled_at": {"$gte": this_month_start}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "accounts": {"$sum": 1}}}
+        ]
+        rev_result = await db.leads.aggregate(rev_pipeline).to_list(1)
+        month_revenue = rev_result[0]["total"] if rev_result else 0
+        month_accounts = rev_result[0]["accounts"] if rev_result else 0
+
+        # Determine category
+        category = SALES_CATEGORIES[-1]  # Default to D
+        for cat in SALES_CATEGORIES:
+            if month_revenue >= cat["min_revenue"]:
+                # Check account requirement
+                if cat["min_accounts"] > 0 and month_accounts < cat["min_accounts"]:
+                    continue
+                category = cat
+                break
+
+        category_salary = category["salary"]
+        # Commission = 0 if below 18k; otherwise difference between category salary and current
+        has_commission = month_revenue >= 18000 and category_salary > 0
+        earned_commission = max(0, category_salary - current_net_salary) if has_commission else 0
+        salary_diff = category_salary - current_net_salary if category_salary > 0 else -current_net_salary
+
+        # Pipeline expected: sum of hot_lead + interested leads' estimated amounts
+        pipeline_stages = ["hot_lead", "interested"]
+        pipeline_result = await db.leads.aggregate([
+            {"$match": {"assigned_to": user["id"], "stage": {"$in": pipeline_stages}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "count": {"$sum": 1}}}
+        ]).to_list(1)
+        pipeline_expected = pipeline_result[0]["total"] if pipeline_result else 0
+        pipeline_count = pipeline_result[0]["count"] if pipeline_result else 0
+
+        return {
+            "role": "sales_executive",
+            "month_revenue": month_revenue,
+            "month_accounts": month_accounts,
+            "category_name": category["name"],
+            "category_salary": category_salary,
+            "category_min_accounts": category["min_accounts"],
+            "current_net_salary": current_net_salary,
+            "salary_diff": salary_diff,
+            "earned_commission": earned_commission,
+            "has_commission": has_commission,
+            "pipeline_expected": pipeline_expected,
+            "pipeline_count": pipeline_count,
+            "all_categories": SALES_CATEGORIES,
+        }
+
+    elif role in ["team_leader", "sales_manager"]:
+        # TL/Manager: their own commission + salary
+        # Commission for TL/Manager = their personal enrolled revenue this month
+        rev_pipeline = [
+            {"$match": {"stage": "enrolled", "assigned_to": user["id"], "enrolled_at": {"$gte": this_month_start}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "accounts": {"$sum": 1}}}
+        ]
+        rev_result = await db.leads.aggregate(rev_pipeline).to_list(1)
+        own_revenue = rev_result[0]["total"] if rev_result else 0
+        own_accounts = rev_result[0]["accounts"] if rev_result else 0
+
+        return {
+            "role": role,
+            "month_revenue": own_revenue,
+            "month_accounts": own_accounts,
+            "current_net_salary": current_net_salary,
+            "total_on_hand": current_net_salary,
+        }
+
+    return {"role": role, "message": "Commission info not applicable for this role"}
+
+
+
 @api_router.get("/dashboard/month-comparison")
 async def get_month_comparison(view_mode: str = "team", user = Depends(get_current_user)):
     """Compare this month vs last month revenue on daily basis for XY scatter."""
@@ -8563,11 +8667,12 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
             "filename": "historical_leads_import_template.csv",
             "headers": [
                 "full_name*", "phone*", "additional_numbers", "email", "country", "city",
-                "course_enrolled*", "agent_employee_id*", "team_name*"
+                "course_enrolled*", "agent_employee_id*", "team_name*",
+                "enrollment_amount", "enrolled_at", "source"
             ],
             "fields": {
                 "required": ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"],
-                "optional": ["additional_numbers", "email", "country", "city"]
+                "optional": ["additional_numbers", "email", "country", "city", "enrollment_amount", "enrolled_at", "source"]
             },
             "example_row": {
                 "full_name": "Ahmed Ali",
@@ -8578,9 +8683,37 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
                 "city": "Dubai",
                 "course_enrolled": "Advanced Trading Mastery",
                 "agent_employee_id": "CLT-EMP-001",
-                "team_name": "Alpha Team"
+                "team_name": "Alpha Team",
+                "enrollment_amount": "15000",
+                "enrolled_at": "2025-06-15",
+                "source": "Meta Ads"
             },
-            "instructions": "For importing historical/closed leads only\nFields marked with * are mandatory\nPhone must include country code\nadditional_numbers: comma-separated list of extra phone numbers\nagent_employee_id MUST match an existing employee ID in the system\nteam_name MUST match an existing team name\nLeads will be imported as ENROLLED (closed) and also created as ACTIVATED students in CS"
+            "instructions": "For importing historical/closed leads only\nFields marked with * are mandatory\nPhone must include country code\nenrollment_amount: Revenue in AED\nenrolled_at: Date in YYYY-MM-DD format\nagent_employee_id MUST match an existing employee ID in the system\nteam_name MUST match an existing team name\nLeads will be imported as ENROLLED (closed) and also created as ACTIVATED students in CS"
+        },
+        "historical-sales": {
+            "filename": "historical_sales_import_template.csv",
+            "headers": [
+                "full_name*", "phone*", "course_enrolled*", "agent_employee_id*", "team_name*",
+                "enrollment_amount", "enrolled_at", "email", "country", "city", "source"
+            ],
+            "fields": {
+                "required": ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"],
+                "optional": ["enrollment_amount", "enrolled_at", "email", "country", "city", "source"]
+            },
+            "example_row": {
+                "full_name": "Ahmed Ali",
+                "phone": "+971501234567",
+                "course_enrolled": "Advanced Trading Mastery",
+                "agent_employee_id": "CLT-EMP-001",
+                "team_name": "TEAM XLNC",
+                "enrollment_amount": "15000",
+                "enrolled_at": "2025-06-15",
+                "email": "ahmed@example.com",
+                "country": "UAE",
+                "city": "Dubai",
+                "source": "Meta Ads"
+            },
+            "instructions": "Upload historical sales data as Excel (XLSX) or CSV.\nFields marked with * are mandatory.\nenrollment_amount: Revenue amount in AED.\nenrolled_at: Enrollment date (YYYY-MM-DD) — defaults to today if empty.\nagent_employee_id MUST match an existing Employee ID in HR.\nteam_name MUST match an existing team name.\nDuplicate phone numbers are skipped.\nEach row creates an enrolled lead + activated student record."
         },
         "historical_students_xlsx": {
             "filename": "historical_students_template.xlsx",
@@ -9276,15 +9409,16 @@ async def import_historical_leads(data: List[Dict], user = Depends(require_roles
                 "city": row.get("city"),
                 "course_of_interest": row["course_enrolled"],
                 "package_bought": row["course_enrolled"],
+                "enrollment_amount": float(row.get("enrollment_amount", 0)) if row.get("enrollment_amount") else 0,
                 "stage": "enrolled",
                 "assigned_to": agent_user["id"],
                 "assigned_to_name": agent_user["full_name"],
-                "assigned_at": now,
-                "first_contact_at": now,
-                "enrolled_at": now,
+                "assigned_at": row.get("enrolled_at") or now,
+                "first_contact_at": row.get("enrolled_at") or now,
+                "enrolled_at": row.get("enrolled_at") or now,
                 "team_id": team["id"],
                 "team_name": team["name"],
-                "source": "Historical Import",
+                "source": row.get("source", "Historical Import"),
                 "is_historical": True,
                 "sla_status": "ok",
                 "created_at": now,
@@ -9336,6 +9470,161 @@ async def import_historical_leads(data: List[Dict], user = Depends(require_roles
             results["errors"].append(f"Row {i+1}: {str(e)}")
     
     return results
+
+@api_router.post("/import/historical-sales-xlsx")
+async def import_historical_sales_xlsx(
+    file: UploadFile = File(...),
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """
+    Import historical sales data from Excel.
+    Required columns: full_name, phone, course_enrolled, agent_employee_id, team_name
+    Optional columns: enrollment_amount, enrolled_at, email, country, city, source, additional_numbers
+    """
+    import pandas as pd
+    import io
+    
+    contents = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
+    
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    rows = df.where(df.notnull(), None).to_dict(orient="records")
+    
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0, "total_rows": len(rows)}
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for i, row in enumerate(rows):
+        try:
+            row = {k: (str(v).strip() if v is not None else None) for k, v in row.items()}
+            
+            required = ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"]
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+2}: Missing: {missing}")
+                continue
+            
+            existing_lead = await db.leads.find_one({"phone": row["phone"]})
+            if existing_lead:
+                results["skipped"] += 1
+                results["errors"].append(f"Row {i+2}: Phone {row['phone']} already exists")
+                continue
+            
+            agent_employee = await db.hr_employees.find_one({"employee_id": row["agent_employee_id"]})
+            if not agent_employee:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+2}: Agent ID '{row['agent_employee_id']}' not found")
+                continue
+            
+            agent_user = await db.users.find_one({"id": agent_employee.get("user_id")})
+            if not agent_user:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+2}: No user for Employee ID '{row['agent_employee_id']}'")
+                continue
+            
+            team = await db.teams.find_one({"name": row["team_name"]})
+            if not team:
+                results["failed"] += 1
+                results["errors"].append(f"Row {i+2}: Team '{row['team_name']}' not found")
+                continue
+            
+            enrolled_at = row.get("enrolled_at") or now
+            enrollment_amount = 0
+            try:
+                enrollment_amount = float(row.get("enrollment_amount") or 0)
+            except (ValueError, TypeError):
+                pass
+            
+            lead_id = str(uuid.uuid4())
+            lead_record = {
+                "id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "additional_numbers": [n.strip() for n in (row.get("additional_numbers") or "").split(",") if n.strip()],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "course_of_interest": row["course_enrolled"],
+                "package_bought": row["course_enrolled"],
+                "enrollment_amount": enrollment_amount,
+                "stage": "enrolled",
+                "assigned_to": agent_user["id"],
+                "assigned_to_name": agent_user["full_name"],
+                "assigned_at": enrolled_at,
+                "first_contact_at": enrolled_at,
+                "enrolled_at": enrolled_at,
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "source": row.get("source") or "Historical Import",
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            }
+            await db.leads.insert_one(lead_record)
+            
+            # Create student record
+            cs_agent = await get_round_robin_agent("cs_agent")
+            student_id = str(uuid.uuid4())
+            student_record = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": row["full_name"],
+                "phone": row["phone"],
+                "email": row.get("email"),
+                "country": row.get("country"),
+                "city": row.get("city"),
+                "package_bought": row["course_enrolled"],
+                "current_course_name": row["course_enrolled"],
+                "enrollment_amount": enrollment_amount,
+                "stage": "activated",
+                "mentor_stage": "new_student",
+                "onboarding_complete": True,
+                "cs_agent_id": cs_agent["id"] if cs_agent else None,
+                "cs_agent_name": cs_agent["full_name"] if cs_agent else None,
+                "sales_agent_id": agent_user["id"],
+                "sales_agent_name": agent_user["full_name"],
+                "team_id": team["id"],
+                "team_name": team["name"],
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.students.insert_one(student_record)
+            results["students_created"] += 1
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {i+2}: {str(e)}")
+    
+    return results
+
+@api_router.get("/import/templates/historical-sales")
+async def get_historical_sales_template(user=Depends(require_roles(["super_admin", "admin"]))):
+    """Return column definitions for historical sales import template."""
+    return {
+        "columns": [
+            {"name": "full_name", "required": True, "description": "Student/Client full name"},
+            {"name": "phone", "required": True, "description": "Phone number (unique identifier)"},
+            {"name": "course_enrolled", "required": True, "description": "Course name enrolled in"},
+            {"name": "agent_employee_id", "required": True, "description": "Sales agent Employee ID from HR"},
+            {"name": "team_name", "required": True, "description": "Team name"},
+            {"name": "enrollment_amount", "required": False, "description": "Revenue amount in AED"},
+            {"name": "enrolled_at", "required": False, "description": "Enrollment date (YYYY-MM-DD)"},
+            {"name": "email", "required": False, "description": "Email address"},
+            {"name": "country", "required": False, "description": "Country"},
+            {"name": "city", "required": False, "description": "City"},
+            {"name": "source", "required": False, "description": "Lead source"},
+        ]
+    }
+
+
 
 @api_router.post("/import/historical-students-xlsx")
 async def import_historical_students_xlsx(

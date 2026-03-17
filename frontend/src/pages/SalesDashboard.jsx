@@ -14,10 +14,13 @@ import {
     PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line,
 } from 'recharts';
 import {
-    DollarSign, TrendingUp, Users, Target, Award, Eye, Filter,
-    BarChart3, PieChart as PieChartIcon, Layers, ChevronRight,
+    DollarSign, TrendingUp, Users, Target, Award, Eye, EyeOff, Filter,
+    BarChart3, PieChart as PieChartIcon, Layers, ChevronRight, Wallet, ArrowUp, ArrowDown, Upload,
 } from 'lucide-react';
 import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
+
+import { Progress } from '@/components/ui/progress';
+import ImportButton from '@/components/ImportButton';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
 const PERIOD_OPTIONS = [
@@ -46,6 +49,8 @@ const SalesDashboard = () => {
     const [monthComparison, setMonthComparison] = useState(null);
     const [todayTxns, setTodayTxns] = useState({ count: 0, total_amount: 0, transactions: [] });
     const [loading, setLoading] = useState(true);
+    const [commissionInfo, setCommissionInfo] = useState(null);
+    const [showEarnings, setShowEarnings] = useState(false);
     const [drill, setDrill] = useState({ open: false, title: '', content: null, loading: false, breadcrumbs: [] });
 
     const periodQuery = useCallback(() => {
@@ -68,6 +73,7 @@ const SalesDashboard = () => {
                 apiClient.get(`/dashboard/monthly-trend?view_mode=${vm}`),
                 apiClient.get(`/dashboard/today-transactions?view_mode=${vm}`),
                 apiClient.get(`/dashboard/month-comparison?view_mode=${vm}`),
+                apiClient.get('/dashboard/sales-commission-info'),
             ]);
             const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
             const funnelData = val(0, []);
@@ -82,6 +88,7 @@ const SalesDashboard = () => {
             setMonthlyTrend(Array.isArray(trendData) ? trendData.map(item => ({ month: item._id, deals: item.deals, revenue: item.revenue })) : []);
             setTodayTxns(val(3, { count: 0, total_amount: 0, transactions: [] }));
             setMonthComparison(val(4, null));
+            setCommissionInfo(val(5, null));
         } catch (err) { console.error(err); }
         setLoading(false);
     };
@@ -274,6 +281,9 @@ const SalesDashboard = () => {
                     <p className="text-muted-foreground">Performance analytics & insights — click any chart to drill down</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
+                    {['super_admin', 'admin'].includes(user?.role) && (
+                        <ImportButton type="historical-sales-xlsx" templateType="historical-sales" onSuccess={() => { fetchAllData(); fetchFilteredData(); }} />
+                    )}
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select value={period} onValueChange={setPeriod}>
                         <SelectTrigger className="w-[150px]" data-testid="period-filter"><SelectValue /></SelectTrigger>
@@ -290,6 +300,142 @@ const SalesDashboard = () => {
             </div>
 
             <PerformanceInsightBanner endpoint="/dashboard/performance-insight" />
+
+            {/* Commission & Category Card */}
+            {commissionInfo && commissionInfo.role === 'sales_executive' && (() => {
+                const ci = commissionInfo;
+                const catColors = { Diamond: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30', Gold: 'bg-amber-500/15 text-amber-400 border-amber-500/30', Silver: 'bg-gray-400/15 text-gray-300 border-gray-400/30', 'A+': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', A: 'bg-green-500/15 text-green-400 border-green-500/30', B: 'bg-blue-500/15 text-blue-400 border-blue-500/30', C: 'bg-orange-500/15 text-orange-400 border-orange-500/30', D: 'bg-red-500/15 text-red-400 border-red-500/30' };
+                const catColor = catColors[ci.category_name] || catColors.D;
+                const MASKED = '••••••';
+                const nextCat = (ci.all_categories || []).slice().reverse().find(c => c.min_revenue > ci.month_revenue);
+                const toNext = nextCat ? nextCat.min_revenue - ci.month_revenue : 0;
+                const progressMax = nextCat ? nextCat.min_revenue : (ci.all_categories?.[0]?.min_revenue || 50000);
+                const progressPct = Math.min(100, (ci.month_revenue / progressMax) * 100);
+
+                return (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" data-testid="sales-commission-section">
+                        {/* Category & Salary Card */}
+                        <Card className="lg:col-span-1">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
+                                    <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
+                                        {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">Current Salary</span>
+                                    <span className="font-semibold font-mono">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">Revised Salary</span>
+                                    <span className="font-semibold font-mono text-primary">{showEarnings ? fmtCur(ci.category_salary) : MASKED}</span>
+                                </div>
+                                <div className="flex items-center justify-between border-t border-border/50 pt-2">
+                                    <span className="text-sm text-muted-foreground">{ci.salary_diff >= 0 ? 'Gain' : 'Loss'}</span>
+                                    <span className={`font-bold font-mono flex items-center gap-1 ${ci.salary_diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                        {ci.salary_diff >= 0 ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+                                        {showEarnings ? fmtCur(Math.abs(ci.salary_diff)) : MASKED}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between border-t border-border pt-2">
+                                    <span className="font-medium text-sm">Earned Commission</span>
+                                    <span className="text-lg font-bold font-mono text-primary">{showEarnings ? fmtCur(ci.earned_commission) : MASKED}</span>
+                                </div>
+                                {!ci.has_commission && ci.month_revenue < 18000 && (
+                                    <p className="text-xs text-amber-400 bg-amber-500/10 p-2 rounded">Commission unlocks at AED 18,000 revenue. You need {fmtCur(18000 - ci.month_revenue)} more.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Category Progress Card */}
+                        <Card className="lg:col-span-2">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2 text-base">
+                                            <Target className="h-5 w-5 text-amber-500" />
+                                            Category Progress
+                                        </CardTitle>
+                                        <CardDescription>This month: {fmtCur(ci.month_revenue)} revenue &middot; {ci.month_accounts} accounts</CardDescription>
+                                    </div>
+                                    <Badge className={`text-sm px-3 py-1 border ${catColor}`} data-testid="category-badge">
+                                        {ci.category_name}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* Progress bar */}
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>Category {ci.category_name} achieved</span>
+                                        {nextCat && <span>{fmtCur(toNext)} to Category {nextCat.name}</span>}
+                                    </div>
+                                    <Progress value={progressPct} className="h-2.5" />
+                                </div>
+                                {/* All categories grid */}
+                                <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 text-center">
+                                    {[...(ci.all_categories || [])].reverse().map((c) => (
+                                        <div key={c.name} className={`p-2 rounded-lg text-[10px] border transition-colors ${ci.month_revenue >= c.min_revenue && (c.min_accounts === 0 || ci.month_accounts >= c.min_accounts) ? `${catColors[c.name] || 'bg-muted'}` : 'bg-muted/30 text-muted-foreground border-transparent'}`}>
+                                            <p className="font-bold text-xs">{c.name}</p>
+                                            <p>{fmtCur(c.min_revenue).replace('AED', '').trim()}</p>
+                                            <p className="font-semibold">{fmtCur(c.salary).replace('AED', '').trim()}</p>
+                                            {c.min_accounts > 0 && <p className="opacity-70">{c.min_accounts}+ accts</p>}
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* Pipeline expected */}
+                                {ci.pipeline_count > 0 && (
+                                    <div className="bg-blue-500/10 rounded-lg p-3 flex items-center justify-between border border-blue-500/20">
+                                        <div>
+                                            <p className="text-sm font-medium">Expected Pipeline</p>
+                                            <p className="text-xs text-muted-foreground">{ci.pipeline_count} leads (Hot + Interested)</p>
+                                        </div>
+                                        <p className="text-lg font-bold text-blue-500 font-mono">{fmtCur(ci.pipeline_expected)}</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                );
+            })()}
+
+            {/* TL / Manager Earnings Card */}
+            {commissionInfo && ['team_leader', 'sales_manager'].includes(commissionInfo.role) && (() => {
+                const ci = commissionInfo;
+                const MASKED = '••••••';
+                return (
+                    <Card data-testid="tl-earnings-card">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
+                                <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
+                                    {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                </button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                    <p className="text-xs text-muted-foreground uppercase">Salary</p>
+                                    <p className="text-xl font-bold font-mono mt-1">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</p>
+                                </div>
+                                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                    <p className="text-xs text-muted-foreground uppercase">Revenue</p>
+                                    <p className="text-xl font-bold font-mono text-emerald-500 mt-1">{fmtCur(ci.month_revenue)}</p>
+                                    <p className="text-xs text-muted-foreground">{ci.month_accounts} deals</p>
+                                </div>
+                                <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                                    <p className="text-xs text-muted-foreground uppercase">Total On Hand</p>
+                                    <p className="text-xl font-bold font-mono text-primary mt-1">{showEarnings ? fmtCur(ci.total_on_hand) : MASKED}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                );
+            })()}
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

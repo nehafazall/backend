@@ -18,6 +18,7 @@ import { Upload, Download, CheckCircle, XCircle, AlertTriangle, FileText, Extern
 const TYPE_CONFIG = {
     leads: { title: 'Leads', endpoint: '/import/leads', useJson: true },
     historical_leads: { title: 'Historical Leads', endpoint: '/import/historical-leads', useJson: true },
+    'historical-sales-xlsx': { title: 'Import Historical Sales', endpoint: '/import/historical-sales-xlsx', useJson: false, acceptXlsx: true },
     comprehensive_students: { title: 'Comprehensive Students', endpoint: '/import/comprehensive-students', useJson: true },
     historical_students_xlsx: { title: 'Historical Students (XLSX)', endpoint: '/import/historical-students-xlsx', useJson: false, acceptXlsx: true },
     customers: { title: 'Customers', endpoint: '/import/customers', useJson: true },
@@ -55,6 +56,8 @@ function ErrorList({ errors }) {
 
 function ImportButton({ type, templateType, onSuccess }) {
     const actualType = type || templateType || 'leads';
+    // Template type can be different from import type (e.g., historical-sales-xlsx uses historical-sales template)
+    const templateActualType = templateType || type || 'leads';
     const config = TYPE_CONFIG[actualType] || { title: actualType, endpoint: `/import/${actualType}`, useJson: true };
     const [open, setOpen] = useState(false);
     const [template, setTemplate] = useState(null);
@@ -66,7 +69,7 @@ function ImportButton({ type, templateType, onSuccess }) {
     async function loadTemplate() {
         setBusy(true);
         try {
-            const r = await apiClient.get(`/import/templates/${actualType}`);
+            const r = await apiClient.get(`/import/templates/${templateActualType}`);
             setTemplate(r.data);
             setOpen(true);
         } catch (e) {
@@ -79,7 +82,7 @@ function ImportButton({ type, templateType, onSuccess }) {
         // Use direct backend download endpoint
         const API_URL = process.env.REACT_APP_BACKEND_URL || '';
         const token = localStorage.getItem('clt_token');
-        const downloadUrl = `${API_URL}/api/import/templates/${actualType}/download`;
+        const downloadUrl = `${API_URL}/api/import/templates/${templateActualType}/download`;
         
         // Open in new window/tab to trigger download
         const link = document.createElement('a');
@@ -97,7 +100,7 @@ function ImportButton({ type, templateType, onSuccess }) {
         // Use direct backend download endpoint
         const API_URL = process.env.REACT_APP_BACKEND_URL || '';
         const token = localStorage.getItem('clt_token');
-        const downloadUrl = `${API_URL}/api/import/templates/${actualType}/download?token=${token}`;
+        const downloadUrl = `${API_URL}/api/import/templates/${templateActualType}/download?token=${token}`;
         window.open(downloadUrl, '_blank');
         toast.info('Template opened in new tab');
     }
