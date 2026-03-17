@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -8636,7 +8636,99 @@ async def update_user_environment_access(user_id: str, access: List[str], user =
 
 # ==================== IMPORT/EXPORT FUNCTIONALITY ====================
 
+@api_router.get("/import/templates/historical-sales/download")
+async def download_historical_sales_template_xlsx(token: str = None, request: Request = None):
+    """Download Excel template with Sheet 1: Import Template, Sheet 2: Courses with Prices, Sheet 3: Teams & Agents."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    import io
+    
+    # Verify token
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+    if auth_token:
+        try:
+            jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
+        except:
+            pass
+    
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "Historical Sales Data"
+    
+    header_labels = ["Full Name *", "Phone *", "Course Enrolled *", "Agent Name *", "Team Name *",
+                     "Enrollment Amount (AED)", "Enrolled At (YYYY-MM-DD)", "Email", "Country", "City", "Source"]
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    req_fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    
+    for col, label in enumerate(header_labels, 1):
+        cell = ws1.cell(row=1, column=col, value=label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+    
+    example = ["Ahmed Ali", "+971501234567", "Basic Package", "Kiran VR", "TEAM XLNC",
+               "2604", "2025-06-15", "ahmed@example.com", "UAE", "Dubai", "Meta Ads"]
+    for col, val in enumerate(example, 1):
+        cell = ws1.cell(row=2, column=col, value=val)
+        cell.border = thin_border
+        if col <= 5:
+            cell.fill = req_fill
+    
+    widths = [20, 18, 25, 20, 22, 22, 22, 25, 12, 12, 15]
+    for col, w in enumerate(widths, 1):
+        ws1.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
+    
+    # Sheet 2: Courses
+    ws2 = wb.create_sheet("Courses & Prices")
+    ch_fill = PatternFill(start_color="059669", end_color="059669", fill_type="solid")
+    for col, h in enumerate(["Course Name", "Price (AED)", "Category"], 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = ch_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    courses = await db.courses.find({}, {"_id": 0, "name": 1, "price": 1, "category": 1}).sort("name", 1).to_list(200)
+    for ri, c in enumerate(courses, 2):
+        ws2.cell(row=ri, column=1, value=c.get("name", "")).border = thin_border
+        ws2.cell(row=ri, column=2, value=c.get("price") or 0).border = thin_border
+        ws2.cell(row=ri, column=3, value=c.get("category", "")).border = thin_border
+    ws2.column_dimensions['A'].width = 30
+    ws2.column_dimensions['B'].width = 15
+    ws2.column_dimensions['C'].width = 15
+    
+    # Sheet 3: Teams & Agents
+    ws3 = wb.create_sheet("Teams & Agents")
+    ta_fill = PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
+    for col, h in enumerate(["Agent Name", "Team Name"], 1):
+        cell = ws3.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = ta_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    sales_agents = await db.users.find({"role": {"$in": ["sales_executive", "team_leader", "sales_manager"]}}, {"_id": 0, "full_name": 1, "team_id": 1}).to_list(200)
+    for ri, agent in enumerate(sales_agents, 2):
+        ws3.cell(row=ri, column=1, value=agent.get("full_name", "")).border = thin_border
+        team = await db.teams.find_one({"id": agent.get("team_id")}, {"_id": 0, "name": 1}) if agent.get("team_id") else None
+        ws3.cell(row=ri, column=2, value=team.get("name", "") if team else "").border = thin_border
+    ws3.column_dimensions['A'].width = 25
+    ws3.column_dimensions['B'].width = 25
+    
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=historical_sales_import_template.xlsx"})
+
 @api_router.get("/import/templates/{template_type}")
+
 async def get_import_template(template_type: str, user = Depends(get_current_user)):
     """Get CSV import template with headers and instructions"""
     templates = {
@@ -8693,27 +8785,27 @@ async def get_import_template(template_type: str, user = Depends(get_current_use
         "historical-sales": {
             "filename": "historical_sales_import_template.csv",
             "headers": [
-                "full_name*", "phone*", "course_enrolled*", "agent_employee_id*", "team_name*",
+                "full_name*", "phone*", "course_enrolled*", "agent_name*", "team_name*",
                 "enrollment_amount", "enrolled_at", "email", "country", "city", "source"
             ],
             "fields": {
-                "required": ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"],
+                "required": ["full_name", "phone", "course_enrolled", "agent_name", "team_name"],
                 "optional": ["enrollment_amount", "enrolled_at", "email", "country", "city", "source"]
             },
             "example_row": {
                 "full_name": "Ahmed Ali",
                 "phone": "+971501234567",
-                "course_enrolled": "Advanced Trading Mastery",
-                "agent_employee_id": "CLT-EMP-001",
+                "course_enrolled": "Basic Package",
+                "agent_name": "Kiran VR",
                 "team_name": "TEAM XLNC",
-                "enrollment_amount": "15000",
+                "enrollment_amount": "2604",
                 "enrolled_at": "2025-06-15",
                 "email": "ahmed@example.com",
                 "country": "UAE",
                 "city": "Dubai",
                 "source": "Meta Ads"
             },
-            "instructions": "Upload historical sales data as Excel (XLSX) or CSV.\nFields marked with * are mandatory.\nenrollment_amount: Revenue amount in AED.\nenrolled_at: Enrollment date (YYYY-MM-DD) — defaults to today if empty.\nagent_employee_id MUST match an existing Employee ID in HR.\nteam_name MUST match an existing team name.\nDuplicate phone numbers are skipped.\nEach row creates an enrolled lead + activated student record."
+            "instructions": "Upload historical sales data as Excel (XLSX).\nSheet 1: Student data (this sheet).\nSheet 2 (reference): Courses with prices.\n\nRequired fields (marked *):\n- full_name: Student full name\n- phone: Phone number with country code (unique)\n- course_enrolled: Must match a course name from Sheet 2\n- agent_name: Sales agent full name (must match system)\n- team_name: Team name (must match system)\n\nOptional:\n- enrollment_amount: Revenue in AED\n- enrolled_at: Date (YYYY-MM-DD), defaults to today\n- email, country, city, source\n\nDuplicate phone numbers are auto-skipped.\nEach row creates: Enrolled Lead + Activated Student.\nCS assignment: Weighted round-robin (Falja/Della/Karthika/Nasida: 2 each, Angel: 1).\nMentor assignment: Equal round-robin (Edwin/Mathson/Ashwin/Nihal/Sriram)."
         },
         "historical_students_xlsx": {
             "filename": "historical_students_template.xlsx",
@@ -9474,12 +9566,12 @@ async def import_historical_leads(data: List[Dict], user = Depends(require_roles
 @api_router.post("/import/historical-sales-xlsx")
 async def import_historical_sales_xlsx(
     file: UploadFile = File(...),
-    user = Depends(require_roles(["super_admin", "admin"]))
+    user = Depends(require_roles(["super_admin"]))
 ):
     """
-    Import historical sales data from Excel.
-    Required columns: full_name, phone, course_enrolled, agent_employee_id, team_name
-    Optional columns: enrollment_amount, enrolled_at, email, country, city, source, additional_numbers
+    Import historical sales data from Excel with weighted CS and mentor round-robin assignment.
+    CS: Falja(2), Della(2), Karthika(2), Nasida(2), Angel(1) — Angel at 50% capacity.
+    Mentors: Edwin, Mathson, Ashwin, Nihal, Sriram — equal distribution.
     """
     import pandas as pd
     import io
@@ -9493,39 +9585,67 @@ async def import_historical_sales_xlsx(
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     rows = df.where(df.notnull(), None).to_dict(orient="records")
     
-    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0, "total_rows": len(rows)}
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0, "total_rows": len(rows), "cs_assignments": {}, "mentor_assignments": {}}
     now = datetime.now(timezone.utc).isoformat()
+    
+    # CS Agents weighted pool (2:2:2:2:1)
+    cs_pool_config = [
+        {"id": "d101229f-2ff5-48c0-b8eb-03eb890fb540", "name": "Falja Nizar", "weight": 2},
+        {"id": "a207c613-0b83-4347-aa17-598a2738879b", "name": "Della Mariyam Shaji", "weight": 2},
+        {"id": "6c8f437b-4b30-4004-8c87-7e397a03136d", "name": "Karthika P. K", "weight": 2},
+        {"id": "d2bed4f5-3f9b-4e7b-a245-5073a189fdf3", "name": "Nasida VN", "weight": 2},
+        {"id": "d4c2f102-4474-44c4-b223-ff0a1f279b26", "name": "Angel Mary", "weight": 1},
+    ]
+    # Build weighted list: [F,F,D,D,K,K,N,N,A] repeating pattern
+    cs_weighted = []
+    for agent in cs_pool_config:
+        cs_weighted.extend([agent] * agent["weight"])
+    cs_index = 0
+    
+    # Mentor equal round-robin pool
+    mentor_pool = [
+        {"id": "31ba3269-0de2-4b8a-b207-7913879c38f4", "name": "Edwin Joy"},
+        {"id": "21ab0994-2a92-4ab0-b5a7-8f7494a5fb50", "name": "Mathson Mathew"},
+        {"id": "0e8a261c-f547-4dca-949f-a105942b4578", "name": "Ashwin Sudarsh"},
+        {"id": "aafb51ec-1fb4-422a-b379-4fb9b989654f", "name": "Nihal Azhikodan"},
+        {"id": "63cb17e1-cd4d-4cfe-8c7f-e98cb342adca", "name": "Sriram Srikumar"},
+    ]
+    mentor_index = 0
+    
+    # Init assignment counters
+    for a in cs_pool_config:
+        results["cs_assignments"][a["name"]] = 0
+    for m in mentor_pool:
+        results["mentor_assignments"][m["name"]] = 0
     
     for i, row in enumerate(rows):
         try:
             row = {k: (str(v).strip() if v is not None else None) for k, v in row.items()}
             
-            required = ["full_name", "phone", "course_enrolled", "agent_employee_id", "team_name"]
+            required = ["full_name", "phone", "course_enrolled", "agent_name", "team_name"]
             missing = [f for f in required if not row.get(f)]
             if missing:
                 results["failed"] += 1
-                results["errors"].append(f"Row {i+2}: Missing: {missing}")
+                results["errors"].append(f"Row {i+2}: Missing required fields: {', '.join(missing)}")
                 continue
             
+            # Check for duplicate phone
             existing_lead = await db.leads.find_one({"phone": row["phone"]})
             if existing_lead:
                 results["skipped"] += 1
-                results["errors"].append(f"Row {i+2}: Phone {row['phone']} already exists")
+                results["errors"].append(f"Row {i+2}: Phone {row['phone']} already exists — skipped")
                 continue
             
-            agent_employee = await db.hr_employees.find_one({"employee_id": row["agent_employee_id"]})
-            if not agent_employee:
-                results["failed"] += 1
-                results["errors"].append(f"Row {i+2}: Agent ID '{row['agent_employee_id']}' not found")
-                continue
-            
-            agent_user = await db.users.find_one({"id": agent_employee.get("user_id")})
+            # Find agent by name
+            agent_user = await db.users.find_one({"full_name": {"$regex": f"^{row['agent_name'].strip()}$", "$options": "i"}})
             if not agent_user:
                 results["failed"] += 1
-                results["errors"].append(f"Row {i+2}: No user for Employee ID '{row['agent_employee_id']}'")
+                results["errors"].append(f"Row {i+2}: Agent '{row['agent_name']}' not found in users")
                 continue
             
-            team = await db.teams.find_one({"name": row["team_name"]})
+            # Find team by name (whitespace-tolerant)
+            team_name_clean = row['team_name'].strip()
+            team = await db.teams.find_one({"name": {"$regex": f"^\\s*{team_name_clean}\\s*$", "$options": "i"}})
             if not team:
                 results["failed"] += 1
                 results["errors"].append(f"Row {i+2}: Team '{row['team_name']}' not found")
@@ -9537,6 +9657,14 @@ async def import_historical_sales_xlsx(
                 enrollment_amount = float(row.get("enrollment_amount") or 0)
             except (ValueError, TypeError):
                 pass
+            
+            # Weighted CS assignment
+            cs_agent = cs_weighted[cs_index % len(cs_weighted)]
+            cs_index += 1
+            
+            # Equal mentor assignment
+            mentor = mentor_pool[mentor_index % len(mentor_pool)]
+            mentor_index += 1
             
             lead_id = str(uuid.uuid4())
             lead_record = {
@@ -9568,8 +9696,7 @@ async def import_historical_sales_xlsx(
             }
             await db.leads.insert_one(lead_record)
             
-            # Create student record
-            cs_agent = await get_round_robin_agent("cs_agent")
+            # Create student record with CS + Mentor assignment
             student_id = str(uuid.uuid4())
             student_record = {
                 "id": student_id,
@@ -9585,44 +9712,31 @@ async def import_historical_sales_xlsx(
                 "stage": "activated",
                 "mentor_stage": "new_student",
                 "onboarding_complete": True,
-                "cs_agent_id": cs_agent["id"] if cs_agent else None,
-                "cs_agent_name": cs_agent["full_name"] if cs_agent else None,
+                "cs_agent_id": cs_agent["id"],
+                "cs_agent_name": cs_agent["name"],
+                "mentor_id": mentor["id"],
+                "mentor_name": mentor["name"],
                 "sales_agent_id": agent_user["id"],
                 "sales_agent_name": agent_user["full_name"],
                 "team_id": team["id"],
                 "team_name": team["name"],
                 "is_historical": True,
                 "sla_status": "ok",
+                "enrolled_at": enrolled_at,
                 "created_at": now,
                 "updated_at": now
             }
             await db.students.insert_one(student_record)
+            
             results["students_created"] += 1
+            results["cs_assignments"][cs_agent["name"]] += 1
+            results["mentor_assignments"][mentor["name"]] += 1
             results["success"] += 1
         except Exception as e:
             results["failed"] += 1
             results["errors"].append(f"Row {i+2}: {str(e)}")
     
     return results
-
-@api_router.get("/import/templates/historical-sales")
-async def get_historical_sales_template(user=Depends(require_roles(["super_admin", "admin"]))):
-    """Return column definitions for historical sales import template."""
-    return {
-        "columns": [
-            {"name": "full_name", "required": True, "description": "Student/Client full name"},
-            {"name": "phone", "required": True, "description": "Phone number (unique identifier)"},
-            {"name": "course_enrolled", "required": True, "description": "Course name enrolled in"},
-            {"name": "agent_employee_id", "required": True, "description": "Sales agent Employee ID from HR"},
-            {"name": "team_name", "required": True, "description": "Team name"},
-            {"name": "enrollment_amount", "required": False, "description": "Revenue amount in AED"},
-            {"name": "enrolled_at", "required": False, "description": "Enrollment date (YYYY-MM-DD)"},
-            {"name": "email", "required": False, "description": "Email address"},
-            {"name": "country", "required": False, "description": "Country"},
-            {"name": "city", "required": False, "description": "City"},
-            {"name": "source", "required": False, "description": "Lead source"},
-        ]
-    }
 
 
 

@@ -64,6 +64,16 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - ADDED: Password History section with per-entry eye toggles and change dates
 - NOTE: Existing users show empty current password until their password is next changed through the system
 
+### Historical Sales Import Page (March 17, 2026)
+- ADDED: Dedicated `/sales/historical-import` page (super_admin only, sidebar under Sales)
+- ADDED: Excel template download with 3 sheets: Import Data, Courses & Prices, Teams & Agents
+- ADDED: Weighted CS round-robin (Falja:2, Della:2, Karthika:2, Nasida:2, Angel:1)
+- ADDED: Equal Mentor round-robin (Edwin, Mathson, Ashwin, Nihal, Sriram)
+- FLOW: Upload Excel → Enrolled Lead + Activated Student + CS Assignment + Mentor Assignment
+- FIX: Whitespace-tolerant team name matching
+- Duplicate phone detection auto-skips duplicates
+- Results page shows CS/Mentor assignment breakdown + error details
+
 ### Sales Commission & Category System (March 17, 2026)
 - ADDED: Category system (D through Diamond) based on monthly revenue for Sales Executives
 - ADDED: My Earnings card — Current Salary, Revised Salary, Gain/Loss, Earned Commission with eye toggle

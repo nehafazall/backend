@@ -20,7 +20,6 @@ import {
 import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
 
 import { Progress } from '@/components/ui/progress';
-import ImportButton from '@/components/ImportButton';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
 const PERIOD_OPTIONS = [
@@ -281,9 +280,6 @@ const SalesDashboard = () => {
                     <p className="text-muted-foreground">Performance analytics & insights — click any chart to drill down</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                    {['super_admin', 'admin'].includes(user?.role) && (
-                        <ImportButton type="historical-sales-xlsx" templateType="historical-sales" onSuccess={() => { fetchAllData(); fetchFilteredData(); }} />
-                    )}
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Select value={period} onValueChange={setPeriod}>
                         <SelectTrigger className="w-[150px]" data-testid="period-filter"><SelectValue /></SelectTrigger>

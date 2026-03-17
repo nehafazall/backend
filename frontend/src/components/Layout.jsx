@@ -60,6 +60,7 @@ import {
     Shuffle,
     Timer,
     ArrowDownRight,
+    Upload,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 
@@ -107,6 +108,7 @@ const SECTIONS = {
             { title: 'Sales CRM', icon: Phone, path: '/sales' },
             { title: 'Sales Dashboard', icon: TrendingUp, path: '/sales/dashboard' },
             { title: "Today's Follow-ups", icon: Bell, path: '/followups' },
+            { title: 'Historical Import', icon: Upload, path: '/sales/historical-import', roles: ['super_admin'] },
         ],
     },
     cs: {
@@ -433,6 +435,8 @@ function Layout() {
     if (currentSection) {
         for (let i = 0; i < currentSection.items.length; i++) {
             const item = currentSection.items[i];
+            // If item has specific roles, check against user role
+            if (item.roles && !item.roles.includes(userRole)) continue;
             if (userRole === 'super_admin' || canAccess(item.path)) {
                 sidebarItems.push(item);
             }
