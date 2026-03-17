@@ -64,6 +64,17 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - ADDED: Password History section with per-entry eye toggles and change dates
 - NOTE: Existing users show empty current password until their password is next changed through the system
 
+### Sales Commission & Category System (March 17, 2026)
+- ADDED: Category system (D through Diamond) based on monthly revenue for Sales Executives
+- ADDED: My Earnings card — Current Salary, Revised Salary, Gain/Loss, Earned Commission with eye toggle
+- ADDED: Category Progress card — visual progress bar, all 8 category slabs with thresholds/salaries
+- ADDED: Earned commission = 0 until 18k AED achieved in a month
+- ADDED: Pipeline expected (Hot + Interested leads) display
+- ADDED: TL/Manager Earnings card — Salary + Revenue = Total On Hand
+- ADDED: Historical Sales Import (Excel upload) — creates enrolled lead + activated student per row
+- ADDED: Template endpoint for historical-sales with required/optional field definitions
+- FIX: ImportButton template URL path corrected for mixed type/templateType props
+
 ## Backlog
 ### P1
 - User Verification for Google Sheets connector (17 agent sheets)
