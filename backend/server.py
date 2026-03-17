@@ -2336,7 +2336,7 @@ async def get_users(
     if is_active is not None:
         query["is_active"] = is_active
     
-    users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(500)
+    users = await db.users.find(query, {"_id": 0, "password": 0, "password_plain": 0, "password_history": 0}).to_list(500)
     return users
 
 @api_router.post("/users", response_model=UserResponse)
@@ -2361,6 +2361,8 @@ async def create_user(data: UserCreate, user = Depends(require_roles(["super_adm
         "id": user_uuid,
         **data.model_dump(exclude={"create_employee_record", "designation", "joining_date", "employment_type", "work_location"}),
         "password": hash_password(data.password),
+        "password_plain": data.password,
+        "password_history": [],
         "permissions": data.permissions or default_permissions,
         "entity_access": data.entity_access or default_entity_access,
         "created_at": now,
@@ -2538,6 +2540,18 @@ def get_default_entity_access(role: str) -> List[str]:
     """Get default entity access (CLT/MILES) based on role"""
     return FINANCE_ROLE_ACCESS.get(role, ["clt", "miles"])
 
+
+@api_router.get("/users/{user_id}/password-info")
+async def get_user_password_info(user_id: str, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Get current plain password and password history for a user (admin only)."""
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_plain": 1, "password_history": 1, "full_name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "current_password": target.get("password_plain", ""),
+        "password_history": target.get("password_history", []),
+    }
+
 # ==================== USER PREFERENCES ====================
 # Note: These routes MUST be placed BEFORE /users/{user_id} to avoid route collision
 
@@ -2614,8 +2628,22 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
             return {"message": "Change request submitted for approval"}
     
     update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "_id"]}
-    if "password" in update_data:
-        update_data["password"] = hash_password(update_data["password"])
+    if "password" in update_data and update_data["password"]:
+        new_plain = update_data["password"]
+        update_data["password"] = hash_password(new_plain)
+        update_data["password_plain"] = new_plain
+        # Archive the old password to history
+        old_plain = existing.get("password_plain", "")
+        if old_plain:
+            history_entry = {
+                "password": old_plain,
+                "changed_at": now,
+                "changed_by": user.get("full_name", "")
+            }
+            await db.users.update_one(
+                {"id": user_id},
+                {"$push": {"password_history": history_entry}}
+            )
     update_data["updated_at"] = now
     
     await db.users.update_one({"id": user_id}, {"$set": update_data})

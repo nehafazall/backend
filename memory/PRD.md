@@ -56,6 +56,14 @@ Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Custo
 - Sales Agent: aleesha@clt-academy.com / @Aqib1234
 - Team Leader: mohammed@clt-academy.com / @Aqib1234
 
+### Password Management (March 17, 2026)
+- ADDED: `password_plain` field stored alongside bcrypt hash on user create/update
+- ADDED: `password_history` array tracks old passwords with timestamp and who changed it
+- ADDED: Admin-only endpoint `GET /users/{user_id}/password-info` for password retrieval
+- ADDED: Eye toggle in Edit User modal to show/hide current password
+- ADDED: Password History section with per-entry eye toggles and change dates
+- NOTE: Existing users show empty current password until their password is next changed through the system
+
 ## Backlog
 ### P1
 - User Verification for Google Sheets connector (17 agent sheets)

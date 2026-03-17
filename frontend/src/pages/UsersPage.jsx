@@ -47,6 +47,10 @@ import {
     UserX,
     Monitor,
     FlaskConical,
+    Eye,
+    EyeOff,
+    Key,
+    History,
 } from 'lucide-react';
 import ImportButton from '@/components/ImportButton';
 
@@ -119,6 +123,9 @@ const UsersPage = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [passwordInfo, setPasswordInfo] = useState({ current_password: '', password_history: [] });
+    const [showCurrentPw, setShowCurrentPw] = useState(false);
+    const [showHistoryPw, setShowHistoryPw] = useState({});
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -270,8 +277,10 @@ const UsersPage = () => {
         }
     };
 
-    const handleEditUser = (user) => {
+    const handleEditUser = async (user) => {
         setSelectedUser(user);
+        setShowCurrentPw(false);
+        setShowHistoryPw({});
         const isFinanceRole = FINANCE_ROLES.includes(user.role);
         setFormData({
             email: user.email,
@@ -289,6 +298,13 @@ const UsersPage = () => {
             threecx_extension: user.threecx_extension || '',
             finance_permissions: user.finance_permissions || (isFinanceRole ? DEFAULT_FINANCE_PERMISSIONS : {}),
         });
+        // Fetch password info for admins
+        try {
+            const res = await api.get(`/users/${user.id}/password-info`);
+            setPasswordInfo(res.data);
+        } catch {
+            setPasswordInfo({ current_password: '', password_history: [] });
+        }
         setShowEditModal(true);
     };
 
@@ -1021,16 +1037,75 @@ const UsersPage = () => {
                             </div>
                         </div>
                         
-                        <div className="space-y-2">
-                            <Label htmlFor="edit_password">New Password (leave blank to keep current)</Label>
-                            <Input
-                                id="edit_password"
-                                type="password"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                placeholder="Enter new password"
-                                data-testid="edit-user-password-input"
-                            />
+                        <div className="space-y-3">
+                            {/* Current Password (visible with eye toggle) */}
+                            <div className="p-4 border rounded-lg bg-muted/30 space-y-3" data-testid="current-password-section">
+                                <Label className="text-sm font-medium flex items-center gap-2">
+                                    <Key className="h-4 w-4 text-amber-500" />
+                                    Current Password
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type={showCurrentPw ? 'text' : 'password'}
+                                        value={passwordInfo.current_password || 'Not set'}
+                                        readOnly
+                                        className="flex-1 bg-background font-mono"
+                                        data-testid="current-password-display"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setShowCurrentPw(!showCurrentPw)}
+                                        data-testid="toggle-current-pw-btn"
+                                    >
+                                        {showCurrentPw ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+
+                                {/* Password History */}
+                                {passwordInfo.password_history?.length > 0 && (
+                                    <div className="mt-2">
+                                        <Label className="text-xs font-medium flex items-center gap-1.5 text-muted-foreground mb-2">
+                                            <History className="h-3.5 w-3.5" />
+                                            Password History
+                                        </Label>
+                                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                            {[...passwordInfo.password_history].reverse().map((entry, idx) => (
+                                                <div key={idx} className="flex items-center gap-2 text-xs bg-background/60 rounded px-2.5 py-1.5">
+                                                    <span className="flex-1 font-mono">
+                                                        {showHistoryPw[idx] ? entry.password : '••••••••'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                                                        onClick={() => setShowHistoryPw(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                                        data-testid={`toggle-history-pw-${idx}`}
+                                                    >
+                                                        {showHistoryPw[idx] ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                                                    </button>
+                                                    <span className="text-muted-foreground whitespace-nowrap">
+                                                        {entry.changed_at ? new Date(entry.changed_at).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Change Password */}
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_password">New Password <span className="text-xs text-muted-foreground">(leave blank to keep current)</span></Label>
+                                <Input
+                                    id="edit_password"
+                                    type="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    placeholder="Enter new password"
+                                    data-testid="edit-user-password-input"
+                                />
+                            </div>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
