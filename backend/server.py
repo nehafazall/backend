@@ -6141,8 +6141,8 @@ async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "ad
         ]).to_list(5),
         # Top 3 CS (10)
         db.cs_upgrades.aggregate([
-            {"$match": {"created_at": {"$gte": this_month_start}, "agent_id": {"$ne": None}}},
-            {"$group": {"_id": "$agent_id", "revenue": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "upgrades": {"$sum": 1}}},
+            {"$match": {"created_at": {"$gte": this_month_start}, "cs_agent_id": {"$ne": None}}},
+            {"$group": {"_id": "$cs_agent_id", "revenue": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "upgrades": {"$sum": 1}}},
             {"$sort": {"revenue": -1}}, {"$limit": 3}
         ]).to_list(3),
         # Top 3 Mentors (11)
@@ -10758,22 +10758,72 @@ async def confirm_cs_historical(preview_id: str, user = Depends(require_roles(["
             if not enrolled_at or enrolled_at == "None": enrolled_at = now
             
             upgrade_id = str(uuid.uuid4())
+            
+            # Derive date fields for dashboard compatibility
+            date_str = str(enrolled_at)[:10] if enrolled_at else now[:10]
+            month_str = date_str[:7]
+            
             upgrade_record = {
                 "id": upgrade_id,
                 "full_name": data["full_name"],
                 "phone": data["phone"],
                 "email": data.get("email"),
                 "course_upgrade": data["course_upgrade"],
+                "upgrade_to_course": data["course_upgrade"],
                 "course_amount": course_amount,
+                "amount": course_amount,
+                "date": date_str,
+                "month": month_str,
                 "cs_agent_id": resolved["agent_id"],
                 "cs_agent_name": resolved["agent_name"],
                 "upgraded_at": enrolled_at,
                 "is_historical": True,
-                "created_at": now,
+                "created_at": enrolled_at if enrolled_at else now,
                 "updated_at": now,
                 "created_by": user["id"],
             }
             await db.cs_upgrades.insert_one(upgrade_record)
+            
+            # Find or create student record and mark as upgraded
+            student = await db.students.find_one({"phone": data["phone"]})
+            if student:
+                await db.students.update_one({"id": student["id"]}, {"$set": {
+                    "is_upgraded_student": True,
+                    "stage": "upgraded",
+                    "last_upgrade_at": date_str,
+                    "last_upgrade_amount": course_amount,
+                    "current_course_name": data["course_upgrade"],
+                    "updated_at": now,
+                }})
+                # Link student to upgrade record
+                await db.cs_upgrades.update_one({"id": upgrade_id}, {"$set": {
+                    "student_id": student["id"],
+                    "student_name": student.get("full_name", data["full_name"]),
+                }})
+            else:
+                # Create a new student record for this upgrade
+                student_id = str(uuid.uuid4())
+                new_student = {
+                    "id": student_id,
+                    "full_name": data["full_name"],
+                    "phone": data["phone"],
+                    "email": data.get("email"),
+                    "stage": "upgraded",
+                    "is_upgraded_student": True,
+                    "last_upgrade_at": date_str,
+                    "last_upgrade_amount": course_amount,
+                    "current_course_name": data["course_upgrade"],
+                    "cs_agent_id": resolved["agent_id"],
+                    "cs_agent_name": resolved["agent_name"],
+                    "is_historical": True,
+                    "created_at": enrolled_at if enrolled_at else now,
+                    "updated_at": now,
+                }
+                await db.students.insert_one(new_student)
+                await db.cs_upgrades.update_one({"id": upgrade_id}, {"$set": {
+                    "student_id": student_id,
+                    "student_name": data["full_name"],
+                }})
             
             # Update customer master for upgrade spend
             upgrade_lead = {"full_name": data["full_name"], "phone": data["phone"], "email": data.get("email")}
