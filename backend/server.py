@@ -348,7 +348,7 @@ class LeadBase(BaseModel):
     notes: Optional[str] = None
 
 class LeadCreate(LeadBase):
-    pass
+    assigned_to: Optional[str] = None  # Super admin can assign directly
 
 class LeadUpdate(BaseModel):
     stage: Optional[str] = None
@@ -3266,15 +3266,23 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
     elif data.phone.startswith("+91") or data.phone.startswith("91"):
         region = "India"
     
-    assigned_agent = await get_round_robin_agent("sales_executive", region)
+    # Super admin can bypass round-robin and assign directly
+    if user.get("role") == "super_admin" and data.assigned_to:
+        assigned_agent = await db.users.find_one({"id": data.assigned_to, "is_active": True}, {"_id": 0})
+    else:
+        assigned_agent = await get_round_robin_agent("sales_executive", region)
     now = datetime.now(timezone.utc).isoformat()
+    
+    lead_data = data.model_dump()
+    lead_data.pop("assigned_to", None)  # Remove from model dump, set explicitly below
     
     new_lead = {
         "id": str(uuid.uuid4()),
-        **data.model_dump(),
+        **lead_data,
         "stage": "new_lead",
         "assigned_to": assigned_agent["id"] if assigned_agent else None,
         "assigned_to_name": assigned_agent["full_name"] if assigned_agent else None,
+        "team_name": assigned_agent.get("team_name", "") if assigned_agent else None,
         "assigned_at": now if assigned_agent else None,  # Track when assigned for SLA
         "first_contact_at": None,  # Will be set when first contacted
         "sla_status": "ok",
@@ -4882,10 +4890,11 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
 async def get_customers(
     search: Optional[str] = None,
     limit: int = 2000,
+    sort_by: str = "created_at",
     sort_order: str = "asc",
     user = Depends(get_current_user)
 ):
-    """Get all customers with transaction history, sorted by date"""
+    """Get all customers with transaction history, sortable by total_spent or date"""
     query = {}
     if search:
         query["$or"] = [
@@ -4894,8 +4903,13 @@ async def get_customers(
             {"email": {"$regex": search, "$options": "i"}}
         ]
     
+    # Validate sort_by field
+    allowed_sort_fields = ["created_at", "total_spent", "full_name", "transaction_count"]
+    if sort_by not in allowed_sort_fields:
+        sort_by = "created_at"
+    
     sort_dir = 1 if sort_order == "asc" else -1
-    customers = await db.customers.find(query, {"_id": 0}).sort("created_at", sort_dir).to_list(limit)
+    customers = await db.customers.find(query, {"_id": 0}).sort(sort_by, sort_dir).to_list(limit)
     return customers
 
 @api_router.get("/customers/{customer_id}")
@@ -10306,6 +10320,22 @@ async def confirm_historical_sales_xlsx(
                 "created_at": now
             })
             
+            # Create/update customer master record for historical import
+            await create_or_update_customer(
+                lead_record,
+                student_record,
+                payment={
+                    "id": str(uuid.uuid4()),
+                    "amount": enrollment_amount,
+                    "currency": "AED",
+                    "payment_method": "historical_import",
+                    "payment_type": "fresh_sale",
+                    "course_id": data.get("course_enrolled"),
+                    "course_name": data.get("course_enrolled"),
+                    "date": enrolled_at,
+                }
+            )
+            
             results["students_created"] += 1
             results["cs_assignments"][cs_agent["name"]] += 1
             results["mentor_assignments"][mentor["name"]] += 1
@@ -10493,6 +10523,23 @@ async def confirm_cs_historical(preview_id: str, user = Depends(require_roles(["
                 "created_by": user["id"],
             }
             await db.cs_upgrades.insert_one(upgrade_record)
+            
+            # Update customer master for upgrade spend
+            upgrade_lead = {"full_name": data["full_name"], "phone": data["phone"], "email": data.get("email")}
+            await create_or_update_customer(
+                upgrade_lead,
+                {},
+                payment={
+                    "id": upgrade_id,
+                    "amount": course_amount,
+                    "currency": "AED",
+                    "payment_method": "historical_import",
+                    "payment_type": "upgrade",
+                    "course_id": data.get("course_upgrade"),
+                    "course_name": data.get("course_upgrade"),
+                    "date": enrolled_at,
+                }
+            )
             
             results["upgrades_created"] += 1
             results["success"] += 1
@@ -12864,7 +12911,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://mentor-crm-dash.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://lead-pool-master.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

@@ -341,6 +341,7 @@ const SalesCRMPage = () => {
         lead_source: '',
         course_of_interest: '',
         notes: '',
+        assigned_to: '',
     });
     const [updateData, setUpdateData] = useState({
         stage: '',
@@ -357,6 +358,9 @@ const SalesCRMPage = () => {
     const [duplicateInfo, setDuplicateInfo] = useState(null);
     const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
     const [merging, setMerging] = useState(false);
+    const [availableAgents, setAvailableAgents] = useState([]);
+
+    const isSuperAdmin = user?.role === 'super_admin';
 
     // Pipeline stages that require course selection
     const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
@@ -374,6 +378,21 @@ const SalesCRMPage = () => {
     useEffect(() => {
         fetchLeads();
     }, []);
+
+    // Fetch agents for super admin direct assignment
+    useEffect(() => {
+        if (isSuperAdmin) {
+            const fetchAgents = async () => {
+                try {
+                    const res = await apiClient.get('/users?role=sales_executive');
+                    setAvailableAgents((res.data || []).filter(u => u.is_active));
+                } catch (e) {
+                    console.error('Failed to fetch agents:', e);
+                }
+            };
+            fetchAgents();
+        }
+    }, [isSuperAdmin]);
 
     // Fetch course catalog for course/addon selection
     useEffect(() => {
@@ -570,7 +589,9 @@ const SalesCRMPage = () => {
         }
         
         try {
-            await leadApi.create(formData);
+            const payload = { ...formData };
+            if (!payload.assigned_to || payload.assigned_to === 'round_robin') delete payload.assigned_to;
+            await leadApi.create(payload);
             toast.success('Lead created successfully');
             setShowCreateModal(false);
             setFormData({
@@ -582,6 +603,7 @@ const SalesCRMPage = () => {
                 lead_source: '',
                 course_of_interest: '',
                 notes: '',
+                assigned_to: '',
             });
             fetchLeads();
         } catch (error) {
@@ -603,7 +625,7 @@ const SalesCRMPage = () => {
             toast.success('Lead merged successfully — missing fields updated');
             setShowDuplicateDialog(false);
             setDuplicateInfo(null);
-            setFormData({ full_name: '', phone: '', email: '', country: '', city: '', lead_source: '', course_of_interest: '', notes: '' });
+            setFormData({ full_name: '', phone: '', email: '', country: '', city: '', lead_source: '', course_of_interest: '', notes: '', assigned_to: '' });
             fetchLeads();
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Merge failed');
@@ -883,6 +905,29 @@ const SalesCRMPage = () => {
                             </div>
                         </div>
                         
+                        {isSuperAdmin && (
+                            <div className="space-y-2">
+                                <Label htmlFor="assigned_to">Assign to Agent (Optional)</Label>
+                                <Select
+                                    value={formData.assigned_to}
+                                    onValueChange={(value) => setFormData({ ...formData, assigned_to: value })}
+                                >
+                                    <SelectTrigger data-testid="lead-assign-agent-select">
+                                        <SelectValue placeholder="Auto (Round Robin)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="round_robin">Auto (Round Robin)</SelectItem>
+                                        {availableAgents.map((agent) => (
+                                            <SelectItem key={agent.id} value={agent.id}>
+                                                {agent.full_name} {agent.team_name ? `(${agent.team_name})` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">Leave as Auto to use round-robin assignment</p>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <Label htmlFor="notes">Notes</Label>
                             <Textarea

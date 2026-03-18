@@ -20,7 +20,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Users, Search, DollarSign, Phone, Eye, Receipt, Clock, CreditCard } from 'lucide-react';
+import { Users, Search, DollarSign, Phone, Eye, Receipt, Clock, CreditCard, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
 import ImportButton from '@/components/ImportButton';
 
 const formatCurrency = (amount) => {
@@ -40,15 +40,17 @@ const CustomerMasterPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [sortBy, setSortBy] = useState('created_at');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     useEffect(() => {
         loadCustomers();
-    }, []);
+    }, [sortBy, sortOrder]);
 
     const loadCustomers = async () => {
         setLoading(true);
         try {
-            const res = await apiClient.get('/customers');
+            const res = await apiClient.get(`/customers?sort_by=${sortBy}&sort_order=${sortOrder}`);
             setCustomers(res.data || []);
         } catch (err) {
             toast.error('Failed to load customers');
@@ -59,7 +61,7 @@ const CustomerMasterPage = () => {
     const searchCustomers = async () => {
         setLoading(true);
         try {
-            const url = '/customers?search=' + encodeURIComponent(searchTerm);
+            const url = `/customers?search=${encodeURIComponent(searchTerm)}&sort_by=${sortBy}&sort_order=${sortOrder}`;
             const res = await apiClient.get(url);
             setCustomers(res.data || []);
         } catch (err) {
@@ -239,7 +241,29 @@ const CustomerMasterPage = () => {
                                     <TableHead>Phone</TableHead>
                                     <TableHead>Course</TableHead>
                                     <TableHead>Transactions</TableHead>
-                                    <TableHead>Total Spent</TableHead>
+                                    <TableHead>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-auto p-0 font-medium hover:bg-transparent"
+                                            onClick={() => {
+                                                if (sortBy === 'total_spent') {
+                                                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+                                                } else {
+                                                    setSortBy('total_spent');
+                                                    setSortOrder('desc');
+                                                }
+                                            }}
+                                            data-testid="sort-total-spent"
+                                        >
+                                            Total Spent
+                                            {sortBy === 'total_spent' ? (
+                                                sortOrder === 'desc' ? <ArrowDown className="ml-1 h-3.5 w-3.5 inline" /> : <ArrowUp className="ml-1 h-3.5 w-3.5 inline" />
+                                            ) : (
+                                                <ArrowUpDown className="ml-1 h-3.5 w-3.5 inline text-muted-foreground" />
+                                            )}
+                                        </Button>
+                                    </TableHead>
                                     <TableHead>Enrollment Date</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>

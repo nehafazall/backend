@@ -1,0 +1,107 @@
+{
+  "summary": "P0 Features Testing Complete - All 4 main features verified working: (1) Super admin lead creation bypasses round-robin with direct agent assignment, (2) Customer Master has sortable Total Spent column, (3) Rejected leads appear in Leads Pool, (4) Duplicate lead detection shows merge dialog. P1 visually confirmed duplicate lead merge dialog works.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Super admin login returns access_token with role=super_admin",
+    "Backend: Sales executive login returns access_token with role=sales_executive",
+    "Backend: POST /api/leads with assigned_to (super admin) creates lead directly assigned to specified agent",
+    "Backend: POST /api/leads without assigned_to (super admin) uses round-robin",
+    "Backend: GET /api/users?role=sales_executive returns active agents including Kiran VR",
+    "Backend: GET /api/customers?sort_by=total_spent&sort_order=desc works correctly",
+    "Backend: GET /api/customers?sort_by=total_spent&sort_order=asc works correctly",
+    "Backend: Invalid sort_by field defaults to created_at (no error)",
+    "Backend: PUT /api/leads/{id} with stage=rejected sets in_pool=True",
+    "Backend: GET /api/leads/pool returns rejected leads",
+    "Backend: POST /api/leads with duplicate phone returns 409 with duplicate info",
+    "Backend: Sales executive creating lead uses round-robin (not super admin override)",
+    "Frontend: Super admin sees 'Assign to Agent (Optional)' dropdown in create lead modal",
+    "Frontend: Agent dropdown shows 'Auto (Round Robin)' default and 'Kiran VR' option",
+    "Frontend: Sales executive does NOT see create lead button (role-restricted feature)",
+    "Frontend: Customer Master page loads at /customers with correct title",
+    "Frontend: Total Spent column header is clickable/sortable with arrow icons",
+    "Frontend: Clicking Total Spent toggles between ASC/DESC sort order",
+    "Frontend: Leads Pool page at /leads/pool shows 'Rejected: 1' count",
+    "Frontend: Rejected lead appears in Leads Pool table with red 'Rejected' badge",
+    "Frontend: Duplicate lead creation shows 'Duplicate Lead Found' dialog",
+    "Frontend: Merge dialog shows existing lead info (name, phone, assigned agent)",
+    "Frontend: Merge dialog has 'Go Back' and 'Merge Lead' action buttons"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_p0_features_56.py",
+    "/app/test_reports/pytest/pytest_p0_features_56.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend create_lead endpoint (line 3239-3322) correctly checks user.role == 'super_admin' before allowing direct assignment",
+    "Backend update_lead endpoint (line 3572-3590) sets in_pool=True when stage changes to 'rejected' or 'not_interested'",
+    "Backend leads/pool endpoint (line 3627-3654) query includes {stage: {$in: ['rejected', 'not_interested']}} condition",
+    "Backend customers endpoint (line 4889-4913) validates sort_by against allowed_sort_fields and defaults to created_at",
+    "Frontend SalesCRMPage.jsx (line 363) uses isSuperAdmin check to conditionally render agent dropdown",
+    "Frontend SalesCRMPage.jsx (line 907-929) shows agent selection dropdown only for super_admin role",
+    "Frontend CustomerMasterPage.jsx (line 244-265) has sortable Total Spent column with data-testid='sort-total-spent'"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_p0_features_56.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (All UI features verified via Playwright)"
+  },
+
+  "test_credentials": {
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"},
+    "sales_executive": {"email": "kiran@clt-academy.com", "password": "@Aqib1234"},
+    "kiran_agent_id": "e4567d08-1123-4058-bdd0-99b0e1c5c09b"
+  },
+
+  "seed_data_creation": "Test leads created with 'TEST' prefix were cleaned up after testing",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "P0 features fully tested and working: (1) Super admin lead creation with direct agent assignment - endpoint checks role and allows assigned_to param only for super_admin; (2) Customer Master sorting - /api/customers accepts sort_by=total_spent&sort_order=asc|desc; (3) Rejected leads in pool - PUT /api/leads/{id} with stage=rejected sets in_pool=True, GET /api/leads/pool includes rejected leads; (4) Duplicate detection - POST /api/leads returns 409 with duplicate info, frontend shows merge dialog. Routes: Sales CRM at /sales, Customer Master at /customers, Leads Pool at /leads/pool.",
+
+  "feature_verification_details": {
+    "super_admin_direct_assignment": {
+      "endpoint": "POST /api/leads",
+      "condition": "user.role == 'super_admin' AND data.assigned_to is provided",
+      "behavior": "Bypasses round-robin, assigns directly to specified agent",
+      "frontend_element": "[data-testid='lead-assign-agent-select']",
+      "visibility": "Only visible when isSuperAdmin is true"
+    },
+    "customer_master_sorting": {
+      "endpoint": "GET /api/customers?sort_by=total_spent&sort_order=desc",
+      "allowed_sort_fields": ["created_at", "total_spent", "full_name", "transaction_count"],
+      "frontend_element": "[data-testid='sort-total-spent']",
+      "behavior": "Clicking toggles between ASC/DESC order"
+    },
+    "rejected_leads_in_pool": {
+      "trigger": "PUT /api/leads/{id} with stage='rejected'",
+      "behavior": "Sets in_pool=True, adds to assignment_history",
+      "pool_endpoint": "GET /api/leads/pool",
+      "pool_query": "{$or: [{in_pool: true}, {assigned_to: null}, {stage: {$in: ['rejected', 'not_interested']}}]}"
+    },
+    "duplicate_lead_merge_dialog": {
+      "trigger": "POST /api/leads with existing phone",
+      "response": "409 with {duplicate: true, existing_lead: {...}, matched_on: 'phone'}",
+      "frontend_dialog": "Shows 'Duplicate Lead Found' with merge option",
+      "merge_endpoint": "POST /api/leads/{id}/merge"
+    }
+  }
+}
