@@ -10611,6 +10611,7 @@ async def preview_cs_historical(
 ):
     """Preview CS historical data — validate each row, no data pushed."""
     import pandas as pd
+    import io
     
     contents = await file.read()
     try:
