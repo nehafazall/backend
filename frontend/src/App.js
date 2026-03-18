@@ -11,6 +11,7 @@ import BirdsEyeDashboard from "@/pages/BirdsEyeDashboard";
 import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import HistoricalImportPage from "@/pages/sales/HistoricalImportPage";
+import CSHistoricalImportPage from "@/pages/cs/CSHistoricalImportPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
 import MentorCRMPage from "@/pages/MentorCRMPage";
 import UsersPage from "@/pages/UsersPage";
@@ -204,6 +205,13 @@ function AppRoutes() {
                 <Route path="sales/historical-import" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <HistoricalImportPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* CS Historical Import (Super Admin only) */}
+                <Route path="cs/historical-import" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <CSHistoricalImportPage />
                     </ProtectedRoute>
                 } />
                 

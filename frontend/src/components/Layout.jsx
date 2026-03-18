@@ -120,6 +120,7 @@ const SECTIONS = {
         items: [
             { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
             { title: 'Customer Service', icon: Users, path: '/cs' },
+            { title: 'CS Historical Import', icon: Upload, path: '/cs/historical-import', roles: ['super_admin'] },
         ],
     },
     academics: {

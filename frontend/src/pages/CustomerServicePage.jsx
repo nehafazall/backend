@@ -577,7 +577,6 @@ const CustomerServicePage = () => {
                     {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />
-                            <ImportButton templateType="cs_upgrades" title="Import Upgrades" onSuccess={fetchStudents} />
                         </>
                     )}
                 </div>

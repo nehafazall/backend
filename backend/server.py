@@ -8990,6 +8990,97 @@ async def download_historical_sales_template_xlsx(token: str = None, request: Re
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=historical_sales_import_template.xlsx"})
 
+
+@api_router.get("/import/templates/cs-historical/download")
+async def download_cs_historical_template(token: str = None, request: Request = None):
+    """Download CS historical import Excel template with upgrade courses and CS agents."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    import io as _io
+    
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+    if auth_token:
+        try:
+            jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
+        except:
+            pass
+    
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "CS Historical Data"
+    
+    header_labels = ["Full Name *", "Phone *", "Course Upgrade *", "Course Amount (AED)",
+                     "CS Agent Name *", "Date (YYYY-MM-DD)", "Email"]
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="059669", end_color="059669", fill_type="solid")
+    req_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    
+    for col, label in enumerate(header_labels, 1):
+        cell = ws1.cell(row=1, column=col, value=label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+    
+    example = ["Ahmed Ali", "+971501234567", "Upgrade", "2105", "Falja Nizar", "2025-02-15", "ahmed@example.com"]
+    for col, val in enumerate(example, 1):
+        cell = ws1.cell(row=2, column=col, value=val)
+        cell.border = thin_border
+        if col in [1, 2, 3, 5]:
+            cell.fill = req_fill
+    
+    widths = [22, 18, 22, 18, 22, 20, 28]
+    for col, w in enumerate(widths, 1):
+        ws1.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
+    
+    # Sheet 2: CS Agents
+    ws2 = wb.create_sheet("CS Agents")
+    agent_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    for col, h in enumerate(["Agent Name", "Role"], 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = agent_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    cs_agents = await db.users.find({"role": {"$in": ["cs_agent", "cs_head", "cs_manager"]}}, {"_id": 0, "full_name": 1, "role": 1}).sort("full_name", 1).to_list(50)
+    for ri, a in enumerate(cs_agents, 2):
+        ws2.cell(row=ri, column=1, value=a.get("full_name", "")).border = thin_border
+        ws2.cell(row=ri, column=2, value=a.get("role", "")).border = thin_border
+    ws2.column_dimensions['A'].width = 25
+    ws2.column_dimensions['B'].width = 15
+    
+    # Sheet 3: Upgrade Courses (from course_catalog)
+    ws3 = wb.create_sheet("Upgrade Courses")
+    upgrade_fill = PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
+    for col, h in enumerate(["Course Name", "Price (AED)"], 1):
+        cell = ws3.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = upgrade_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    upgrades = await db.course_catalog.find({"type": "upgrade", "is_active": True}, {"_id": 0, "name": 1, "price": 1}).sort("name", 1).to_list(50)
+    for ri, u in enumerate(upgrades, 2):
+        ws3.cell(row=ri, column=1, value=u.get("name", "")).border = thin_border
+        ws3.cell(row=ri, column=2, value=u.get("price") or 0).border = thin_border
+    ws3.column_dimensions['A'].width = 25
+    ws3.column_dimensions['B'].width = 15
+    
+    output = _io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=cs_historical_import_template.xlsx"}
+    )
+
+
 @api_router.get("/import/templates/{template_type}")
 
 async def get_import_template(template_type: str, user = Depends(get_current_user)):
@@ -10227,6 +10318,191 @@ async def confirm_historical_sales_xlsx(
     await db.import_previews.update_one({"id": preview_id}, {"$set": {"status": "confirmed"}})
     
     return results
+
+
+# ==================== CS HISTORICAL IMPORT ====================
+
+
+
+@api_router.post("/import/cs-historical/preview")
+async def preview_cs_historical(
+    file: UploadFile = File(...),
+    user = Depends(require_roles(["super_admin"]))
+):
+    """Preview CS historical data — validate each row, no data pushed."""
+    import pandas as pd
+    
+    contents = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading Excel: {str(e)}")
+    
+    df.columns = [c.strip().lower().replace(" ", "_").replace("*", "").strip("_").strip() for c in df.columns]
+    df = df.where(df.notnull(), None)
+    df = df.dropna(how='all')
+    rows = df.to_dict(orient="records")
+    
+    def clean_val(v):
+        if v is None: return None
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''): return None
+        if s.endswith('.0') and s.replace('.0', '').replace('+', '').isdigit(): s = s[:-2]
+        return s
+    
+    def clean_phone(v):
+        if v is None: return None
+        if isinstance(v, float): v = int(v)
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''): return None
+        if s.endswith('.0'): s = s[:-2]
+        if s and s[0].isdigit() and len(s) >= 10: s = '+' + s
+        return s
+    
+    # Pre-load for fast lookups
+    all_users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1, "role": 1}).to_list(1000)
+    users_by_name = {u["full_name"].strip().lower(): u for u in all_users}
+    existing_phones = set()
+    async for doc in db.leads.find({}, {"_id": 0, "phone": 1}):
+        if doc.get("phone"): existing_phones.add(doc["phone"])
+    
+    preview_rows = []
+    valid_count = 0
+    error_count = 0
+    skip_count = 0
+    
+    for i, row in enumerate(rows):
+        row = {k: clean_val(v) for k, v in row.items()}
+        row_result = {"row_num": i + 2, "data": {}, "status": "valid", "errors": [], "resolved": {}}
+        
+        full_name = row.get("full_name") or ""
+        phone_raw = next((row[k] for k in row.keys() if k.startswith("phone")), None)
+        phone = clean_phone(phone_raw) if phone_raw else None
+        if not phone: phone = row.get("phone") or ""
+        course_upgrade = row.get("course_upgrade") or row.get("course_upgrades") or ""
+        course_amount_key = next((k for k in row.keys() if "course_amount" in k), None)
+        course_amount = row.get(course_amount_key) if course_amount_key else None
+        cs_agent_name = row.get("cs_agent_name") or ""
+        date_key = next((k for k in row.keys() if "date" in k), None)
+        date_val = row.get(date_key) if date_key else None
+        email = row.get("email") or ""
+        
+        full_name = full_name.strip() if full_name else ""
+        cs_agent_name = cs_agent_name.strip() if cs_agent_name else ""
+        
+        row_result["data"] = {
+            "full_name": full_name, "phone": phone, "course_upgrade": course_upgrade,
+            "course_amount": course_amount, "cs_agent_name": cs_agent_name,
+            "date": date_val, "email": email,
+        }
+        
+        if not full_name and not phone and not course_upgrade:
+            continue
+        
+        if not full_name: row_result["errors"].append("Missing Full Name")
+        if not phone: row_result["errors"].append("Missing Phone")
+        if not course_upgrade: row_result["errors"].append("Missing Course Upgrade")
+        if not cs_agent_name: row_result["errors"].append("Missing CS Agent Name")
+        
+        # Resolve CS agent
+        if cs_agent_name:
+            agent_key = cs_agent_name.lower()
+            agent = users_by_name.get(agent_key)
+            if agent:
+                row_result["resolved"]["agent_id"] = agent["id"]
+                row_result["resolved"]["agent_name"] = agent["full_name"]
+            else:
+                row_result["errors"].append(f"CS Agent '{cs_agent_name}' not found")
+        
+        if row_result["errors"]:
+            row_result["status"] = "error"
+            error_count += 1
+        else:
+            valid_count += 1
+        
+        preview_rows.append(row_result)
+    
+    # Duplicate phone check within file
+    phones_in_file = {}
+    for pr in preview_rows:
+        ph = pr["data"].get("phone")
+        if ph:
+            if ph in phones_in_file:
+                if pr["status"] == "valid":
+                    # For CS upgrades, same phone is OK (same student upgrading multiple times)
+                    pass
+            else:
+                phones_in_file[ph] = pr["row_num"]
+    
+    preview_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    await db.import_previews.insert_one({
+        "id": preview_id, "type": "cs_historical", "rows": preview_rows,
+        "created_at": now, "created_by": user["id"], "status": "pending",
+    })
+    
+    return {
+        "preview_id": preview_id, "total_rows": len(rows),
+        "valid": valid_count, "errors": error_count, "duplicates": skip_count,
+        "rows": preview_rows,
+    }
+
+
+@api_router.post("/import/cs-historical/confirm/{preview_id}")
+async def confirm_cs_historical(preview_id: str, user = Depends(require_roles(["super_admin"]))):
+    """Confirm and push valid CS historical rows to database."""
+    preview = await db.import_previews.find_one({"id": preview_id})
+    if not preview:
+        raise HTTPException(status_code=404, detail="Preview not found or expired. Please re-upload.")
+    if preview.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Already confirmed.")
+    
+    valid_rows = [r for r in preview["rows"] if r["status"] == "valid"]
+    if not valid_rows:
+        raise HTTPException(status_code=400, detail="No valid rows.")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    results = {"success": 0, "failed": 0, "errors": [], "total_rows": len(valid_rows), "upgrades_created": 0}
+    
+    for vr in valid_rows:
+        try:
+            data = vr["data"]
+            resolved = vr["resolved"]
+            
+            course_amount = 0
+            try: course_amount = float(data.get("course_amount") or 0)
+            except: pass
+            
+            enrolled_at = data.get("date") or now
+            if not enrolled_at or enrolled_at == "None": enrolled_at = now
+            
+            upgrade_id = str(uuid.uuid4())
+            upgrade_record = {
+                "id": upgrade_id,
+                "full_name": data["full_name"],
+                "phone": data["phone"],
+                "email": data.get("email"),
+                "course_upgrade": data["course_upgrade"],
+                "course_amount": course_amount,
+                "cs_agent_id": resolved["agent_id"],
+                "cs_agent_name": resolved["agent_name"],
+                "upgraded_at": enrolled_at,
+                "is_historical": True,
+                "created_at": now,
+                "updated_at": now,
+                "created_by": user["id"],
+            }
+            await db.cs_upgrades.insert_one(upgrade_record)
+            
+            results["upgrades_created"] += 1
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {vr['row_num']}: {str(e)}")
+    
+    await db.import_previews.update_one({"id": preview_id}, {"$set": {"status": "confirmed"}})
+    return results
+
 
 
 @api_router.post("/import/historical-sales-xlsx")
