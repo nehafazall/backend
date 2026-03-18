@@ -16,27 +16,43 @@ import {
     FileWarning, AlertTriangle, Banknote, Receipt, Clock, Shield,
     ArrowUpRight, ArrowDownRight, RefreshCw, Landmark, Wallet, CreditCard,
     Trophy, Medal, Award, Star, Activity, Building2, CircleDollarSign,
+    Calendar, ChevronDown,
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const DEPT_COLORS = { sales: '#dc2626', cs: '#3b82f6', mentors: '#10b981' };
 const PIE_COLORS = ['#dc2626', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 const GENDER_COLORS = { male: '#3b82f6', female: '#ec4899', other: '#8b5cf6', unknown: '#94a3b8' };
 
+const PERIOD_OPTIONS = [
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'this_week', label: 'This Week' },
+    { value: 'last_week', label: 'Last Week' },
+    { value: 'this_month', label: 'This Month' },
+    { value: 'last_month', label: 'Last Month' },
+    { value: 'this_quarter', label: 'This Quarter' },
+    { value: 'last_quarter', label: 'Last Quarter' },
+    { value: 'this_year', label: 'This Year' },
+    { value: 'last_year', label: 'Last Year' },
+    { value: 'overall', label: 'All Time' },
+];
+
 const formatAED = (v) => `AED ${(v || 0).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-const pctChange = (curr, prev) => prev > 0 ? ((curr - prev) / prev * 100).toFixed(1) : curr > 0 ? '+100' : '0';
 
 const BirdsEyeDashboard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [d, setD] = useState(null);
+    const [period, setPeriod] = useState('this_month');
 
-    useEffect(() => { if (user) fetchData(); }, [user]);
+    useEffect(() => { if (user) fetchData(); }, [user, period]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await apiClient.get('/dashboard/overall');
+            const res = await apiClient.get(`/dashboard/overall?period=${period}`);
             setD(res.data);
         } catch (e) { console.error(e); toast.error('Failed to load dashboard'); }
         setLoading(false);
@@ -51,10 +67,8 @@ const BirdsEyeDashboard = () => {
     );
 
     const rev = d.revenue;
-    const salesPct = pctChange(rev.this_month.sales, rev.last_month.sales);
-    const csPct = pctChange(rev.this_month.cs, rev.last_month.cs);
-    const mentorPct = pctChange(rev.this_month.mentors, rev.last_month.mentors);
-    const overallPct = pctChange(rev.this_month.total, rev.last_month.total);
+    const sp = rev.selected_period;
+    const periodLabel = PERIOD_OPTIONS.find(p => p.value === period)?.label || 'This Month';
 
     const genderData = Object.entries(d.hr.gender || {}).map(([k, v]) => ({
         name: k.charAt(0).toUpperCase() + k.slice(1), value: v, fill: GENDER_COLORS[k] || '#94a3b8'
@@ -71,6 +85,19 @@ const BirdsEyeDashboard = () => {
                     <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Select value={period} onValueChange={setPeriod} data-testid="period-filter">
+                        <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="period-filter-trigger">
+                            <Calendar className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                            <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {PERIOD_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value} data-testid={`period-${opt.value}`}>
+                                    {opt.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     {d.sla_breaches > 0 && (
                         <Badge variant="destructive" className="cursor-pointer" onClick={() => navigate('/sales')} data-testid="sla-alert">
                             <AlertTriangle className="h-3 w-3 mr-1" />{d.sla_breaches} SLA Breaches
@@ -87,17 +114,17 @@ const BirdsEyeDashboard = () => {
 
             {/* Row 1: Revenue KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="revenue-cards">
-                <KPICard title="Overall Revenue" value={formatAED(rev.this_month.total)} subtitle={`Last Month: ${formatAED(rev.last_month.total)}`} pct={overallPct} icon={DollarSign} color="bg-gradient-to-br from-amber-500/15 to-amber-600/5 border-amber-500/30" iconBg="bg-amber-500/20 text-amber-500" testId="overall-revenue" />
-                <KPICard title="Sales Revenue" value={formatAED(rev.this_month.sales)} subtitle={`${rev.this_month.sales_count} enrollments`} pct={salesPct} icon={TrendingUp} color="bg-gradient-to-br from-red-500/15 to-red-600/5 border-red-500/30" iconBg="bg-red-500/20 text-red-500" testId="sales-revenue" />
-                <KPICard title="CS Revenue" value={formatAED(rev.this_month.cs)} subtitle={`${rev.this_month.cs_count} upgrades`} pct={csPct} icon={Activity} color="bg-gradient-to-br from-blue-500/15 to-blue-600/5 border-blue-500/30" iconBg="bg-blue-500/20 text-blue-500" testId="cs-revenue" />
-                <KPICard title="Mentor Revenue" value={formatAED(rev.this_month.mentors)} subtitle={`${rev.this_month.mentor_count} deposits`} pct={mentorPct} icon={Award} color="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border-emerald-500/30" iconBg="bg-emerald-500/20 text-emerald-500" testId="mentor-revenue" />
+                <KPICard title="Overall Revenue" value={formatAED(sp.total)} subtitle={`${periodLabel}`} icon={DollarSign} color="bg-gradient-to-br from-amber-500/15 to-amber-600/5 border-amber-500/30" iconBg="bg-amber-500/20 text-amber-500" testId="overall-revenue" />
+                <KPICard title="Sales Revenue" value={formatAED(sp.sales)} subtitle={`${sp.sales_count} enrollments`} icon={TrendingUp} color="bg-gradient-to-br from-red-500/15 to-red-600/5 border-red-500/30" iconBg="bg-red-500/20 text-red-500" testId="sales-revenue" />
+                <KPICard title="CS Revenue" value={formatAED(sp.cs)} subtitle={`${sp.cs_count} upgrades`} icon={Activity} color="bg-gradient-to-br from-blue-500/15 to-blue-600/5 border-blue-500/30" iconBg="bg-blue-500/20 text-blue-500" testId="cs-revenue" />
+                <KPICard title="Mentor Revenue" value={formatAED(sp.mentors)} subtitle={`${sp.mentor_count} deposits`} icon={Award} color="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border-emerald-500/30" iconBg="bg-emerald-500/20 text-emerald-500" testId="mentor-revenue" />
             </div>
 
             {/* Row 2: Treasury + Expenses + HR Summary */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="treasury-hr-row">
                 <MiniCard title="In Bank" value={formatAED(d.treasury.in_bank)} icon={Landmark} color="text-emerald-500" testId="in-bank" />
                 <MiniCard title="Pending Settlement" value={formatAED(d.treasury.pending_settlement)} icon={Clock} color="text-amber-500" testId="pending-settlement" />
-                <MiniCard title="Monthly Expenses" value={formatAED(d.expenses.this_month)} icon={CreditCard} color="text-red-500" subtitle={`${d.expenses.count} entries`} testId="monthly-expenses" />
+                <MiniCard title="Expenses" value={formatAED(d.expenses.this_month)} icon={CreditCard} color="text-red-500" subtitle={`${d.expenses.count} entries`} testId="monthly-expenses" />
                 <MiniCard title="Active Employees" value={d.hr.total_active} icon={Users} color="text-blue-500" testId="active-employees" />
                 <MiniCard title="Present Today" value={`${d.hr.present_today}/${d.hr.attendance_total}`} icon={UserCheck} color="text-emerald-500" subtitle={`${attendancePct}%`} testId="present-today" />
             </div>
@@ -149,11 +176,11 @@ const BirdsEyeDashboard = () => {
                 </Card>
             </div>
 
-            {/* Row 4: This Month vs Last Month Comparison */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="month-comparison">
-                <ComparisonCard dept="Sales" current={rev.this_month.sales} previous={rev.last_month.sales} color={DEPT_COLORS.sales} icon={TrendingUp} />
-                <ComparisonCard dept="Customer Service" current={rev.this_month.cs} previous={rev.last_month.cs} color={DEPT_COLORS.cs} icon={Activity} />
-                <ComparisonCard dept="Mentors" current={rev.this_month.mentors} previous={rev.last_month.mentors} color={DEPT_COLORS.mentors} icon={Award} />
+            {/* Row 4: Department Revenue Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="dept-revenue">
+                <ComparisonCard dept="Sales" current={sp.sales} allTime={rev.all_time.sales} color={DEPT_COLORS.sales} icon={TrendingUp} periodLabel={periodLabel} />
+                <ComparisonCard dept="Customer Service" current={sp.cs} allTime={rev.all_time.cs} color={DEPT_COLORS.cs} icon={Activity} periodLabel={periodLabel} />
+                <ComparisonCard dept="Mentors" current={sp.mentors} allTime={rev.all_time.mentors} color={DEPT_COLORS.mentors} icon={Award} periodLabel={periodLabel} />
             </div>
 
             {/* Row 5: Top Performers */}
@@ -245,8 +272,7 @@ const BirdsEyeDashboard = () => {
 
 /* =========== SUB-COMPONENTS =========== */
 
-const KPICard = ({ title, value, subtitle, pct, icon: Icon, color, iconBg, testId }) => {
-    const isPositive = parseFloat(pct) >= 0;
+const KPICard = ({ title, value, subtitle, icon: Icon, color, iconBg, testId }) => {
     return (
         <Card className={`${color} border transition-all hover:scale-[1.02] hover:shadow-md`} data-testid={testId}>
             <CardContent className="p-4">
@@ -255,12 +281,6 @@ const KPICard = ({ title, value, subtitle, pct, icon: Icon, color, iconBg, testI
                         <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
                         <p className="text-xl font-bold mt-1">{value}</p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
-                        {pct !== '0' && pct !== '0.0' && (
-                            <div className={`flex items-center gap-1 mt-1 text-[11px] ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-                                {isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                                <span>{isPositive ? '+' : ''}{pct}% vs last month</span>
-                            </div>
-                        )}
                     </div>
                     <div className={`p-2.5 rounded-lg ${iconBg}`}><Icon className="h-5 w-5" /></div>
                 </div>
@@ -282,31 +302,26 @@ const MiniCard = ({ title, value, icon: Icon, color, subtitle, testId }) => (
     </Card>
 );
 
-const ComparisonCard = ({ dept, current, previous, color, icon: Icon }) => {
-    const change = previous > 0 ? ((current - previous) / previous * 100).toFixed(1) : current > 0 ? 100 : 0;
-    const isUp = parseFloat(change) >= 0;
+const ComparisonCard = ({ dept, current, allTime, color, icon: Icon, periodLabel }) => {
     return (
         <Card className="border border-border/50" data-testid={`comparison-${dept.toLowerCase().replace(/\s/g, '-')}`}>
             <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <Icon className="h-4 w-4" style={{ color }} />
                     <p className="text-sm font-medium">{dept}</p>
-                    <Badge variant={isUp ? 'default' : 'destructive'} className="ml-auto text-[10px]">
-                        {isUp ? '+' : ''}{change}%
-                    </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <p className="text-[10px] text-muted-foreground uppercase">This Month</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">{periodLabel}</p>
                         <p className="text-lg font-bold" style={{ color }}>{formatAED(current)}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] text-muted-foreground uppercase">Last Month</p>
-                        <p className="text-lg font-bold text-muted-foreground">{formatAED(previous)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">All Time</p>
+                        <p className="text-lg font-bold text-muted-foreground">{formatAED(allTime)}</p>
                     </div>
                 </div>
                 <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((current / Math.max(previous, current, 1)) * 100, 100)}%`, backgroundColor: color }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${allTime > 0 ? Math.min((current / allTime) * 100, 100) : 0}%`, backgroundColor: color }} />
                 </div>
             </CardContent>
         </Card>

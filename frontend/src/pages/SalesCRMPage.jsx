@@ -92,7 +92,8 @@ const REJECTION_REASONS = [
     { id: 'not_interested', label: 'Not Interested' },
 ];
 
-const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
+const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging, isSuperAdmin, availableAgents, onQuickReassign }) => {
+    const [showReassign, setShowReassign] = React.useState(false);
     const formatDate = (dateStr) => {
         if (!dateStr) return 'N/A';
         return new Date(dateStr).toLocaleDateString('en-AE', {
@@ -132,10 +133,37 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
                     <div>
                         <p className="font-medium text-sm">{lead.full_name}</p>
                         {lead.assigned_to_name && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                {lead.assigned_to_name}
-                            </p>
+                            <div className="relative">
+                                {isSuperAdmin ? (
+                                    <button
+                                        className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                                        onClick={(e) => { e.stopPropagation(); setShowReassign(!showReassign); }}
+                                        data-testid={`reassign-btn-${lead.id}`}
+                                    >
+                                        <User className="h-3 w-3" />
+                                        {lead.assigned_to_name}
+                                    </button>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <User className="h-3 w-3" />
+                                        {lead.assigned_to_name}
+                                    </p>
+                                )}
+                                {showReassign && isSuperAdmin && (
+                                    <div className="absolute z-50 top-6 left-0 bg-popover border rounded-md shadow-lg p-1 min-w-[180px] max-h-48 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                        {(availableAgents || []).map(agent => (
+                                            <button
+                                                key={agent.id}
+                                                className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent ${agent.id === lead.assigned_to ? 'bg-accent font-medium' : ''}`}
+                                                onClick={(e) => { e.stopPropagation(); onQuickReassign(lead, agent); setShowReassign(false); }}
+                                                data-testid={`reassign-agent-${agent.id}`}
+                                            >
+                                                {agent.full_name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -241,7 +269,7 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
 };
 
 // Sortable wrapper for LeadCard
-const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
+const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder, isSuperAdmin, availableAgents, onQuickReassign }) => {
     const {
         attributes,
         listeners,
@@ -264,12 +292,15 @@ const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder }) => {
                 onView={onView}
                 onSetReminder={onSetReminder}
                 isDragging={isDragging}
+                isSuperAdmin={isSuperAdmin}
+                availableAgents={availableAgents}
+                onQuickReassign={onQuickReassign}
             />
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
+const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder, isSuperAdmin, availableAgents, onQuickReassign }) => {
     const stageLeads = leads.filter(l => l.stage === stage.id);
     const leadIds = stageLeads.map(l => l.id);
     
@@ -303,6 +334,9 @@ const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder }) => {
                                 onUpdate={onUpdate}
                                 onView={onView}
                                 onSetReminder={onSetReminder}
+                                isSuperAdmin={isSuperAdmin}
+                                availableAgents={availableAgents}
+                                onQuickReassign={onQuickReassign}
                             />
                         ))}
                         {stageLeads.length === 0 && (
@@ -726,6 +760,20 @@ const SalesCRMPage = () => {
         setShowReminderModal(true);
     };
 
+    const handleQuickReassign = async (lead, agent) => {
+        try {
+            await apiClient.put(`/leads/${lead.id}`, {
+                assigned_to: agent.id,
+                assigned_to_name: agent.full_name,
+            });
+            toast.success(`Reassigned to ${agent.full_name}`);
+            fetchLeads();
+        } catch (e) {
+            console.error(e);
+            toast.error('Failed to reassign');
+        }
+    };
+
     const handleReminderSuccess = () => {
         setShowReminderModal(false);
         setReminderLead(null);
@@ -795,6 +843,9 @@ const SalesCRMPage = () => {
                                 onUpdate={handleUpdateLead}
                                 onView={handleViewLead}
                                 onSetReminder={handleSetReminder}
+                                isSuperAdmin={isSuperAdmin}
+                                availableAgents={availableAgents}
+                                onQuickReassign={handleQuickReassign}
                             />
                         ))}
                     </div>

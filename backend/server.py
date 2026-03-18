@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +15,9 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 from enum import Enum
+from functools import lru_cache
+import time as _time
+import orjson
 
 # Import BioCloud sync module
 from biocloud_sync import (
@@ -105,6 +108,33 @@ CURRENT_APP_ENV = os.environ.get('APP_ENV', 'production').lower()
 _db_from_url = extract_db_name_from_url(mongo_url)
 _db_source = "MONGO_URL connection string" if _db_from_url else "DB_NAME environment variable"
 print(f"✅ Database '{CURRENT_DB_NAME}' loaded from {_db_source}")
+
+# ==================== IN-MEMORY TTL CACHE ====================
+class TTLCache:
+    """Simple TTL cache for expensive dashboard queries."""
+    def __init__(self):
+        self._store = {}
+    
+    def get(self, key: str, ttl: int = 60):
+        """Get cached value if not expired. ttl in seconds."""
+        if key in self._store:
+            val, ts = self._store[key]
+            if _time.time() - ts < ttl:
+                return val
+            del self._store[key]
+        return None
+    
+    def set(self, key: str, value):
+        self._store[key] = (value, _time.time())
+    
+    def invalidate(self, prefix: str = ""):
+        """Invalidate all keys matching prefix, or all if empty."""
+        if not prefix:
+            self._store.clear()
+        else:
+            self._store = {k: v for k, v in self._store.items() if not k.startswith(prefix)}
+
+_cache = TTLCache()
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -930,10 +960,17 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         
+        # Cache user lookups for 30 seconds
+        cache_key = f"user_{user_id}"
+        cached_user = _cache.get(cache_key, ttl=30)
+        if cached_user:
+            return cached_user
+        
         user = await db.users.find_one({"id": user_id})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
+        _cache.set(cache_key, user)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -3651,6 +3688,7 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
         )
     
     updated = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    _cache.invalidate()  # Invalidate dashboard caches on lead update
     return updated
 
 @api_router.delete("/leads/{lead_id}")
@@ -6087,15 +6125,45 @@ async def get_viewable_users(user = Depends(get_current_user)):
 
 
 @api_router.get("/dashboard/overall")
-async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "admin"]))):
+async def get_overall_dashboard(
+    period: str = "this_month",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
     """Comprehensive overall dashboard with revenue, HR, treasury, top performers."""
     import asyncio
+    
+    # Check cache (60 second TTL keyed by period)
+    cache_key = f"dashboard_overall_{period}_{custom_start}_{custom_end}"
+    cached_bytes = _cache.get(cache_key, ttl=60)
+    if cached_bytes:
+        return Response(content=cached_bytes, media_type="application/json")
+    
     now = datetime.now(timezone.utc)
     today_str = now.strftime("%Y-%m-%d")
-    this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-    last_month_end = (now.replace(day=1) - timedelta(days=1))
-    last_month_start = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-    last_month_end_str = last_month_end.replace(hour=23, minute=59, second=59).isoformat()
+    
+    # Build date range for the selected period
+    period_start, period_end = _get_date_range(period, custom_start, custom_end)
+    # Build query match for the selected period
+    period_match_enrolled = {"stage": "enrolled"}
+    period_match_cs = {}
+    period_match_mentor = {}
+    if period_start:
+        period_match_enrolled["enrolled_at"] = {"$gte": period_start}
+        period_match_cs["created_at"] = {"$gte": period_start}
+        period_match_mentor["created_at"] = {"$gte": period_start}
+        if period_end:
+            period_match_enrolled["enrolled_at"]["$lt"] = period_end
+            period_match_cs["created_at"]["$lt"] = period_end
+            period_match_mentor["created_at"]["$lt"] = period_end
+    
+    # For top performers, use the same period filter
+    tp_date_filter = {}
+    if period_start:
+        tp_date_filter["$gte"] = period_start
+        if period_end:
+            tp_date_filter["$lt"] = period_end
 
     async def agg_first(coll, pipeline):
         r = await coll.aggregate(pipeline).to_list(1)
@@ -6119,47 +6187,43 @@ async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "ad
     def mentor_pipeline(match):
         return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]
 
-    # ---- PARALLEL BATCH 1: Revenue (this/last month), Top Performers, Treasury, HR, Docs ----
+    # ---- PARALLEL BATCH 1: Revenue (selected period), All-time, Top Performers, Treasury, HR, Docs ----
     results = await asyncio.gather(
-        # Revenue this month (0-2)
-        agg_first(db.leads, rev_pipeline({"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}})),
-        agg_first(db.cs_upgrades, cs_pipeline({"created_at": {"$gte": this_month_start}})),
-        agg_first(db.mentor_redeposits, mentor_pipeline({"created_at": {"$gte": this_month_start}})),
-        # Revenue last month (3-5)
-        agg_first(db.leads, rev_pipeline({"stage": "enrolled", "enrolled_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
-        agg_first(db.cs_upgrades, cs_pipeline({"created_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
-        agg_first(db.mentor_redeposits, mentor_pipeline({"created_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
-        # All-time revenue (6-8)
+        # Revenue for selected period (0-2)
+        agg_first(db.leads, rev_pipeline(period_match_enrolled)),
+        agg_first(db.cs_upgrades, cs_pipeline(period_match_cs)),
+        agg_first(db.mentor_redeposits, mentor_pipeline(period_match_mentor)),
+        # All-time revenue (3-5)
         agg_first(db.leads, [{"$match": {"stage": "enrolled"}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}]),
         agg_first(db.cs_upgrades, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}]),
         agg_first(db.mentor_redeposits, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
-        # Top 5 Sales (9)
+        # Top 5 Sales (6)
         db.leads.aggregate([
-            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}, "assigned_to": {"$ne": None}}},
+            {"$match": {**period_match_enrolled, "assigned_to": {"$ne": None}}},
             {"$group": {"_id": "$assigned_to", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "deals": {"$sum": 1}}},
             {"$sort": {"revenue": -1}}, {"$limit": 5}
         ]).to_list(5),
-        # Top 3 CS (10)
+        # Top 3 CS (7)
         db.cs_upgrades.aggregate([
-            {"$match": {"created_at": {"$gte": this_month_start}, "cs_agent_id": {"$ne": None}}},
+            {"$match": {**period_match_cs, "cs_agent_id": {"$ne": None}}},
             {"$group": {"_id": "$cs_agent_id", "revenue": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "upgrades": {"$sum": 1}}},
             {"$sort": {"revenue": -1}}, {"$limit": 3}
         ]).to_list(3),
-        # Top 3 Mentors (11)
+        # Top 3 Mentors (8)
         db.mentor_redeposits.aggregate([
-            {"$match": {"created_at": {"$gte": this_month_start}, "mentor_id": {"$ne": None}}},
+            {"$match": {**period_match_mentor, "mentor_id": {"$ne": None}}},
             {"$group": {"_id": "$mentor_id", "revenue": {"$sum": {"$ifNull": ["$amount", 0]}}, "deposits": {"$sum": 1}}},
             {"$sort": {"revenue": -1}}, {"$limit": 3}
         ]).to_list(3),
-        # Treasury: total receivables (12)
+        # Treasury: total receivables (9)
         agg_first(db.finance_clt_receivables, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
-        # Pending settlements (13)
+        # Pending settlements (10)
         db.finance_verifications.find({"status": "pending_verification"}, {"_id": 0, "sale_amount": 1}).to_list(5000),
-        # Expenses this month (14)
-        agg_first(db.expenses, [{"$match": {"date": {"$gte": now.replace(day=1).strftime("%Y-%m-%d")}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]),
-        # Payables (15)
+        # Expenses for selected period (11)
+        agg_first(db.expenses, [{"$match": {"date": {"$gte": period_start or now.replace(day=1).strftime("%Y-%m-%d"), **( {"$lt": period_end} if period_end else {})}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]),
+        # Payables (12)
         agg_first(db.finance_clt_payables, [{"$match": {"status": {"$ne": "paid"}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
-        # HR employees (16)
+        # HR employees (13)
         db.hr_employees.find({"employment_status": {"$in": ["active", "probation"]}}, {"_id": 0, "gender": 1, "full_name": 1, "employee_id": 1, "passport": 1, "visa": 1, "emirates_id": 1, "labour_card": 1, "health_insurance": 1}).to_list(500),
         # Attendance today (17)
         db.hr_attendance.find({"date": today_str}, {"_id": 0, "status": 1}).to_list(500),
@@ -6172,22 +6236,17 @@ async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "ad
     )
 
     sales_tm, cs_tm, mentor_tm = results[0], results[1], results[2]
-    sales_lm, cs_lm, mentor_lm = results[3], results[4], results[5]
-    all_time_s, all_time_c, all_time_m = results[6], results[7], results[8]
-    top_sales, top_cs, top_mentors = results[9], results[10], results[11]
-    total_recv, pending_vf, exp_result, payables_r = results[12], results[13], results[14], results[15]
-    employees, attendance_list = results[16], results[17]
-    pending_finance_count, sla_breaches, recent_enrollments = results[18], results[19], results[20]
+    all_time_s, all_time_c, all_time_m = results[3], results[4], results[5]
+    top_sales, top_cs, top_mentors = results[6], results[7], results[8]
+    total_recv, pending_vf, exp_result, payables_r = results[9], results[10], results[11], results[12]
+    employees, attendance_list = results[13], results[14]
+    pending_finance_count, sla_breaches, recent_enrollments = results[15], results[16], results[17]
 
     # Extract revenue values
     s_rev_tm = sales_tm.get("total", 0)
     cs_rev_tm = cs_tm.get("total", 0)
     m_rev_tm = mentor_tm.get("total", 0)
-    s_rev_lm = sales_lm.get("total", 0)
-    cs_rev_lm = cs_lm.get("total", 0)
-    m_rev_lm = mentor_lm.get("total", 0)
     overall_tm = s_rev_tm + cs_rev_tm + m_rev_tm
-    overall_lm = s_rev_lm + cs_rev_lm + m_rev_lm
 
     # Enrich top performers with names (parallel)
     async def enrich_name(item):
@@ -6237,12 +6296,11 @@ async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "ad
         m_val = trend_results[i*3+2].get("total", 0)
         monthly_trend.append({"month": label, "sales": round(s_val, 2), "cs": round(c_val, 2), "mentors": round(m_val, 2), "total": round(s_val + c_val + m_val, 2)})
 
-    return {
+    result = {
+        "period": period,
         "revenue": {
-            "this_month": {"sales": round(s_rev_tm, 2), "cs": round(cs_rev_tm, 2), "mentors": round(m_rev_tm, 2), "total": round(overall_tm, 2), "sales_count": sales_tm.get("count", 0), "cs_count": cs_tm.get("count", 0), "mentor_count": mentor_tm.get("count", 0)},
-            "last_month": {"sales": round(s_rev_lm, 2), "cs": round(cs_rev_lm, 2), "mentors": round(m_rev_lm, 2), "total": round(overall_lm, 2)},
+            "selected_period": {"sales": round(s_rev_tm, 2), "cs": round(cs_rev_tm, 2), "mentors": round(m_rev_tm, 2), "total": round(overall_tm, 2), "sales_count": sales_tm.get("count", 0), "cs_count": cs_tm.get("count", 0), "mentor_count": mentor_tm.get("count", 0)},
             "all_time": {"sales": round(all_time_s.get("total", 0), 2), "cs": round(all_time_c.get("total", 0), 2), "mentors": round(all_time_m.get("total", 0), 2)},
-            "change_pct": round(((overall_tm - overall_lm) / overall_lm * 100), 1) if overall_lm > 0 else 0,
         },
         "monthly_trend": monthly_trend,
         "revenue_split": [{"name": "Sales", "value": round(s_rev_tm, 2)}, {"name": "Customer Service", "value": round(cs_rev_tm, 2)}, {"name": "Mentors", "value": round(m_rev_tm, 2)}],
@@ -6260,6 +6318,14 @@ async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "ad
         "sla_breaches": sla_breaches,
         "recent_enrollments": [{"name": e.get("full_name"), "amount": e.get("enrollment_amount") or e.get("sale_amount", 0), "date": e.get("enrolled_at"), "agent": e.get("assigned_to_name"), "course": e.get("course_name") or e.get("interested_course_name")} for e in recent_enrollments],
     }
+    
+    # Cache pre-serialized JSON for instant response
+    import json as _json
+    try:
+        _cache.set(cache_key, _json.dumps(result, default=str).encode())
+    except Exception:
+        pass
+    return result
 
 
 @api_router.get("/dashboard/stats")
@@ -7439,13 +7505,29 @@ def _get_date_range(period: str, custom_start: str = None, custom_end: str = Non
     elif period == "this_week":
         start = now - timedelta(days=now.weekday())
         return start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10], None
+    elif period == "last_week":
+        week_start = now - timedelta(days=now.weekday() + 7)
+        week_end = now - timedelta(days=now.weekday())
+        return week_start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10], week_end.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()[:10]
     elif period == "this_month":
         return now.replace(day=1).isoformat()[:10], None
+    elif period == "last_month":
+        first_this = now.replace(day=1)
+        last_month_end = first_this - timedelta(days=1)
+        return last_month_end.replace(day=1).isoformat()[:10], first_this.isoformat()[:10]
     elif period == "this_quarter":
         q_month = ((now.month - 1) // 3) * 3 + 1
         return now.replace(month=q_month, day=1).isoformat()[:10], None
+    elif period == "last_quarter":
+        q_month = ((now.month - 1) // 3) * 3 + 1
+        lq_end = now.replace(month=q_month, day=1)
+        lq_start_month = q_month - 3 if q_month > 3 else q_month + 9
+        lq_start_year = now.year if q_month > 3 else now.year - 1
+        return datetime(lq_start_year, lq_start_month, 1).isoformat()[:10], lq_end.isoformat()[:10]
     elif period == "this_year":
         return now.replace(month=1, day=1).isoformat()[:10], None
+    elif period == "last_year":
+        return datetime(now.year - 1, 1, 1).isoformat()[:10], datetime(now.year, 1, 1).isoformat()[:10]
     return None, None  # "overall" = no filter
 
 def _build_date_filter(field: str, period: str, custom_start: str = None, custom_end: str = None):
@@ -7901,6 +7983,11 @@ async def get_team_revenue(
     user = Depends(get_current_user)
 ):
     """Team-wise revenue with individual agent drill-down."""
+    cache_key = f"team_revenue_{period}_{custom_start}_{custom_end}"
+    cached = _cache.get(cache_key, ttl=60)
+    if cached:
+        return cached
+    
     query = {"stage": "enrolled", "team_name": {"$exists": True, "$ne": None}}
     query.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
 
@@ -7915,7 +8002,9 @@ async def get_team_revenue(
         {"$sort": {"revenue": -1}}
     ]
     result = await db.leads.aggregate(pipeline).to_list(50)
-    return [{"team_name": r["_id"], "team_id": r.get("team_id"), "deals": r["deals"], "revenue": r["revenue"]} for r in result if r["_id"]]
+    response = [{"team_name": r["_id"], "team_id": r.get("team_id"), "deals": r["deals"], "revenue": r["revenue"]} for r in result if r["_id"]]
+    _cache.set(cache_key, response)
+    return response
 
 @api_router.get("/dashboard/team-revenue/{team_name}/agents")
 async def get_team_agent_details(
@@ -23971,11 +24060,31 @@ async def startup_event():
     await db.leads.create_index("phone", unique=True)
     await db.leads.create_index("stage")
     await db.leads.create_index("assigned_to")
+    # Compound indexes for dashboard aggregations
+    await db.leads.create_index([("stage", 1), ("enrolled_at", -1)])
+    await db.leads.create_index([("stage", 1), ("created_at", -1)])
+    await db.leads.create_index([("stage", 1), ("team_name", 1)])
+    await db.leads.create_index([("assigned_to", 1), ("stage", 1)])
+    await db.leads.create_index("created_at")
+    await db.leads.create_index("enrolled_at")
+    await db.leads.create_index("team_name")
     await db.students.create_index("phone")
     await db.students.create_index("stage")
     await db.students.create_index("mentor_stage")
     await db.students.create_index("cs_agent_id")
     await db.students.create_index("mentor_id")
+    await db.students.create_index("created_at")
+    # CS upgrades indexes
+    await db.cs_upgrades.create_index("created_at")
+    await db.cs_upgrades.create_index("cs_agent_id")
+    await db.cs_upgrades.create_index([("created_at", -1), ("cs_agent_id", 1)])
+    await db.cs_upgrades.create_index("date")
+    # LTV transactions indexes
+    await db.ltv_transactions.create_index("created_at")
+    await db.ltv_transactions.create_index("student_id")
+    # Customers indexes
+    await db.customers.create_index("phone", unique=True, sparse=True)
+    await db.customers.create_index("created_at")
     await db.payments.create_index("stage")
     await db.notifications.create_index("user_id")
     await db.activity_logs.create_index([("entity_type", 1), ("entity_id", 1)])

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="21" time="80.513" timestamp="2026-03-18T22:32:31.461501+00:00" hostname="agent-env-402b16db-68ac-4113-af8a-c38790abf841"><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_default_this_month" time="22.943"><failure message="requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))">/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1395: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:294: in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+E   http.client.RemoteDisconnected: Remote end closed connection without response
+
+During handling of the above exception, another exception occurred:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:490: in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/util/util.py:38: in reraise
+    raise value.with_traceback(tb)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1395: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:294: in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+E   urllib3.exceptions.ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_p0_features_57.py:36: in test_dashboard_default_this_month
+    response = self.session.get(f"{BASE_URL}/api/dashboard/overall")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:602: in get
+    return self.request("GET", url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:659: in send
+    raise ConnectionError(err, request=request)
+E   requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))</failure></testcase><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_today_filter" time="6.537" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_yesterday_filter" time="4.000" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_this_week_filter" time="4.403" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_last_week_filter" time="4.796" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_this_month_filter" time="1.857" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_last_month_filter" time="1.777" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_this_quarter_filter" time="1.946" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_last_quarter_filter" time="1.491" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_this_year_filter" time="1.723" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_last_year_filter" time="1.586" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_overall_filter" time="1.961" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardPeriodFilters" name="test_dashboard_this_month_less_than_overall" time="1.126" /><testcase classname="backend.tests.test_p0_features_57.TestDashboardCaching" name="test_caching_second_call_faster" time="0.876" /><testcase classname="backend.tests.test_p0_features_57.TestQuickReassign" name="test_get_sales_agents" time="1.252" /><testcase classname="backend.tests.test_p0_features_57.TestQuickReassign" name="test_get_cs_agents" time="1.049" /><testcase classname="backend.tests.test_p0_features_57.TestQuickReassign" name="test_lead_reassign_endpoint" time="11.823" /><testcase classname="backend.tests.test_p0_features_57.TestCustomerMaster" name="test_customers_endpoint" time="1.552" /><testcase classname="backend.tests.test_p0_features_57.TestCustomerMaster" name="test_customers_with_transactions" time="1.114" /><testcase classname="backend.tests.test_p0_features_57.TestStudentReassign" name="test_get_students" time="3.688" /><testcase classname="backend.tests.test_p0_features_57.TestStudentReassign" name="test_student_has_cs_agent_info" time="2.827" /></testsuite></testsuites>

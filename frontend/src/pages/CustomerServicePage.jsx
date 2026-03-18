@@ -81,7 +81,8 @@ const CS_STAGES = [
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
-const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging }) => {
+const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging, isSuperAdmin, csAgents, onQuickReassign }) => {
+    const [showReassign, setShowReassign] = React.useState(false);
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const isUpgradedStudent = student.is_upgraded_student;
     const isNewImport = student.is_new_from_import;
@@ -126,9 +127,35 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                             )}
                         </div>
                         {student.cs_agent_name && (
-                            <p className="text-xs text-muted-foreground">
-                                Agent: {student.cs_agent_name}
-                            </p>
+                            <div className="relative">
+                                {isSuperAdmin ? (
+                                    <button
+                                        className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                                        onClick={(e) => { e.stopPropagation(); setShowReassign(!showReassign); }}
+                                        data-testid={`cs-reassign-btn-${student.id}`}
+                                    >
+                                        Agent: {student.cs_agent_name}
+                                    </button>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">
+                                        Agent: {student.cs_agent_name}
+                                    </p>
+                                )}
+                                {showReassign && isSuperAdmin && (
+                                    <div className="absolute z-50 top-6 left-0 bg-popover border rounded-md shadow-lg p-1 min-w-[180px] max-h-48 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                        {(csAgents || []).map(agent => (
+                                            <button
+                                                key={agent.id}
+                                                className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent ${agent.id === student.cs_agent_id ? 'bg-accent font-medium' : ''}`}
+                                                onClick={(e) => { e.stopPropagation(); onQuickReassign(student, agent); setShowReassign(false); }}
+                                                data-testid={`cs-reassign-agent-${agent.id}`}
+                                            >
+                                                {agent.full_name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -220,7 +247,7 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
 };
 
 // Sortable wrapper for StudentCard
-const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade }) => {
+const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign }) => {
     const {
         attributes,
         listeners,
@@ -243,12 +270,15 @@ const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade
                 onSetReminder={onSetReminder}
                 onInitiateUpgrade={onInitiateUpgrade}
                 isDragging={isDragging}
+                isSuperAdmin={isSuperAdmin}
+                csAgents={csAgents}
+                onQuickReassign={onQuickReassign}
             />
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrade }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign }) => {
     const stageStudents = students.filter(s => s.stage === stage.id);
     const studentIds = stageStudents.map(s => s.id);
     const StageIcon = stage.icon;
@@ -282,6 +312,9 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrad
                                 onView={onView}
                                 onSetReminder={onSetReminder}
                                 onInitiateUpgrade={onInitiateUpgrade}
+                                isSuperAdmin={isSuperAdmin}
+                                csAgents={csAgents}
+                                onQuickReassign={onQuickReassign}
                             />
                         ))}
                         {stageStudents.length === 0 && (
@@ -342,6 +375,15 @@ const CustomerServicePage = () => {
     }, [viewMode]);
 
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
+    const isSuperAdmin = user?.role === 'super_admin';
+    const [csAgentsList, setCsAgentsList] = useState([]);
+
+    // Fetch CS agents for super admin quick reassign
+    useEffect(() => {
+        if (isSuperAdmin) {
+            apiClient.get('/users?department=Customer Service').then(res => setCsAgentsList(res.data || [])).catch(() => {});
+        }
+    }, [isSuperAdmin]);
 
     const fetchStudents = async () => {
         try {
@@ -402,6 +444,20 @@ const CustomerServicePage = () => {
     const handleInitiateUpgrade = (student) => {
         setUpgradeStudent(student);
         setShowUpgradeModal(true);
+    };
+
+    const handleQuickReassignCS = async (student, agent) => {
+        try {
+            await studentApi.update(student.id, {
+                cs_agent_id: agent.id,
+                cs_agent_name: agent.full_name,
+            });
+            toast.success(`Reassigned to ${agent.full_name}`);
+            fetchStudents();
+        } catch (e) {
+            console.error(e);
+            toast.error('Failed to reassign');
+        }
     };
 
     // When upgrade is completed
@@ -634,6 +690,9 @@ const CustomerServicePage = () => {
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
                                 onInitiateUpgrade={handleInitiateUpgrade}
+                                isSuperAdmin={isSuperAdmin}
+                                csAgents={csAgentsList}
+                                onQuickReassign={handleQuickReassignCS}
                             />
                         ))}
                     </div>
