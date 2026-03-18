@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -366,6 +366,9 @@ class LeadUpdate(BaseModel):
     estimated_value: Optional[float] = None  # Estimated deal value
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
+    selected_addons: Optional[List[Dict]] = None  # [{id, name, price}] from course catalog
+    course_value: Optional[float] = None  # Base course price (without addons)
+    addons_value: Optional[float] = None  # Total addons price
     call_recording_url: Optional[str] = None  # 3CX integration placeholder
     # Reminder fields
     reminder_date: Optional[datetime] = None
@@ -401,6 +404,9 @@ class LeadResponse(LeadBase):
     estimated_value: Optional[float] = None
     sale_amount: Optional[float] = None
     addons_selected: Optional[List[str]] = None
+    selected_addons: Optional[List[Dict]] = None  # [{id, name, price}]
+    course_value: Optional[float] = None
+    addons_value: Optional[float] = None
     call_recording_url: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -2005,6 +2011,142 @@ async def delete_course(course_id: str, user = Depends(require_roles(["super_adm
     await log_activity("course", course_id, "deleted", user)
     return {"message": "Course deleted"}
 
+# ==================== COURSE CATALOG ====================
+
+COURSE_CATALOG_DATA = [
+    # Add-ons
+    {"name": "Addons - Whatsapp community", "price": 49, "type": "addon"},
+    {"name": "Addons - indicator", "price": 99, "type": "addon"},
+    {"name": "Addons - Ebook", "price": 59, "type": "addon"},
+    {"name": "Addons - Lifetime Mentorship", "price": 199, "type": "addon"},
+    {"name": "Addons - Whatsapp Signal", "price": 199, "type": "addon"},
+    {"name": "Addons - Full Pack", "price": 605, "type": "addon"},
+    # Normal Courses (Sales only)
+    {"name": "Advance Course", "price": 6000, "type": "course"},
+    {"name": "Advance Course - 2", "price": 7999, "type": "course"},
+    {"name": "Advance Course - 3", "price": 6500, "type": "course"},
+    {"name": "Only Course", "price": 5000, "type": "course"},
+    {"name": "Basic Course", "price": 1999, "type": "course"},
+    {"name": "Offer Course", "price": 1599, "type": "course"},
+    {"name": "CLT Vantage offer price", "price": 34500, "type": "course"},
+    {"name": "CLT Vantage", "price": 37549, "type": "course"},
+    {"name": "intermediate", "price": 3899, "type": "course"},
+    {"name": "Intermediate", "price": 3499, "type": "course"},
+    # Upgrade Courses (CS only)
+    {"name": "Upgrade", "price": 2105, "type": "upgrade"},
+    {"name": "Upgrade offer", "price": 1600, "type": "upgrade"},
+    {"name": "Upgrade offer -2", "price": 3899, "type": "upgrade"},
+    {"name": "Upgrade offer -3", "price": 1999, "type": "upgrade"},
+    {"name": "Upgrade offer -4", "price": 5600, "type": "upgrade"},
+    {"name": "Upgrade offer -5", "price": 6000, "type": "upgrade"},
+]
+
+async def seed_course_catalog():
+    """Seed course catalog if empty."""
+    count = await db.course_catalog.count_documents({})
+    if count > 0:
+        return
+    
+    now = datetime.now(timezone.utc).isoformat()
+    for item in COURSE_CATALOG_DATA:
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": item["name"],
+            "price": item["price"],
+            "type": item["type"],  # course, addon, upgrade
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.course_catalog.insert_one(doc)
+    
+    await db.course_catalog.create_index("type")
+    logger.info(f"Seeded {len(COURSE_CATALOG_DATA)} course catalog items")
+
+
+@api_router.get("/course-catalog")
+async def get_course_catalog(user=Depends(get_current_user)):
+    """Get course catalog filtered by user role.
+    Sales roles see courses + addons. CS roles see upgrades + addons.
+    Admins see everything."""
+    role = user.get("role", "")
+    
+    sales_roles = ["sales_executive", "sales_manager", "team_leader"]
+    cs_roles = ["cs_agent", "cs_manager"]
+    
+    query = {"is_active": True}
+    if role in sales_roles:
+        query["type"] = {"$in": ["course", "addon"]}
+    elif role in cs_roles:
+        query["type"] = {"$in": ["upgrade", "addon"]}
+    # Admin/super_admin see all
+    
+    items = await db.course_catalog.find(query, {"_id": 0}).sort("type", 1).to_list(200)
+    
+    # Group by type for frontend convenience
+    grouped = {"courses": [], "addons": [], "upgrades": []}
+    for item in items:
+        t = item.get("type", "course")
+        if t == "course":
+            grouped["courses"].append(item)
+        elif t == "addon":
+            grouped["addons"].append(item)
+        elif t == "upgrade":
+            grouped["upgrades"].append(item)
+    
+    return {"items": items, "grouped": grouped}
+
+
+@api_router.post("/course-catalog")
+async def create_catalog_item(data: Dict, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Add a new item to the course catalog."""
+    name = data.get("name")
+    price = data.get("price")
+    item_type = data.get("type", "course")
+    
+    if not name or price is None:
+        raise HTTPException(status_code=400, detail="Name and price are required")
+    if item_type not in ["course", "addon", "upgrade"]:
+        raise HTTPException(status_code=400, detail="Type must be course, addon, or upgrade")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "price": float(price),
+        "type": item_type,
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.course_catalog.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.put("/course-catalog/{item_id}")
+async def update_catalog_item(item_id: str, data: Dict, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Update a course catalog item."""
+    existing = await db.course_catalog.find_one({"id": item_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    update = {k: v for k, v in data.items() if k not in ["id", "_id", "created_at"]}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.course_catalog.update_one({"id": item_id}, {"$set": update})
+    updated = await db.course_catalog.find_one({"id": item_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/course-catalog/{item_id}")
+async def delete_catalog_item(item_id: str, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Delete a course catalog item."""
+    result = await db.course_catalog.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"message": "Item deleted"}
+
+
 # ==================== COMMISSION RULES ====================
 
 @api_router.get("/commission-rules", response_model=List[CommissionRuleResponse])
@@ -3057,9 +3199,28 @@ async def get_leads(
 
 @api_router.post("/leads", response_model=LeadResponse)
 async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user = Depends(get_current_user)):
-    existing = await db.leads.find_one({"phone": data.phone})
+    # Check duplicates by phone AND email
+    dup_conditions = [{"phone": data.phone}]
+    if data.email:
+        dup_conditions.append({"email": data.email})
+    
+    existing = await db.leads.find_one({"$or": dup_conditions}, {"_id": 0})
     if existing:
-        raise HTTPException(status_code=400, detail=f"Lead with this phone already exists. Assigned to: {existing.get('assigned_to_name', 'Unknown')}")
+        # Return duplicate info with 409 status
+        return JSONResponse(status_code=409, content={
+            "duplicate": True,
+            "existing_lead": {
+                "id": existing.get("id"),
+                "full_name": existing.get("full_name"),
+                "phone": existing.get("phone"),
+                "email": existing.get("email"),
+                "stage": existing.get("stage"),
+                "assigned_to_name": existing.get("assigned_to_name"),
+                "source": existing.get("source"),
+                "created_at": existing.get("created_at"),
+            },
+            "matched_on": "phone" if existing.get("phone") == data.phone else "email",
+        })
     
     region = "international"
     if data.phone.startswith("+971") or data.phone.startswith("971"):
@@ -3114,6 +3275,34 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
     
     return {k: v for k, v in new_lead.items() if k != "_id"}
 
+
+@api_router.post("/leads/{lead_id}/merge")
+async def merge_lead(lead_id: str, request: Request, user=Depends(get_current_user)):
+    """Merge new lead data into an existing lead. Fills in missing fields only."""
+    body = await request.json()
+    existing = await db.leads.find_one({"id": lead_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    merge_fields = {}
+    mergeable = ["full_name", "email", "phone", "country", "city", "source", "course_of_interest", "additional_numbers"]
+    
+    for field in mergeable:
+        new_val = body.get(field)
+        old_val = existing.get(field)
+        if new_val and not old_val:
+            merge_fields[field] = new_val
+    
+    if merge_fields:
+        merge_fields["updated_at"] = now
+        await db.leads.update_one({"id": lead_id}, {"$set": merge_fields})
+        await log_activity("lead", lead_id, "merged", user, {"merged_fields": list(merge_fields.keys())})
+    
+    updated = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    return {"merged_fields": list(merge_fields.keys()), "lead": updated}
+
+
 @api_router.put("/leads/{lead_id}", response_model=LeadResponse)
 async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current_user)):
     existing = await db.leads.find_one({"id": lead_id})
@@ -3156,12 +3345,23 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                     detail=f"Please select the course/package the client is interested in when moving to {update_data['stage'].replace('_', ' ').title()}"
                 )
             
-            # Auto-set estimated value from course price if not provided
+            # Auto-set estimated value from course catalog or legacy courses
             if not update_data.get("estimated_value") and not existing.get("estimated_value"):
-                course = await db.courses.find_one({"id": interested_course}, {"_id": 0, "base_price": 1, "name": 1})
-                if course:
-                    update_data["estimated_value"] = course.get("base_price", 0)
-                    update_data["interested_course_name"] = course.get("name")
+                # Try course catalog first
+                cat_course = await db.course_catalog.find_one({"id": interested_course}, {"_id": 0, "price": 1, "name": 1})
+                if cat_course:
+                    course_price = cat_course.get("price", 0)
+                    addons_price = sum(a.get("price", 0) for a in (update_data.get("selected_addons") or []))
+                    update_data["estimated_value"] = course_price + addons_price
+                    update_data["interested_course_name"] = cat_course.get("name")
+                    update_data["course_value"] = course_price
+                    update_data["addons_value"] = addons_price
+                else:
+                    # Fallback to legacy courses collection
+                    course = await db.courses.find_one({"id": interested_course}, {"_id": 0, "base_price": 1, "name": 1})
+                    if course:
+                        update_data["estimated_value"] = course.get("base_price", 0)
+                        update_data["interested_course_name"] = course.get("name")
         
         if update_data["stage"] == "enrolled":
             # Calculate commission for sales executive
@@ -11855,7 +12055,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://commission-debug-2.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://mentor-crm-dash.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -22703,6 +22903,9 @@ async def startup_event():
     
     # Start background scheduler for Google Sheets auto-sync
     asyncio.create_task(sheets_auto_sync_loop())
+    
+    # Seed course catalog
+    await seed_course_catalog()
     
     # Seed SLA rules and load cache
     await seed_sla_rules()

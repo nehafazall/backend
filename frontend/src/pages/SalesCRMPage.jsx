@@ -67,6 +67,9 @@ import {
     PhoneCall,
     GripVertical,
     Target,
+    GitMerge,
+    Package,
+    ShoppingCart,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
@@ -188,6 +191,11 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging }) => {
                     {lead.interested_course_name && (
                         <p className="text-xs font-medium text-primary truncate" title={lead.interested_course_name}>
                             {lead.interested_course_name}
+                        </p>
+                    )}
+                    {lead.selected_addons?.length > 0 && (
+                        <p className="text-xs text-muted-foreground truncate" title={lead.selected_addons.map(a => a.name?.replace('Addons - ', '')).join(', ')}>
+                            + {lead.selected_addons.map(a => a.name?.replace('Addons - ', '')).join(', ')}
                         </p>
                     )}
                     {lead.estimated_value > 0 && (
@@ -341,8 +349,14 @@ const SalesCRMPage = () => {
         follow_up_date: '',
         interested_course_id: '',
         estimated_value: '',
+        selectedAddons: [],
     });
     const [courses, setCourses] = useState([]);
+    const [catalogCourses, setCatalogCourses] = useState([]);
+    const [catalogAddons, setCatalogAddons] = useState([]);
+    const [duplicateInfo, setDuplicateInfo] = useState(null);
+    const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+    const [merging, setMerging] = useState(false);
 
     // Pipeline stages that require course selection
     const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
@@ -361,17 +375,28 @@ const SalesCRMPage = () => {
         fetchLeads();
     }, []);
 
-    // Fetch courses for course selection
+    // Fetch course catalog for course/addon selection
     useEffect(() => {
-        const fetchCourses = async () => {
+        const fetchCatalog = async () => {
             try {
-                const res = await apiClient.get('/courses');
-                setCourses(res.data || []);
+                const res = await apiClient.get('/course-catalog');
+                const grouped = res.data?.grouped || {};
+                setCatalogCourses(grouped.courses || []);
+                setCatalogAddons(grouped.addons || []);
+                // Keep legacy courses for backward compat
+                setCourses(res.data?.items || []);
             } catch (error) {
-                console.error('Failed to fetch courses:', error);
+                console.error('Failed to fetch course catalog:', error);
+                // Fallback to legacy courses endpoint
+                try {
+                    const res = await apiClient.get('/courses');
+                    setCourses(res.data || []);
+                } catch (e) {
+                    console.error('Failed to fetch courses:', e);
+                }
             }
         };
-        fetchCourses();
+        fetchCatalog();
     }, []);
 
     // Auto-detect country when phone number changes
@@ -462,7 +487,12 @@ const SalesCRMPage = () => {
                 toast.success(`Lead moved to ${LEAD_STAGES.find(s => s.id === targetStage)?.label}`);
                 fetchLeads();
             } catch (error) {
-                toast.error('Failed to move lead');
+                const detail = error.response?.data?.detail || 'Failed to move lead';
+                if (detail.includes('course') || detail.includes('Course')) {
+                    toast.error('Please open the lead details and select a course + add-ons first');
+                } else {
+                    toast.error(detail);
+                }
                 console.error(error);
             }
         }
@@ -475,7 +505,7 @@ const SalesCRMPage = () => {
         try {
             // Get course details
             const courseId = pendingEnrollmentLead.interested_course_id;
-            const selectedCourse = courses.find(c => c.id === courseId);
+            const selectedCourse = catalogCourses.find(c => c.id === courseId) || courses.find(c => c.id === courseId);
             
             const updatePayload = {
                 stage: 'enrolled',
@@ -555,8 +585,30 @@ const SalesCRMPage = () => {
             });
             fetchLeads();
         } catch (error) {
-            toast.error(error.response?.data?.detail || 'Failed to create lead');
+            if (error.response?.status === 409 && error.response?.data?.duplicate) {
+                setDuplicateInfo(error.response.data);
+                setShowCreateModal(false);
+                setShowDuplicateDialog(true);
+            } else {
+                toast.error(error.response?.data?.detail || 'Failed to create lead');
+            }
         }
+    };
+
+    const handleMerge = async () => {
+        if (!duplicateInfo?.existing_lead?.id) return;
+        setMerging(true);
+        try {
+            await apiClient.post(`/leads/${duplicateInfo.existing_lead.id}/merge`, formData);
+            toast.success('Lead merged successfully — missing fields updated');
+            setShowDuplicateDialog(false);
+            setDuplicateInfo(null);
+            setFormData({ full_name: '', phone: '', email: '', country: '', city: '', lead_source: '', course_of_interest: '', notes: '' });
+            fetchLeads();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Merge failed');
+        }
+        setMerging(false);
     };
 
     const handleUpdateLead = async () => {
@@ -571,13 +623,21 @@ const SalesCRMPage = () => {
         // Add course interest for pipeline stages
         if (updateData.interested_course_id) {
             updates.interested_course_id = updateData.interested_course_id;
-            const selectedCourse = courses.find(c => c.id === updateData.interested_course_id);
+            const selectedCourse = catalogCourses.find(c => c.id === updateData.interested_course_id)
+                || courses.find(c => c.id === updateData.interested_course_id);
             if (selectedCourse) {
                 updates.interested_course_name = selectedCourse.name;
+                const coursePrice = selectedCourse.price || selectedCourse.base_price || 0;
+                const addonsPrice = (updateData.selectedAddons || []).reduce((sum, a) => sum + (a.price || 0), 0);
+                updates.course_value = coursePrice;
+                updates.addons_value = addonsPrice;
                 if (!updateData.estimated_value) {
-                    updates.estimated_value = selectedCourse.base_price || 0;
+                    updates.estimated_value = coursePrice + addonsPrice;
                 }
             }
+        }
+        if (updateData.selectedAddons?.length > 0) {
+            updates.selected_addons = updateData.selectedAddons;
         }
         if (updateData.estimated_value) {
             updates.estimated_value = parseFloat(updateData.estimated_value);
@@ -618,7 +678,7 @@ const SalesCRMPage = () => {
             toast.success('Lead updated successfully');
             setShowDetailModal(false);
             setSelectedLead(null);
-            setUpdateData({ stage: '', call_notes: '', rejection_reason: '', follow_up_date: '', interested_course_id: '', estimated_value: '' });
+            setUpdateData({ stage: '', call_notes: '', rejection_reason: '', follow_up_date: '', interested_course_id: '', estimated_value: '', selectedAddons: [] });
             fetchLeads();
         } catch (error) {
             toast.error(error.response?.data?.detail || 'Failed to update lead');
@@ -634,6 +694,7 @@ const SalesCRMPage = () => {
             follow_up_date: '',
             interested_course_id: lead.interested_course_id || '',
             estimated_value: lead.estimated_value || '',
+            selectedAddons: lead.selected_addons || [],
         });
         setShowDetailModal(true);
     };
@@ -1022,53 +1083,125 @@ const SalesCRMPage = () => {
                                         )}
                                     </div>
                                     
-                                    {/* Course Interest - Required for pipeline stages */}
+                                    {/* Course & Add-ons Selection - Required for pipeline stages */}
                                     {PIPELINE_STAGES.includes(updateData.stage) && (
                                         <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-4">
                                             <div className="flex items-center gap-2 text-amber-600">
                                                 <Target className="h-4 w-4" />
-                                                <span className="text-sm font-medium">Course Interest Required</span>
+                                                <span className="text-sm font-medium">Course & Add-ons Selection</span>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4">
+                                            
+                                            {/* Course Selection */}
+                                            <div className="space-y-2">
+                                                <Label className="flex items-center gap-1.5">
+                                                    <Package className="h-3.5 w-3.5" />
+                                                    Select Course *
+                                                </Label>
+                                                <Select
+                                                    value={updateData.interested_course_id}
+                                                    onValueChange={(value) => {
+                                                        const course = catalogCourses.find(c => c.id === value);
+                                                        const coursePrice = course?.price || 0;
+                                                        const addonsPrice = (updateData.selectedAddons || []).reduce((sum, a) => sum + (a.price || 0), 0);
+                                                        setUpdateData({ 
+                                                            ...updateData, 
+                                                            interested_course_id: value,
+                                                            estimated_value: coursePrice + addonsPrice
+                                                        });
+                                                    }}
+                                                >
+                                                    <SelectTrigger data-testid="course-interest-select">
+                                                        <SelectValue placeholder="Select course" />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="popper" className="z-[9999]">
+                                                        {catalogCourses.map((course) => (
+                                                            <SelectItem key={course.id} value={course.id}>
+                                                                {course.name} - AED {course.price?.toLocaleString()}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            
+                                            {/* Add-ons Selection (Multi-select checkboxes) */}
+                                            {catalogAddons.length > 0 && (
                                                 <div className="space-y-2">
-                                                    <Label>Course/Package Interested *</Label>
-                                                    <Select
-                                                        value={updateData.interested_course_id}
-                                                        onValueChange={(value) => {
-                                                            const course = courses.find(c => c.id === value);
-                                                            setUpdateData({ 
-                                                                ...updateData, 
-                                                                interested_course_id: value,
-                                                                estimated_value: course?.base_price || ''
-                                                            });
-                                                        }}
-                                                    >
-                                                        <SelectTrigger data-testid="course-interest-select">
-                                                            <SelectValue placeholder="Select course" />
-                                                        </SelectTrigger>
-                                                        <SelectContent position="popper" className="z-[9999]">
-                                                            {courses.map((course) => (
-                                                                <SelectItem key={course.id} value={course.id}>
-                                                                    {course.name} - AED {course.base_price?.toLocaleString()}
-                                                                </SelectItem>
+                                                    <Label className="flex items-center gap-1.5">
+                                                        <ShoppingCart className="h-3.5 w-3.5" />
+                                                        Select Add-ons (Optional)
+                                                    </Label>
+                                                    <div className="grid grid-cols-2 gap-2 p-3 bg-background rounded-md border border-border">
+                                                        {catalogAddons.map((addon) => {
+                                                            const isSelected = (updateData.selectedAddons || []).some(a => a.id === addon.id);
+                                                            return (
+                                                                <label
+                                                                    key={addon.id}
+                                                                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors text-sm ${
+                                                                        isSelected 
+                                                                            ? 'bg-primary/10 border border-primary/30' 
+                                                                            : 'hover:bg-muted/50 border border-transparent'
+                                                                    }`}
+                                                                    data-testid={`addon-checkbox-${addon.id}`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={(e) => {
+                                                                            let newAddons;
+                                                                            if (e.target.checked) {
+                                                                                newAddons = [...(updateData.selectedAddons || []), { id: addon.id, name: addon.name, price: addon.price }];
+                                                                            } else {
+                                                                                newAddons = (updateData.selectedAddons || []).filter(a => a.id !== addon.id);
+                                                                            }
+                                                                            const coursePrice = catalogCourses.find(c => c.id === updateData.interested_course_id)?.price || 0;
+                                                                            const addonsPrice = newAddons.reduce((sum, a) => sum + (a.price || 0), 0);
+                                                                            setUpdateData({
+                                                                                ...updateData,
+                                                                                selectedAddons: newAddons,
+                                                                                estimated_value: coursePrice + addonsPrice
+                                                                            });
+                                                                        }}
+                                                                        className="rounded border-gray-400 text-primary focus:ring-primary h-4 w-4"
+                                                                    />
+                                                                    <span className="flex-1 truncate">{addon.name.replace('Addons - ', '')}</span>
+                                                                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">AED {addon.price}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Price Breakdown */}
+                                            {updateData.interested_course_id && (
+                                                <div className="p-3 bg-background rounded-md border border-border space-y-1.5" data-testid="price-breakdown">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-muted-foreground">Course</span>
+                                                        <span>AED {(catalogCourses.find(c => c.id === updateData.interested_course_id)?.price || 0).toLocaleString()}</span>
+                                                    </div>
+                                                    {(updateData.selectedAddons || []).length > 0 && (
+                                                        <>
+                                                            {(updateData.selectedAddons || []).map((a) => (
+                                                                <div key={a.id} className="flex justify-between text-sm">
+                                                                    <span className="text-muted-foreground">{a.name.replace('Addons - ', '')}</span>
+                                                                    <span>AED {a.price?.toLocaleString()}</span>
+                                                                </div>
                                                             ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                        </>
+                                                    )}
+                                                    <div className="flex justify-between text-sm font-semibold pt-1.5 border-t border-border">
+                                                        <span>Estimated Total</span>
+                                                        <span className="text-primary">AED {(updateData.estimated_value || 0).toLocaleString()}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label>Estimated Value (AED)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        value={updateData.estimated_value}
-                                                        onChange={(e) => setUpdateData({ ...updateData, estimated_value: e.target.value })}
-                                                        placeholder="Auto-filled from course"
-                                                        data-testid="estimated-value-input"
-                                                    />
-                                                </div>
-                                            </div>
+                                            )}
+                                            
                                             {selectedLead?.interested_course_name && (
                                                 <p className="text-xs text-muted-foreground">
                                                     Currently interested in: <span className="font-medium">{selectedLead.interested_course_name}</span>
+                                                    {selectedLead?.selected_addons?.length > 0 && (
+                                                        <span> + {selectedLead.selected_addons.map(a => a.name?.replace('Addons - ', '')).join(', ')}</span>
+                                                    )}
                                                 </p>
                                             )}
                                         </div>
@@ -1115,7 +1248,7 @@ const SalesCRMPage = () => {
                 open={showEnrollmentModal}
                 onClose={() => { setShowEnrollmentModal(false); setPendingEnrollmentLead(null); }}
                 lead={pendingEnrollmentLead}
-                course={courses.find(c => c.id === pendingEnrollmentLead?.interested_course_id)}
+                course={catalogCourses.find(c => c.id === pendingEnrollmentLead?.interested_course_id) || courses.find(c => c.id === pendingEnrollmentLead?.interested_course_id)}
                 onComplete={handleEnrollmentComplete}
             />
 
@@ -1126,6 +1259,52 @@ const SalesCRMPage = () => {
                 lead={pendingRejectionLead}
                 onComplete={handleRejectionComplete}
             />
+
+            {/* Duplicate Lead Dialog */}
+            <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+                <DialogContent className="max-w-lg" data-testid="duplicate-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-500">
+                            <AlertTriangle className="h-5 w-5" />
+                            Duplicate Lead Found
+                        </DialogTitle>
+                    </DialogHeader>
+                    {duplicateInfo?.existing_lead && (() => {
+                        const el = duplicateInfo.existing_lead;
+                        return (
+                            <div className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    A lead with the same <strong>{duplicateInfo.matched_on}</strong> already exists in the system.
+                                </p>
+                                <div className="bg-muted/30 rounded-lg p-4 space-y-2.5">
+                                    <div className="flex items-center gap-2">
+                                        <User className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-semibold">{el.full_name}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-muted-foreground" />{el.phone || 'N/A'}</div>
+                                        <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-muted-foreground" />{el.email || 'N/A'}</div>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                        <Badge variant="outline" className="capitalize">{el.stage?.replace(/_/g, ' ')}</Badge>
+                                        <span>Assigned to: {el.assigned_to_name || 'Unassigned'}</span>
+                                    </div>
+                                    {el.source && <p className="text-xs text-muted-foreground">Source: {el.source}</p>}
+                                </div>
+                                <p className="text-sm">Would you like to <strong>merge</strong> the new data into the existing lead? Only missing fields will be updated.</p>
+                                <div className="flex gap-2 justify-end">
+                                    <Button variant="outline" onClick={() => { setShowDuplicateDialog(false); setShowCreateModal(true); }} data-testid="duplicate-cancel-btn">
+                                        Go Back
+                                    </Button>
+                                    <Button onClick={handleMerge} disabled={merging} className="bg-amber-600 hover:bg-amber-700" data-testid="duplicate-merge-btn">
+                                        <GitMerge className="h-4 w-4 mr-2" />{merging ? 'Merging...' : 'Merge Lead'}
+                                    </Button>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
