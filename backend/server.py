@@ -422,6 +422,13 @@ class LeadResponse(LeadBase):
     reminder_time: Optional[str] = None
     reminder_note: Optional[str] = None
     reminder_completed: bool = False
+    enrolled_at: Optional[str] = None
+    enrollment_amount: Optional[float] = None
+    team_name: Optional[str] = None
+    rejection_reason_label: Optional[str] = None
+    rejection_notes: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_verified: Optional[bool] = None
     
     model_config = ConfigDict(extra="ignore")
 
@@ -3410,8 +3417,15 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                         update_data["interested_course_name"] = course.get("name")
         
         if update_data["stage"] == "enrolled":
-            # Calculate commission for sales executive
+            # Set enrolled_at timestamp — critical for all revenue/commission dashboards
+            update_data["enrolled_at"] = now.isoformat()
+            
+            # Ensure enrollment_amount is set from sale_amount for dashboard aggregation
             sale_amount = update_data.get("sale_amount") or existing.get("sale_amount", 0)
+            if sale_amount and not existing.get("enrollment_amount"):
+                update_data["enrollment_amount"] = sale_amount
+            
+            # Calculate commission for sales executive
             course_id = update_data.get("course_id") or existing.get("course_id")
             
             if existing.get("assigned_to") and sale_amount > 0:

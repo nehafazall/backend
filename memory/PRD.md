@@ -14,61 +14,52 @@ Build a comprehensive ERP system for CLT Academy with role-based dashboards, sal
 - `course_catalog` collection: types `course`, `addon`, `upgrade`
 - Per-course commission: sales_executive, team_leader, sales_manager
 - Bulk actions: Delete, Activate, Deactivate
-- Role-based visibility: Sales sees courses+addons, CS sees upgrades+addons
+- Role-based visibility
 
 ### Course & Add-on Split Selection (Sales CRM)
 - Course dropdown + Add-on checkboxes with auto-calculated price breakdown
-- Stored on lead: `selected_addons`, `course_value`, `addons_value`
 
 ### Historical Import - Two-Step Preview & Confirm
 - Step 1 (Preview): Parse Excel, validate each row in-memory
 - Step 2 (Confirm): Only valid rows pushed after user review
-- Optimized: in-memory lookups, processes 133 rows in ~3 seconds
 - Historical imports now create Customer Master records
 
-### Super Admin Lead Assignment (NEW - Mar 2026)
-- When super_admin creates a lead, they can assign it directly to any sales agent
-- Bypasses automatic round-robin distribution
-- Frontend shows agent selection dropdown only for super_admin role
-- Default option: "Auto (Round Robin)"
+### Super Admin Lead Assignment (Mar 2026)
+- Super admin bypasses round-robin, assigns leads directly to any sales agent
+- Agent selection dropdown in create lead form (super_admin only)
 
-### Customer Master Sorting (NEW - Mar 2026)
-- "Total Spent" column header is clickable/sortable (ascending/descending)
-- Backend supports `sort_by` and `sort_order` query parameters
-- Allowed sort fields: created_at, total_spent, full_name, transaction_count
-- Historical sales imports now create/update customer records
+### Customer Master Sorting (Mar 2026)
+- "Total Spent" column sortable (ASC/DESC via clickable header)
+- Backend `sort_by` and `sort_order` query params
 
-### Rejected Leads to Pool (NEW - Mar 2026)
-- When a lead stage is set to "rejected" or "not_interested", it auto-moves to Leads Pool
-- Sets `in_pool: True` and records assignment_history
-- Pool query includes rejected/not_interested leads
+### Rejected Leads to Pool (Mar 2026)
+- Rejecting a lead sets `in_pool: True`, appears in Leads Pool
 
-### Duplicate Lead Detection & Merge (Confirmed Working - Mar 2026)
-- Creating a lead with existing phone returns 409 with duplicate info
-- Frontend shows merge dialog with existing lead details
-- Merge fills in missing fields only
+### Duplicate Lead Detection & Merge (Confirmed Mar 2026)
+- 409 response on duplicate phone, merge dialog in frontend
 
-### Other Features
-- Mentor Dashboard eye-toggle, salary display
-- Sales Dashboard commission module
-- Password management (admin view + history)
-- Google Sheets connector
-- CS Historical Import (separate page with Excel template)
+### Bug Fix: enrolled_at Not Set (Mar 2026)
+**Root Cause:** Two issues:
+1. `enrolled_at` was never set when a lead transitioned to "enrolled" stage via `update_lead`
+2. `LeadResponse` Pydantic model had `extra="ignore"` and didn't include `enrolled_at`, `enrollment_amount`, `team_name`, etc. — so even after DB writes, the API response stripped these fields
+
+**Fix:** 
+- Added `enrolled_at = now.isoformat()` and `enrollment_amount = sale_amount` to the enrollment block in `update_lead`
+- Added missing fields to `LeadResponse` model
+- Patched existing Selvakumar record directly in Atlas DB
 
 ## Key API Endpoints
-- `GET /api/course-catalog` - Role-filtered with commission
-- `POST /api/course-catalog/bulk-action` - Bulk operations
-- `POST /api/import/historical-sales-xlsx/preview` - Validate
-- `POST /api/import/historical-sales-xlsx/confirm/{preview_id}` - Push valid rows
-- `GET /api/customers?sort_by=total_spent&sort_order=desc` - Sortable customers
-- `POST /api/leads` - Create lead (super_admin can include assigned_to)
+- `GET /api/leads` - response_model=List[LeadResponse]
+- `POST /api/leads` - response_model=LeadResponse, super_admin can include assigned_to
+- `PUT /api/leads/{id}` - response_model=LeadResponse, sets enrolled_at on enrollment
+- `GET /api/customers?sort_by=total_spent&sort_order=desc`
 - `GET /api/leads/pool` - Includes rejected leads
-- `PUT /api/leads/{id}` - Stage changes; rejected -> auto pool
+- Course catalog, import endpoints (unchanged)
 
 ## Database
 - `course_catalog` - name, price, type, is_active, commission fields
-- `import_previews` - Stores validated rows (1-hour TTL)
-- `leads` - selected_addons, course_value, addons_value, assigned_to
+- `import_previews` - Validated rows (1-hour TTL)
+- `leads` - enrolled_at, enrollment_amount, selected_addons, course_value, addons_value
 - `customers` - total_spent, transaction_count, transactions array
 
 ## Credentials
@@ -81,7 +72,7 @@ Build a comprehensive ERP system for CLT Academy with role-based dashboards, sal
 - P1: Wire per-course commission into Sales Dashboard earnings
 - P1: Post-deployment: Google Sheets redirect_uri, tighten CORS
 - P1: User verification for Google Sheets redirect_uri fix
-- P2: Refactor server.py into route modules
+- P2: Refactor server.py into route modules (critical — 24K+ lines)
 - P2: Dynamic commission structure UI
 - P2: Payslip generation
 - P2: Google Ads API integration
