@@ -1,0 +1,99 @@
+{
+  "summary": "CLT Synapse ERP Course Catalog Enhancements Testing Complete. All features verified: (1) Commission columns (SE, TL, SM) in Course Catalog table and edit modal, (2) Bulk actions (delete, activate, deactivate) working, (3) Historical import template has 4 sheets with correct structure including commission columns on Courses sheet.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/course-catalog", "issue": "Returns 200 instead of 201 for creation - works correctly but non-standard HTTP status"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: GET /api/course-catalog returns items with commission_sales_executive, commission_team_leader, commission_sales_manager fields",
+    "Backend: POST /api/course-catalog creates item with commission fields (returns 200)",
+    "Backend: PUT /api/course-catalog/{id} updates commission fields successfully",
+    "Backend: POST /api/course-catalog/bulk-action with action=deactivate deactivates items",
+    "Backend: POST /api/course-catalog/bulk-action with action=activate re-activates items",
+    "Backend: POST /api/course-catalog/bulk-action with action=delete deletes items",
+    "Backend: Bulk action validation - returns 400 for invalid action",
+    "Backend: Bulk action validation - returns 400 for empty ids",
+    "Backend: Bulk action requires admin/super_admin role (403 for sales_executive)",
+    "Backend: Historical template download returns xlsx file with 4 sheets",
+    "Backend: Historical template Sheet 1 (Historical Sales Data) has 14 columns: Full Name, Phone, Course Enrolled, Course Amount, Add-ons, Add-on Amount, Agent Name, Team Name, Enrolled Amount, Enrolled At, Email, Country, City, Source",
+    "Backend: Historical template Sheet 2 (Courses & Prices) has commission columns: Commission SE, Commission TL, Commission SM",
+    "Backend: Historical template Sheet 3 (Add-ons & Prices) has Add-on Name and Price columns",
+    "Backend: Historical template Sheet 4 (Teams & Agents) has Agent Name and Team Name columns",
+    "Frontend: Course Catalog page (/courses) loads correctly",
+    "Frontend: Table displays commission columns (SE Comm., TL Comm., SM Comm.)",
+    "Frontend: Filter buttons work (All, Course, Add-on, Upgrade) with counts",
+    "Frontend: Add Item modal opens with commission input fields (Sales Executive, Team Leader, Sales Manager)",
+    "Frontend: Edit modal shows existing commission values and allows updates",
+    "Frontend: Select all checkbox works and shows bulk actions bar",
+    "Frontend: Bulk actions bar shows Activate, Deactivate, Delete buttons"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_course_catalog_commissions.py",
+    "/app/test_reports/pytest/pytest_course_catalog_commissions.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Commission fields properly stored in course_catalog collection with defaults of 0",
+    "Bulk action endpoint (line 2166-2185) properly handles delete/activate/deactivate with admin role restriction",
+    "Historical template (line 8900-8991) generates 4 sheets with openpyxl including commission columns on Courses sheet",
+    "Frontend CoursesPage.jsx properly displays commission columns and handles CRUD with commission fields"
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "100% (14/14 tests passed - 2 creation tests return 200 instead of 201 but data is correct)",
+    "frontend": "100% (All UI features verified via Playwright)"
+  },
+
+  "test_credentials": {
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"},
+    "sales_executive": {"email": "kiran@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "No new seed data created - 22 existing items in course catalog",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Course Catalog with commission fields and bulk actions fully tested. Key features: (1) Each course/addon/upgrade has commission_sales_executive, commission_team_leader, commission_sales_manager fields (default 0), (2) Bulk actions work for delete/activate/deactivate with confirmation, (3) Historical template has 4 sheets with new column structure. Total 22 items in catalog: 10 courses, 6 add-ons, 6 upgrades.",
+
+  "feature_verification_details": {
+    "course_catalog_commission_columns": {
+      "table_columns": ["SE Comm.", "TL Comm.", "SM Comm."],
+      "modal_fields": ["Sales Executive", "Team Leader", "Sales Manager"],
+      "default_values": 0
+    },
+    "bulk_actions": {
+      "available_actions": ["delete", "activate", "deactivate"],
+      "requires_role": ["super_admin", "admin"],
+      "ui_elements": ["select-all-checkbox", "bulk-actions-bar", "bulk-activate-btn", "bulk-deactivate-btn", "bulk-delete-btn"]
+    },
+    "historical_template": {
+      "total_sheets": 4,
+      "sheet_1_columns": ["Full Name *", "Phone *", "Course Enrolled *", "Course Amount (AED)", "Add-ons", "Add-on Amount (AED)", "Agent Name *", "Team Name *", "Enrolled Amount (AED)", "Enrolled At (YYYY-MM-DD)", "Email", "Country", "City", "Source"],
+      "sheet_2_columns": ["Course Name", "Price (AED)", "Type", "Commission SE (AED)", "Commission TL (AED)", "Commission SM (AED)"],
+      "sheet_3_columns": ["Add-on Name", "Price (AED)"],
+      "sheet_4_columns": ["Agent Name", "Team Name"]
+    },
+    "items_count": {
+      "total": 22,
+      "courses": 10,
+      "addons": 6,
+      "upgrades": 6
+    }
+  }
+}

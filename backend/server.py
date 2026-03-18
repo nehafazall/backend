@@ -2045,6 +2045,11 @@ async def seed_course_catalog():
     """Seed course catalog if empty."""
     count = await db.course_catalog.count_documents({})
     if count > 0:
+        # Ensure commission fields exist on all items
+        await db.course_catalog.update_many(
+            {"commission_sales_executive": {"$exists": False}},
+            {"$set": {"commission_sales_executive": 0, "commission_team_leader": 0, "commission_sales_manager": 0}}
+        )
         return
     
     now = datetime.now(timezone.utc).isoformat()
@@ -2055,6 +2060,9 @@ async def seed_course_catalog():
             "price": item["price"],
             "type": item["type"],  # course, addon, upgrade
             "is_active": True,
+            "commission_sales_executive": 0,
+            "commission_team_leader": 0,
+            "commission_sales_manager": 0,
             "created_at": now,
             "updated_at": now,
         }
@@ -2121,6 +2129,9 @@ async def create_catalog_item(data: Dict, user=Depends(require_roles(["super_adm
         "price": float(price),
         "type": item_type,
         "is_active": True,
+        "commission_sales_executive": float(data.get("commission_sales_executive", 0)),
+        "commission_team_leader": float(data.get("commission_team_leader", 0)),
+        "commission_sales_manager": float(data.get("commission_sales_manager", 0)),
         "created_at": now,
         "updated_at": now,
     }
@@ -8886,8 +8897,9 @@ async def download_historical_sales_template_xlsx(token: str = None, request: Re
     ws1 = wb.active
     ws1.title = "Historical Sales Data"
     
-    header_labels = ["Full Name *", "Phone *", "Course Enrolled *", "Agent Name *", "Team Name *",
-                     "Enrollment Amount (AED)", "Enrolled At (YYYY-MM-DD)", "Email", "Country", "City", "Source"]
+    header_labels = ["Full Name *", "Phone *", "Course Enrolled *", "Course Amount (AED)",
+                     "Add-ons", "Add-on Amount (AED)", "Agent Name *", "Team Name *",
+                     "Enrolled Amount (AED)", "Enrolled At (YYYY-MM-DD)", "Email", "Country", "City", "Source"]
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
     req_fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
@@ -8900,28 +8912,30 @@ async def download_historical_sales_template_xlsx(token: str = None, request: Re
         cell.alignment = Alignment(horizontal='center', wrap_text=True)
         cell.border = thin_border
     
-    example = ["Ahmed Ali", "+971501234567", "Basic Package", "Kiran VR", "TEAM XLNC",
-               "2604", "2025-06-15", "ahmed@example.com", "UAE", "Dubai", "Meta Ads"]
+    example = ["Ahmed Ali", "+971501234567", "Basic Course", "1999",
+               "Whatsapp community, Ebook", "108", "Kiran VR", "TEAM XLNC",
+               "2107", "2025-06-15", "ahmed@example.com", "UAE", "Dubai", "Meta Ads"]
     for col, val in enumerate(example, 1):
         cell = ws1.cell(row=2, column=col, value=val)
         cell.border = thin_border
-        if col <= 5:
+        if col <= 3 or col in [7, 8]:
             cell.fill = req_fill
     
-    widths = [20, 18, 25, 20, 22, 22, 22, 25, 12, 12, 15]
+    widths = [20, 18, 22, 18, 28, 18, 20, 22, 18, 22, 25, 12, 12, 15]
     for col, w in enumerate(widths, 1):
         ws1.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
     
-    # Sheet 2: Courses (from course_catalog)
+    # Sheet 2: Courses (from course_catalog) with commission info
     ws2 = wb.create_sheet("Courses & Prices")
     ch_fill = PatternFill(start_color="059669", end_color="059669", fill_type="solid")
-    for col, h in enumerate(["Course Name", "Price (AED)", "Type"], 1):
+    course_headers = ["Course Name", "Price (AED)", "Type", "Commission SE (AED)", "Commission TL (AED)", "Commission SM (AED)"]
+    for col, h in enumerate(course_headers, 1):
         cell = ws2.cell(row=1, column=col, value=h)
         cell.font = Font(bold=True, color="FFFFFF", size=11)
         cell.fill = ch_fill
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
-    catalog_courses = await db.course_catalog.find({"type": {"$in": ["course", "upgrade"]}, "is_active": True}, {"_id": 0, "name": 1, "price": 1, "type": 1}).sort("type", 1).to_list(200)
+    catalog_courses = await db.course_catalog.find({"type": {"$in": ["course", "upgrade"]}, "is_active": True}, {"_id": 0}).sort("type", 1).to_list(200)
     # Fallback to legacy courses if catalog is empty
     if not catalog_courses:
         legacy = await db.courses.find({}, {"_id": 0, "name": 1, "price": 1, "category": 1}).sort("name", 1).to_list(200)
@@ -8930,9 +8944,11 @@ async def download_historical_sales_template_xlsx(token: str = None, request: Re
         ws2.cell(row=ri, column=1, value=c.get("name", "")).border = thin_border
         ws2.cell(row=ri, column=2, value=c.get("price") or 0).border = thin_border
         ws2.cell(row=ri, column=3, value=c.get("type", "").title()).border = thin_border
-    ws2.column_dimensions['A'].width = 30
-    ws2.column_dimensions['B'].width = 15
-    ws2.column_dimensions['C'].width = 15
+        ws2.cell(row=ri, column=4, value=c.get("commission_sales_executive", 0)).border = thin_border
+        ws2.cell(row=ri, column=5, value=c.get("commission_team_leader", 0)).border = thin_border
+        ws2.cell(row=ri, column=6, value=c.get("commission_sales_manager", 0)).border = thin_border
+    for col, w in zip(range(1, 7), [30, 15, 15, 20, 20, 20]):
+        ws2.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
     
     # Sheet 3: Add-ons & Prices (from course_catalog)
     ws_addons = wb.create_sheet("Add-ons & Prices")
@@ -9869,6 +9885,45 @@ async def import_historical_sales_xlsx(
         try:
             row = {k: (str(v).strip() if v is not None else None) for k, v in row.items()}
             
+            # Map new column names (handle both old and new formats)
+            # New: full_name, phone, course_enrolled, course_amount_(aed), add-ons, add-on_amount_(aed), agent_name, team_name, enrolled_amount_(aed), enrolled_at_(yyyy-mm-dd)
+            # Old: full_name, phone, course_enrolled, agent_name, team_name, enrollment_amount_(aed), enrolled_at_(yyyy-mm-dd)
+            
+            # Normalize enrollment amount key
+            enrollment_key = None
+            for k in row.keys():
+                if "enrolled_amount" in k or "enrollment_amount" in k:
+                    enrollment_key = k
+                    break
+            
+            # Normalize date key
+            date_key = None
+            for k in row.keys():
+                if "enrolled_at" in k:
+                    date_key = k
+                    break
+            
+            # Normalize add-ons key
+            addons_key = None
+            for k in row.keys():
+                if k in ["add-ons", "addons", "add_ons"]:
+                    addons_key = k
+                    break
+            
+            # Normalize add-on amount key
+            addon_amount_key = None
+            for k in row.keys():
+                if "add-on_amount" in k or "addon_amount" in k or "add_on_amount" in k:
+                    addon_amount_key = k
+                    break
+            
+            # Normalize course amount key
+            course_amount_key = None
+            for k in row.keys():
+                if "course_amount" in k:
+                    course_amount_key = k
+                    break
+            
             required = ["full_name", "phone", "course_enrolled", "agent_name", "team_name"]
             missing = [f for f in required if not row.get(f)]
             if missing:
@@ -9898,12 +9953,32 @@ async def import_historical_sales_xlsx(
                 results["errors"].append(f"Row {i+2}: Team '{row['team_name']}' not found")
                 continue
             
-            enrolled_at = row.get("enrolled_at") or now
+            enrolled_at = row.get(date_key) if date_key else now
+            if not enrolled_at or enrolled_at == "None":
+                enrolled_at = now
+            
             enrollment_amount = 0
             try:
-                enrollment_amount = float(row.get("enrollment_amount") or 0)
+                enrollment_amount = float(row.get(enrollment_key) or 0) if enrollment_key else 0
             except (ValueError, TypeError):
                 pass
+            
+            course_amount = 0
+            try:
+                course_amount = float(row.get(course_amount_key) or 0) if course_amount_key else 0
+            except (ValueError, TypeError):
+                pass
+            
+            addon_names = row.get(addons_key, "") if addons_key else ""
+            addon_amount = 0
+            try:
+                addon_amount = float(row.get(addon_amount_key) or 0) if addon_amount_key else 0
+            except (ValueError, TypeError):
+                pass
+            
+            # If enrolled amount not provided, calculate from course + addon
+            if enrollment_amount == 0 and (course_amount > 0 or addon_amount > 0):
+                enrollment_amount = course_amount + addon_amount
             
             # Weighted CS assignment
             cs_agent = cs_weighted[cs_index % len(cs_weighted)]
@@ -9925,6 +10000,9 @@ async def import_historical_sales_xlsx(
                 "course_of_interest": row["course_enrolled"],
                 "package_bought": row["course_enrolled"],
                 "enrollment_amount": enrollment_amount,
+                "course_value": course_amount,
+                "addons_value": addon_amount,
+                "addons_names": addon_names if addon_names and addon_names != "None" else None,
                 "stage": "enrolled",
                 "assigned_to": agent_user["id"],
                 "assigned_to_name": agent_user["full_name"],
@@ -9956,6 +10034,9 @@ async def import_historical_sales_xlsx(
                 "package_bought": row["course_enrolled"],
                 "current_course_name": row["course_enrolled"],
                 "enrollment_amount": enrollment_amount,
+                "course_value": course_amount,
+                "addons_value": addon_amount,
+                "addons_names": addon_names if addon_names and addon_names != "None" else None,
                 "stage": "activated",
                 "mentor_stage": "new_student",
                 "onboarding_complete": True,

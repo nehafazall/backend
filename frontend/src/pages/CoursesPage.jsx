@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -15,12 +14,12 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Eye, EyeOff, Check, Package, ShoppingCart, ArrowUpCircle, Search } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, Pencil, Package, ShoppingCart, ArrowUpCircle, Search } from 'lucide-react';
 
 const TYPE_OPTIONS = [
-    { id: 'course', label: 'Course', icon: Package, color: 'bg-blue-500' },
-    { id: 'addon', label: 'Add-on', icon: ShoppingCart, color: 'bg-purple-500' },
-    { id: 'upgrade', label: 'Upgrade', icon: ArrowUpCircle, color: 'bg-amber-500' },
+    { id: 'course', label: 'Course', color: 'bg-blue-500' },
+    { id: 'addon', label: 'Add-on', color: 'bg-purple-500' },
+    { id: 'upgrade', label: 'Upgrade', color: 'bg-amber-500' },
 ];
 
 const CoursesPage = () => {
@@ -33,7 +32,12 @@ const CoursesPage = () => {
     const [filterType, setFilterType] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [form, setForm] = useState({ name: '', price: '', type: 'course' });
+    const [form, setForm] = useState({
+        name: '', price: '', type: 'course',
+        commission_sales_executive: '',
+        commission_team_leader: '',
+        commission_sales_manager: '',
+    });
 
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin';
 
@@ -64,11 +68,7 @@ const CoursesPage = () => {
     const allSelected = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
     const toggleAll = () => {
-        if (allSelected) {
-            setSelectedIds([]);
-        } else {
-            setSelectedIds(filtered.map(i => i.id));
-        }
+        setSelectedIds(allSelected ? [] : filtered.map(i => i.id));
     };
 
     const toggleOne = (id) => {
@@ -77,8 +77,7 @@ const CoursesPage = () => {
 
     const handleBulkAction = async (action) => {
         if (selectedIds.length === 0) return;
-        const labels = { delete: 'Delete', activate: 'Activate', deactivate: 'Deactivate' };
-        if (action === 'delete' && !confirm(`${labels[action]} ${selectedIds.length} item(s)?`)) return;
+        if (action === 'delete' && !confirm(`Delete ${selectedIds.length} item(s)?`)) return;
         try {
             const res = await apiClient.post('/course-catalog/bulk-action', { ids: selectedIds, action });
             toast.success(res.data?.message || 'Done');
@@ -89,17 +88,28 @@ const CoursesPage = () => {
         }
     };
 
-    const resetForm = () => { setForm({ name: '', price: '', type: 'course' }); setEditItem(null); };
+    const resetForm = () => {
+        setForm({ name: '', price: '', type: 'course', commission_sales_executive: '', commission_team_leader: '', commission_sales_manager: '' });
+        setEditItem(null);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.name || !form.price) { toast.error('Name and price are required'); return; }
+        const payload = {
+            name: form.name,
+            price: parseFloat(form.price),
+            type: form.type,
+            commission_sales_executive: parseFloat(form.commission_sales_executive || 0),
+            commission_team_leader: parseFloat(form.commission_team_leader || 0),
+            commission_sales_manager: parseFloat(form.commission_sales_manager || 0),
+        };
         try {
             if (editItem) {
-                await apiClient.put(`/course-catalog/${editItem.id}`, { name: form.name, price: parseFloat(form.price), type: form.type });
+                await apiClient.put(`/course-catalog/${editItem.id}`, payload);
                 toast.success('Item updated');
             } else {
-                await apiClient.post('/course-catalog', { name: form.name, price: parseFloat(form.price), type: form.type });
+                await apiClient.post('/course-catalog', payload);
                 toast.success('Item added');
             }
             setShowModal(false);
@@ -112,11 +122,18 @@ const CoursesPage = () => {
 
     const openEdit = (item) => {
         setEditItem(item);
-        setForm({ name: item.name, price: String(item.price), type: item.type });
+        setForm({
+            name: item.name,
+            price: String(item.price),
+            type: item.type,
+            commission_sales_executive: String(item.commission_sales_executive || 0),
+            commission_team_leader: String(item.commission_team_leader || 0),
+            commission_sales_manager: String(item.commission_sales_manager || 0),
+        });
         setShowModal(true);
     };
 
-    const formatCurrency = (amt) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amt || 0);
+    const fmtAED = (amt) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amt || 0);
 
     const typeBadge = (type) => {
         const opt = TYPE_OPTIONS.find(o => o.id === type);
@@ -132,11 +149,10 @@ const CoursesPage = () => {
 
     return (
         <div className="space-y-6" data-testid="courses-page">
-            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Course Catalog</h1>
-                    <p className="text-muted-foreground">Manage courses, add-ons, and upgrade packages</p>
+                    <p className="text-muted-foreground">Manage courses, add-ons, upgrade packages & commissions</p>
                 </div>
                 {canEdit && (
                     <Button onClick={() => { resetForm(); setShowModal(true); }} data-testid="add-catalog-item-btn">
@@ -145,16 +161,11 @@ const CoursesPage = () => {
                 )}
             </div>
 
-            {/* Filters & Type Tabs */}
+            {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
                 {['all', 'course', 'addon', 'upgrade'].map(t => (
-                    <Button
-                        key={t}
-                        variant={filterType === t ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setFilterType(t)}
-                        data-testid={`filter-type-${t}`}
-                    >
+                    <Button key={t} variant={filterType === t ? 'default' : 'outline'} size="sm"
+                        onClick={() => setFilterType(t)} data-testid={`filter-type-${t}`}>
                         {t === 'all' ? 'All' : TYPE_OPTIONS.find(o => o.id === t)?.label}
                         <span className="ml-1.5 text-xs opacity-70">({counts[t] || 0})</span>
                     </Button>
@@ -162,13 +173,8 @@ const CoursesPage = () => {
                 <div className="flex-1" />
                 <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8 w-48"
-                        data-testid="catalog-search"
-                    />
+                    <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8 w-48" data-testid="catalog-search" />
                 </div>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger className="w-32" data-testid="filter-status">
@@ -182,9 +188,9 @@ const CoursesPage = () => {
                 </Select>
             </div>
 
-            {/* Bulk Actions Bar */}
+            {/* Bulk Actions */}
             {selectedIds.length > 0 && canEdit && (
-                <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg animate-in fade-in" data-testid="bulk-actions-bar">
+                <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg" data-testid="bulk-actions-bar">
                     <span className="text-sm font-medium">{selectedIds.length} selected</span>
                     <div className="flex-1" />
                     <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')} data-testid="bulk-activate-btn">
@@ -211,44 +217,45 @@ const CoursesPage = () => {
                         <TableHeader>
                             <TableRow className="bg-muted/50">
                                 {canEdit && (
-                                    <TableHead className="w-12">
-                                        <input
-                                            type="checkbox"
-                                            checked={allSelected}
-                                            onChange={toggleAll}
-                                            className="rounded border-gray-400 h-4 w-4"
-                                            data-testid="select-all-checkbox"
-                                        />
+                                    <TableHead className="w-10">
+                                        <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                                            className="rounded border-gray-400 h-4 w-4" data-testid="select-all-checkbox" />
                                     </TableHead>
                                 )}
                                 <TableHead>Name</TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead className="text-right">Price (AED)</TableHead>
+                                <TableHead className="text-right">Price</TableHead>
+                                <TableHead className="text-right">SE Comm.</TableHead>
+                                <TableHead className="text-right">TL Comm.</TableHead>
+                                <TableHead className="text-right">SM Comm.</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
-                                {canEdit && <TableHead className="text-center w-24">Actions</TableHead>}
+                                {canEdit && <TableHead className="text-center w-16">Edit</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filtered.map((item) => (
-                                <TableRow
-                                    key={item.id}
+                                <TableRow key={item.id}
                                     className={`${selectedIds.includes(item.id) ? 'bg-primary/5' : ''} ${!item.is_active ? 'opacity-60' : ''}`}
-                                    data-testid={`catalog-row-${item.id}`}
-                                >
+                                    data-testid={`catalog-row-${item.id}`}>
                                     {canEdit && (
                                         <TableCell>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIds.includes(item.id)}
+                                            <input type="checkbox" checked={selectedIds.includes(item.id)}
                                                 onChange={() => toggleOne(item.id)}
-                                                className="rounded border-gray-400 h-4 w-4"
-                                                data-testid={`select-item-${item.id}`}
-                                            />
+                                                className="rounded border-gray-400 h-4 w-4" />
                                         </TableCell>
                                     )}
                                     <TableCell className="font-medium">{item.name}</TableCell>
                                     <TableCell>{typeBadge(item.type)}</TableCell>
-                                    <TableCell className="text-right font-semibold">{formatCurrency(item.price)}</TableCell>
+                                    <TableCell className="text-right font-semibold">{fmtAED(item.price)}</TableCell>
+                                    <TableCell className="text-right text-sm">
+                                        {item.commission_sales_executive ? fmtAED(item.commission_sales_executive) : <span className="text-muted-foreground">-</span>}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm">
+                                        {item.commission_team_leader ? fmtAED(item.commission_team_leader) : <span className="text-muted-foreground">-</span>}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm">
+                                        {item.commission_sales_manager ? fmtAED(item.commission_sales_manager) : <span className="text-muted-foreground">-</span>}
+                                    </TableCell>
                                     <TableCell className="text-center">
                                         <Badge className={item.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}>
                                             {item.is_active ? 'Active' : 'Inactive'}
@@ -256,8 +263,9 @@ const CoursesPage = () => {
                                     </TableCell>
                                     {canEdit && (
                                         <TableCell className="text-center">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)} data-testid={`edit-item-${item.id}`}>
-                                                <Check className="h-3.5 w-3.5" />
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}
+                                                data-testid={`edit-item-${item.id}`}>
+                                                <Pencil className="h-3.5 w-3.5" />
                                             </Button>
                                         </TableCell>
                                     )}
@@ -265,7 +273,7 @@ const CoursesPage = () => {
                             ))}
                             {filtered.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={canEdit ? 6 : 4} className="text-center py-12 text-muted-foreground">
+                                    <TableCell colSpan={canEdit ? 9 : 7} className="text-center py-12 text-muted-foreground">
                                         No items found
                                     </TableCell>
                                 </TableRow>
@@ -277,38 +285,27 @@ const CoursesPage = () => {
 
             {/* Add/Edit Modal */}
             <Dialog open={showModal} onOpenChange={(o) => { if (!o) { setShowModal(false); resetForm(); } }}>
-                <DialogContent>
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>{editItem ? 'Edit Item' : 'Add Catalog Item'}</DialogTitle>
-                        <DialogDescription>Course, add-on, or upgrade package</DialogDescription>
+                        <DialogDescription>Course, add-on, or upgrade package with commission</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
                             <Label>Name *</Label>
-                            <Input
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="e.g. Advance Course"
-                                data-testid="catalog-item-name"
-                            />
+                            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                placeholder="e.g. Advance Course" data-testid="catalog-item-name" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Price (AED) *</Label>
-                                <Input
-                                    type="number"
-                                    value={form.price}
-                                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                    placeholder="5000"
-                                    data-testid="catalog-item-price"
-                                />
+                                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+                                    placeholder="5000" data-testid="catalog-item-price" />
                             </div>
                             <div className="space-y-2">
                                 <Label>Type *</Label>
                                 <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                                    <SelectTrigger data-testid="catalog-item-type">
-                                        <SelectValue />
-                                    </SelectTrigger>
+                                    <SelectTrigger data-testid="catalog-item-type"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {TYPE_OPTIONS.map((t) => (
                                             <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
@@ -317,6 +314,32 @@ const CoursesPage = () => {
                                 </Select>
                             </div>
                         </div>
+
+                        {/* Commission Fields */}
+                        <div className="pt-2 border-t">
+                            <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Commission (AED per sale)</Label>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Sales Executive</Label>
+                                    <Input type="number" value={form.commission_sales_executive}
+                                        onChange={(e) => setForm({ ...form, commission_sales_executive: e.target.value })}
+                                        placeholder="0" data-testid="commission-se" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Team Leader</Label>
+                                    <Input type="number" value={form.commission_team_leader}
+                                        onChange={(e) => setForm({ ...form, commission_team_leader: e.target.value })}
+                                        placeholder="0" data-testid="commission-tl" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">Sales Manager</Label>
+                                    <Input type="number" value={form.commission_sales_manager}
+                                        onChange={(e) => setForm({ ...form, commission_sales_manager: e.target.value })}
+                                        placeholder="0" data-testid="commission-sm" />
+                                </div>
+                            </div>
+                        </div>
+
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>Cancel</Button>
                             <Button type="submit" data-testid="catalog-item-submit">{editItem ? 'Update' : 'Add'}</Button>
