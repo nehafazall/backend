@@ -3502,6 +3502,24 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
             
             await db.students.insert_one(student_data)
             
+            # Create LTV transaction for today-transactions tracking
+            course_name = update_data.get("course_name") or update_data.get("interested_course_name") or existing.get("interested_course_name") or "N/A"
+            ltv_record = {
+                "id": str(uuid.uuid4()),
+                "student_id": student_data["id"],
+                "student_name": existing["full_name"],
+                "type": "enrollment",
+                "amount": sale_amount,
+                "description": f"New Enrollment: {course_name}",
+                "course_name": course_name,
+                "agent_name": existing.get("assigned_to_name"),
+                "agent_id": existing.get("assigned_to"),
+                "date": now.strftime("%Y-%m-%d"),
+                "created_by": user["id"],
+                "created_at": now.isoformat(),
+            }
+            await db.ltv_transactions.insert_one(ltv_record)
+            
             # Create/update customer master record
             await create_or_update_customer(existing, student_data)
             
@@ -6303,7 +6321,7 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         stats["enrolled_today"] = await db.leads.count_documents({
             **lead_query,
             "stage": "enrolled",
-            "updated_at": {"$gte": today_start.isoformat()}
+            "enrolled_at": {"$gte": today_start.isoformat()}
         })
         stats["enrolled_total"] = await db.leads.count_documents({**lead_query, "stage": "enrolled"})
         
@@ -6768,22 +6786,20 @@ async def get_sales_by_course(view_as: Optional[str] = None, user = Depends(get_
     
     pipeline = [
         {"$match": query},
+        {"$addFields": {
+            "_course_display": {"$ifNull": ["$course_name", {"$ifNull": ["$interested_course_name", {"$ifNull": ["$course_of_interest", "Not Specified"]}]}]}
+        }},
         {"$group": {
-            "_id": "$course_id",
+            "_id": "$_course_display",
             "count": {"$sum": 1},
             "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}
-        }}
+        }},
+        {"$sort": {"revenue": -1}}
     ]
     
     result = await db.leads.aggregate(pipeline).to_list(100)
-    
-    # Add course names
     for item in result:
-        if item["_id"]:
-            course = await db.courses.find_one({"id": item["_id"]})
-            item["course_name"] = course.get("name") if course else "Unknown"
-        else:
-            item["course_name"] = "Not Specified"
+        item["course_name"] = item["_id"] or "Not Specified"
     
     return result
 
@@ -7816,20 +7832,55 @@ async def get_activity_summary(
 
 
 @api_router.get("/dashboard/today-transactions")
-async def get_today_transactions(user = Depends(get_current_user)):
-    """Get all transactions that happened today"""
+async def get_today_transactions(view_mode: str = "personal", user = Depends(get_current_user)):
+    """Get all transactions (enrollments + upgrades) that happened today"""
     today = datetime.now(timezone.utc).isoformat()[:10]
     
-    transactions = await db.ltv_transactions.find(
+    # 1. LTV transactions (upgrades, deposits)
+    ltv_txns = await db.ltv_transactions.find(
         {"date": today}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     
-    total = sum(t.get("amount", 0) for t in transactions)
+    # 2. Today's enrollments from leads (based on enrolled_at)
+    enroll_query = {"stage": "enrolled", "enrolled_at": {"$gte": today}}
+    if view_mode == "personal" and user["role"] == "sales_executive":
+        enroll_query["assigned_to"] = user["id"]
+    elif view_mode == "personal" and user["role"] == "team_leader":
+        team = await db.users.find({"team_leader_id": user["id"]}, {"_id": 0, "id": 1}).to_list(100)
+        team_ids = [t["id"] for t in team] + [user["id"]]
+        enroll_query["assigned_to"] = {"$in": team_ids}
+    
+    enrolled_today = await db.leads.find(
+        enroll_query,
+        {"_id": 0, "id": 1, "full_name": 1, "enrollment_amount": 1, "sale_amount": 1, 
+         "enrolled_at": 1, "assigned_to_name": 1, "course_name": 1, "interested_course_name": 1}
+    ).sort("enrolled_at", -1).to_list(100)
+    
+    # Convert enrollments to transaction format (avoid duplicates with ltv_transactions)
+    ltv_lead_ids = {t.get("lead_id") for t in ltv_txns if t.get("lead_id")}
+    enrollment_txns = []
+    for e in enrolled_today:
+        if e["id"] not in ltv_lead_ids:
+            enrollment_txns.append({
+                "id": e["id"],
+                "student_name": e["full_name"],
+                "type": "enrollment",
+                "amount": e.get("enrollment_amount") or e.get("sale_amount", 0),
+                "description": f"New Enrollment: {e.get('course_name') or e.get('interested_course_name') or 'N/A'}",
+                "course_name": e.get("course_name") or e.get("interested_course_name"),
+                "agent_name": e.get("assigned_to_name"),
+                "date": today,
+                "created_at": e.get("enrolled_at"),
+            })
+    
+    all_transactions = sorted(ltv_txns + enrollment_txns, key=lambda x: x.get("created_at", ""), reverse=True)
+    total = sum(t.get("amount", 0) for t in all_transactions)
+    
     return {
         "date": today,
-        "count": len(transactions),
+        "count": len(all_transactions),
         "total_amount": total,
-        "transactions": transactions
+        "transactions": all_transactions
     }
 
 
