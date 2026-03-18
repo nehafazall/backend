@@ -1,0 +1,102 @@
+{
+  "summary": "CLT Synapse ERP Historical Import Two-Step Flow Testing Complete. All features verified: (1) POST /api/import/historical-sales-xlsx/preview validates rows, returns preview_id and row-by-row status, (2) Preview correctly identifies missing fields, unknown agents/teams, duplicate phones, (3) Phone numbers cleaned (no .0 suffix), (4) Duplicate phones within file detected, (5) POST /api/import/historical-sales-xlsx/confirm/{preview_id} imports only valid rows, (6) Confirm with invalid/expired preview returns 404, (7) Confirm with already-confirmed preview returns 400, (8) Frontend shows complete two-step flow with preview table and action buttons.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: POST /api/import/historical-sales-xlsx/preview returns preview_id and row-by-row status",
+    "Backend: Preview catches missing required fields (Full Name, Phone, Course, Agent, Team)",
+    "Backend: Preview catches unknown agent with error message 'Agent not found in system'",
+    "Backend: Preview catches unknown team with error message 'Team not found in system'",
+    "Backend: Preview detects duplicate phones within the same uploaded file",
+    "Backend: Phone numbers stored as floats (e.g., 971500000001.0) are cleaned to string without .0 suffix",
+    "Backend: Preview handles partial data (some fields empty) without crashing",
+    "Backend: Preview response has correct structure for frontend display (preview_id, total_rows, valid, errors, duplicates, rows[])",
+    "Backend: POST /api/import/historical-sales-xlsx/confirm/{preview_id} imports valid rows only",
+    "Backend: Confirm returns 404 for invalid/expired preview_id with message 'Preview not found or expired'",
+    "Backend: Confirm returns 400 for already-confirmed preview with message 'already been confirmed'",
+    "Backend: Confirm response includes success count, students_created, cs_assignments, mentor_assignments",
+    "Frontend: Historical Import page loads at /sales/historical-import",
+    "Frontend: Page title 'Import Historical Sales Data' displayed",
+    "Frontend: Subtitle mentions 'preview before pushing to database'",
+    "Frontend: Step 1 'Download Template' visible with download button",
+    "Frontend: Step 2 'Upload & Preview' visible with file upload area",
+    "Frontend: 'Upload & Preview' button (not direct import) displayed",
+    "Frontend: After preview - Step 3 'Review Data' section appears",
+    "Frontend: Summary stats show Total Rows, Ready to Import, Errors, Duplicates",
+    "Frontend: Preview table shows Row, Status, Name, Phone, Course, Add-ons, Agent, Team, Amount, Issues columns",
+    "Frontend: Valid rows show green 'Valid' badge",
+    "Frontend: Error rows show red 'Error' badge with specific error messages",
+    "Frontend: 'Confirm Import (N valid rows)' button shows correct count",
+    "Frontend: 'Re-upload File' button visible and works (clears preview, returns to upload step)",
+    "Frontend: CS Assignment info displayed (Falja, Della, Karthika, Nasida: 2 each | Angel: 1)",
+    "Frontend: Mentor Assignment info displayed (Edwin, Mathson, Ashwin, Nihal, Sriram)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_historical_import_preview_confirm.py",
+    "/app/test_reports/pytest/pytest_historical_import_preview_confirm.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend: clean_val function (line 9852-9862) properly handles NaN, None, and float phone numbers",
+    "Backend: Preview stores validated rows in import_previews MongoDB collection with 1-hour TTL index",
+    "Backend: Duplicate phone detection works both for DB duplicates and within-file duplicates",
+    "Backend: Agent/Team resolution uses case-insensitive regex matching",
+    "Frontend: HistoricalImportPage.jsx implements clean 3-step flow (Download -> Upload/Preview -> Review/Confirm)",
+    "Frontend: All interactive elements have data-testid attributes for testing"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_historical_import_preview_confirm.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (All UI features verified via Playwright)"
+  },
+
+  "test_credentials": {
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "Test data created during testing with 'TEST' prefix for cleanup. Test leads/students with phones starting with 97150 were created and cleaned up.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Historical Import two-step flow (preview -> confirm) fully tested. Key features: (1) POST /api/import/historical-sales-xlsx/preview validates file, stores in import_previews collection with 1-hour TTL, returns preview_id and row-by-row validation status; (2) POST /api/import/historical-sales-xlsx/confirm/{preview_id} imports only valid rows to leads and students collections; (3) Known valid agent: 'Kiran VR' in team 'TEAM XLNC'; (4) Frontend at /sales/historical-import shows complete flow with preview table, error messages, and action buttons.",
+
+  "feature_verification_details": {
+    "preview_endpoint": {
+      "path": "POST /api/import/historical-sales-xlsx/preview",
+      "returns": ["preview_id", "total_rows", "valid", "errors", "duplicates", "rows[]"],
+      "row_structure": ["row_num", "data", "status", "errors", "resolved"],
+      "status_values": ["valid", "error", "duplicate"],
+      "error_messages": ["Missing Full Name", "Missing Phone", "Missing Course Enrolled", "Missing Agent Name", "Missing Team Name", "Agent 'X' not found in system", "Team 'X' not found in system", "Phone X already exists in database", "Duplicate phone X within file"]
+    },
+    "confirm_endpoint": {
+      "path": "POST /api/import/historical-sales-xlsx/confirm/{preview_id}",
+      "returns": ["success", "failed", "total_rows", "students_created", "cs_assignments", "mentor_assignments", "errors[]"],
+      "error_responses": {
+        "404": "Preview not found or expired. Please re-upload the file.",
+        "400": "This import has already been confirmed."
+      }
+    },
+    "frontend_elements": {
+      "testids": ["historical-import-page", "download-template-btn", "file-upload-area", "preview-btn", "preview-results", "confirm-import-btn", "reset-btn", "preview-row-{N}"],
+      "buttons": ["Download Excel Template", "Upload & Preview", "Confirm Import (N valid rows)", "Re-upload File"]
+    }
+  }
+}

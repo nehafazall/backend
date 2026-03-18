@@ -9826,6 +9826,361 @@ async def import_historical_leads(data: List[Dict], user = Depends(require_roles
     
     return results
 
+@api_router.post("/import/historical-sales-xlsx/preview")
+async def preview_historical_sales_xlsx(
+    file: UploadFile = File(...),
+    user = Depends(require_roles(["super_admin"]))
+):
+    """
+    Step 1: Parse and validate Excel file. Returns preview with row-by-row status.
+    No data is written to the database. Stores validated rows for confirmation.
+    """
+    import pandas as pd
+    import io
+    
+    contents = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
+    
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    # Replace NaN with None properly
+    df = df.where(df.notnull(), None)
+    rows = df.to_dict(orient="records")
+    
+    def clean_val(v):
+        """Clean a cell value: handle NaN, None, strip strings, fix float phone numbers."""
+        if v is None:
+            return None
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''):
+            return None
+        # Fix phone numbers stored as floats (e.g., 971500000001.0 -> 971500000001)
+        if s.endswith('.0') and s.replace('.0', '').replace('+', '').isdigit():
+            s = s[:-2]
+        return s
+    
+    preview_rows = []
+    valid_count = 0
+    error_count = 0
+    skip_count = 0
+    
+    for i, row in enumerate(rows):
+        row = {k: clean_val(v) for k, v in row.items()}
+        row_result = {
+            "row_num": i + 2,
+            "data": {},
+            "status": "valid",
+            "errors": [],
+            "resolved": {}
+        }
+        
+        # Normalize column keys
+        enrollment_key = next((k for k in row.keys() if "enrolled_amount" in k or "enrollment_amount" in k), None)
+        date_key = next((k for k in row.keys() if "enrolled_at" in k), None)
+        addons_key = next((k for k in row.keys() if k in ["add-ons", "addons", "add_ons"]), None)
+        addon_amount_key = next((k for k in row.keys() if "add-on_amount" in k or "addon_amount" in k or "add_on_amount" in k), None)
+        course_amount_key = next((k for k in row.keys() if "course_amount" in k), None)
+        
+        full_name = row.get("full_name") or row.get("full_name_*") or ""
+        phone = row.get("phone") or row.get("phone_*") or ""
+        course_enrolled = row.get("course_enrolled") or row.get("course_enrolled_*") or ""
+        agent_name = row.get("agent_name") or row.get("agent_name_*") or ""
+        team_name = row.get("team_name") or row.get("team_name_*") or ""
+        
+        row_result["data"] = {
+            "full_name": full_name,
+            "phone": phone,
+            "course_enrolled": course_enrolled,
+            "agent_name": agent_name,
+            "team_name": team_name,
+            "email": row.get("email"),
+            "country": row.get("country"),
+            "city": row.get("city"),
+            "source": row.get("source"),
+            "course_amount": row.get(course_amount_key) if course_amount_key else None,
+            "addons": row.get(addons_key) if addons_key else None,
+            "addon_amount": row.get(addon_amount_key) if addon_amount_key else None,
+            "enrolled_amount": row.get(enrollment_key) if enrollment_key else None,
+            "enrolled_at": row.get(date_key) if date_key else None,
+        }
+        
+        # Validate required fields
+        if not full_name:
+            row_result["errors"].append("Missing Full Name")
+        if not phone:
+            row_result["errors"].append("Missing Phone")
+        if not course_enrolled:
+            row_result["errors"].append("Missing Course Enrolled")
+        if not agent_name:
+            row_result["errors"].append("Missing Agent Name")
+        if not team_name:
+            row_result["errors"].append("Missing Team Name")
+        
+        # Check duplicate phone in DB
+        if phone:
+            existing = await db.leads.find_one({"phone": phone})
+            if existing:
+                row_result["errors"].append(f"Phone {phone} already exists in database")
+                row_result["status"] = "duplicate"
+        
+        # Resolve agent
+        if agent_name:
+            agent_user = await db.users.find_one({"full_name": {"$regex": f"^{agent_name.strip()}$", "$options": "i"}})
+            if agent_user:
+                row_result["resolved"]["agent_id"] = agent_user["id"]
+                row_result["resolved"]["agent_name"] = agent_user["full_name"]
+            else:
+                row_result["errors"].append(f"Agent '{agent_name}' not found in system")
+        
+        # Resolve team
+        if team_name:
+            team = await db.teams.find_one({"name": {"$regex": f"^\\s*{team_name.strip()}\\s*$", "$options": "i"}})
+            if team:
+                row_result["resolved"]["team_id"] = team["id"]
+                row_result["resolved"]["team_name"] = team["name"]
+            else:
+                row_result["errors"].append(f"Team '{team_name}' not found in system")
+        
+        if row_result["errors"]:
+            if row_result["status"] != "duplicate":
+                row_result["status"] = "error"
+                error_count += 1
+            else:
+                skip_count += 1
+        else:
+            valid_count += 1
+        
+        preview_rows.append(row_result)
+    
+    # Check for duplicate phones within the file itself
+    phones_in_file = {}
+    for pr in preview_rows:
+        ph = pr["data"].get("phone")
+        if ph and ph != "None":
+            if ph in phones_in_file:
+                pr["errors"].append(f"Duplicate phone {ph} within file (same as row {phones_in_file[ph]})")
+                if pr["status"] == "valid":
+                    pr["status"] = "error"
+                    valid_count -= 1
+                    error_count += 1
+            else:
+                phones_in_file[ph] = pr["row_num"]
+    
+    # Store preview for confirmation
+    preview_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    await db.import_previews.insert_one({
+        "id": preview_id,
+        "rows": preview_rows,
+        "created_at": now,
+        "created_by": user["id"],
+        "status": "pending",
+    })
+    # TTL: auto-delete after 1 hour
+    await db.import_previews.create_index("created_at", expireAfterSeconds=3600)
+    
+    return {
+        "preview_id": preview_id,
+        "total_rows": len(rows),
+        "valid": valid_count,
+        "errors": error_count,
+        "duplicates": skip_count,
+        "rows": preview_rows,
+    }
+
+
+@api_router.post("/import/historical-sales-xlsx/confirm/{preview_id}")
+async def confirm_historical_sales_xlsx(
+    preview_id: str,
+    user = Depends(require_roles(["super_admin"]))
+):
+    """
+    Step 2: Confirm and push only valid rows from a previous preview to the database.
+    """
+    preview = await db.import_previews.find_one({"id": preview_id})
+    if not preview:
+        raise HTTPException(status_code=404, detail="Preview not found or expired. Please re-upload the file.")
+    if preview.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="This import has already been confirmed.")
+    
+    valid_rows = [r for r in preview["rows"] if r["status"] == "valid"]
+    if not valid_rows:
+        raise HTTPException(status_code=400, detail="No valid rows to import.")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0, "total_rows": len(valid_rows), "cs_assignments": {}, "mentor_assignments": {}}
+    
+    # CS Agents weighted pool (2:2:2:2:1)
+    cs_pool_config = [
+        {"id": "d101229f-2ff5-48c0-b8eb-03eb890fb540", "name": "Falja Nizar", "weight": 2},
+        {"id": "a207c613-0b83-4347-aa17-598a2738879b", "name": "Della Mariyam Shaji", "weight": 2},
+        {"id": "6c8f437b-4b30-4004-8c87-7e397a03136d", "name": "Karthika P. K", "weight": 2},
+        {"id": "d2bed4f5-3f9b-4e7b-a245-5073a189fdf3", "name": "Nasida VN", "weight": 2},
+        {"id": "d4c2f102-4474-44c4-b223-ff0a1f279b26", "name": "Angel Mary", "weight": 1},
+    ]
+    cs_weighted = []
+    for agent in cs_pool_config:
+        cs_weighted.extend([agent] * agent["weight"])
+    cs_index = 0
+    
+    # Mentor equal round-robin pool
+    mentor_pool = [
+        {"id": "31ba3269-0de2-4b8a-b207-7913879c38f4", "name": "Edwin Joy"},
+        {"id": "21ab0994-2a92-4ab0-b5a7-8f7494a5fb50", "name": "Mathson Mathew"},
+        {"id": "0e8a261c-f547-4dca-949f-a105942b4578", "name": "Ashwin Sudarsh"},
+        {"id": "aafb51ec-1fb4-422a-b379-4fb9b989654f", "name": "Nihal Azhikodan"},
+        {"id": "63cb17e1-cd4d-4cfe-8c7f-e98cb342adca", "name": "Sriram Srikumar"},
+    ]
+    mentor_index = 0
+    
+    for a in cs_pool_config:
+        results["cs_assignments"][a["name"]] = 0
+    for m in mentor_pool:
+        results["mentor_assignments"][m["name"]] = 0
+    
+    for vr in valid_rows:
+        try:
+            data = vr["data"]
+            resolved = vr["resolved"]
+            
+            enrollment_amount = 0
+            try:
+                enrollment_amount = float(data.get("enrolled_amount") or 0)
+            except (ValueError, TypeError):
+                pass
+            
+            course_amount = 0
+            try:
+                course_amount = float(data.get("course_amount") or 0)
+            except (ValueError, TypeError):
+                pass
+            
+            addon_amount = 0
+            try:
+                addon_amount = float(data.get("addon_amount") or 0)
+            except (ValueError, TypeError):
+                pass
+            
+            addon_names = data.get("addons") or ""
+            enrolled_at = data.get("enrolled_at") or now
+            if not enrolled_at or enrolled_at == "None":
+                enrolled_at = now
+            
+            if enrollment_amount == 0 and (course_amount > 0 or addon_amount > 0):
+                enrollment_amount = course_amount + addon_amount
+            
+            # Round-robin CS assignment
+            cs_agent = cs_weighted[cs_index % len(cs_weighted)]
+            cs_index += 1
+            
+            # Round-robin Mentor assignment
+            mentor = mentor_pool[mentor_index % len(mentor_pool)]
+            mentor_index += 1
+            
+            lead_id = str(uuid.uuid4())
+            lead_record = {
+                "id": lead_id,
+                "full_name": data["full_name"],
+                "phone": data["phone"],
+                "email": data.get("email"),
+                "country": data.get("country"),
+                "city": data.get("city"),
+                "course_of_interest": data["course_enrolled"],
+                "package_bought": data["course_enrolled"],
+                "enrollment_amount": enrollment_amount,
+                "course_value": course_amount,
+                "addons_value": addon_amount,
+                "addons_names": addon_names if addon_names and addon_names != "None" else None,
+                "stage": "enrolled",
+                "assigned_to": resolved["agent_id"],
+                "assigned_to_name": resolved["agent_name"],
+                "assigned_at": enrolled_at,
+                "first_contact_at": enrolled_at,
+                "enrolled_at": enrolled_at,
+                "team_id": resolved["team_id"],
+                "team_name": resolved["team_name"],
+                "source": data.get("source") or "Historical Import",
+                "is_historical": True,
+                "sla_status": "ok",
+                "created_at": now,
+                "updated_at": now,
+                "created_by": user["id"],
+                "created_by_name": user["full_name"]
+            }
+            await db.leads.insert_one(lead_record)
+            
+            student_id = str(uuid.uuid4())
+            student_record = {
+                "id": student_id,
+                "lead_id": lead_id,
+                "full_name": data["full_name"],
+                "phone": data["phone"],
+                "email": data.get("email"),
+                "country": data.get("country"),
+                "city": data.get("city"),
+                "package_bought": data["course_enrolled"],
+                "current_course_name": data["course_enrolled"],
+                "enrollment_amount": enrollment_amount,
+                "course_value": course_amount,
+                "addons_value": addon_amount,
+                "addons_names": addon_names if addon_names and addon_names != "None" else None,
+                "stage": "activated",
+                "mentor_stage": "new_student",
+                "onboarding_complete": True,
+                "cs_agent_id": cs_agent["id"],
+                "cs_agent_name": cs_agent["name"],
+                "mentor_id": mentor["id"],
+                "mentor_name": mentor["name"],
+                "sales_agent_id": resolved["agent_id"],
+                "sales_agent_name": resolved["agent_name"],
+                "team_id": resolved["team_id"],
+                "team_name": resolved["team_name"],
+                "is_historical": True,
+                "sla_status": "ok",
+                "enrolled_at": enrolled_at,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.students.insert_one(student_record)
+            
+            # CS assignment record
+            await db.cs_assignments.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student_id,
+                "cs_agent_id": cs_agent["id"],
+                "cs_agent_name": cs_agent["name"],
+                "assigned_at": now,
+                "status": "active",
+                "created_at": now
+            })
+            
+            # Mentor assignment record
+            await db.mentor_assignments.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student_id,
+                "mentor_id": mentor["id"],
+                "mentor_name": mentor["name"],
+                "assigned_at": now,
+                "status": "active",
+                "created_at": now
+            })
+            
+            results["students_created"] += 1
+            results["cs_assignments"][cs_agent["name"]] += 1
+            results["mentor_assignments"][mentor["name"]] += 1
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {vr['row_num']}: {str(e)}")
+    
+    # Mark preview as confirmed
+    await db.import_previews.update_one({"id": preview_id}, {"$set": {"status": "confirmed"}})
+    
+    return results
+
+
 @api_router.post("/import/historical-sales-xlsx")
 async def import_historical_sales_xlsx(
     file: UploadFile = File(...),
