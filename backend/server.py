@@ -6059,6 +6059,182 @@ async def get_viewable_users(user = Depends(get_current_user)):
     }
 
 
+@api_router.get("/dashboard/overall")
+async def get_overall_dashboard(user = Depends(require_roles(["super_admin", "admin"]))):
+    """Comprehensive overall dashboard with revenue, HR, treasury, top performers."""
+    import asyncio
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    last_month_end = (now.replace(day=1) - timedelta(days=1))
+    last_month_start = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    last_month_end_str = last_month_end.replace(hour=23, minute=59, second=59).isoformat()
+
+    async def agg_first(coll, pipeline):
+        r = await coll.aggregate(pipeline).to_list(1)
+        return r[0] if r else {}
+
+    # Build month ranges for trend
+    month_ranges = []
+    for i in range(5, -1, -1):
+        month_date = now - timedelta(days=i*30)
+        m_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if m_start.month == 12:
+            m_end = m_start.replace(year=m_start.year+1, month=1) - timedelta(seconds=1)
+        else:
+            m_end = m_start.replace(month=m_start.month+1) - timedelta(seconds=1)
+        month_ranges.append((m_start.strftime("%b %Y"), m_start.isoformat(), m_end.isoformat()))
+
+    def rev_pipeline(match):
+        return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "count": {"$sum": 1}}}]
+    def cs_pipeline(match):
+        return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}}]
+    def mentor_pipeline(match):
+        return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]
+
+    # ---- PARALLEL BATCH 1: Revenue (this/last month), Top Performers, Treasury, HR, Docs ----
+    results = await asyncio.gather(
+        # Revenue this month (0-2)
+        agg_first(db.leads, rev_pipeline({"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}})),
+        agg_first(db.cs_upgrades, cs_pipeline({"created_at": {"$gte": this_month_start}})),
+        agg_first(db.mentor_redeposits, mentor_pipeline({"created_at": {"$gte": this_month_start}})),
+        # Revenue last month (3-5)
+        agg_first(db.leads, rev_pipeline({"stage": "enrolled", "enrolled_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
+        agg_first(db.cs_upgrades, cs_pipeline({"created_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
+        agg_first(db.mentor_redeposits, mentor_pipeline({"created_at": {"$gte": last_month_start, "$lte": last_month_end_str}})),
+        # All-time revenue (6-8)
+        agg_first(db.leads, [{"$match": {"stage": "enrolled"}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}]),
+        agg_first(db.cs_upgrades, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}]),
+        agg_first(db.mentor_redeposits, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
+        # Top 5 Sales (9)
+        db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": this_month_start}, "assigned_to": {"$ne": None}}},
+            {"$group": {"_id": "$assigned_to", "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "deals": {"$sum": 1}}},
+            {"$sort": {"revenue": -1}}, {"$limit": 5}
+        ]).to_list(5),
+        # Top 3 CS (10)
+        db.cs_upgrades.aggregate([
+            {"$match": {"created_at": {"$gte": this_month_start}, "agent_id": {"$ne": None}}},
+            {"$group": {"_id": "$agent_id", "revenue": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "upgrades": {"$sum": 1}}},
+            {"$sort": {"revenue": -1}}, {"$limit": 3}
+        ]).to_list(3),
+        # Top 3 Mentors (11)
+        db.mentor_redeposits.aggregate([
+            {"$match": {"created_at": {"$gte": this_month_start}, "mentor_id": {"$ne": None}}},
+            {"$group": {"_id": "$mentor_id", "revenue": {"$sum": {"$ifNull": ["$amount", 0]}}, "deposits": {"$sum": 1}}},
+            {"$sort": {"revenue": -1}}, {"$limit": 3}
+        ]).to_list(3),
+        # Treasury: total receivables (12)
+        agg_first(db.finance_clt_receivables, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
+        # Pending settlements (13)
+        db.finance_verifications.find({"status": "pending_verification"}, {"_id": 0, "sale_amount": 1}).to_list(5000),
+        # Expenses this month (14)
+        agg_first(db.expenses, [{"$match": {"date": {"$gte": now.replace(day=1).strftime("%Y-%m-%d")}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]),
+        # Payables (15)
+        agg_first(db.finance_clt_payables, [{"$match": {"status": {"$ne": "paid"}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
+        # HR employees (16)
+        db.hr_employees.find({"employment_status": {"$in": ["active", "probation"]}}, {"_id": 0, "gender": 1, "full_name": 1, "employee_id": 1, "passport": 1, "visa": 1, "emirates_id": 1, "labour_card": 1, "health_insurance": 1}).to_list(500),
+        # Attendance today (17)
+        db.hr_attendance.find({"date": today_str}, {"_id": 0, "status": 1}).to_list(500),
+        # Pending finance count (18)
+        db.finance_verifications.count_documents({"status": "pending_verification"}),
+        # SLA breaches (19)
+        db.leads.count_documents({"sla_breach": True, "stage": {"$nin": ["enrolled", "rejected", "not_interested"]}}),
+        # Recent enrollments (20)
+        db.leads.find({"stage": "enrolled"}, {"_id": 0, "full_name": 1, "sale_amount": 1, "enrollment_amount": 1, "enrolled_at": 1, "assigned_to_name": 1, "interested_course_name": 1, "course_name": 1}).sort("enrolled_at", -1).to_list(5),
+    )
+
+    sales_tm, cs_tm, mentor_tm = results[0], results[1], results[2]
+    sales_lm, cs_lm, mentor_lm = results[3], results[4], results[5]
+    all_time_s, all_time_c, all_time_m = results[6], results[7], results[8]
+    top_sales, top_cs, top_mentors = results[9], results[10], results[11]
+    total_recv, pending_vf, exp_result, payables_r = results[12], results[13], results[14], results[15]
+    employees, attendance_list = results[16], results[17]
+    pending_finance_count, sla_breaches, recent_enrollments = results[18], results[19], results[20]
+
+    # Extract revenue values
+    s_rev_tm = sales_tm.get("total", 0)
+    cs_rev_tm = cs_tm.get("total", 0)
+    m_rev_tm = mentor_tm.get("total", 0)
+    s_rev_lm = sales_lm.get("total", 0)
+    cs_rev_lm = cs_lm.get("total", 0)
+    m_rev_lm = mentor_lm.get("total", 0)
+    overall_tm = s_rev_tm + cs_rev_tm + m_rev_tm
+    overall_lm = s_rev_lm + cs_rev_lm + m_rev_lm
+
+    # Enrich top performers with names (parallel)
+    async def enrich_name(item):
+        agent = await db.users.find_one({"id": item["_id"]}, {"_id": 0, "full_name": 1})
+        item["name"] = agent["full_name"] if agent else "Unknown"
+        item["revenue"] = round(item.get("revenue", 0), 2)
+    await asyncio.gather(*[enrich_name(t) for t in top_sales + top_cs + top_mentors])
+
+    # Treasury
+    pending_settlement = sum(v.get("sale_amount", 0) for v in pending_vf)
+
+    # HR
+    gender_breakdown = {}
+    for emp in employees:
+        g = (emp.get("gender") or "unknown").lower()
+        gender_breakdown[g] = gender_breakdown.get(g, 0) + 1
+    present_count = sum(1 for a in attendance_list if a.get("status") in ["present", "late", "half_day"])
+    absent_count = sum(1 for a in attendance_list if a.get("status") == "absent")
+
+    # Document expiry
+    cutoff = (now.date() + timedelta(days=60)).isoformat()
+    today_date_str = now.date().isoformat()
+    expiring_docs = []
+    doc_fields = [("passport", "Passport"), ("visa", "Visa"), ("emirates_id", "Emirates ID"), ("labour_card", "Labour Card"), ("health_insurance", "Health Insurance")]
+    for emp in employees:
+        for field, label in doc_fields:
+            doc = emp.get(field)
+            if doc and doc.get("expiry_date"):
+                exp = doc["expiry_date"]
+                if today_date_str <= exp <= cutoff:
+                    days_left = (datetime.strptime(exp, "%Y-%m-%d").date() - now.date()).days
+                    expiring_docs.append({"employee_name": emp["full_name"], "employee_id": emp.get("employee_id"), "document": label, "expiry_date": exp, "days_left": days_left, "urgency": "critical" if days_left <= 7 else "high" if days_left <= 15 else "medium" if days_left <= 30 else "low"})
+    expiring_docs.sort(key=lambda x: x["days_left"])
+
+    # ---- PARALLEL BATCH 2: Monthly Trend (6 months x 3 collections) ----
+    trend_tasks = []
+    for label, m_start_str, m_end_str in month_ranges:
+        trend_tasks.append(agg_first(db.leads, [{"$match": {"stage": "enrolled", "enrolled_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}]))
+        trend_tasks.append(agg_first(db.cs_upgrades, [{"$match": {"created_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}]))
+        trend_tasks.append(agg_first(db.mentor_redeposits, [{"$match": {"created_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]))
+    trend_results = await asyncio.gather(*trend_tasks)
+
+    monthly_trend = []
+    for i, (label, _, _) in enumerate(month_ranges):
+        s_val = trend_results[i*3].get("total", 0)
+        c_val = trend_results[i*3+1].get("total", 0)
+        m_val = trend_results[i*3+2].get("total", 0)
+        monthly_trend.append({"month": label, "sales": round(s_val, 2), "cs": round(c_val, 2), "mentors": round(m_val, 2), "total": round(s_val + c_val + m_val, 2)})
+
+    return {
+        "revenue": {
+            "this_month": {"sales": round(s_rev_tm, 2), "cs": round(cs_rev_tm, 2), "mentors": round(m_rev_tm, 2), "total": round(overall_tm, 2), "sales_count": sales_tm.get("count", 0), "cs_count": cs_tm.get("count", 0), "mentor_count": mentor_tm.get("count", 0)},
+            "last_month": {"sales": round(s_rev_lm, 2), "cs": round(cs_rev_lm, 2), "mentors": round(m_rev_lm, 2), "total": round(overall_lm, 2)},
+            "all_time": {"sales": round(all_time_s.get("total", 0), 2), "cs": round(all_time_c.get("total", 0), 2), "mentors": round(all_time_m.get("total", 0), 2)},
+            "change_pct": round(((overall_tm - overall_lm) / overall_lm * 100), 1) if overall_lm > 0 else 0,
+        },
+        "monthly_trend": monthly_trend,
+        "revenue_split": [{"name": "Sales", "value": round(s_rev_tm, 2)}, {"name": "Customer Service", "value": round(cs_rev_tm, 2)}, {"name": "Mentors", "value": round(m_rev_tm, 2)}],
+        "top_performers": {
+            "sales": [{"name": t["name"], "revenue": t["revenue"], "deals": t["deals"]} for t in top_sales],
+            "cs": [{"name": t["name"], "revenue": t["revenue"], "upgrades": t["upgrades"]} for t in top_cs],
+            "mentors": [{"name": t["name"], "revenue": t["revenue"], "deposits": t["deposits"]} for t in top_mentors],
+        },
+        "treasury": {"in_bank": round(total_recv.get("total", 0), 2), "pending_settlement": round(pending_settlement, 2), "total_payables": round(payables_r.get("total", 0), 2)},
+        "expenses": {"this_month": round(exp_result.get("total", 0), 2), "count": exp_result.get("count", 0)},
+        "hr": {"total_active": len(employees), "gender": gender_breakdown, "present_today": present_count, "absent_today": absent_count, "attendance_total": len(attendance_list) if attendance_list else len(employees)},
+        "expiring_documents": expiring_docs[:10],
+        "expiring_documents_total": len(expiring_docs),
+        "pending_verifications": pending_finance_count,
+        "sla_breaches": sla_breaches,
+        "recent_enrollments": [{"name": e.get("full_name"), "amount": e.get("enrollment_amount") or e.get("sale_amount", 0), "date": e.get("enrolled_at"), "agent": e.get("assigned_to_name"), "course": e.get("course_name") or e.get("interested_course_name")} for e in recent_enrollments],
+    }
+
+
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_current_user)):
     """Get dashboard stats. Use view_as parameter to view another user's dashboard (if authorized)"""
