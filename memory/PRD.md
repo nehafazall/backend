@@ -1,98 +1,72 @@
 # CLT Synapse ERP - Product Requirements Document
 
 ## Original Problem Statement
-Build a custom, modular ERP system for CLT Synapse that unifies Sales CRM, Customer Service CRM, Mentor CRM, Finance & Accounting, HR & Payroll, Asset Management, Marketing Operations, Training & Development, Task & Project Management into one single platform.
+Build a comprehensive ERP system for CLT Academy with role-based dashboards, sales CRM, mentor management, HR modules, and commission tracking.
 
-## Architecture
-- Frontend: React 18 + Tailwind CSS + Shadcn/UI + Recharts
-- Backend: FastAPI + Motor (async MongoDB) + Pydantic
-- Database: MongoDB Atlas (clt_academy_erp on cluster0.rnswuch.mongodb.net)
+## Core Architecture
+- **Frontend:** React + Shadcn/UI + TailwindCSS
+- **Backend:** FastAPI + MongoDB Atlas (production)
+- **Auth:** JWT-based with role-based access control
 
-## Latest Updates (March 16, 2026)
+## Key Modules
+1. **Sales CRM** — Kanban pipeline, lead management, duplicate detection, course & addon selection
+2. **Mentor Dashboard** — Commission tracking, eye-toggle for sensitive data, salary from HR
+3. **Sales Dashboard** — Commission card with tiered salary structure
+4. **Historical Import** — Excel upload with round-robin assignment for CS/Mentors
+5. **User Management** — Password visibility, history tracking
+6. **Course Catalog** — Manage courses, add-ons, upgrades with per-course commission and bulk actions
+7. **HR Module** — Employee master, salary structures
+8. **Operations** — Teams, departments, SLA management
 
-### Atlas DB Migration Complete
-- Connected to user's MongoDB Atlas cluster
-- Migrated 10,680 documents across 59 collections
-- Cleared test data: mentor deposits/withdrawals, sales leads, CS data, students
-- Kept: Users (86), Teams, Departments, HR Employees, Bank Accounts, Payment Gateways, SLA Rules, Courses
+## Implemented Features (Latest Session)
 
-### Mentor Dashboard — Rebuilt with Dual View for Edwin
-- **My Performance section**: Student overview, Revenue Overview (Deposits/Withdrawals/Net), Commission Breakdown, Bonus Progress, Student Pipeline
-- **Team Overview section (Edwin only)**: Team Deposits/Withdrawals/Net, Mentor-wise Revenue chart, Leaderboard
-- Edwin sees BOTH individual AND team data simultaneously on one page
-- Regular mentors see only individual section + leaderboard
-- Fixed Academics nav visibility for mentors (cleared stored permissions to use defaults)
-- Added `master_of_academics` role to all permission checks
+### Course Catalog System (NEW)
+- **Collection:** `course_catalog` with types: `course`, `addon`, `upgrade`
+- **Commission per item:** `commission_sales_executive`, `commission_team_leader`, `commission_sales_manager`
+- **Bulk actions:** Delete, Activate, Deactivate via checkbox multi-select
+- **Role-based visibility:** Sales sees courses+addons, CS sees upgrades+addons, Admin sees all
+- **22 seeded items:** 10 courses, 6 add-ons, 6 upgrades
 
-### Finance Withdrawals Page
-- Dedicated page at `/finance/mentor-withdrawals` for financier role
-- Student Deposits tab + Withdrawal History tab
-- Record Withdrawal modal with amount, date, notes
+### Course & Add-on Split Selection (Sales CRM)
+- Course dropdown + Add-on checkboxes (separate from courses)
+- Auto-calculated price breakdown: Course Price + Add-on Prices = Estimated Total
+- Stored on lead: `selected_addons`, `course_value`, `addons_value`
 
-### Commission & Bonus System
-- 1% flat commission on deposits (AED)
-- 1% net commission monthly (deposits - withdrawals) — same for ALL mentors including Edwin
-- Edwin: additional 0.5% team override on entire team's net deposit (separate line item)
-- Negative net carries forward — payout withheld
-- Bonus slabs: $10K=10%, $20K=15%, $30K=17.5%, $40K=20%, $50K=25% of salary
+### Historical Import Template Update
+- **Sheet 1:** Full Name, Phone, Course Enrolled, Course Amount, Add-ons, Add-on Amount, Agent Name, Team Name, Enrolled Amount, Date, Email, Country, City, Source
+- **Sheet 2:** Courses & Prices (with Commission SE/TL/SM columns)
+- **Sheet 3:** Add-ons & Prices
+- **Sheet 4:** Teams & Agents
 
-### P0 Bug Fixes (March 16, 2026)
-- FIXED: Edwin's net commission was 1.5% → corrected to 1% (backend line 6595)
-- FIXED: Leaderboard + charts were hidden when empty → always render with empty states
-- FIXED: Team Overview invisible → now uses canDrillDown flag, not teamData truthy check
-- ADDED: Eye toggle (show/hide) for sensitive data — commission amounts, salary, bonus
-- ADDED: Base Salary row in Bonus Progress card (fetched from Employee Master / hr_employees)
-- ENFORCED: Team Override (0.5%) visible ONLY to Edwin (master_of_academics), not regular mentors
-- ENFORCED: Team Overview section ONLY visible to Edwin/Admin, regular mentors see individual + leaderboard
-- CLEANED: All test data removed from mentor_redeposits and mentor_withdrawals on Atlas DB
+### Previous Session Features
+- Mentor Dashboard eye-toggle, salary display
+- Sales Dashboard commission module
+- Historical Sales Data Import with round-robin
+- Password management (admin view + history)
+- Duplicate lead detection & merge
+- Deployment issue resolution (MongoDB Atlas)
 
-## Test Credentials
+## Key API Endpoints
+- `GET /api/course-catalog` — Role-filtered catalog
+- `POST /api/course-catalog` — Create with commission
+- `PUT /api/course-catalog/{id}` — Update
+- `DELETE /api/course-catalog/{id}` — Delete single
+- `POST /api/course-catalog/bulk-action` — Bulk delete/activate/deactivate
+- `GET /api/import/templates/historical-sales/download` — Updated template
+
+## Database Collections
+- `course_catalog` — id, name, price, type, is_active, commission_sales_executive, commission_team_leader, commission_sales_manager
+- `leads` — Added: selected_addons, course_value, addons_value
+- `students` — Added: course_value, addons_value, addons_names
+
+## Credentials
 - Super Admin: aqib@clt-academy.com / @Aqib1234
-- Edwin (Master of Academics): edwin@clt-academy.com / Edwin@123
-- Regular Mentor: ashwin@clt-academy.com / @Aqib1234
-- Financier: finance@clt-academy.com / @Aqib1234
-- CS Agent: della@clt-academy.com / @Aqib1234
-- CS Head: falja@clt-academy.com / @Aqib1234
-- Sales Agent: aleesha@clt-academy.com / @Aqib1234
-- Team Leader: mohammed@clt-academy.com / @Aqib1234
+- Sales Executive: kiran@clt-academy.com / @Aqib1234
+- Mentor Lead: edwin@clt-academy.com / Edwin@123
 
-### Password Management (March 17, 2026)
-- ADDED: `password_plain` field stored alongside bcrypt hash on user create/update
-- ADDED: `password_history` array tracks old passwords with timestamp and who changed it
-- ADDED: Admin-only endpoint `GET /users/{user_id}/password-info` for password retrieval
-- ADDED: Eye toggle in Edit User modal to show/hide current password
-- ADDED: Password History section with per-entry eye toggles and change dates
-- NOTE: Existing users show empty current password until their password is next changed through the system
-
-### Historical Sales Import Page (March 17, 2026)
-- ADDED: Dedicated `/sales/historical-import` page (super_admin only, sidebar under Sales)
-- ADDED: Excel template download with 3 sheets: Import Data, Courses & Prices, Teams & Agents
-- ADDED: Weighted CS round-robin (Falja:2, Della:2, Karthika:2, Nasida:2, Angel:1)
-- ADDED: Equal Mentor round-robin (Edwin, Mathson, Ashwin, Nihal, Sriram)
-- FLOW: Upload Excel → Enrolled Lead + Activated Student + CS Assignment + Mentor Assignment
-- FIX: Whitespace-tolerant team name matching
-- Duplicate phone detection auto-skips duplicates
-- Results page shows CS/Mentor assignment breakdown + error details
-
-### Sales Commission & Category System (March 17, 2026)
-- ADDED: Category system (D through Diamond) based on monthly revenue for Sales Executives
-- ADDED: My Earnings card — Current Salary, Revised Salary, Gain/Loss, Earned Commission with eye toggle
-- ADDED: Category Progress card — visual progress bar, all 8 category slabs with thresholds/salaries
-- ADDED: Earned commission = 0 until 18k AED achieved in a month
-- ADDED: Pipeline expected (Hot + Interested leads) display
-- ADDED: TL/Manager Earnings card — Salary + Revenue = Total On Hand
-- ADDED: Historical Sales Import (Excel upload) — creates enrolled lead + activated student per row
-- ADDED: Template endpoint for historical-sales with required/optional field definitions
-- FIX: ImportButton template URL path corrected for mixed type/templateType props
-
-## Backlog
-### P1
-- User Verification for Google Sheets connector (17 agent sheets)
-- Sales Commission Configuration
-
-### P2
+## Backlog (P2)
 - Refactor server.py into domain-specific route files
-- Course and Commission Configuration UI
-- Payslip Generation
-- Google Ads API Integration
-- Resolve Babel Plugin RangeError
+- Payslip generation
+- Google Ads API integration
+- Fix Babel RangeError (recurring)
+- Post-deployment: Update Google Sheets redirect_uri, tighten CORS
