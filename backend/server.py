@@ -2068,18 +2068,23 @@ async def seed_course_catalog():
 async def get_course_catalog(user=Depends(get_current_user)):
     """Get course catalog filtered by user role.
     Sales roles see courses + addons. CS roles see upgrades + addons.
-    Admins see everything."""
+    Admins see everything (including inactive)."""
     role = user.get("role", "")
     
     sales_roles = ["sales_executive", "sales_manager", "team_leader"]
     cs_roles = ["cs_agent", "cs_manager"]
+    admin_roles = ["super_admin", "admin"]
     
-    query = {"is_active": True}
-    if role in sales_roles:
-        query["type"] = {"$in": ["course", "addon"]}
+    query = {}
+    if role in admin_roles:
+        # Admins see everything including inactive
+        pass
+    elif role in sales_roles:
+        query = {"is_active": True, "type": {"$in": ["course", "addon"]}}
     elif role in cs_roles:
-        query["type"] = {"$in": ["upgrade", "addon"]}
-    # Admin/super_admin see all
+        query = {"is_active": True, "type": {"$in": ["upgrade", "addon"]}}
+    else:
+        query = {"is_active": True}
     
     items = await db.course_catalog.find(query, {"_id": 0}).sort("type", 1).to_list(200)
     
@@ -2145,6 +2150,28 @@ async def delete_catalog_item(item_id: str, user=Depends(require_roles(["super_a
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted"}
+
+
+@api_router.post("/course-catalog/bulk-action")
+async def bulk_action_catalog(data: Dict, user=Depends(require_roles(["super_admin", "admin"]))):
+    """Bulk action on course catalog items. Actions: delete, activate, deactivate."""
+    ids = data.get("ids", [])
+    action = data.get("action")
+    
+    if not ids:
+        raise HTTPException(status_code=400, detail="No items selected")
+    if action not in ["delete", "activate", "deactivate"]:
+        raise HTTPException(status_code=400, detail="Action must be delete, activate, or deactivate")
+    
+    if action == "delete":
+        result = await db.course_catalog.delete_many({"id": {"$in": ids}})
+        return {"message": f"{result.deleted_count} item(s) deleted"}
+    elif action == "activate":
+        result = await db.course_catalog.update_many({"id": {"$in": ids}}, {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"message": f"{result.modified_count} item(s) activated"}
+    elif action == "deactivate":
+        result = await db.course_catalog.update_many({"id": {"$in": ids}}, {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"message": f"{result.modified_count} item(s) deactivated"}
 
 
 # ==================== COMMISSION RULES ====================
@@ -8885,25 +8912,45 @@ async def download_historical_sales_template_xlsx(token: str = None, request: Re
     for col, w in enumerate(widths, 1):
         ws1.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
     
-    # Sheet 2: Courses
+    # Sheet 2: Courses (from course_catalog)
     ws2 = wb.create_sheet("Courses & Prices")
     ch_fill = PatternFill(start_color="059669", end_color="059669", fill_type="solid")
-    for col, h in enumerate(["Course Name", "Price (AED)", "Category"], 1):
+    for col, h in enumerate(["Course Name", "Price (AED)", "Type"], 1):
         cell = ws2.cell(row=1, column=col, value=h)
         cell.font = Font(bold=True, color="FFFFFF", size=11)
         cell.fill = ch_fill
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
-    courses = await db.courses.find({}, {"_id": 0, "name": 1, "price": 1, "category": 1}).sort("name", 1).to_list(200)
-    for ri, c in enumerate(courses, 2):
+    catalog_courses = await db.course_catalog.find({"type": {"$in": ["course", "upgrade"]}, "is_active": True}, {"_id": 0, "name": 1, "price": 1, "type": 1}).sort("type", 1).to_list(200)
+    # Fallback to legacy courses if catalog is empty
+    if not catalog_courses:
+        legacy = await db.courses.find({}, {"_id": 0, "name": 1, "price": 1, "category": 1}).sort("name", 1).to_list(200)
+        catalog_courses = [{"name": c.get("name", ""), "price": c.get("price", 0), "type": c.get("category", "")} for c in legacy]
+    for ri, c in enumerate(catalog_courses, 2):
         ws2.cell(row=ri, column=1, value=c.get("name", "")).border = thin_border
         ws2.cell(row=ri, column=2, value=c.get("price") or 0).border = thin_border
-        ws2.cell(row=ri, column=3, value=c.get("category", "")).border = thin_border
+        ws2.cell(row=ri, column=3, value=c.get("type", "").title()).border = thin_border
     ws2.column_dimensions['A'].width = 30
     ws2.column_dimensions['B'].width = 15
     ws2.column_dimensions['C'].width = 15
     
-    # Sheet 3: Teams & Agents
+    # Sheet 3: Add-ons & Prices (from course_catalog)
+    ws_addons = wb.create_sheet("Add-ons & Prices")
+    addon_fill = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
+    for col, h in enumerate(["Add-on Name", "Price (AED)"], 1):
+        cell = ws_addons.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = addon_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    catalog_addons = await db.course_catalog.find({"type": "addon", "is_active": True}, {"_id": 0, "name": 1, "price": 1}).sort("name", 1).to_list(200)
+    for ri, a in enumerate(catalog_addons, 2):
+        ws_addons.cell(row=ri, column=1, value=a.get("name", "")).border = thin_border
+        ws_addons.cell(row=ri, column=2, value=a.get("price") or 0).border = thin_border
+    ws_addons.column_dimensions['A'].width = 30
+    ws_addons.column_dimensions['B'].width = 15
+    
+    # Sheet 4: Teams & Agents
     ws3 = wb.create_sheet("Teams & Agents")
     ta_fill = PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
     for col, h in enumerate(["Agent Name", "Team Name"], 1):
