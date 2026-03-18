@@ -9844,9 +9844,11 @@ async def preview_historical_sales_xlsx(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
     
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    df.columns = [c.strip().lower().replace(" ", "_").replace("*", "").strip("_").strip() for c in df.columns]
     # Replace NaN with None properly
     df = df.where(df.notnull(), None)
+    # Drop fully empty rows
+    df = df.dropna(how='all')
     rows = df.to_dict(orient="records")
     
     def clean_val(v):
@@ -9856,15 +9858,46 @@ async def preview_historical_sales_xlsx(
         s = str(v).strip()
         if s.lower() in ('nan', 'none', 'nat', ''):
             return None
-        # Fix phone numbers stored as floats (e.g., 971500000001.0 -> 971500000001)
+        # Fix phone numbers stored as floats (e.g., 971500000001.0 -> +971500000001)
         if s.endswith('.0') and s.replace('.0', '').replace('+', '').isdigit():
             s = s[:-2]
+        return s
+    
+    def clean_phone(v):
+        """Special handler for phone - ensure + prefix and handle float conversion."""
+        if v is None:
+            return None
+        # Handle float (pandas reads phone as float64)
+        if isinstance(v, float):
+            v = int(v)
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''):
+            return None
+        # Remove .0 suffix
+        if s.endswith('.0'):
+            s = s[:-2]
+        # Add + prefix if it's a valid-looking phone number without one
+        if s and s[0].isdigit() and len(s) >= 10:
+            s = '+' + s
         return s
     
     preview_rows = []
     valid_count = 0
     error_count = 0
     skip_count = 0
+    
+    # Pre-load all users and teams for fast in-memory lookups (avoid per-row DB queries)
+    all_users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1}).to_list(1000)
+    users_by_name = {u["full_name"].strip().lower(): u for u in all_users}
+    
+    all_teams = await db.teams.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+    teams_by_name = {t["name"].strip().lower(): t for t in all_teams}
+    
+    # Pre-load existing phone numbers for duplicate check
+    existing_phones = set()
+    async for doc in db.leads.find({}, {"_id": 0, "phone": 1}):
+        if doc.get("phone"):
+            existing_phones.add(doc["phone"])
     
     for i, row in enumerate(rows):
         row = {k: clean_val(v) for k, v in row.items()}
@@ -9876,18 +9909,28 @@ async def preview_historical_sales_xlsx(
             "resolved": {}
         }
         
-        # Normalize column keys
+        # Normalize column keys — handle both old (with *) and new (without *) formats
+        # After column normalization: full_name, phone, course_enrolled, agent_name, team_name
         enrollment_key = next((k for k in row.keys() if "enrolled_amount" in k or "enrollment_amount" in k), None)
         date_key = next((k for k in row.keys() if "enrolled_at" in k), None)
         addons_key = next((k for k in row.keys() if k in ["add-ons", "addons", "add_ons"]), None)
         addon_amount_key = next((k for k in row.keys() if "add-on_amount" in k or "addon_amount" in k or "add_on_amount" in k), None)
         course_amount_key = next((k for k in row.keys() if "course_amount" in k), None)
         
-        full_name = row.get("full_name") or row.get("full_name_*") or ""
-        phone = row.get("phone") or row.get("phone_*") or ""
-        course_enrolled = row.get("course_enrolled") or row.get("course_enrolled_*") or ""
-        agent_name = row.get("agent_name") or row.get("agent_name_*") or ""
-        team_name = row.get("team_name") or row.get("team_name_*") or ""
+        full_name = row.get("full_name") or ""
+        phone_raw = next((row[k] for k in row.keys() if k.startswith("phone")), None)
+        phone = clean_phone(phone_raw) if phone_raw else None
+        # For already cleaned phone in dict
+        if not phone:
+            phone = row.get("phone") or ""
+        course_enrolled = row.get("course_enrolled") or ""
+        agent_name = row.get("agent_name") or ""
+        team_name = row.get("team_name") or ""
+        
+        # Strip whitespace from names
+        full_name = full_name.strip() if full_name else ""
+        agent_name = agent_name.strip() if agent_name else ""
+        team_name = team_name.strip() if team_name else ""
         
         row_result["data"] = {
             "full_name": full_name,
@@ -9906,6 +9949,10 @@ async def preview_historical_sales_xlsx(
             "enrolled_at": row.get(date_key) if date_key else None,
         }
         
+        # Skip fully empty rows
+        if not full_name and not phone and not course_enrolled:
+            continue
+        
         # Validate required fields
         if not full_name:
             row_result["errors"].append("Missing Full Name")
@@ -9920,23 +9967,24 @@ async def preview_historical_sales_xlsx(
         
         # Check duplicate phone in DB
         if phone:
-            existing = await db.leads.find_one({"phone": phone})
-            if existing:
+            if phone in existing_phones:
                 row_result["errors"].append(f"Phone {phone} already exists in database")
                 row_result["status"] = "duplicate"
         
-        # Resolve agent
+        # Resolve agent (in-memory lookup)
         if agent_name:
-            agent_user = await db.users.find_one({"full_name": {"$regex": f"^{agent_name.strip()}$", "$options": "i"}})
+            agent_key = agent_name.lower()
+            agent_user = users_by_name.get(agent_key)
             if agent_user:
                 row_result["resolved"]["agent_id"] = agent_user["id"]
                 row_result["resolved"]["agent_name"] = agent_user["full_name"]
             else:
                 row_result["errors"].append(f"Agent '{agent_name}' not found in system")
         
-        # Resolve team
+        # Resolve team (in-memory lookup)
         if team_name:
-            team = await db.teams.find_one({"name": {"$regex": f"^\\s*{team_name.strip()}\\s*$", "$options": "i"}})
+            team_key = team_name.lower()
+            team = teams_by_name.get(team_key)
             if team:
                 row_result["resolved"]["team_id"] = team["id"]
                 row_result["resolved"]["team_name"] = team["name"]
@@ -10200,8 +10248,10 @@ async def import_historical_sales_xlsx(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
     
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-    rows = df.where(df.notnull(), None).to_dict(orient="records")
+    df.columns = [c.strip().lower().replace(" ", "_").replace("*", "").strip("_").strip() for c in df.columns]
+    df = df.where(df.notnull(), None)
+    df = df.dropna(how='all')
+    rows = df.to_dict(orient="records")
     
     results = {"success": 0, "failed": 0, "skipped": 0, "errors": [], "students_created": 0, "total_rows": len(rows), "cs_assignments": {}, "mentor_assignments": {}}
     now = datetime.now(timezone.utc).isoformat()
