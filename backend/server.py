@@ -1199,6 +1199,14 @@ async def create_notification(
     }
     await db.notifications.insert_one(notification)
 
+async def resolve_agent_team_name(agent: Dict) -> str:
+    """Resolve team name from agent's team_id via the teams collection."""
+    tid = agent.get("team_id")
+    if not tid:
+        return ""
+    team = await db.teams.find_one({"id": tid}, {"_id": 0, "name": 1})
+    return team["name"] if team else ""
+
 async def get_round_robin_agent(role: str, region: str = None, department: str = None) -> Optional[Dict]:
     """Get next available agent using round-robin with fallback to any agent if regional match not found"""
     query = {"role": role, "is_active": True}
@@ -3289,7 +3297,7 @@ async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user 
         "stage": "new_lead",
         "assigned_to": assigned_agent["id"] if assigned_agent else None,
         "assigned_to_name": assigned_agent["full_name"] if assigned_agent else None,
-        "team_name": assigned_agent.get("team_name", "") if assigned_agent else None,
+        "team_name": (await resolve_agent_team_name(assigned_agent)) if assigned_agent else None,
         "assigned_at": now if assigned_agent else None,  # Track when assigned for SLA
         "first_contact_at": None,  # Will be set when first contacted
         "sla_status": "ok",
@@ -3730,7 +3738,7 @@ async def assign_lead_from_pool(lead_id: str, user_id: Optional[str] = None, use
     }
     
     # Get agent's team name
-    agent_team = agent.get("team_name", "")
+    agent_team = await resolve_agent_team_name(agent)
     
     await db.leads.update_one(
         {"id": lead_id},
@@ -3804,7 +3812,7 @@ async def bulk_assign_leads_from_pool(
         raise HTTPException(status_code=404, detail="Agent not found")
     
     now = datetime.now(timezone.utc).isoformat()
-    agent_team = agent.get("team_name", "")
+    agent_team = await resolve_agent_team_name(agent)
     assigned = 0
     
     for lid in lead_ids:
@@ -3913,7 +3921,7 @@ async def create_transfer_request(
         "from_team": from_team,
         "to_agent_id": to_agent_id,
         "to_agent_name": to_agent["full_name"],
-        "to_team": to_agent.get("team_name", ""),
+        "to_team": await resolve_agent_team_name(to_agent),
         "reason": reason,
         "requested_by_id": user.get("id"),
         "requested_by_name": user.get("full_name"),
@@ -4049,15 +4057,16 @@ async def execute_transfer(req, approver, now):
     to_agent = await db.users.find_one({"id": req["to_agent_id"]})
     
     if entity_type == "lead":
+        to_team_name = (await resolve_agent_team_name(to_agent)) if to_agent else ""
         await db.leads.update_one({"id": entity_id}, {"$set": {
             "assigned_to": req["to_agent_id"],
             "assigned_to_name": req["to_agent_name"],
-            "team_name": to_agent.get("team_name", "") if to_agent else "",
+            "team_name": to_team_name,
             "updated_at": now,
         }, "$push": {"assignment_history": {
             "agent_id": req["to_agent_id"],
             "agent_name": req["to_agent_name"],
-            "team_name": to_agent.get("team_name", "") if to_agent else "",
+            "team_name": to_team_name,
             "action": "transferred",
             "from_agent": req["from_agent_name"],
             "reason": req.get("reason", ""),
@@ -13152,7 +13161,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://lead-pool-master.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-attribution.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

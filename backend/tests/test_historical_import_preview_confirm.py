@@ -20,7 +20,7 @@ import os
 import io
 from openpyxl import Workbook
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://lead-pool-master.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-attribution.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "aqib@clt-academy.com"
