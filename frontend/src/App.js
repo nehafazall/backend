@@ -33,6 +33,7 @@ import PasswordResetPage from "@/pages/PasswordResetPage";
 import RolesPage from "@/pages/RolesPage";
 import TeamsPage from "@/pages/TeamsPage";
 import MentorLeaderboard from "@/pages/MentorLeaderboard";
+import MentorHistoricalImportPage from "@/pages/academics/MentorHistoricalImportPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -262,6 +263,11 @@ function AppRoutes() {
                 <Route path="mentor/leaderboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
                         <MentorLeaderboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="mentor/historical-import" element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                        <MentorHistoricalImportPage />
                     </ProtectedRoute>
                 } />
                 

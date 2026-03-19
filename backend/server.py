@@ -9467,6 +9467,103 @@ async def download_cs_historical_template(token: str = None, request: Request = 
     )
 
 
+@api_router.get("/import/templates/mentor-historical/download")
+async def download_mentor_historical_template(token: str = None, request: Request = None):
+    """Download Mentor historical import Excel template with mentors and students."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    import io as _io
+
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+    if auth_token:
+        try:
+            jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
+        except:
+            pass
+
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "Mentor Redeposit Data"
+
+    header_labels = [
+        "Student Name *", "Student Email *", "Phone", "Redeposit Amount (USD) *",
+        "Amount (AED)", "Mentor Name *", "Date (YYYY-MM-DD) *", "Status"
+    ]
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="D97706", end_color="D97706", fill_type="solid")
+    req_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    for col, label in enumerate(header_labels, 1):
+        cell = ws1.cell(row=1, column=col, value=label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+
+    example = ["Ahmed Ali", "ahmed@example.com", "+971501234567", "1500", "5511", "Mathson Mathew", "2025-12-15", "closed"]
+    for col, val in enumerate(example, 1):
+        cell = ws1.cell(row=2, column=col, value=val)
+        cell.border = thin_border
+        if col in [1, 2, 4, 6, 7]:
+            cell.fill = req_fill
+
+    widths = [22, 28, 18, 22, 18, 22, 20, 14]
+    for col, w in enumerate(widths, 1):
+        ws1.column_dimensions[openpyxl.utils.get_column_letter(col)].width = w
+
+    # Sheet 2: Mentors
+    ws2 = wb.create_sheet("Mentors")
+    mentor_fill = PatternFill(start_color="EA580C", end_color="EA580C", fill_type="solid")
+    for col, h in enumerate(["Mentor Name", "Role"], 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = mentor_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    mentors = await db.users.find(
+        {"role": {"$in": ["mentor", "academic_master", "master_of_academics"]}},
+        {"_id": 0, "full_name": 1, "role": 1}
+    ).sort("full_name", 1).to_list(50)
+    for ri, m in enumerate(mentors, 2):
+        ws2.cell(row=ri, column=1, value=m.get("full_name", "")).border = thin_border
+        ws2.cell(row=ri, column=2, value=m.get("role", "")).border = thin_border
+    ws2.column_dimensions['A'].width = 25
+    ws2.column_dimensions['B'].width = 20
+
+    # Sheet 3: Existing Students
+    ws3 = wb.create_sheet("Students")
+    student_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    for col, h in enumerate(["Student Name", "Email", "Phone"], 1):
+        cell = ws3.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = student_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    students = await db.students.find({}, {"_id": 0, "full_name": 1, "email": 1, "phone": 1}).sort("full_name", 1).to_list(2000)
+    for ri, s in enumerate(students, 2):
+        ws3.cell(row=ri, column=1, value=s.get("full_name", "")).border = thin_border
+        ws3.cell(row=ri, column=2, value=s.get("email", "")).border = thin_border
+        ws3.cell(row=ri, column=3, value=s.get("phone", "")).border = thin_border
+    ws3.column_dimensions['A'].width = 25
+    ws3.column_dimensions['B'].width = 30
+    ws3.column_dimensions['C'].width = 18
+
+    output = _io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=mentor_historical_import_template.xlsx"}
+    )
+
+
 @api_router.get("/import/templates/{template_type}")
 
 async def get_import_template(template_type: str, user = Depends(get_current_user)):
@@ -10970,6 +11067,245 @@ async def confirm_cs_historical(preview_id: str, user = Depends(require_roles(["
             results["failed"] += 1
             results["errors"].append(f"Row {vr['row_num']}: {str(e)}")
     
+    await db.import_previews.update_one({"id": preview_id}, {"$set": {"status": "confirmed"}})
+    return results
+
+
+
+
+@api_router.post("/import/mentor-historical/preview")
+async def preview_mentor_historical(
+    file: UploadFile = File(...),
+    user=Depends(require_roles(["super_admin"]))
+):
+    """Preview mentor redeposit data — validate each row, no data pushed."""
+    import pandas as pd
+    import io
+
+    contents = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading Excel: {str(e)}")
+
+    df.columns = [c.strip().lower().replace(" ", "_").replace("*", "").strip("_").strip() for c in df.columns]
+    df = df.where(df.notnull(), None)
+    df = df.dropna(how='all')
+    rows = df.to_dict(orient="records")
+
+    def clean_val(v):
+        if v is None: return None
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''): return None
+        if s.endswith('.0') and s.replace('.0', '').replace('+', '').replace('-', '').isdigit(): s = s[:-2]
+        return s
+
+    def clean_phone(v):
+        if v is None: return None
+        if isinstance(v, float): v = int(v)
+        s = str(v).strip()
+        if s.lower() in ('nan', 'none', 'nat', ''): return None
+        if s.endswith('.0'): s = s[:-2]
+        if s and s[0].isdigit() and len(s) >= 10: s = '+' + s
+        return s
+
+    # Pre-load lookups
+    all_users = await db.users.find({}, {"_id": 0, "id": 1, "full_name": 1, "role": 1}).to_list(1000)
+    users_by_name = {u["full_name"].strip().lower(): u for u in all_users}
+
+    all_students = await db.students.find({}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1}).to_list(5000)
+    students_by_email = {s["email"].strip().lower(): s for s in all_students if s.get("email")}
+    students_by_phone = {s["phone"]: s for s in all_students if s.get("phone")}
+
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    preview_rows = []
+    valid_count = 0
+    error_count = 0
+
+    for i, row in enumerate(rows):
+        row = {k: clean_val(v) for k, v in row.items()}
+        row_result = {"row_num": i + 2, "data": {}, "status": "valid", "errors": [], "resolved": {}}
+
+        student_name = (row.get("student_name") or "").strip()
+        student_email = (row.get("student_email") or "").strip()
+        phone_raw = row.get("phone")
+        phone = clean_phone(phone_raw) if phone_raw else ""
+        amount_usd_str = row.get("redeposit_amount_(usd)") or row.get("redeposit_amount_usd") or row.get("redeposit_amount") or ""
+        amount_aed_str = row.get("amount_(aed)") or row.get("amount_aed") or ""
+        mentor_name = (row.get("mentor_name") or "").strip()
+        date_key = next((k for k in row.keys() if "date" in k and "amount" not in k), None)
+        date_val = row.get(date_key) if date_key else None
+        status = (row.get("status") or "closed").strip().lower()
+
+        amount_usd = 0
+        try:
+            amount_usd = float(amount_usd_str) if amount_usd_str else 0
+        except:
+            pass
+        amount_aed = 0
+        try:
+            amount_aed = float(amount_aed_str) if amount_aed_str else 0
+        except:
+            pass
+        if amount_usd > 0 and amount_aed == 0:
+            amount_aed = round(amount_usd * USD_TO_AED, 2)
+
+        row_result["data"] = {
+            "student_name": student_name, "student_email": student_email, "phone": phone,
+            "amount_usd": amount_usd, "amount_aed": amount_aed,
+            "mentor_name": mentor_name, "date": date_val, "status": status,
+        }
+
+        if not student_name and not student_email and not mentor_name:
+            continue
+
+        if not student_name: row_result["errors"].append("Missing Student Name")
+        if not student_email: row_result["errors"].append("Missing Student Email")
+        if not amount_usd and not amount_aed: row_result["errors"].append("Missing Redeposit Amount")
+        if not mentor_name: row_result["errors"].append("Missing Mentor Name")
+        if not date_val: row_result["errors"].append("Missing Date")
+
+        # Resolve mentor
+        if mentor_name:
+            mentor_key = mentor_name.lower()
+            mentor = users_by_name.get(mentor_key)
+            if mentor:
+                row_result["resolved"]["mentor_id"] = mentor["id"]
+                row_result["resolved"]["mentor_name"] = mentor["full_name"]
+            else:
+                row_result["errors"].append(f"Mentor '{mentor_name}' not found in system")
+
+        # Resolve student
+        if student_email:
+            student = students_by_email.get(student_email.lower())
+            if student:
+                row_result["resolved"]["student_id"] = student["id"]
+                row_result["resolved"]["student_name"] = student.get("full_name", student_name)
+            elif phone and students_by_phone.get(phone):
+                student = students_by_phone[phone]
+                row_result["resolved"]["student_id"] = student["id"]
+                row_result["resolved"]["student_name"] = student.get("full_name", student_name)
+            else:
+                row_result["errors"].append(f"Student '{student_email}' not found. Will create new record.")
+                row_result["resolved"]["new_student"] = True
+                # Demote from error — new student creation is acceptable
+                row_result["errors"] = [e for e in row_result["errors"] if "not found" not in e]
+
+        if row_result["errors"]:
+            row_result["status"] = "error"
+            error_count += 1
+        else:
+            valid_count += 1
+
+        preview_rows.append(row_result)
+
+    preview_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    await db.import_previews.insert_one({
+        "id": preview_id, "type": "mentor_historical", "rows": preview_rows,
+        "created_at": now, "created_by": user["id"], "status": "pending",
+    })
+
+    return {
+        "preview_id": preview_id, "total_rows": len(rows),
+        "valid": valid_count, "errors": error_count,
+        "rows": preview_rows,
+    }
+
+
+@api_router.post("/import/mentor-historical/confirm/{preview_id}")
+async def confirm_mentor_historical(preview_id: str, user=Depends(require_roles(["super_admin"]))):
+    """Confirm and push valid mentor redeposit rows to database."""
+    preview = await db.import_previews.find_one({"id": preview_id})
+    if not preview:
+        raise HTTPException(status_code=404, detail="Preview not found or expired. Please re-upload.")
+    if preview.get("status") == "confirmed":
+        raise HTTPException(status_code=400, detail="Already confirmed.")
+
+    valid_rows = [r for r in preview["rows"] if r["status"] == "valid"]
+    if not valid_rows:
+        raise HTTPException(status_code=400, detail="No valid rows.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    results = {"success": 0, "failed": 0, "errors": [], "total_rows": len(valid_rows),
+               "mentor_summary": {}}
+
+    for vr in valid_rows:
+        try:
+            data = vr["data"]
+            resolved = vr["resolved"]
+
+            amount_usd = float(data.get("amount_usd") or 0)
+            amount_aed = float(data.get("amount_aed") or 0)
+            if amount_usd > 0 and amount_aed == 0:
+                amount_aed = round(amount_usd * USD_TO_AED, 2)
+
+            date_str = str(data.get("date", ""))[:10] if data.get("date") else now[:10]
+            month_str = date_str[:7]
+
+            # Resolve student_id — either from lookup or create new student
+            student_id = resolved.get("student_id")
+            student_name = resolved.get("student_name") or data["student_name"]
+            if not student_id:
+                new_sid = str(uuid.uuid4())
+                await db.students.insert_one({
+                    "id": new_sid,
+                    "full_name": data["student_name"],
+                    "email": data.get("student_email"),
+                    "phone": data.get("phone"),
+                    "stage": "discussion_started",
+                    "mentor_stage": "discussion_started",
+                    "mentor_id": resolved["mentor_id"],
+                    "mentor_name": resolved["mentor_name"],
+                    "onboarding_complete": False,
+                    "classes_attended": 0,
+                    "upgrade_eligible": False,
+                    "is_historical": True,
+                    "created_at": data.get("date") or now,
+                    "updated_at": now,
+                })
+                student_id = new_sid
+
+            redeposit_record = {
+                "id": str(uuid.uuid4()),
+                "month": month_str,
+                "date": date_str,
+                "mentor_id": resolved["mentor_id"],
+                "mentor_name": resolved["mentor_name"],
+                "student_id": student_id,
+                "student_name": student_name,
+                "student_email": data.get("student_email", ""),
+                "amount": amount_usd,
+                "amount_aed": amount_aed,
+                "status": data.get("status", "closed"),
+                "is_historical": True,
+                "created_at": data.get("date") or now,
+                "created_by": user["id"],
+            }
+            await db.mentor_redeposits.insert_one(redeposit_record)
+
+            # Update student mentor assignment and stage
+            await db.students.update_one({"id": student_id}, {"$set": {
+                "mentor_id": resolved["mentor_id"],
+                "mentor_name": resolved["mentor_name"],
+                "mentor_stage": "discussion_started",
+                "updated_at": now,
+            }})
+
+            # Track per-mentor summary
+            mn = resolved["mentor_name"]
+            if mn not in results["mentor_summary"]:
+                results["mentor_summary"][mn] = {"count": 0, "total_usd": 0, "total_aed": 0}
+            results["mentor_summary"][mn]["count"] += 1
+            results["mentor_summary"][mn]["total_usd"] += amount_usd
+            results["mentor_summary"][mn]["total_aed"] += amount_aed
+
+            results["success"] += 1
+        except Exception as e:
+            results["failed"] += 1
+            results["errors"].append(f"Row {vr['row_num']}: {str(e)}")
+
     await db.import_previews.update_one({"id": preview_id}, {"$set": {"status": "confirmed"}})
     return results
 
