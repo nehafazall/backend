@@ -2184,6 +2184,9 @@ async def create_catalog_item(data: Dict, user=Depends(require_roles(["super_adm
         "commission_sales_executive": float(data.get("commission_sales_executive", 0)),
         "commission_team_leader": float(data.get("commission_team_leader", 0)),
         "commission_sales_manager": float(data.get("commission_sales_manager", 0)),
+        "commission_cs_agent": float(data.get("commission_cs_agent", 0)),
+        "commission_cs_head": float(data.get("commission_cs_head", 0)),
+        "commission_mentor": float(data.get("commission_mentor", 0)),
         "created_at": now,
         "updated_at": now,
     }

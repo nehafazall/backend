@@ -14,13 +14,36 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Eye, EyeOff, Pencil, Package, ShoppingCart, ArrowUpCircle, Search } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, Pencil, Search } from 'lucide-react';
 
 const TYPE_OPTIONS = [
     { id: 'course', label: 'Course', color: 'bg-blue-500' },
     { id: 'addon', label: 'Add-on', color: 'bg-purple-500' },
     { id: 'upgrade', label: 'Upgrade', color: 'bg-amber-500' },
 ];
+
+const EMPTY_FORM = {
+    name: '', price: '', type: 'course',
+    commission_sales_executive: '',
+    commission_team_leader: '',
+    commission_sales_manager: '',
+    commission_cs_agent: '',
+    commission_cs_head: '',
+    commission_mentor: '',
+};
+
+const fmtAED = (amt) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amt || 0);
+
+const calcTotal = (item) => {
+    if (item.type === 'upgrade') {
+        return (parseFloat(item.commission_cs_agent) || 0) +
+               (parseFloat(item.commission_cs_head) || 0) +
+               (parseFloat(item.commission_mentor) || 0);
+    }
+    return (parseFloat(item.commission_sales_executive) || 0) +
+           (parseFloat(item.commission_team_leader) || 0) +
+           (parseFloat(item.commission_sales_manager) || 0);
+};
 
 const CoursesPage = () => {
     const { user } = useAuth();
@@ -32,12 +55,7 @@ const CoursesPage = () => {
     const [filterType, setFilterType] = useState('all');
     const [filterStatus, setFilterStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
-    const [form, setForm] = useState({
-        name: '', price: '', type: 'course',
-        commission_sales_executive: '',
-        commission_team_leader: '',
-        commission_sales_manager: '',
-    });
+    const [form, setForm] = useState({ ...EMPTY_FORM });
 
     const canEdit = user?.role === 'super_admin' || user?.role === 'admin';
 
@@ -89,7 +107,7 @@ const CoursesPage = () => {
     };
 
     const resetForm = () => {
-        setForm({ name: '', price: '', type: 'course', commission_sales_executive: '', commission_team_leader: '', commission_sales_manager: '' });
+        setForm({ ...EMPTY_FORM });
         setEditItem(null);
     };
 
@@ -103,6 +121,9 @@ const CoursesPage = () => {
             commission_sales_executive: parseFloat(form.commission_sales_executive || 0),
             commission_team_leader: parseFloat(form.commission_team_leader || 0),
             commission_sales_manager: parseFloat(form.commission_sales_manager || 0),
+            commission_cs_agent: parseFloat(form.commission_cs_agent || 0),
+            commission_cs_head: parseFloat(form.commission_cs_head || 0),
+            commission_mentor: parseFloat(form.commission_mentor || 0),
         };
         try {
             if (editItem) {
@@ -129,11 +150,12 @@ const CoursesPage = () => {
             commission_sales_executive: String(item.commission_sales_executive || 0),
             commission_team_leader: String(item.commission_team_leader || 0),
             commission_sales_manager: String(item.commission_sales_manager || 0),
+            commission_cs_agent: String(item.commission_cs_agent || 0),
+            commission_cs_head: String(item.commission_cs_head || 0),
+            commission_mentor: String(item.commission_mentor || 0),
         });
         setShowModal(true);
     };
-
-    const fmtAED = (amt) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(amt || 0);
 
     const typeBadge = (type) => {
         const opt = TYPE_OPTIONS.find(o => o.id === type);
@@ -146,6 +168,9 @@ const CoursesPage = () => {
         items.forEach(i => { if (c[i.type] !== undefined) c[i.type]++; });
         return c;
     }, [items]);
+
+    const isUpgrade = form.type === 'upgrade';
+    const formTotal = calcTotal(form);
 
     return (
         <div className="space-y-6" data-testid="courses-page">
@@ -212,7 +237,7 @@ const CoursesPage = () => {
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
                 </div>
             ) : (
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/50">
@@ -228,52 +253,75 @@ const CoursesPage = () => {
                                 <TableHead className="text-right">SE Comm.</TableHead>
                                 <TableHead className="text-right">TL Comm.</TableHead>
                                 <TableHead className="text-right">SM Comm.</TableHead>
+                                <TableHead className="text-right">CS Agent</TableHead>
+                                <TableHead className="text-right">CS Head</TableHead>
+                                <TableHead className="text-right">Mentor</TableHead>
+                                <TableHead className="text-right font-semibold">Total Out</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
                                 {canEdit && <TableHead className="text-center w-16">Edit</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filtered.map((item) => (
-                                <TableRow key={item.id}
-                                    className={`${selectedIds.includes(item.id) ? 'bg-primary/5' : ''} ${!item.is_active ? 'opacity-60' : ''}`}
-                                    data-testid={`catalog-row-${item.id}`}>
-                                    {canEdit && (
-                                        <TableCell>
-                                            <input type="checkbox" checked={selectedIds.includes(item.id)}
-                                                onChange={() => toggleOne(item.id)}
-                                                className="rounded border-gray-400 h-4 w-4" />
+                            {filtered.map((item) => {
+                                const total = calcTotal(item);
+                                const isUpg = item.type === 'upgrade';
+                                return (
+                                    <TableRow key={item.id}
+                                        className={`${selectedIds.includes(item.id) ? 'bg-primary/5' : ''} ${!item.is_active ? 'opacity-60' : ''}`}
+                                        data-testid={`catalog-row-${item.id}`}>
+                                        {canEdit && (
+                                            <TableCell>
+                                                <input type="checkbox" checked={selectedIds.includes(item.id)}
+                                                    onChange={() => toggleOne(item.id)}
+                                                    className="rounded border-gray-400 h-4 w-4" />
+                                            </TableCell>
+                                        )}
+                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                        <TableCell>{typeBadge(item.type)}</TableCell>
+                                        <TableCell className="text-right font-semibold">{fmtAED(item.price)}</TableCell>
+                                        {/* Sales commissions */}
+                                        <TableCell className="text-right text-sm">
+                                            {!isUpg && item.commission_sales_executive ? fmtAED(item.commission_sales_executive) : <span className="text-muted-foreground">-</span>}
                                         </TableCell>
-                                    )}
-                                    <TableCell className="font-medium">{item.name}</TableCell>
-                                    <TableCell>{typeBadge(item.type)}</TableCell>
-                                    <TableCell className="text-right font-semibold">{fmtAED(item.price)}</TableCell>
-                                    <TableCell className="text-right text-sm">
-                                        {item.commission_sales_executive ? fmtAED(item.commission_sales_executive) : <span className="text-muted-foreground">-</span>}
-                                    </TableCell>
-                                    <TableCell className="text-right text-sm">
-                                        {item.commission_team_leader ? fmtAED(item.commission_team_leader) : <span className="text-muted-foreground">-</span>}
-                                    </TableCell>
-                                    <TableCell className="text-right text-sm">
-                                        {item.commission_sales_manager ? fmtAED(item.commission_sales_manager) : <span className="text-muted-foreground">-</span>}
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                        <Badge className={item.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}>
-                                            {item.is_active ? 'Active' : 'Inactive'}
-                                        </Badge>
-                                    </TableCell>
-                                    {canEdit && (
+                                        <TableCell className="text-right text-sm">
+                                            {!isUpg && item.commission_team_leader ? fmtAED(item.commission_team_leader) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        <TableCell className="text-right text-sm">
+                                            {!isUpg && item.commission_sales_manager ? fmtAED(item.commission_sales_manager) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        {/* CS / Mentor commissions (upgrade) */}
+                                        <TableCell className="text-right text-sm">
+                                            {isUpg && item.commission_cs_agent ? fmtAED(item.commission_cs_agent) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        <TableCell className="text-right text-sm">
+                                            {isUpg && item.commission_cs_head ? fmtAED(item.commission_cs_head) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        <TableCell className="text-right text-sm">
+                                            {isUpg && item.commission_mentor ? fmtAED(item.commission_mentor) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        {/* Total out */}
+                                        <TableCell className="text-right font-semibold text-primary">
+                                            {total > 0 ? fmtAED(total) : <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
                                         <TableCell className="text-center">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}
-                                                data-testid={`edit-item-${item.id}`}>
-                                                <Pencil className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <Badge className={item.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}>
+                                                {item.is_active ? 'Active' : 'Inactive'}
+                                            </Badge>
                                         </TableCell>
-                                    )}
-                                </TableRow>
-                            ))}
+                                        {canEdit && (
+                                            <TableCell className="text-center">
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}
+                                                    data-testid={`edit-item-${item.id}`}>
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                );
+                            })}
                             {filtered.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={canEdit ? 9 : 7} className="text-center py-12 text-muted-foreground">
+                                    <TableCell colSpan={canEdit ? 13 : 11} className="text-center py-12 text-muted-foreground">
                                         No items found
                                     </TableCell>
                                 </TableRow>
@@ -315,29 +363,66 @@ const CoursesPage = () => {
                             </div>
                         </div>
 
-                        {/* Commission Fields */}
-                        <div className="pt-2 border-t">
-                            <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Commission (AED per sale)</Label>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Sales Executive</Label>
-                                    <Input type="number" value={form.commission_sales_executive}
-                                        onChange={(e) => setForm({ ...form, commission_sales_executive: e.target.value })}
-                                        placeholder="0" data-testid="commission-se" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Team Leader</Label>
-                                    <Input type="number" value={form.commission_team_leader}
-                                        onChange={(e) => setForm({ ...form, commission_team_leader: e.target.value })}
-                                        placeholder="0" data-testid="commission-tl" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Sales Manager</Label>
-                                    <Input type="number" value={form.commission_sales_manager}
-                                        onChange={(e) => setForm({ ...form, commission_sales_manager: e.target.value })}
-                                        placeholder="0" data-testid="commission-sm" />
+                        {/* Sales Commission Fields (for course/addon) */}
+                        {!isUpgrade && (
+                            <div className="pt-2 border-t">
+                                <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Sales Commission (AED per sale)</Label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Sales Executive</Label>
+                                        <Input type="number" value={form.commission_sales_executive}
+                                            onChange={(e) => setForm({ ...form, commission_sales_executive: e.target.value })}
+                                            placeholder="0" data-testid="commission-se" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Team Leader</Label>
+                                        <Input type="number" value={form.commission_team_leader}
+                                            onChange={(e) => setForm({ ...form, commission_team_leader: e.target.value })}
+                                            placeholder="0" data-testid="commission-tl" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Sales Manager</Label>
+                                        <Input type="number" value={form.commission_sales_manager}
+                                            onChange={(e) => setForm({ ...form, commission_sales_manager: e.target.value })}
+                                            placeholder="0" data-testid="commission-sm" />
+                                    </div>
                                 </div>
                             </div>
+                        )}
+
+                        {/* Upgrade Commission Fields (for upgrade type) */}
+                        {isUpgrade && (
+                            <div className="pt-2 border-t">
+                                <Label className="text-sm font-semibold text-muted-foreground mb-3 block">Upgrade Commission (AED per sale)</Label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">CS Agent</Label>
+                                        <Input type="number" value={form.commission_cs_agent}
+                                            onChange={(e) => setForm({ ...form, commission_cs_agent: e.target.value })}
+                                            placeholder="0" data-testid="commission-cs-agent" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">CS Head</Label>
+                                        <Input type="number" value={form.commission_cs_head}
+                                            onChange={(e) => setForm({ ...form, commission_cs_head: e.target.value })}
+                                            placeholder="0" data-testid="commission-cs-head" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs">Mentor</Label>
+                                        <Input type="number" value={form.commission_mentor}
+                                            onChange={(e) => setForm({ ...form, commission_mentor: e.target.value })}
+                                            placeholder="0" data-testid="commission-mentor" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Total Commission Out */}
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
+                            <span className="text-sm font-medium">Total Commission Out</span>
+                            <span className="text-lg font-bold font-mono text-primary" data-testid="total-commission-out">
+                                {fmtAED(formTotal)}
+                            </span>
                         </div>
 
                         <DialogFooter>
