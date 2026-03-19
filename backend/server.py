@@ -3471,8 +3471,8 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                         update_data["estimated_value"] = course.get("base_price", 0)
                         update_data["interested_course_name"] = course.get("name")
         
-        if update_data["stage"] == "enrolled":
-            # Set enrolled_at timestamp — critical for all revenue/commission dashboards
+        if update_data["stage"] == "enrolled" and existing.get("stage") != "enrolled":
+            # Set enrolled_at ONLY on first transition to enrolled — not on re-edits
             update_data["enrolled_at"] = now.isoformat()
             
             # Ensure enrollment_amount is set from sale_amount for dashboard aggregation
@@ -7959,10 +7959,18 @@ async def get_today_transactions(view_mode: str = "personal", user = Depends(get
     ).sort("enrolled_at", -1).to_list(100)
     
     # Convert enrollments to transaction format (avoid duplicates with ltv_transactions)
-    ltv_lead_ids = {t.get("lead_id") for t in ltv_txns if t.get("lead_id")}
+    # ltv_transactions use student_id, so map student_id → lead_id via students collection
+    ltv_student_ids = [t.get("student_id") for t in ltv_txns if t.get("student_id")]
+    ltv_linked_lead_ids = set()
+    if ltv_student_ids:
+        linked_students = await db.students.find(
+            {"id": {"$in": ltv_student_ids}}, {"_id": 0, "lead_id": 1}
+        ).to_list(500)
+        ltv_linked_lead_ids = {s["lead_id"] for s in linked_students if s.get("lead_id")}
+    
     enrollment_txns = []
     for e in enrolled_today:
-        if e["id"] not in ltv_lead_ids:
+        if e["id"] not in ltv_linked_lead_ids:
             enrollment_txns.append({
                 "id": e["id"],
                 "student_name": e["full_name"],
