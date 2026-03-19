@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="11" failures="0" skipped="0" tests="11" time="60.344" timestamp="2026-03-19T01:25:29.954703+00:00" hostname="agent-env-fae53e44-dc35-4022-a153-09d92fdd5e65"><testcase classname="backend.tests.test_iteration_58.TestCustomDateRange" name="test_dashboard_custom_period_support" time="60.226"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestCustomDateRange" name="test_custom_range_with_short_period" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestCustomDateRange" name="test_this_month_vs_all_time" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestSalesAgentClosings" name="test_sales_agent_closings_sorted_by_revenue" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestSalesAgentClosings" name="test_sales_agent_closings_limit_3" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestPipelineRevenue" name="test_pipeline_revenue_endpoint" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestMentorAgentFilter" name="test_mentor_users_list" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestMentorAgentFilter" name="test_students_filter_by_mentor_id" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestCSAgentFilter" name="test_cs_users_list" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestTeamFilter" name="test_teams_sales_department" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration_58.TestTeamFilter" name="test_sales_agents_list" time="0.000"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration_58.py:22: in auth_token
+    assert response.status_code == 200, f"Login failed: {response.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase></testsuite></testsuites>

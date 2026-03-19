@@ -393,6 +393,9 @@ const SalesCRMPage = () => {
     const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
     const [merging, setMerging] = useState(false);
     const [availableAgents, setAvailableAgents] = useState([]);
+    const [teams, setTeams] = useState([]);
+    const [filterAgent, setFilterAgent] = useState('all');
+    const [filterTeam, setFilterTeam] = useState('all');
 
     const isSuperAdmin = user?.role === 'super_admin';
 
@@ -411,20 +414,24 @@ const SalesCRMPage = () => {
 
     useEffect(() => {
         fetchLeads();
-    }, []);
+    }, [filterAgent, filterTeam]);
 
-    // Fetch agents for super admin direct assignment
+    // Fetch agents and teams for super admin
     useEffect(() => {
         if (isSuperAdmin) {
-            const fetchAgents = async () => {
+            const fetchAgentsAndTeams = async () => {
                 try {
-                    const res = await apiClient.get('/users?role=sales_executive');
-                    setAvailableAgents((res.data || []).filter(u => u.is_active));
+                    const [agentsRes, teamsRes] = await Promise.all([
+                        apiClient.get('/users?role=sales_executive'),
+                        apiClient.get('/teams?department=Sales'),
+                    ]);
+                    setAvailableAgents((agentsRes.data || []).filter(u => u.is_active));
+                    setTeams(teamsRes.data || []);
                 } catch (e) {
-                    console.error('Failed to fetch agents:', e);
+                    console.error('Failed to fetch agents/teams:', e);
                 }
             };
-            fetchAgents();
+            fetchAgentsAndTeams();
         }
     }, [isSuperAdmin]);
 
@@ -467,7 +474,10 @@ const SalesCRMPage = () => {
     const fetchLeads = async () => {
         try {
             setLoading(true);
-            const response = await leadApi.getAll({ search: searchTerm || undefined });
+            const params = { search: searchTerm || undefined };
+            if (filterAgent !== 'all') params.assigned_to = filterAgent;
+            if (filterTeam !== 'all') params.team_id = filterTeam;
+            const response = await leadApi.getAll(params);
             setLeads(response.data);
         } catch (error) {
             toast.error('Failed to fetch leads');
@@ -799,7 +809,7 @@ const SalesCRMPage = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Sales CRM</h1>
                     <p className="text-muted-foreground">Manage your leads and sales pipeline</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -810,6 +820,28 @@ const SalesCRMPage = () => {
                             data-testid="search-leads"
                         />
                     </div>
+                    {isSuperAdmin && teams.length > 0 && (
+                        <Select value={filterTeam} onValueChange={(v) => { setFilterTeam(v); setFilterAgent('all'); }} data-testid="filter-team">
+                            <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-team-trigger">
+                                <SelectValue placeholder="All Teams" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Teams</SelectItem>
+                                {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    {isSuperAdmin && availableAgents.length > 0 && (
+                        <Select value={filterAgent} onValueChange={setFilterAgent} data-testid="filter-agent">
+                            <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-agent-trigger">
+                                <SelectValue placeholder="All Agents" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Agents</SelectItem>
+                                {(filterTeam !== 'all' ? availableAgents.filter(a => a.team_id === filterTeam) : availableAgents).map(a => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="leads" title="Import Leads" onSuccess={fetchLeads} />

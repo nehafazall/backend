@@ -372,18 +372,19 @@ const CustomerServicePage = () => {
 
     useEffect(() => {
         fetchStudents();
-    }, [viewMode]);
+    }, [viewMode, filterCSAgent]);
 
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
     const [csAgentsList, setCsAgentsList] = useState([]);
+    const [filterCSAgent, setFilterCSAgent] = useState('all');
 
-    // Fetch CS agents for super admin quick reassign
+    // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
-        if (isSuperAdmin) {
+        if (isSuperAdmin || isHeadOrAdmin) {
             apiClient.get('/users?department=Customer Service').then(res => setCsAgentsList(res.data || [])).catch(() => {});
         }
-    }, [isSuperAdmin]);
+    }, [isSuperAdmin, isHeadOrAdmin]);
 
     const fetchStudents = async () => {
         try {
@@ -392,6 +393,10 @@ const CustomerServicePage = () => {
             // In "my_work" mode for cs_head, show only their students
             if (viewMode === 'my_work' && isHeadOrAdmin) {
                 params.cs_agent_id = user.id;
+            }
+            // Agent filter for super admin
+            if (filterCSAgent !== 'all') {
+                params.cs_agent_id = filterCSAgent;
             }
             const response = await studentApi.getAll(params);
             setStudents(response.data);
@@ -619,7 +624,7 @@ const CustomerServicePage = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Customer Service</h1>
                     <p className="text-muted-foreground">Manage student onboarding and support</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -630,6 +635,17 @@ const CustomerServicePage = () => {
                             data-testid="search-students"
                         />
                     </div>
+                    {isSuperAdmin && csAgentsList.length > 0 && (
+                        <Select value={filterCSAgent} onValueChange={setFilterCSAgent} data-testid="filter-cs-agent">
+                            <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-cs-agent-trigger">
+                                <SelectValue placeholder="All Agents" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Agents</SelectItem>
+                                {csAgentsList.map(a => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
                     {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />

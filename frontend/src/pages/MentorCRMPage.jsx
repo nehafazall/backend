@@ -261,6 +261,8 @@ const MentorCRMPage = () => {
         notes: '',
     });
     const [redepositSummary, setRedepositSummary] = useState(null);
+    const [mentorAgentsList, setMentorAgentsList] = useState([]);
+    const [filterMentorAgent, setFilterMentorAgent] = useState('all');
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -275,9 +277,19 @@ const MentorCRMPage = () => {
     useEffect(() => {
         fetchStudents();
         fetchRevenueSummary();
-    }, [viewMode]);
+    }, [viewMode, filterMentorAgent]);
 
     const isHeadOrAdmin = ['academic_master', 'super_admin', 'admin'].includes(user?.role);
+    const isSuperAdmin = user?.role === 'super_admin';
+
+    // Fetch mentor agents for super admin / academic master filtering
+    useEffect(() => {
+        if (isSuperAdmin || isHeadOrAdmin) {
+            apiClient.get('/users?role=mentor').then(res => {
+                setMentorAgentsList((res.data || []).filter(u => u.is_active !== false));
+            }).catch(() => {});
+        }
+    }, [isSuperAdmin, isHeadOrAdmin]);
 
     const fetchRevenueSummary = async () => {
         try {
@@ -305,6 +317,10 @@ const MentorCRMPage = () => {
             // In "my_work" mode, filter by mentor_id
             if (viewMode === 'my_work' || !isHeadOrAdmin) {
                 params.mentor_id = user.id;
+            }
+            // Agent filter for super admin / academic master
+            if (filterMentorAgent !== 'all') {
+                params.mentor_id = filterMentorAgent;
             }
             const response = await studentApi.getAll(params);
             const mentorStudents = response.data.filter(s => s.mentor_id || s.mentor_stage);
@@ -466,7 +482,7 @@ const MentorCRMPage = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Mentor CRM</h1>
                     <p className="text-muted-foreground">Manage student mentorship and redeposit pipeline</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -477,6 +493,17 @@ const MentorCRMPage = () => {
                             data-testid="search-mentor-students"
                         />
                     </div>
+                    {(isSuperAdmin || isHeadOrAdmin) && mentorAgentsList.length > 0 && (
+                        <Select value={filterMentorAgent} onValueChange={setFilterMentorAgent} data-testid="filter-mentor-agent">
+                            <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-mentor-agent-trigger">
+                                <SelectValue placeholder="All Mentors" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Mentors</SelectItem>
+                                {mentorAgentsList.map(a => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
                     {['super_admin', 'admin', 'academic_master'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />

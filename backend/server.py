@@ -3247,6 +3247,13 @@ async def get_leads(
                 query["assigned_to"] = {"$in": team_ids}
     # super_admin and admin see all leads
     
+    # Super admin/admin can also filter by team_name
+    if team_id and role in ["super_admin", "admin"]:
+        team_members = await db.users.find({"team_id": team_id}).to_list(100)
+        team_ids = [t["id"] for t in team_members]
+        if team_ids:
+            query["assigned_to"] = {"$in": team_ids}
+    
     if stage:
         query["stage"] = stage
     if assigned_to:
@@ -6303,7 +6310,7 @@ async def get_overall_dashboard(
             "all_time": {"sales": round(all_time_s.get("total", 0), 2), "cs": round(all_time_c.get("total", 0), 2), "mentors": round(all_time_m.get("total", 0), 2)},
         },
         "monthly_trend": monthly_trend,
-        "revenue_split": [{"name": "Sales", "value": round(s_rev_tm, 2)}, {"name": "Customer Service", "value": round(cs_rev_tm, 2)}, {"name": "Mentors", "value": round(m_rev_tm, 2)}],
+        "revenue_split": [{"name": "Sales", "value": round(s_rev_tm, 2)}, {"name": "Customer Service", "value": round(cs_rev_tm, 2)}, {"name": "Academics", "value": round(m_rev_tm, 2)}],
         "top_performers": {
             "sales": [{"name": t["name"], "revenue": t["revenue"], "deals": t["deals"]} for t in top_sales],
             "cs": [{"name": t["name"], "revenue": t["revenue"], "upgrades": t["upgrades"]} for t in top_cs],
@@ -6593,7 +6600,8 @@ async def get_pipeline_revenue(view_as: Optional[str] = None, user = Depends(get
                 "full_name": "$full_name",
                 "interested_course_id": "$interested_course_id",
                 "estimated_value": {"$ifNull": ["$estimated_value", 0]},
-                "sale_amount": {"$ifNull": ["$sale_amount", 0]}
+                "sale_amount": {"$ifNull": ["$sale_amount", 0]},
+                "enrollment_amount": {"$ifNull": ["$enrollment_amount", 0]}
             }}
         }}
     ]
@@ -6611,9 +6619,9 @@ async def get_pipeline_revenue(view_as: Optional[str] = None, user = Depends(get
     for stage in pipeline_stages:
         stage_data = next((r for r in result if r["_id"] == stage), None)
         if stage_data:
-            # Calculate actual value for enrolled (use sale_amount)
+            # Calculate actual value for enrolled (use enrollment_amount)
             if stage == "enrolled":
-                total_value = sum(l.get("sale_amount", 0) for l in stage_data.get("leads", []))
+                total_value = sum((l.get("enrollment_amount") or l.get("sale_amount") or 0) for l in stage_data.get("leads", []))
             else:
                 total_value = stage_data.get("total_value", 0)
             
@@ -7558,7 +7566,7 @@ async def get_sales_agent_closings(
             "closings": {"$sum": 1},
             "revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
         }},
-        {"$sort": {"closings": -1}},
+        {"$sort": {"revenue": -1}},
         {"$limit": limit}
     ]
     result = await db.leads.aggregate(pipeline).to_list(limit)
@@ -8480,21 +8488,35 @@ async def get_cs_agent_students_drill(
     query = {"cs_agent_name": agent_name}
     students = await db.students.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
     
+    # Get all upgrades for this agent from cs_upgrades collection
+    agent_upgrades = await db.cs_upgrades.find(
+        {"cs_agent_name": agent_name},
+        {"_id": 0, "phone": 1, "amount": 1, "course_amount": 1, "upgrade_to_course": 1, "course_upgrade": 1, "date": 1, "upgraded_at": 1}
+    ).to_list(5000)
+    
+    # Group upgrades by student phone
+    upgrades_by_phone = {}
+    for u in agent_upgrades:
+        phone = u.get("phone")
+        if phone:
+            upgrades_by_phone.setdefault(phone, []).append(u)
+    
     result = []
     for s in students:
-        upgrades = s.get("upgrade_history") or []
-        total_upgrade_revenue = sum(uh.get("amount", 0) for uh in upgrades)
+        phone = s.get("phone", "")
+        student_upgrades = upgrades_by_phone.get(phone, [])
+        total_upgrade_revenue = sum(u.get("amount") or u.get("course_amount", 0) for u in student_upgrades)
         result.append({
             "student_name": s.get("full_name") or s.get("student_name") or "Unknown",
             "student_code": s.get("student_code") or s.get("id", "")[:8],
             "stage": s.get("stage", ""),
             "course": s.get("current_course_name") or s.get("package_bought") or s.get("course_name") or "",
-            "upgrade_count": s.get("upgrade_count") or len(upgrades),
+            "upgrade_count": len(student_upgrades),
             "upgrade_revenue": total_upgrade_revenue,
-            "upgrades": [{"package": u.get("to_package") or u.get("to_course_name", ""), "amount": u.get("amount", 0), "date": (u.get("confirmed_at") or "")[:10]} for u in upgrades],
+            "upgrades": [{"package": u.get("upgrade_to_course") or u.get("course_upgrade", ""), "amount": u.get("amount") or u.get("course_amount", 0), "date": str(u.get("date") or u.get("upgraded_at") or "")[:10]} for u in student_upgrades],
             "pitched_label": s.get("pitched_upgrade_label", ""),
             "pitched_price": s.get("pitched_upgrade_price", 0),
-            "phone": s.get("phone", ""),
+            "phone": phone,
         })
     return result
 
@@ -13301,7 +13323,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-attribution.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-drilldown.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

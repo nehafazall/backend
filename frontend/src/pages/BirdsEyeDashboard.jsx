@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -16,9 +18,10 @@ import {
     FileWarning, AlertTriangle, Banknote, Receipt, Clock, Shield,
     ArrowUpRight, ArrowDownRight, RefreshCw, Landmark, Wallet, CreditCard,
     Trophy, Medal, Award, Star, Activity, Building2, CircleDollarSign,
-    Calendar, ChevronDown,
+    Calendar as CalendarIcon, ChevronDown,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format } from 'date-fns';
 
 const DEPT_COLORS = { sales: '#dc2626', cs: '#3b82f6', mentors: '#10b981' };
 const PIE_COLORS = ['#dc2626', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
@@ -36,6 +39,7 @@ const PERIOD_OPTIONS = [
     { value: 'this_year', label: 'This Year' },
     { value: 'last_year', label: 'Last Year' },
     { value: 'overall', label: 'All Time' },
+    { value: 'custom', label: 'Custom Range' },
 ];
 
 const formatAED = (v) => `AED ${(v || 0).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -46,16 +50,83 @@ const BirdsEyeDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [d, setD] = useState(null);
     const [period, setPeriod] = useState('this_month');
+    const [customRange, setCustomRange] = useState({ from: undefined, to: undefined });
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [drillLevel, setDrillLevel] = useState('departments'); // departments > teams > agents
+    const [drillData, setDrillData] = useState(null);
+    const [drillLabel, setDrillLabel] = useState('');
 
-    useEffect(() => { if (user) fetchData(); }, [user, period]);
+    useEffect(() => {
+        if (user) {
+            if (period === 'custom') {
+                if (customRange.from && customRange.to) fetchData();
+            } else {
+                fetchData();
+            }
+        }
+    }, [user, period, customRange]);
 
     const fetchData = async () => {
         setLoading(true);
+        setDrillLevel('departments');
+        setDrillData(null);
         try {
-            const res = await apiClient.get(`/dashboard/overall?period=${period}`);
+            let url = `/dashboard/overall?period=${period}`;
+            if (period === 'custom' && customRange.from && customRange.to) {
+                const startStr = format(customRange.from, 'yyyy-MM-dd');
+                const endStr = format(customRange.to, 'yyyy-MM-dd');
+                url += `&custom_start=${startStr}&custom_end=${endStr}`;
+            }
+            const res = await apiClient.get(url);
             setD(res.data);
         } catch (e) { console.error(e); toast.error('Failed to load dashboard'); }
         setLoading(false);
+    };
+
+    const handlePeriodChange = (value) => {
+        if (value === 'custom') {
+            setPeriod('custom');
+            setShowDatePicker(true);
+        } else {
+            setPeriod(value);
+            setShowDatePicker(false);
+            setCustomRange({ from: undefined, to: undefined });
+        }
+    };
+
+    const handlePieClick = async (entry) => {
+        if (drillLevel === 'departments' && entry.name === 'Sales') {
+            // Drill into Sales → show Teams
+            try {
+                const res = await apiClient.get(`/dashboard/team-revenue?period=${period}`);
+                const teamData = (res.data || []).map(t => ({ name: t.team_name, value: t.revenue, deals: t.deals, team_id: t.team_id }));
+                setDrillData(teamData);
+                setDrillLevel('teams');
+                setDrillLabel('Sales → Teams');
+            } catch (e) { toast.error('Failed to load team data'); }
+        } else if (drillLevel === 'teams') {
+            // Drill into a Team → show Agents
+            try {
+                const teamName = encodeURIComponent(entry.name);
+                const res = await apiClient.get(`/dashboard/team-revenue/${teamName}/agents?period=${period}`);
+                const agentData = (res.data || []).map(a => ({ name: a.agent_name, value: a.revenue, deals: a.deals }));
+                setDrillData(agentData);
+                setDrillLevel('agents');
+                setDrillLabel(`${entry.name} → Agents`);
+            } catch (e) { toast.error('Failed to load agent data'); }
+        }
+    };
+
+    const handleDrillBack = () => {
+        if (drillLevel === 'agents') {
+            setDrillLevel('teams');
+            // Re-fetch teams
+            handlePieClick({ name: 'Sales' });
+        } else if (drillLevel === 'teams') {
+            setDrillLevel('departments');
+            setDrillData(null);
+            setDrillLabel('');
+        }
     };
 
     if (loading || !d) return (
@@ -68,7 +139,9 @@ const BirdsEyeDashboard = () => {
 
     const rev = d.revenue;
     const sp = rev.selected_period;
-    const periodLabel = PERIOD_OPTIONS.find(p => p.value === period)?.label || 'This Month';
+    const periodLabel = period === 'custom' && customRange.from && customRange.to
+        ? `${format(customRange.from, 'MMM d')} – ${format(customRange.to, 'MMM d, yyyy')}`
+        : (PERIOD_OPTIONS.find(p => p.value === period)?.label || 'This Month');
 
     const genderData = Object.entries(d.hr.gender || {}).map(([k, v]) => ({
         name: k.charAt(0).toUpperCase() + k.slice(1), value: v, fill: GENDER_COLORS[k] || '#94a3b8'
@@ -85,9 +158,9 @@ const BirdsEyeDashboard = () => {
                     <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Select value={period} onValueChange={setPeriod} data-testid="period-filter">
+                    <Select value={period} onValueChange={handlePeriodChange} data-testid="period-filter">
                         <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="period-filter-trigger">
-                            <Calendar className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                            <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                             <SelectValue placeholder="Select period" />
                         </SelectTrigger>
                         <SelectContent>
@@ -98,6 +171,33 @@ const BirdsEyeDashboard = () => {
                             ))}
                         </SelectContent>
                     </Select>
+                    {period === 'custom' && (
+                        <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" data-testid="custom-date-trigger">
+                                    <CalendarIcon className="h-3.5 w-3.5" />
+                                    {customRange.from && customRange.to
+                                        ? `${format(customRange.from, 'MMM d')} – ${format(customRange.to, 'MMM d')}`
+                                        : 'Pick dates'}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    mode="range"
+                                    selected={customRange}
+                                    onSelect={(range) => {
+                                        setCustomRange(range || { from: undefined, to: undefined });
+                                        if (range?.from && range?.to) {
+                                            setShowDatePicker(false);
+                                        }
+                                    }}
+                                    numberOfMonths={2}
+                                    disabled={{ after: new Date() }}
+                                    data-testid="custom-date-calendar"
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    )}
                     {d.sla_breaches > 0 && (
                         <Badge variant="destructive" className="cursor-pointer" onClick={() => navigate('/sales')} data-testid="sla-alert">
                             <AlertTriangle className="h-3 w-3 mr-1" />{d.sla_breaches} SLA Breaches
@@ -112,21 +212,21 @@ const BirdsEyeDashboard = () => {
                 </div>
             </div>
 
-            {/* Row 1: Revenue KPI Cards */}
+            {/* Row 1: Revenue KPI Cards - Clickable */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="revenue-cards">
                 <KPICard title="Overall Revenue" value={formatAED(sp.total)} subtitle={`${periodLabel}`} icon={DollarSign} color="bg-gradient-to-br from-amber-500/15 to-amber-600/5 border-amber-500/30" iconBg="bg-amber-500/20 text-amber-500" testId="overall-revenue" />
-                <KPICard title="Sales Revenue" value={formatAED(sp.sales)} subtitle={`${sp.sales_count} enrollments`} icon={TrendingUp} color="bg-gradient-to-br from-red-500/15 to-red-600/5 border-red-500/30" iconBg="bg-red-500/20 text-red-500" testId="sales-revenue" />
-                <KPICard title="CS Revenue" value={formatAED(sp.cs)} subtitle={`${sp.cs_count} upgrades`} icon={Activity} color="bg-gradient-to-br from-blue-500/15 to-blue-600/5 border-blue-500/30" iconBg="bg-blue-500/20 text-blue-500" testId="cs-revenue" />
-                <KPICard title="Mentor Revenue" value={formatAED(sp.mentors)} subtitle={`${sp.mentor_count} deposits`} icon={Award} color="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border-emerald-500/30" iconBg="bg-emerald-500/20 text-emerald-500" testId="mentor-revenue" />
+                <KPICard title="Sales Revenue" value={formatAED(sp.sales)} subtitle={`${sp.sales_count} enrollments`} icon={TrendingUp} color="bg-gradient-to-br from-red-500/15 to-red-600/5 border-red-500/30" iconBg="bg-red-500/20 text-red-500" testId="sales-revenue" onClick={() => navigate('/sales/dashboard')} />
+                <KPICard title="CS Revenue" value={formatAED(sp.cs)} subtitle={`${sp.cs_count} upgrades`} icon={Activity} color="bg-gradient-to-br from-blue-500/15 to-blue-600/5 border-blue-500/30" iconBg="bg-blue-500/20 text-blue-500" testId="cs-revenue" onClick={() => navigate('/cs/dashboard')} />
+                <KPICard title="Academics Revenue" value={formatAED(sp.mentors)} subtitle={`${sp.mentor_count} deposits`} icon={Award} color="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border-emerald-500/30" iconBg="bg-emerald-500/20 text-emerald-500" testId="mentor-revenue" onClick={() => navigate('/academics')} />
             </div>
 
-            {/* Row 2: Treasury + Expenses + HR Summary */}
+            {/* Row 2: Treasury + Expenses + HR Summary - Clickable */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="treasury-hr-row">
-                <MiniCard title="In Bank" value={formatAED(d.treasury.in_bank)} icon={Landmark} color="text-emerald-500" testId="in-bank" />
-                <MiniCard title="Pending Settlement" value={formatAED(d.treasury.pending_settlement)} icon={Clock} color="text-amber-500" testId="pending-settlement" />
-                <MiniCard title="Expenses" value={formatAED(d.expenses.this_month)} icon={CreditCard} color="text-red-500" subtitle={`${d.expenses.count} entries`} testId="monthly-expenses" />
-                <MiniCard title="Active Employees" value={d.hr.total_active} icon={Users} color="text-blue-500" testId="active-employees" />
-                <MiniCard title="Present Today" value={`${d.hr.present_today}/${d.hr.attendance_total}`} icon={UserCheck} color="text-emerald-500" subtitle={`${attendancePct}%`} testId="present-today" />
+                <MiniCard title="In Bank" value={formatAED(d.treasury.in_bank)} icon={Landmark} color="text-emerald-500" testId="in-bank" onClick={() => navigate('/finance/clt/receivables')} />
+                <MiniCard title="Pending Settlement" value={formatAED(d.treasury.pending_settlement)} icon={Clock} color="text-amber-500" testId="pending-settlement" onClick={() => navigate('/finance/clt/verifications')} />
+                <MiniCard title="Expenses" value={formatAED(d.expenses.this_month)} icon={CreditCard} color="text-red-500" subtitle={`${d.expenses.count} entries`} testId="monthly-expenses" onClick={() => navigate('/finance/expenses')} />
+                <MiniCard title="Active Employees" value={d.hr.total_active} icon={Users} color="text-blue-500" testId="active-employees" onClick={() => navigate('/hr/employees')} />
+                <MiniCard title="Present Today" value={`${d.hr.present_today}/${d.hr.attendance_total}`} icon={UserCheck} color="text-emerald-500" subtitle={`${attendancePct}%`} testId="present-today" onClick={() => navigate('/hr/attendance')} />
             </div>
 
             {/* Row 3: Monthly Revenue Trend + Revenue Split Bar */}
@@ -150,7 +250,7 @@ const BirdsEyeDashboard = () => {
                                 <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                                 <Area type="monotone" dataKey="sales" name="Sales" stroke={DEPT_COLORS.sales} fill="url(#gSales)" strokeWidth={2} />
                                 <Area type="monotone" dataKey="cs" name="CS" stroke={DEPT_COLORS.cs} fill="url(#gCS)" strokeWidth={2} />
-                                <Area type="monotone" dataKey="mentors" name="Mentors" stroke={DEPT_COLORS.mentors} fill="url(#gMentors)" strokeWidth={2} />
+                                <Area type="monotone" dataKey="mentors" name="Academics" stroke={DEPT_COLORS.mentors} fill="url(#gMentors)" strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
@@ -158,17 +258,28 @@ const BirdsEyeDashboard = () => {
 
                 <Card className="border border-border/50" data-testid="revenue-split-chart">
                     <CardHeader className="pb-2 pt-3 px-4">
-                        <CardTitle className="text-sm font-medium">Revenue Bifurcation (This Month)</CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm font-medium">
+                                {drillLevel === 'departments' ? `Revenue Bifurcation (${periodLabel})` : drillLabel}
+                            </CardTitle>
+                            {drillLevel !== 'departments' && (
+                                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleDrillBack} data-testid="drill-back-btn">
+                                    <ChevronDown className="h-3 w-3 mr-1 rotate-90" /> Back
+                                </Button>
+                            )}
+                        </div>
+                        {drillLevel === 'departments' && <p className="text-[10px] text-muted-foreground mt-0.5">Click "Sales" to drill into teams</p>}
+                        {drillLevel === 'teams' && <p className="text-[10px] text-muted-foreground mt-0.5">Click a team to see agents</p>}
                     </CardHeader>
                     <CardContent className="px-4 pb-3">
                         <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={d.revenue_split} layout="vertical">
+                            <BarChart data={drillData || d.revenue_split} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                                 <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={80} />
+                                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" width={100} />
                                 <Tooltip formatter={(v) => formatAED(v)} />
-                                <Bar dataKey="value" name="Revenue" radius={[0, 6, 6, 0]}>
-                                    {d.revenue_split.map((entry, i) => <Cell key={i} fill={Object.values(DEPT_COLORS)[i]} />)}
+                                <Bar dataKey="value" name="Revenue" radius={[0, 6, 6, 0]} cursor={drillLevel !== 'agents' ? 'pointer' : 'default'} onClick={(data) => drillLevel !== 'agents' && handlePieClick(data)}>
+                                    {(drillData || d.revenue_split).map((entry, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -178,16 +289,16 @@ const BirdsEyeDashboard = () => {
 
             {/* Row 4: Department Revenue Breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="dept-revenue">
-                <ComparisonCard dept="Sales" current={sp.sales} allTime={rev.all_time.sales} color={DEPT_COLORS.sales} icon={TrendingUp} periodLabel={periodLabel} />
-                <ComparisonCard dept="Customer Service" current={sp.cs} allTime={rev.all_time.cs} color={DEPT_COLORS.cs} icon={Activity} periodLabel={periodLabel} />
-                <ComparisonCard dept="Mentors" current={sp.mentors} allTime={rev.all_time.mentors} color={DEPT_COLORS.mentors} icon={Award} periodLabel={periodLabel} />
+                <ComparisonCard dept="Sales" current={sp.sales} allTime={rev.all_time.sales} color={DEPT_COLORS.sales} icon={TrendingUp} periodLabel={periodLabel} onClick={() => navigate('/sales/dashboard')} />
+                <ComparisonCard dept="Customer Service" current={sp.cs} allTime={rev.all_time.cs} color={DEPT_COLORS.cs} icon={Activity} periodLabel={periodLabel} onClick={() => navigate('/cs/dashboard')} />
+                <ComparisonCard dept="Academics" current={sp.mentors} allTime={rev.all_time.mentors} color={DEPT_COLORS.mentors} icon={Award} periodLabel={periodLabel} onClick={() => navigate('/academics')} />
             </div>
 
             {/* Row 5: Top Performers */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="top-performers">
                 <TopPerformersCard title="Top 5 Sales Agents" data={d.top_performers.sales} metricKey="deals" metricLabel="deals" icon={Trophy} color="text-red-500" bgColor="bg-red-500/10" />
                 <TopPerformersCard title="Top 3 CS Agents" data={d.top_performers.cs} metricKey="upgrades" metricLabel="upgrades" icon={Medal} color="text-blue-500" bgColor="bg-blue-500/10" />
-                <TopPerformersCard title="Top 3 Mentors" data={d.top_performers.mentors} metricKey="deposits" metricLabel="deposits" icon={Star} color="text-emerald-500" bgColor="bg-emerald-500/10" />
+                <TopPerformersCard title="Top 3 Academics" data={d.top_performers.mentors} metricKey="deposits" metricLabel="deposits" icon={Star} color="text-emerald-500" bgColor="bg-emerald-500/10" />
             </div>
 
             {/* Row 6: Gender + Docs Expiry + Recent Enrollments */}
@@ -201,10 +312,17 @@ const BirdsEyeDashboard = () => {
                         {genderData.length > 0 ? (
                             <ResponsiveContainer width="100%" height={180}>
                                 <PieChart>
-                                    <Pie data={genderData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                                    <Pie data={genderData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" label={({ name, value, cx, cy, midAngle, outerRadius }) => {
+                                        const RADIAN = Math.PI / 180;
+                                        const radius = outerRadius + 20;
+                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                        return <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11} fontWeight={500}>{`${name}: ${value}`}</text>;
+                                    }} labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}>
                                         {genderData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                                     </Pie>
                                     <Tooltip />
+                                    <Legend iconSize={10} wrapperStyle={{ fontSize: 11, color: 'hsl(var(--foreground))' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
@@ -272,9 +390,9 @@ const BirdsEyeDashboard = () => {
 
 /* =========== SUB-COMPONENTS =========== */
 
-const KPICard = ({ title, value, subtitle, icon: Icon, color, iconBg, testId }) => {
+const KPICard = ({ title, value, subtitle, icon: Icon, color, iconBg, testId, onClick }) => {
     return (
-        <Card className={`${color} border transition-all hover:scale-[1.02] hover:shadow-md`} data-testid={testId}>
+        <Card className={`${color} border transition-all hover:scale-[1.02] hover:shadow-md ${onClick ? 'cursor-pointer' : ''}`} data-testid={testId} onClick={onClick}>
             <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -289,8 +407,8 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, iconBg, testId }) 
     );
 };
 
-const MiniCard = ({ title, value, icon: Icon, color, subtitle, testId }) => (
-    <Card className="border border-border/50 hover:border-primary/20 transition-all" data-testid={testId}>
+const MiniCard = ({ title, value, icon: Icon, color, subtitle, testId, onClick }) => (
+    <Card className={`border border-border/50 hover:border-primary/20 transition-all ${onClick ? 'cursor-pointer' : ''}`} data-testid={testId} onClick={onClick}>
         <CardContent className="p-3 flex items-center gap-3">
             <div className={`p-2 rounded-lg bg-muted/50 ${color}`}><Icon className="h-4 w-4" /></div>
             <div>
@@ -302,9 +420,9 @@ const MiniCard = ({ title, value, icon: Icon, color, subtitle, testId }) => (
     </Card>
 );
 
-const ComparisonCard = ({ dept, current, allTime, color, icon: Icon, periodLabel }) => {
+const ComparisonCard = ({ dept, current, allTime, color, icon: Icon, periodLabel, onClick }) => {
     return (
-        <Card className="border border-border/50" data-testid={`comparison-${dept.toLowerCase().replace(/\s/g, '-')}`}>
+        <Card className={`border border-border/50 ${onClick ? 'cursor-pointer hover:border-primary/30' : ''}`} data-testid={`comparison-${dept.toLowerCase().replace(/\s/g, '-')}`} onClick={onClick}>
             <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <Icon className="h-4 w-4" style={{ color }} />
