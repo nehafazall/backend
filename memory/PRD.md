@@ -15,6 +15,7 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 1. **P0 Verification** - All recent dashboard and Kanban fixes verified via testing agent (iteration_58). Pipeline revenue, sales agent sorting, CS drill-down revenue, clickable cards, gender chart, "Academics" rename — all passing.
 2. **Academics Kanban Filters** - Added mentor agent filter dropdown on MentorCRMPage for super_admin/academic_master. Filters students by `mentor_id` param. Matches the filter pattern on Sales and CS Kanban pages.
 3. **Custom Date Range Picker** - Added "Custom Range" option to the Overall Dashboard period filter. When selected, a Calendar popover (dual-month, range mode) appears. Selecting start/end dates sends `period=custom&custom_start=YYYY-MM-DD&custom_end=YYYY-MM-DD` to the backend, which already supports custom date ranges via `_get_date_range()`.
+4. **Sales Dashboard Top 10 Fix** - Changed from horizontal bar chart showing deal count (`closings`) to vertical bar chart showing revenue per agent, color-coded bars, sorted by revenue desc, linked with period filter.
 
 ### Session (March 18, 2026) - Batch Fixes
 1. **Dashboard Time Period Filters** - 11 filter options (Today, Yesterday, This/Last Week, This/Last Month, This/Last Quarter, This/Last Year, All Time) with full backend support via `_get_date_range()` and dynamic period queries

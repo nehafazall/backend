@@ -455,17 +455,19 @@ const SalesDashboard = () => {
             {/* Top 10 Agents + Team Revenue */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Top 10 Agents</CardTitle></div>{canDrillDown && <CardDescription>Click any bar to see their closed students</CardDescription>}</CardHeader>
+                    <CardHeader className="pb-2"><div className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-500" /><CardTitle className="text-base">Top 10 Agents by Revenue</CardTitle></div>{canDrillDown && <CardDescription>Click any bar to see their closed students</CardDescription>}</CardHeader>
                     <CardContent>
                         {topAgentsOverall.length > 0 ? (
                             <ResponsiveContainer width="100%" height={320}>
-                                <BarChart data={topAgentsOverall} layout="vertical" margin={{ left: 5 }}>
+                                <BarChart data={topAgentsOverall} margin={{ left: 5, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" opacity={0.3} />
-                                    <XAxis type="number" tick={{ className: 'fill-muted-foreground', fontSize: 11 }} />
-                                    <YAxis dataKey="agent_name" type="category" tick={{ className: 'fill-foreground', fontSize: 10 }} width={110} />
-                                    <Tooltip formatter={(v, n) => [n === 'Revenue' ? fmtCur(v) : v, n]} contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                                    <Bar dataKey="closings" fill="#EF3340" radius={[0, 4, 4, 0]} name="Closings" cursor={canDrillDown ? "pointer" : "default"}
-                                        onClick={(data) => { if (canDrillDown && data?.agent_name) drillAgent(data.agent_name); }} />
+                                    <XAxis dataKey="agent_name" tick={{ className: 'fill-foreground', fontSize: 9 }} angle={-25} textAnchor="end" height={60} interval={0} />
+                                    <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                                    <Tooltip formatter={(v, n) => [fmtCur(v), n]} contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} name="Revenue" cursor={canDrillDown ? "pointer" : "default"}
+                                        onClick={(data) => { if (canDrillDown && data?.agent_name) drillAgent(data.agent_name); }}>
+                                        {topAgentsOverall.map((_, i) => (<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (<div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>)}
