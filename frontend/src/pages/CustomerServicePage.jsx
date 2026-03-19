@@ -370,14 +370,14 @@ const CustomerServicePage = () => {
         useSensor(KeyboardSensor)
     );
 
-    useEffect(() => {
-        fetchStudents();
-    }, [viewMode, filterCSAgent]);
-
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
     const [csAgentsList, setCsAgentsList] = useState([]);
     const [filterCSAgent, setFilterCSAgent] = useState('all');
+
+    useEffect(() => {
+        fetchStudents();
+    }, [viewMode, filterCSAgent]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
