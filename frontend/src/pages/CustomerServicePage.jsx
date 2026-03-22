@@ -68,6 +68,7 @@ import {
     PhoneCall,
     GripVertical,
     ArrowUp,
+    Download,
 } from 'lucide-react';
 
 const CS_STAGES = [
@@ -650,6 +651,16 @@ const CustomerServicePage = () => {
                         <>
                             <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />
                         </>
+                    )}
+                    {isSuperAdmin && (
+                        <Button variant="outline" size="sm" data-testid="export-students-btn"
+                            onClick={() => {
+                                const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+                                const token = localStorage.getItem('clt_token');
+                                window.open(`${API_URL}/api/students/export/excel?token=${token}`, '_blank');
+                            }}>
+                            <Download className="h-4 w-4 mr-1.5" />Export All
+                        </Button>
                     )}
                 </div>
             </div>

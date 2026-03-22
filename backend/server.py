@@ -5312,6 +5312,71 @@ async def get_students(
     students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return students
 
+
+@api_router.get("/students/export/excel")
+async def export_students_excel(token: str = None, request: Request = None):
+    """Export all students as Excel (Sr No, Name, Phone, Email) for super admin."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    import io as _io
+
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(auth_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        uid = payload.get("user_id") or payload.get("sub")
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+        if not user or user.get("role") not in ["super_admin", "admin"]:
+            raise HTTPException(status_code=403, detail="Super admin only")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    students = await db.students.find({}, {"_id": 0, "full_name": 1, "phone": 1, "email": 1}).sort("full_name", 1).to_list(10000)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "All Students"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    for col, h in enumerate(["Sr No.", "Name", "Phone", "Email"], 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    for i, s in enumerate(students, 1):
+        ws.cell(row=i + 1, column=1, value=i).border = thin_border
+        ws.cell(row=i + 1, column=2, value=s.get("full_name", "")).border = thin_border
+        ws.cell(row=i + 1, column=3, value=s.get("phone", "")).border = thin_border
+        ws.cell(row=i + 1, column=4, value=s.get("email", "")).border = thin_border
+
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 28
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 32
+
+    output = _io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=all_students_export.xlsx"}
+    )
+
+
 @api_router.put("/students/{student_id}", response_model=StudentResponse)
 async def update_student(student_id: str, data: StudentUpdate, user = Depends(get_current_user)):
     existing = await db.students.find_one({"id": student_id})
