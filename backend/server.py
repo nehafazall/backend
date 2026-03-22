@@ -7292,13 +7292,51 @@ async def get_mentor_dashboard(
             next_slab = slab
             break
 
-    # Get net salary from salary_structure for bonus calc (fallback to top-level salary)
-    hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
+    # Get salary for bonus calculation
+    # For individual mentor: use their salary
+    # For team/admin view: aggregate per-mentor bonuses
     salary_aed = 0
-    if hr_emp:
-        ss = hr_emp.get("salary_structure") or {}
-        salary_aed = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
-    bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
+    bonus_amount_aed = 0
+
+    if effective_view == "individual" and not is_admin:
+        # Single mentor — use their salary
+        hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
+        if hr_emp:
+            ss = hr_emp.get("salary_structure") or {}
+            salary_aed = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+        bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
+    else:
+        # Team/admin view: calculate each mentor's individual bonus and sum
+        bonus_mentor_ids = mentor_ids or [m["id"] async for m in db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}}, {"_id": 0, "id": 1})]
+        total_salary = 0
+        total_bonus = 0
+        for mid in bonus_mentor_ids:
+            # Get this mentor's month net
+            m_dep_q = {"date": {"$gte": month_start}, "mentor_id": mid}
+            m_wd_q = {"date": {"$gte": month_start}, "mentor_id": mid}
+            m_dep = sum([d.get("amount", 0) async for d in db.mentor_redeposits.find(m_dep_q, {"_id": 0, "amount": 1})])
+            m_wd = sum([w.get("amount", 0) async for w in db.mentor_withdrawals.find(m_wd_q, {"_id": 0, "amount": 1})])
+            m_net = m_dep - m_wd
+
+            # Find this mentor's slab
+            m_slab = None
+            for slab in slabs:
+                if m_net >= slab["threshold"]:
+                    m_slab = slab
+
+            # Get this mentor's salary
+            hr_emp = await db.hr_employees.find_one({"user_id": mid}, {"_id": 0, "salary_structure": 1, "salary": 1})
+            m_salary = 0
+            if hr_emp:
+                ss = hr_emp.get("salary_structure") or {}
+                m_salary = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+
+            total_salary += m_salary
+            if m_slab:
+                total_bonus += round(m_salary * (m_slab["bonus_pct"] / 100), 2)
+
+        salary_aed = total_salary
+        bonus_amount_aed = total_bonus
 
     return {
         "total_students": total_students,
