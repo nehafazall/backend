@@ -9456,6 +9456,24 @@ async def download_cs_historical_template(token: str = None, request: Request = 
     ws3.column_dimensions['A'].width = 25
     ws3.column_dimensions['B'].width = 15
     
+    # Sheet 4: Existing Students (for correct mapping)
+    ws4 = wb.create_sheet("Students")
+    student_fill = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
+    for col, h in enumerate(["Student Name", "Email", "Phone"], 1):
+        cell = ws4.cell(row=1, column=col, value=h)
+        cell.font = Font(bold=True, color="FFFFFF", size=11)
+        cell.fill = student_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    students = await db.students.find({}, {"_id": 0, "full_name": 1, "email": 1, "phone": 1}).sort("full_name", 1).to_list(5000)
+    for ri, s in enumerate(students, 2):
+        ws4.cell(row=ri, column=1, value=s.get("full_name", "")).border = thin_border
+        ws4.cell(row=ri, column=2, value=s.get("email", "")).border = thin_border
+        ws4.cell(row=ri, column=3, value=s.get("phone", "")).border = thin_border
+    ws4.column_dimensions['A'].width = 25
+    ws4.column_dimensions['B'].width = 30
+    ws4.column_dimensions['C'].width = 18
+    
     output = _io.BytesIO()
     wb.save(output)
     output.seek(0)
