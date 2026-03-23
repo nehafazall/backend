@@ -445,21 +445,21 @@ const MentorCRMPage = () => {
                                 <div>
                                     <p className="text-emerald-100 text-sm">Monthly Redeposits ({redepositSummary.month})</p>
                                     <p className="text-3xl font-bold text-emerald-50">
-                                        AED {(redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0).toLocaleString()}
+                                        AED {Math.round(redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0).toLocaleString()}
                                     </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>
                                 <div>
                                     <p className="text-emerald-100 text-sm">Withdrawals</p>
                                     <p className="text-2xl font-semibold text-red-200">
-                                        - AED {(redepositSummary.totals?.grand_withdrawals || 0).toLocaleString()}
+                                        - AED {Math.round(redepositSummary.totals?.grand_withdrawals || 0).toLocaleString()}
                                     </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>
                                 <div>
                                     <p className="text-emerald-100 text-sm">Net Active</p>
                                     <p className="text-2xl font-bold text-yellow-200">
-                                        AED {(redepositSummary.totals?.grand_net || (redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0) - (redepositSummary.totals?.grand_withdrawals || 0)).toLocaleString()}
+                                        AED {Math.round(redepositSummary.totals?.grand_net || (redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0) - (redepositSummary.totals?.grand_withdrawals || 0)).toLocaleString()}
                                     </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>

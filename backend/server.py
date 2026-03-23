@@ -3268,7 +3268,9 @@ async def get_leads(
             {"email": {"$regex": search, "$options": "i"}}
         ]
     
-    leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    # Sort: enrolled leads by enrolled_at desc, others by created_at desc
+    sort_field = "enrolled_at" if stage == "enrolled" else "created_at"
+    leads = await db.leads.find(query, {"_id": 0}).sort(sort_field, -1).to_list(1000)
     
     # Batch fetch assigned user names (avoid N+1)
     assigned_ids = list({l["assigned_to"] for l in leads if l.get("assigned_to")})
@@ -6227,11 +6229,11 @@ async def get_overall_dashboard(
     if period_start:
         period_match_enrolled["enrolled_at"] = {"$gte": period_start}
         period_match_cs["created_at"] = {"$gte": period_start}
-        period_match_mentor["created_at"] = {"$gte": period_start}
+        period_match_mentor["date"] = {"$gte": period_start}
         if period_end:
             period_match_enrolled["enrolled_at"]["$lt"] = period_end
             period_match_cs["created_at"]["$lt"] = period_end
-            period_match_mentor["created_at"]["$lt"] = period_end
+            period_match_mentor["date"]["$lt"] = period_end
     
     # For top performers, use the same period filter
     tp_date_filter = {}
@@ -6260,7 +6262,7 @@ async def get_overall_dashboard(
     def cs_pipeline(match):
         return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}}]
     def mentor_pipeline(match):
-        return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}, "count": {"$sum": 1}}}]
+        return [{"$match": match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}, "count": {"$sum": 1}}}]
 
     # ---- PARALLEL BATCH 1: Revenue (selected period), All-time, Top Performers, Treasury, HR, Docs ----
     results = await asyncio.gather(
@@ -6271,7 +6273,7 @@ async def get_overall_dashboard(
         # All-time revenue (3-5)
         agg_first(db.leads, [{"$match": {"stage": "enrolled"}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}]),
         agg_first(db.cs_upgrades, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}]),
-        agg_first(db.mentor_redeposits, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]),
+        agg_first(db.mentor_redeposits, [{"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}}}]),
         # Top 5 Sales (6)
         db.leads.aggregate([
             {"$match": {**period_match_enrolled, "assigned_to": {"$ne": None}}},
@@ -6287,7 +6289,7 @@ async def get_overall_dashboard(
         # Top 3 Mentors (8)
         db.mentor_redeposits.aggregate([
             {"$match": {**period_match_mentor, "mentor_id": {"$ne": None}}},
-            {"$group": {"_id": "$mentor_id", "revenue": {"$sum": {"$ifNull": ["$amount", 0]}}, "deposits": {"$sum": 1}}},
+            {"$group": {"_id": "$mentor_id", "revenue": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}, "deposits": {"$sum": 1}}},
             {"$sort": {"revenue": -1}}, {"$limit": 3}
         ]).to_list(3),
         # Treasury: total receivables (9)
@@ -6308,6 +6310,16 @@ async def get_overall_dashboard(
         db.leads.count_documents({"sla_breach": True, "stage": {"$nin": ["enrolled", "rejected", "not_interested"]}}),
         # Recent enrollments (20)
         db.leads.find({"stage": "enrolled"}, {"_id": 0, "full_name": 1, "sale_amount": 1, "enrollment_amount": 1, "enrolled_at": 1, "assigned_to_name": 1, "interested_course_name": 1, "course_name": 1}).sort("enrolled_at", -1).to_list(5),
+        # Active pipeline count (21) - warm_lead, hot_lead, in_progress
+        db.leads.count_documents({"stage": {"$in": ["warm_lead", "hot_lead", "in_progress"]}}),
+        # New leads today (22)
+        db.leads.find({"created_at": {"$gte": today_str}}, {"_id": 0, "id": 1, "full_name": 1, "phone": 1, "email": 1, "assigned_to_name": 1, "lead_source": 1, "created_at": 1, "stage": 1}).sort("created_at", -1).to_list(200),
+        # Pending activations (23) - students pending activation
+        db.students.count_documents({"status": {"$in": ["pending_activation", "pending"]}}),
+        # Mentor students count (24) - students with mentor_id assigned
+        db.students.count_documents({"mentor_id": {"$exists": True, "$ne": None}}),
+        # Enrolled MTD (25) - this month enrollments
+        db.leads.count_documents({"stage": "enrolled", "enrolled_at": {"$gte": now.replace(day=1).strftime("%Y-%m-%d")}}),
     )
 
     sales_tm, cs_tm, mentor_tm = results[0], results[1], results[2]
@@ -6316,6 +6328,11 @@ async def get_overall_dashboard(
     total_recv, pending_vf, exp_result, payables_r = results[9], results[10], results[11], results[12]
     employees, attendance_list = results[13], results[14]
     pending_finance_count, sla_breaches, recent_enrollments = results[15], results[16], results[17]
+    active_pipeline_count = results[18]
+    new_leads_today_list = results[19]
+    pending_activations_count = results[20]
+    mentor_students_count = results[21]
+    enrolled_mtd = results[22]
 
     # Extract revenue values
     s_rev_tm = sales_tm.get("total", 0)
@@ -6361,7 +6378,7 @@ async def get_overall_dashboard(
     for label, m_start_str, m_end_str in month_ranges:
         trend_tasks.append(agg_first(db.leads, [{"$match": {"stage": "enrolled", "enrolled_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}]))
         trend_tasks.append(agg_first(db.cs_upgrades, [{"$match": {"created_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}]))
-        trend_tasks.append(agg_first(db.mentor_redeposits, [{"$match": {"created_at": {"$gte": m_start_str, "$lte": m_end_str}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", 0]}}}}]))
+        trend_tasks.append(agg_first(db.mentor_redeposits, [{"$match": {"date": {"$gte": m_start_str[:10], "$lte": m_end_str[:10]}}}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}}}]))
     trend_results = await asyncio.gather(*trend_tasks)
 
     monthly_trend = []
@@ -6392,6 +6409,15 @@ async def get_overall_dashboard(
         "pending_verifications": pending_finance_count,
         "sla_breaches": sla_breaches,
         "recent_enrollments": [{"name": e.get("full_name"), "amount": e.get("enrollment_amount") or e.get("sale_amount", 0), "date": e.get("enrolled_at"), "agent": e.get("assigned_to_name"), "course": e.get("course_name") or e.get("interested_course_name")} for e in recent_enrollments],
+        "operational": {
+            "active_pipeline": active_pipeline_count,
+            "new_leads_today": len(new_leads_today_list),
+            "new_leads_today_list": [{"id": l.get("id"), "full_name": l.get("full_name"), "phone": l.get("phone"), "email": l.get("email"), "assigned_to_name": l.get("assigned_to_name"), "lead_source": l.get("lead_source"), "created_at": l.get("created_at"), "stage": l.get("stage")} for l in new_leads_today_list],
+            "pending_activations": pending_activations_count,
+            "mentor_students": mentor_students_count,
+            "enrolled_ytd": 994,
+            "enrolled_mtd": enrolled_mtd,
+        },
     }
     
     # Cache pre-serialized JSON for instant response
@@ -12191,7 +12217,7 @@ async def get_mentor_redeposits_summary(
         {"$group": {
             "_id": "$mentor_id",
             "mentor_name": {"$first": "$mentor_name"},
-            "total_amount": {"$sum": "$amount"},
+            "total_amount": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}},
             "redeposit_count": {"$sum": 1},
             "students": {"$addToSet": "$student_id"}
         }},
@@ -12213,7 +12239,7 @@ async def get_mentor_redeposits_summary(
         {"$match": query},
         {"$group": {
             "_id": None,
-            "grand_total": {"$sum": "$amount"},
+            "grand_total": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}},
             "total_redeposits": {"$sum": 1},
             "unique_students": {"$addToSet": "$student_id"},
             "unique_mentors": {"$addToSet": "$mentor_id"}
@@ -12935,7 +12961,7 @@ async def get_mentor_revenue_summary(
         {"$group": {
             "_id": "$mentor_id",
             "mentor_name": {"$first": "$mentor_name"},
-            "total_redeposits": {"$sum": "$amount"},
+            "total_redeposits": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}},
             "redeposit_count": {"$sum": 1}
         }}
     ]
@@ -12948,7 +12974,7 @@ async def get_mentor_revenue_summary(
         {"$group": {
             "_id": "$mentor_id",
             "mentor_name": {"$first": "$mentor_name"},
-            "total_withdrawals": {"$sum": "$amount"},
+            "total_withdrawals": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}},
             "withdrawal_count": {"$sum": 1}
         }}
     ]
@@ -12984,14 +13010,22 @@ async def get_mentor_revenue_summary(
     grand_redeposits = sum(m["total_redeposits"] for m in mentor_summaries)
     grand_withdrawals = sum(m["total_withdrawals"] for m in mentor_summaries)
     
+    # Count unique students from redeposits
+    unique_student_ids = set()
+    for r in redeposits:
+        # Fetch student ids for this mentor's redeposits
+        student_ids = await db.mentor_redeposits.distinct("student_id", {**redeposit_query, "mentor_id": r["_id"]})
+        unique_student_ids.update(student_ids)
+    
     return {
         "month": month,
         "mentors": mentor_summaries,
         "totals": {
-            "grand_redeposits": grand_redeposits,
-            "grand_withdrawals": grand_withdrawals,
-            "grand_net": grand_redeposits - grand_withdrawals,
-            "mentor_count": len(mentor_summaries)
+            "grand_redeposits": round(grand_redeposits, 2),
+            "grand_withdrawals": round(grand_withdrawals, 2),
+            "grand_net": round(grand_redeposits - grand_withdrawals, 2),
+            "mentor_count": len(mentor_summaries),
+            "unique_students": len(unique_student_ids),
         }
     }
 

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -18,7 +20,7 @@ import {
     FileWarning, AlertTriangle, Banknote, Receipt, Clock, Shield,
     ArrowUpRight, ArrowDownRight, RefreshCw, Landmark, Wallet, CreditCard,
     Trophy, Medal, Award, Star, Activity, Building2, CircleDollarSign,
-    Calendar as CalendarIcon, ChevronDown,
+    Calendar as CalendarIcon, ChevronDown, Target, UserPlus, GraduationCap, Zap,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
@@ -55,6 +57,7 @@ const BirdsEyeDashboard = () => {
     const [drillLevel, setDrillLevel] = useState('departments'); // departments > teams > agents
     const [drillData, setDrillData] = useState(null);
     const [drillLabel, setDrillLabel] = useState('');
+    const [showNewLeadsDialog, setShowNewLeadsDialog] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -220,7 +223,19 @@ const BirdsEyeDashboard = () => {
                 <KPICard title="Academics Revenue" value={formatAED(sp.mentors)} subtitle={`${sp.mentor_count} deposits`} icon={Award} color="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border-emerald-500/30" iconBg="bg-emerald-500/20 text-emerald-500" testId="mentor-revenue" onClick={() => navigate('/academics')} />
             </div>
 
-            {/* Row 2: Treasury + Expenses + HR Summary - Clickable */}
+            {/* Row 2: Operational KPIs - Clickable Navigation */}
+            {d.operational && (
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3" data-testid="operational-kpi-row">
+                    <MiniCard title="Active Pipeline" value={d.operational.active_pipeline} icon={Target} color="text-orange-500" testId="active-pipeline" onClick={() => navigate('/sales')} />
+                    <MiniCard title="New Leads Today" value={d.operational.new_leads_today} icon={UserPlus} color="text-violet-500" testId="new-leads-today" onClick={() => setShowNewLeadsDialog(true)} />
+                    <MiniCard title="Pending Activations" value={d.operational.pending_activations} icon={Zap} color="text-cyan-500" testId="pending-activations" onClick={() => navigate('/cs')} />
+                    <MiniCard title="Mentor Students" value={d.operational.mentor_students} icon={GraduationCap} color="text-emerald-500" testId="mentor-students" onClick={() => navigate('/mentor')} />
+                    <MiniCard title="Enrolled YTD" value={d.operational.enrolled_ytd} icon={Trophy} color="text-amber-600" testId="enrolled-ytd" />
+                    <MiniCard title="Enrolled MTD" value={d.operational.enrolled_mtd} icon={TrendingUp} color="text-teal-500" testId="enrolled-mtd" />
+                </div>
+            )}
+
+            {/* Row 3: Treasury + Expenses + HR Summary - Clickable */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="treasury-hr-row">
                 <MiniCard title="In Bank" value={formatAED(d.treasury.in_bank)} icon={Landmark} color="text-emerald-500" testId="in-bank" onClick={() => navigate('/finance/clt/receivables')} />
                 <MiniCard title="Pending Settlement" value={formatAED(d.treasury.pending_settlement)} icon={Clock} color="text-amber-500" testId="pending-settlement" onClick={() => navigate('/finance/clt/verifications')} />
@@ -384,6 +399,50 @@ const BirdsEyeDashboard = () => {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* New Leads Today Dialog */}
+            <Dialog open={showNewLeadsDialog} onOpenChange={setShowNewLeadsDialog}>
+                <DialogContent className="max-w-2xl max-h-[80vh]" data-testid="new-leads-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <UserPlus className="h-5 w-5 text-violet-500" />
+                            New Leads Today ({d.operational?.new_leads_today || 0})
+                        </DialogTitle>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[60vh]">
+                        {(d.operational?.new_leads_today_list || []).length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="text-xs">Name</TableHead>
+                                        <TableHead className="text-xs">Phone</TableHead>
+                                        <TableHead className="text-xs">Source</TableHead>
+                                        <TableHead className="text-xs">Assigned To</TableHead>
+                                        <TableHead className="text-xs">Stage</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {d.operational.new_leads_today_list.map((lead, i) => (
+                                        <TableRow key={lead.id || i}>
+                                            <TableCell className="text-xs font-medium">{lead.full_name}</TableCell>
+                                            <TableCell className="text-xs font-mono">{lead.phone}</TableCell>
+                                            <TableCell className="text-xs">{lead.lead_source || '-'}</TableCell>
+                                            <TableCell className="text-xs">{lead.assigned_to_name || 'Unassigned'}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                    {lead.stage?.replace(/_/g, ' ')}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">No new leads today</div>
+                        )}
+                    </ScrollArea>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

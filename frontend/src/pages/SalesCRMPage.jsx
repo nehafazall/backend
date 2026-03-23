@@ -301,7 +301,15 @@ const SortableLeadCard = ({ lead, onUpdate, onView, onSetReminder, isSuperAdmin,
 };
 
 const KanbanColumn = ({ stage, leads, onUpdate, onView, onSetReminder, isSuperAdmin, availableAgents, onQuickReassign }) => {
-    const stageLeads = leads.filter(l => l.stage === stage.id);
+    let stageLeads = leads.filter(l => l.stage === stage.id);
+    // Sort enrolled leads by enrolled_at desc (most recent first)
+    if (stage.id === 'enrolled') {
+        stageLeads = [...stageLeads].sort((a, b) => {
+            const dateA = a.enrolled_at || a.created_at || '';
+            const dateB = b.enrolled_at || b.created_at || '';
+            return dateB.localeCompare(dateA);
+        });
+    }
     const leadIds = stageLeads.map(l => l.id);
     
     // Make column a drop target
@@ -396,6 +404,8 @@ const SalesCRMPage = () => {
     const [teams, setTeams] = useState([]);
     const [filterAgent, setFilterAgent] = useState('all');
     const [filterTeam, setFilterTeam] = useState('all');
+    const [deepSearchResults, setDeepSearchResults] = useState(null);
+    const [deepSearching, setDeepSearching] = useState(false);
 
     const isSuperAdmin = user?.role === 'super_admin';
 
@@ -489,8 +499,22 @@ const SalesCRMPage = () => {
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
+        setDeepSearchResults(null);
         // Debounce search
         setTimeout(() => fetchLeads(), 500);
+    };
+
+    const handleDeepSearch = async () => {
+        if (!searchTerm.trim()) return;
+        setDeepSearching(true);
+        try {
+            const response = await leadApi.getAll({ search: searchTerm.trim() });
+            setDeepSearchResults(response.data || []);
+        } catch (error) {
+            toast.error('Deep search failed');
+        } finally {
+            setDeepSearching(false);
+        }
     };
 
     // Drag and drop handlers
@@ -895,6 +919,71 @@ const SalesCRMPage = () => {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
+            )}
+
+            {/* Advanced Search Fallback - When no results found */}
+            {!loading && searchTerm.trim() && leads.length === 0 && (
+                <Card className="border-dashed border-2 border-muted-foreground/30" data-testid="no-results-fallback">
+                    <CardContent className="py-6">
+                        <div className="text-center space-y-3">
+                            <Search className="h-8 w-8 mx-auto text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">No leads found for "{searchTerm}" in your view</p>
+                            <p className="text-xs text-muted-foreground">Try a deep search across all leads by phone, email, or name</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleDeepSearch}
+                                disabled={deepSearching}
+                                data-testid="deep-search-btn"
+                            >
+                                {deepSearching ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary mr-2" />
+                                ) : (
+                                    <Search className="h-4 w-4 mr-2" />
+                                )}
+                                Search All Leads (Phone / Email / Name)
+                            </Button>
+                        </div>
+                        {deepSearchResults !== null && (
+                            <div className="mt-4">
+                                {deepSearchResults.length > 0 ? (
+                                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">{deepSearchResults.length} result(s) found:</p>
+                                        {deepSearchResults.map((lead) => (
+                                            <div
+                                                key={lead.id}
+                                                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border cursor-pointer hover:bg-muted transition-colors"
+                                                onClick={() => handleViewLead(lead)}
+                                                data-testid={`deep-search-result-${lead.id}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+                                                        {lead.full_name?.charAt(0) || '?'}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium">{lead.full_name}</p>
+                                                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                            {lead.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{lead.phone}</span>}
+                                                            {lead.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{lead.email}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="secondary" className="text-[10px]">{lead.stage?.replace(/_/g, ' ')}</Badge>
+                                                    {lead.assigned_to_name && (
+                                                        <span className="text-xs text-muted-foreground">{lead.assigned_to_name}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-sm text-muted-foreground mt-2">No leads found across the entire database</p>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             )}
 
             {/* Create Lead Modal */}
