@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PeriodFilter } from '@/components/PeriodFilter';
 import { TransactionHistory } from '@/components/TransactionHistory';
+import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import ReminderModal from '@/components/ReminderModal';
 import {
     DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor,
     useSensor, useSensors, useDroppable,
@@ -29,8 +31,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-    Search, Phone, Mail, User, Briefcase, MessageSquare, TrendingUp,
-    CheckCircle, DollarSign, MoreVertical, GripVertical, RefreshCw,
+    Search, Phone, PhoneCall, Mail, User, Briefcase, MessageSquare, TrendingUp,
+    CheckCircle, DollarSign, MoreVertical, GripVertical, RefreshCw, Bell, Clock,
+    Send, FileText,
 } from 'lucide-react';
 
 const BD_STAGES = [
@@ -107,9 +110,17 @@ const BDStudentCard = ({ student, onView, isDragging, isSuperAdmin, bdAgents, on
             </div>
 
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                <span className="text-xs text-muted-foreground">
-                    {student.enrollment_amount ? fmtAED(student.enrollment_amount) : 'No deposit'}
-                </span>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">
+                        {student.enrollment_amount ? fmtAED(student.enrollment_amount) : 'No deposit'}
+                    </span>
+                    {student.reminder_date && !student.reminder_completed && (
+                        <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0">
+                            <Bell className="h-2.5 w-2.5 mr-0.5" />
+                            {student.reminder_date}
+                        </Badge>
+                    )}
+                </div>
                 {student.bd_agent_name && (
                     <Badge variant="outline" className="text-xs">{student.bd_agent_name}</Badge>
                 )}
@@ -179,6 +190,10 @@ export default function BDCRMPage() {
     const [showRedepositModal, setShowRedepositModal] = useState(false);
     const [redepositData, setRedepositData] = useState({ amount_aed: '', date: new Date().toISOString().slice(0, 10) });
     const [periodFilter, setPeriodFilter] = useState(null);
+    const [studentNotes, setStudentNotes] = useState([]);
+    const [newNote, setNewNote] = useState('');
+    const [savingNote, setSavingNote] = useState(false);
+    const [showReminderModal, setShowReminderModal] = useState(false);
 
     const isSuperAdmin = ['super_admin', 'admin'].includes(user?.role);
     const isBD = user?.role === 'business_development';
@@ -270,6 +285,32 @@ export default function BDCRMPage() {
     const handleViewStudent = (student) => {
         setSelectedStudent(student);
         setShowDetailModal(true);
+        setNewNote('');
+        fetchStudentNotes(student.id);
+    };
+
+    const fetchStudentNotes = async (studentId) => {
+        try {
+            const res = await apiClient.get(`/students/${studentId}/notes`);
+            setStudentNotes(Array.isArray(res.data) ? res.data : []);
+        } catch { setStudentNotes([]); }
+    };
+
+    const handleAddNote = async () => {
+        if (!newNote.trim() || !selectedStudent) return;
+        setSavingNote(true);
+        try {
+            await apiClient.post(`/students/${selectedStudent.id}/notes`, { text: newNote, type: 'call_note' });
+            toast.success('Note saved');
+            setNewNote('');
+            fetchStudentNotes(selectedStudent.id);
+        } catch { toast.error('Failed to save note'); }
+        setSavingNote(false);
+    };
+
+    const handleReminderSuccess = () => {
+        fetchStudents();
+        setShowReminderModal(false);
     };
 
     const handleSearch = (e) => {
@@ -361,33 +402,110 @@ export default function BDCRMPage() {
 
             {/* Student Detail Modal */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-                <DialogContent className="max-w-lg" data-testid="bd-student-detail-modal">
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="bd-student-detail-modal">
                     <DialogHeader>
                         <DialogTitle>{selectedStudent?.full_name}</DialogTitle>
-                        <DialogDescription>Student Details</DialogDescription>
+                        <DialogDescription>Student Details &amp; Call Center</DialogDescription>
                     </DialogHeader>
                     {selectedStudent && (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div><Label className="text-muted-foreground">Phone</Label><p className="font-mono">{selectedStudent.phone}</p></div>
-                                <div><Label className="text-muted-foreground">Email</Label><p>{selectedStudent.email || 'N/A'}</p></div>
-                                <div><Label className="text-muted-foreground">Course</Label><p>{selectedStudent.package_bought || selectedStudent.current_course_name || 'N/A'}</p></div>
-                                <div><Label className="text-muted-foreground">BD Stage</Label>
+                            {/* Contact Info + Call Button */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-sky-600 text-white flex items-center justify-center text-lg font-medium">
+                                        {selectedStudent.full_name?.charAt(0) || '?'}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono text-sm">{selectedStudent.phone}</span>
+                                            <ClickToCall
+                                                phoneNumber={selectedStudent.phone}
+                                                contactId={selectedStudent.id}
+                                                contactName={selectedStudent.full_name}
+                                                variant="outline"
+                                                size="sm"
+                                                showLabel={true}
+                                            />
+                                        </div>
+                                        {selectedStudent.email && <p className="text-xs text-muted-foreground">{selectedStudent.email}</p>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
                                     <Badge className={`${BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.color || 'bg-gray-500'} text-white`}>
                                         {BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.label || selectedStudent.bd_stage}
                                     </Badge>
+                                    <Button variant="outline" size="sm" onClick={() => setShowReminderModal(true)} data-testid="bd-set-reminder-btn">
+                                        <Bell className="h-3.5 w-3.5 mr-1.5" /> Reminder
+                                    </Button>
                                 </div>
+                            </div>
+
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div><Label className="text-muted-foreground">Course</Label><p>{selectedStudent.package_bought || selectedStudent.current_course_name || 'N/A'}</p></div>
                                 <div><Label className="text-muted-foreground">BD Agent</Label><p>{selectedStudent.bd_agent_name || 'Unassigned'}</p></div>
                                 <div><Label className="text-muted-foreground">Mentor</Label><p>{selectedStudent.mentor_name || 'N/A'}</p></div>
-                                <div><Label className="text-muted-foreground">Enrollment Amount</Label><p>{fmtAED(selectedStudent.enrollment_amount)}</p></div>
+                                <div><Label className="text-muted-foreground">Enrollment</Label><p>{fmtAED(selectedStudent.enrollment_amount)}</p></div>
                                 <div><Label className="text-muted-foreground">Language</Label><p>{selectedStudent.preferred_language || 'N/A'}</p></div>
+                                {selectedStudent.reminder_date && !selectedStudent.reminder_completed && (
+                                    <div><Label className="text-muted-foreground">Next Reminder</Label>
+                                        <p className="flex items-center gap-1 text-amber-600"><Bell className="h-3 w-3" /> {selectedStudent.reminder_date} {selectedStudent.reminder_time || ''}</p>
+                                        {selectedStudent.reminder_note && <p className="text-xs text-muted-foreground mt-0.5">{selectedStudent.reminder_note}</p>}
+                                    </div>
+                                )}
                             </div>
-                            {selectedStudent.notes && (
-                                <div>
-                                    <Label className="text-muted-foreground">Notes</Label>
-                                    <p className="text-sm mt-1 whitespace-pre-wrap bg-muted/50 p-2 rounded">{selectedStudent.notes}</p>
+
+                            {/* 3CX Call History & Recordings */}
+                            <div className="p-3 bg-muted/50 rounded-lg border border-muted-foreground/20">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <PhoneCall className="h-4 w-4 text-primary" />
+                                    <Label className="text-sm font-medium">3CX Call Center</Label>
+                                    <Badge variant="outline" className="text-xs ml-auto bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>
                                 </div>
-                            )}
+                                <CallHistory contactId={selectedStudent.id} />
+                            </div>
+
+                            {/* Call Notes / Comments */}
+                            <div className="space-y-2">
+                                <Label className="flex items-center gap-1.5 text-sm font-medium">
+                                    <FileText className="h-3.5 w-3.5" /> Follow-up Notes
+                                </Label>
+                                {/* Add new note */}
+                                <div className="flex gap-2">
+                                    <Textarea
+                                        value={newNote}
+                                        onChange={e => setNewNote(e.target.value)}
+                                        placeholder="Add call notes, discussion summary..."
+                                        rows={2}
+                                        className="flex-1 text-sm"
+                                        data-testid="bd-note-input"
+                                    />
+                                    <Button size="sm" onClick={handleAddNote} disabled={!newNote.trim() || savingNote}
+                                        className="self-end" data-testid="bd-save-note-btn">
+                                        <Send className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                                {/* Existing notes */}
+                                {studentNotes.length > 0 && (
+                                    <ScrollArea className="max-h-[140px]">
+                                        <div className="space-y-1.5">
+                                            {studentNotes.map(n => (
+                                                <div key={n.id} className="p-2 bg-muted/50 rounded text-sm border-l-2 border-sky-400">
+                                                    <p className="whitespace-pre-wrap">{n.text}</p>
+                                                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2">
+                                                        <span>{n.created_by_name}</span>
+                                                        <span>{new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                )}
+                                {studentNotes.length === 0 && (
+                                    <p className="text-xs text-muted-foreground py-2">No notes yet. Add your first call note above.</p>
+                                )}
+                            </div>
+
                             {/* Customer Transaction History */}
                             <div>
                                 <Label className="text-muted-foreground flex items-center gap-1.5 mb-2">
@@ -437,6 +555,16 @@ export default function BDCRMPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Reminder Modal */}
+            <ReminderModal
+                open={showReminderModal}
+                onClose={() => setShowReminderModal(false)}
+                entityType="student"
+                entityId={selectedStudent?.id}
+                entityName={selectedStudent?.full_name}
+                onSuccess={handleReminderSuccess}
+            />
         </div>
     );
 }

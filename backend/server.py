@@ -5616,6 +5616,47 @@ async def reassign_student_mentor(
     return updated
 
 
+# ===================== STUDENT NOTES / CALL LOG =====================
+
+@api_router.get("/students/{student_id}/notes")
+async def get_student_notes(student_id: str, user=Depends(get_current_user)):
+    """Get all notes/comments for a student, most recent first."""
+    notes = await db.student_notes.find(
+        {"student_id": student_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return notes
+
+
+@api_router.post("/students/{student_id}/notes")
+async def add_student_note(student_id: str, request: Request, user=Depends(get_current_user)):
+    """Add a call note or comment for a student."""
+    body = await request.json()
+    text = body.get("text", "").strip()
+    note_type = body.get("type", "call_note")  # call_note, follow_up, general
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text is required")
+
+    student = await db.students.find_one({"id": student_id}, {"_id": 0, "full_name": 1})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    note = {
+        "id": str(uuid.uuid4()),
+        "student_id": student_id,
+        "text": text,
+        "type": note_type,
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name", "Unknown"),
+        "created_at": now,
+    }
+    await db.student_notes.insert_one(note)
+    await log_activity("student", student_id, "note_added", user, {"type": note_type})
+
+    note.pop("_id", None)
+    return note
+
+
 # ===================== STUDENT TRANSACTION HISTORY =====================
 
 @api_router.get("/students/{student_id}/transaction-history")
