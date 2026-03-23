@@ -63,6 +63,7 @@ import {
     Upload,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 // Notification sound URLs (base64 encoded short alert tones)
 const NOTIFICATION_SOUNDS = {
@@ -120,6 +121,7 @@ const SECTIONS = {
         items: [
             { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
             { title: 'Customer Service', icon: Users, path: '/cs' },
+            { title: 'Student Portal', icon: GraduationCap, path: '/cs/student-portal', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'CS Historical Import', icon: Upload, path: '/cs/historical-import', roles: ['super_admin'] },
         ],
     },
@@ -203,6 +205,9 @@ const SECTIONS = {
             { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications' },
             { title: 'Mentor Withdrawals', icon: ArrowDownRight, path: '/finance/mentor-withdrawals' },
             { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
+            { title: 'Revenue Forecast', icon: TrendingUp, path: '/forecasting', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Report Builder', icon: BarChart3, path: '/reports', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin'] },
         ],
     },
     marketing: {
@@ -323,8 +328,10 @@ function Layout() {
         async function fetchNotifications() {
             try {
                 const response = await notificationApi.getAll();
-                setNotifications(response.data);
-                setUnreadCount(response.data.filter(n => !n.read).length);
+                const data = response.data;
+                const items = data?.items || (Array.isArray(data) ? data : []);
+                setNotifications(items);
+                setUnreadCount(data?.unread_count || items.filter(n => !n.read).length);
             } catch (err) { /* ignore */ }
         }
         fetchNotifications();
@@ -596,21 +603,7 @@ function Layout() {
                         <Button variant="ghost" size="icon" onClick={toggleTheme} title={`Theme: ${themeMode || 'auto'}`} data-testid="theme-toggle">
                             {themeMode === 'auto' ? <Monitor className="h-5 w-5" /> : theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                         </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="relative">
-                                    <Bell className="h-5 w-5" />
-                                    {unreadCount > 0 && <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-80">
-                                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <ScrollArea className="h-64">
-                                    {notifications.length === 0 ? <div className="p-4 text-center text-muted-foreground text-sm">No notifications</div> : notificationItems}
-                                </ScrollArea>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <NotificationCenter />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon"><div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">{user?.full_name?.charAt(0) || 'U'}</div></Button>

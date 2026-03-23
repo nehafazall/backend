@@ -1,0 +1,124 @@
+{
+  "summary": "Iteration 67 Testing - 5 New Features: Notification Center, Certificate Generation, Report Builder, Revenue Forecasting, Student Portal. Backend: 15/15 tests passed. Frontend: All 5 features verified working with UI tests.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Super admin login successful",
+    "Backend: GET /api/notifications returns paginated response with items, unread_count, total, page, page_size",
+    "Backend: GET /api/notifications?page=1&page_size=10 pagination works",
+    "Backend: PUT /api/notifications/read-all marks all as read",
+    "Backend: POST /api/certificates/generate returns pdf_base64 and certificate record",
+    "Backend: Certificate generation requires student_name validation",
+    "Backend: GET /api/certificates returns list of generated certificates",
+    "Backend: GET /api/reports/collections returns 6 collections (leads, students, cs_upgrades, mentor_redeposits, users, certificates)",
+    "Backend: POST /api/reports/generate with leads collection returns rows and total",
+    "Backend: Report generation with filters works correctly",
+    "Backend: Report generation rejects invalid collection",
+    "Backend: GET /api/forecasting/revenue returns historical, forecast, metrics, pipeline",
+    "Backend: Reports endpoint requires authentication",
+    "Backend: Forecasting endpoint requires authentication",
+    "Backend: Certificates endpoint requires authentication",
+    "Frontend: Home page loads with module icons and KPIs",
+    "Frontend: Notification bell icon visible in header",
+    "Frontend: Notification panel opens with notifications list",
+    "Frontend: Revenue Forecast page renders with all KPIs (Avg Monthly, Recent 3M Avg, Conversion Rate, Pipeline Leads, Growth Trend)",
+    "Frontend: Revenue Trend & Forecast chart displays",
+    "Frontend: Revenue Breakdown by Source chart displays",
+    "Frontend: Projected Revenue table shows 3 months forecast",
+    "Frontend: Sales Pipeline table displays",
+    "Frontend: Monthly Revenue History table displays",
+    "Frontend: Report Builder page renders with collection selector",
+    "Frontend: Report Builder shows 6 data sources (Leads/Sales, Students, CS Upgrades, Mentor Redeposits, Users/Staff, Certificates)",
+    "Frontend: Report Builder fields selection with checkboxes works",
+    "Frontend: Report Builder filters section with date range works",
+    "Frontend: Report Builder Run Report generates results (3233 records)",
+    "Frontend: Report Builder Export CSV button available",
+    "Frontend: Certificate page renders with form and preview area",
+    "Frontend: Certificate generation works - PDF generated",
+    "Frontend: Certificate Download PDF button works",
+    "Frontend: Certificate History shows generated certificates",
+    "Frontend: Student Portal page renders with iframe",
+    "Frontend: Student Portal iframe src is https://main.clt-academy.com/admin/students",
+    "Frontend: Student Portal 'Open in New Tab' button available",
+    "Frontend: Sidebar Finance section shows Revenue Forecast, Report Builder, Certificates",
+    "Frontend: Sidebar CS section shows Student Portal link"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_new_features_iteration67.py",
+    "/app/test_reports/pytest/pytest_iteration67.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 5 new features implemented correctly with proper data-testid attributes",
+    "Notification Center uses polling (30s interval) for real-time updates",
+    "Certificate PDF generation uses reportlab library with CLT Academy branding (red/black corners, dual signatures)",
+    "Report Builder supports 6 collections with field selection, filters, date range, and CSV export",
+    "Revenue Forecasting uses MongoDB aggregation over last 6 months with 3-month projections",
+    "Student Portal embeds external iframe with sandbox permissions"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_new_features_iteration67.py - New test file for 5 new features (15 tests)"
+  ],
+
+  "success_rate": {
+    "backend": "100% (15/15 passed)",
+    "frontend": "100% (All 5 features verified)"
+  },
+
+  "test_credentials": {
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234", "role": "super_admin"}
+  },
+
+  "seed_data_creation": "Created TEST_Jane Smith and TEST_John Doe certificates during testing",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "5 new features fully tested and working: 1) Notification Center with bell icon in header, popover panel, mark read/all read functionality. 2) Certificate Generation with PDF download (reportlab), CLT Academy branding, dual signatures. 3) Report Builder with 6 collections (leads, students, cs_upgrades, mentor_redeposits, users, certificates), field selection, filters, CSV export. 4) Revenue Forecasting with 6-month historical data, 3-month projections, KPIs, charts. 5) Student Portal with iframe embedding main.clt-academy.com/admin/students. All features accessible from Finance section (Revenue Forecast, Report Builder, Certificates) and CS section (Student Portal) in sidebar.",
+
+  "feature_verification_details": {
+    "notification_center": {
+      "endpoint": "GET /api/notifications",
+      "response_format": {"items": "array", "unread_count": "number", "total": "number", "page": "number", "page_size": "number"},
+      "ui_elements": ["notification-bell", "notification-badge", "notification-panel", "mark-all-read-btn"],
+      "status": "WORKING"
+    },
+    "certificate_generation": {
+      "endpoint": "POST /api/certificates/generate",
+      "response_format": {"pdf_base64": "string", "certificate": "object"},
+      "ui_elements": ["cert-form", "cert-student-name", "cert-type-select", "cert-generate-btn", "cert-download-btn", "cert-history-btn"],
+      "status": "WORKING"
+    },
+    "report_builder": {
+      "endpoints": ["GET /api/reports/collections", "POST /api/reports/generate"],
+      "collections": ["leads", "students", "cs_upgrades", "mentor_redeposits", "users", "certificates"],
+      "ui_elements": ["report-builder-page", "report-collection-select", "report-fields-card", "report-filters-card", "report-run-btn", "report-export-btn"],
+      "status": "WORKING"
+    },
+    "revenue_forecasting": {
+      "endpoint": "GET /api/forecasting/revenue",
+      "response_format": {"historical": "array", "forecast": "array", "metrics": "object", "pipeline": "array"},
+      "ui_elements": ["revenue-forecast-page", "forecast-metric-*", "forecast-trend-chart", "forecast-breakdown-chart", "forecast-projections", "forecast-pipeline", "forecast-historical"],
+      "status": "WORKING"
+    },
+    "student_portal": {
+      "iframe_src": "https://main.clt-academy.com/admin/students",
+      "ui_elements": ["student-portal-page", "student-portal-iframe"],
+      "status": "WORKING"
+    }
+  }
+}

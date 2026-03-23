@@ -6707,14 +6707,32 @@ async def update_payment(payment_id: str, data: PaymentUpdate, user = Depends(ge
 
 # ==================== NOTIFICATIONS ====================
 
+async def create_notification(user_id: str, title: str, message: str, ntype: str = "info", link: str = None):
+    """Helper to create a notification for a user."""
+    notif = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": ntype,
+        "link": link,
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.insert_one(notif)
+    return notif
+
 @api_router.get("/notifications")
-async def get_notifications(unread_only: bool = False, user = Depends(get_current_user)):
+async def get_notifications(unread_only: bool = False, page: int = 1, page_size: int = 30, user = Depends(get_current_user)):
     query = {"user_id": user["id"]}
     if unread_only:
         query["read"] = False
     
-    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return notifications
+    total = await db.notifications.count_documents(query)
+    unread_count = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    skip = (max(page, 1) - 1) * page_size
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(page_size).to_list(page_size)
+    return {"items": notifications, "total": total, "unread_count": unread_count, "page": page, "page_size": page_size}
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, user = Depends(get_current_user)):
@@ -6731,6 +6749,362 @@ async def mark_all_notifications_read(user = Depends(get_current_user)):
         {"$set": {"read": True}}
     )
     return {"message": "All notifications marked as read"}
+
+# ==================== CERTIFICATE GENERATION ====================
+
+@api_router.post("/certificates/generate")
+async def generate_certificate(request: Request, user=Depends(get_current_user)):
+    """Generate a certificate PDF for a student."""
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import inch, cm
+    from reportlab.lib.colors import HexColor
+    import io, base64
+
+    body = await request.json()
+    student_name = body.get("student_name", "")
+    certificate_type = body.get("certificate_type", "Course Completion")
+    course_name = body.get("course_name", "")
+    award_date = body.get("award_date", datetime.now(timezone.utc).strftime("%d %B %Y"))
+    custom_text = body.get("custom_text", "")
+    student_id = body.get("student_id")
+
+    if not student_name:
+        raise HTTPException(status_code=400, detail="Student name is required")
+
+    buf = io.BytesIO()
+    width, height = landscape(A4)
+    c = canvas.Canvas(buf, pagesize=landscape(A4))
+
+    # Background
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.rect(0, 0, width, height, fill=1, stroke=0)
+
+    # Decorative corner accents (red/black)
+    accent = HexColor("#C41E3A")
+    dark = HexColor("#1a1a1a")
+    
+    # Top-left corner
+    c.setStrokeColor(accent)
+    c.setLineWidth(4)
+    c.line(30, height - 30, 30, height - 100)
+    c.line(30, height - 30, 100, height - 30)
+    # Top-right
+    c.line(width - 30, height - 30, width - 30, height - 100)
+    c.line(width - 30, height - 30, width - 100, height - 30)
+    # Bottom-left
+    c.line(30, 30, 30, 100)
+    c.line(30, 30, 100, 30)
+    # Bottom-right
+    c.line(width - 30, 30, width - 30, 100)
+    c.line(width - 30, 30, width - 100, 30)
+
+    # Inner border
+    c.setStrokeColor(dark)
+    c.setLineWidth(1.5)
+    c.rect(45, 45, width - 90, height - 90, fill=0, stroke=1)
+
+    # CLT Academy heading
+    c.setFillColor(dark)
+    c.setFont("Helvetica-Bold", 28)
+    c.drawCentredString(width / 2, height - 95, "CLT ACADEMY")
+    
+    # "TRADING ACADEMY" subtitle
+    c.setFont("Helvetica", 12)
+    c.setFillColor(HexColor("#666666"))
+    c.drawCentredString(width / 2, height - 115, "TRADING ACADEMY")
+
+    # Certificate type
+    c.setFillColor(accent)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, height - 155, f"CERTIFICATE OF {certificate_type.upper()}")
+
+    # Decorative line
+    c.setStrokeColor(accent)
+    c.setLineWidth(2)
+    c.line(width / 2 - 120, height - 165, width / 2 + 120, height - 165)
+
+    # "This is to certify that"
+    c.setFillColor(HexColor("#444444"))
+    c.setFont("Helvetica", 13)
+    c.drawCentredString(width / 2, height - 200, "This is to certify that")
+
+    # Student name (large, elegant)
+    c.setFillColor(dark)
+    c.setFont("Helvetica-Bold", 32)
+    c.drawCentredString(width / 2, height - 245, student_name)
+
+    # Underline for name
+    name_width = c.stringWidth(student_name, "Helvetica-Bold", 32)
+    c.setStrokeColor(accent)
+    c.setLineWidth(1)
+    c.line(width / 2 - name_width / 2 - 20, height - 252, width / 2 + name_width / 2 + 20, height - 252)
+
+    # Course / description
+    desc = custom_text or f"has successfully completed the {course_name} program"
+    c.setFillColor(HexColor("#444444"))
+    c.setFont("Helvetica", 12)
+    c.drawCentredString(width / 2, height - 285, desc)
+    c.drawCentredString(width / 2, height - 305, f"at CLT Trading Academy")
+
+    # Date
+    c.setFont("Helvetica", 11)
+    c.setFillColor(HexColor("#666666"))
+    c.drawCentredString(width / 2, height - 340, f"Date: {award_date}")
+
+    # Award emblem circle
+    c.setFillColor(accent)
+    c.circle(width / 2, 140, 35, fill=1, stroke=0)
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(width / 2, 147, "BEST")
+    c.drawCentredString(width / 2, 135, "AWARD")
+
+    # Signatures
+    sig_y = 85
+    # Left signature - COO
+    c.setStrokeColor(dark)
+    c.setLineWidth(0.5)
+    c.line(130, sig_y + 15, 300, sig_y + 15)
+    c.setFillColor(dark)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(215, sig_y, "Mohammed Faizeen")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(HexColor("#888888"))
+    c.drawCentredString(215, sig_y - 12, "Chief Operating Officer")
+
+    # Right signature - CEO
+    c.line(width - 300, sig_y + 15, width - 130, sig_y + 15)
+    c.setFillColor(dark)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(width - 215, sig_y, "Mohammed Aqib Lapia")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(HexColor("#888888"))
+    c.drawCentredString(width - 215, sig_y - 12, "Chief Executive Officer")
+
+    c.save()
+    buf.seek(0)
+    pdf_base64 = base64.b64encode(buf.getvalue()).decode()
+
+    # Save certificate record
+    cert_record = {
+        "id": str(uuid.uuid4()),
+        "student_id": student_id,
+        "student_name": student_name,
+        "certificate_type": certificate_type,
+        "course_name": course_name,
+        "award_date": award_date,
+        "generated_by": user["id"],
+        "generated_by_name": user.get("full_name", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.certificates.insert_one(cert_record)
+    cert_record.pop("_id", None)
+
+    if student_id:
+        await create_notification(
+            user["id"], "Certificate Generated",
+            f"Certificate for {student_name} ({certificate_type}) has been generated.",
+            "success", "/certificates"
+        )
+
+    return {"certificate": cert_record, "pdf_base64": pdf_base64}
+
+
+@api_router.get("/certificates")
+async def get_certificates(student_id: Optional[str] = None, user=Depends(get_current_user)):
+    query = {}
+    if student_id:
+        query["student_id"] = student_id
+    certs = await db.certificates.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return certs
+
+
+# ==================== REPORT BUILDER ====================
+
+@api_router.get("/reports/collections")
+async def get_report_collections(user=Depends(get_current_user)):
+    """Get available collections and their fields for report building."""
+    if user["role"] not in ["super_admin", "admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    collections = {
+        "leads": {
+            "label": "Leads / Sales",
+            "fields": ["full_name", "email", "phone", "stage", "assigned_to_name", "team_name", "source", "sale_amount", "enrollment_amount", "created_at", "enrolled_at", "country", "nationality"],
+        },
+        "students": {
+            "label": "Students",
+            "fields": ["full_name", "email", "phone", "cs_agent_name", "mentor_name", "bd_agent_name", "mentor_stage", "bd_stage", "enrollment_amount", "package_bought", "preferred_language", "created_at"],
+        },
+        "cs_upgrades": {
+            "label": "CS Upgrades",
+            "fields": ["student_name", "cs_agent_name", "course_upgrade", "amount", "date", "created_at"],
+        },
+        "mentor_redeposits": {
+            "label": "Mentor Redeposits",
+            "fields": ["student_name", "mentor_name", "amount_aed", "date", "created_at"],
+        },
+        "users": {
+            "label": "Users / Staff",
+            "fields": ["full_name", "email", "role", "department", "is_active", "created_at"],
+        },
+        "certificates": {
+            "label": "Certificates",
+            "fields": ["student_name", "certificate_type", "course_name", "award_date", "generated_by_name", "created_at"],
+        },
+    }
+    return collections
+
+
+@api_router.post("/reports/generate")
+async def generate_report(request: Request, user=Depends(get_current_user)):
+    """Generate a custom report from selected collection, fields, and filters."""
+    if user["role"] not in ["super_admin", "admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    body = await request.json()
+    collection_name = body.get("collection")
+    fields = body.get("fields", [])
+    filters = body.get("filters", {})
+    sort_field = body.get("sort_field", "created_at")
+    sort_dir = body.get("sort_direction", "desc")
+    limit = min(body.get("limit", 500), 2000)
+    date_from = body.get("date_from")
+    date_to = body.get("date_to")
+
+    allowed_collections = ["leads", "students", "cs_upgrades", "mentor_redeposits", "users", "certificates"]
+    if collection_name not in allowed_collections:
+        raise HTTPException(status_code=400, detail=f"Collection not allowed: {collection_name}")
+
+    query = {}
+    # Apply text filters
+    for key, value in filters.items():
+        if value and isinstance(value, str):
+            query[key] = {"$regex": value, "$options": "i"}
+        elif value is not None:
+            query[key] = value
+
+    # Date range
+    if date_from or date_to:
+        date_filter = {}
+        if date_from:
+            date_filter["$gte"] = date_from
+        if date_to:
+            date_filter["$lte"] = date_to + "T23:59:59"
+        query["created_at"] = date_filter
+
+    # Projection
+    projection = {"_id": 0}
+    if fields:
+        for f in fields:
+            projection[f] = 1
+
+    sort_direction = -1 if sort_dir == "desc" else 1
+    rows = await db[collection_name].find(query, projection).sort(sort_field, sort_direction).to_list(limit)
+    total = await db[collection_name].count_documents(query)
+
+    return {"rows": rows, "total": total, "fields": fields, "collection": collection_name}
+
+
+# ==================== REVENUE FORECASTING ====================
+
+@api_router.get("/forecasting/revenue")
+async def get_revenue_forecast(user=Depends(get_current_user)):
+    """Generate revenue forecast based on historical data and pipeline."""
+    if user["role"] not in ["super_admin", "admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    now = datetime.now(timezone.utc)
+    
+    # Historical monthly revenue (last 6 months)
+    historical = []
+    for i in range(6, 0, -1):
+        month_start = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1)
+        
+        ms = month_start.isoformat()
+        me = month_end.isoformat()
+        
+        # Enrollment revenue
+        enroll_pipeline = [
+            {"$match": {"enrolled_at": {"$gte": ms, "$lt": me}}},
+            {"$group": {"_id": None, "total": {"$sum": "$enrollment_amount"}, "count": {"$sum": 1}}},
+        ]
+        enroll = await db.leads.aggregate(enroll_pipeline).to_list(1)
+        enroll_rev = enroll[0]["total"] if enroll else 0
+        enroll_count = enroll[0]["count"] if enroll else 0
+        
+        # CS Upgrade revenue
+        upgrade_pipeline = [
+            {"$match": {"date": {"$gte": ms[:10], "$lt": me[:10]}}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]
+        upgrades = await db.cs_upgrades.aggregate(upgrade_pipeline).to_list(1)
+        upgrade_rev = upgrades[0]["total"] if upgrades else 0
+        
+        # Redeposit revenue
+        redep_pipeline = [
+            {"$match": {"date": {"$gte": ms[:10], "$lt": me[:10]}}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount_aed"}, "count": {"$sum": 1}}},
+        ]
+        redeps = await db.mentor_redeposits.aggregate(redep_pipeline).to_list(1)
+        redep_rev = redeps[0]["total"] if redeps else 0
+        
+        historical.append({
+            "month": month_start.strftime("%b %Y"),
+            "month_num": month_start.month,
+            "enrollments": round(float(enroll_rev), 2),
+            "upgrades": round(float(upgrade_rev), 2),
+            "redeposits": round(float(redep_rev), 2),
+            "total": round(float(enroll_rev) + float(upgrade_rev) + float(redep_rev), 2),
+            "enrollment_count": enroll_count,
+        })
+    
+    # Current pipeline value (leads not yet enrolled)
+    pipeline_stages = await db.leads.aggregate([
+        {"$match": {"stage": {"$nin": ["enrolled", "dead", "not_interested"]}}},
+        {"$group": {
+            "_id": "$stage",
+            "count": {"$sum": 1},
+            "potential_value": {"$sum": {"$ifNull": ["$sale_amount", 0]}},
+        }},
+    ]).to_list(20)
+    
+    # Conversion rates from historical data
+    total_leads_6m = await db.leads.count_documents({"created_at": {"$gte": (now - timedelta(days=180)).isoformat()}})
+    total_enrolled_6m = await db.leads.count_documents({"enrolled_at": {"$gte": (now - timedelta(days=180)).isoformat()}})
+    conversion_rate = (total_enrolled_6m / total_leads_6m * 100) if total_leads_6m > 0 else 0
+    
+    # Forecast next 3 months based on trend
+    avg_monthly = sum(h["total"] for h in historical) / len(historical) if historical else 0
+    recent_avg = sum(h["total"] for h in historical[-3:]) / 3 if len(historical) >= 3 else avg_monthly
+    growth_rate = ((recent_avg - avg_monthly) / avg_monthly * 100) if avg_monthly > 0 else 0
+    
+    forecast = []
+    for i in range(1, 4):
+        future_month = (now + timedelta(days=i * 30))
+        projected = recent_avg * (1 + growth_rate / 100 * i * 0.3)
+        forecast.append({
+            "month": future_month.strftime("%b %Y"),
+            "projected_total": round(max(projected, 0), 2),
+            "confidence": max(60 - i * 10, 30),
+        })
+    
+    return {
+        "historical": historical,
+        "pipeline": pipeline_stages,
+        "forecast": forecast,
+        "metrics": {
+            "avg_monthly_revenue": round(avg_monthly, 2),
+            "recent_3m_avg": round(recent_avg, 2),
+            "growth_rate": round(growth_rate, 1),
+            "conversion_rate": round(conversion_rate, 1),
+            "total_pipeline_leads": sum(s["count"] for s in pipeline_stages),
+            "total_pipeline_value": round(sum(float(s["potential_value"]) for s in pipeline_stages), 2),
+        },
+    }
+
 
 # ==================== ACTIVITY LOGS ====================
 

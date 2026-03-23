@@ -36,6 +36,10 @@ import MentorLeaderboard from "@/pages/MentorLeaderboard";
 import MentorHistoricalImportPage from "@/pages/academics/MentorHistoricalImportPage";
 import BDCRMPage from "@/pages/BDCRMPage";
 import BDDashboardPage from "@/pages/BDDashboardPage";
+import CertificatePage from "@/pages/CertificatePage";
+import ReportBuilderPage from "@/pages/ReportBuilderPage";
+import RevenueForecastPage from "@/pages/RevenueForecastPage";
+import StudentPortalPage from "@/pages/StudentPortalPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -282,6 +286,28 @@ function AppRoutes() {
                 <Route path="bd/dashboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development']}>
                         <BDDashboardPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Certificates, Reports, Forecasting */}
+                <Route path="certificates" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <CertificatePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="reports" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                        <ReportBuilderPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="forecasting" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
+                        <RevenueForecastPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="cs/student-portal" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head']}>
+                        <StudentPortalPage />
                     </ProtectedRoute>
                 } />
                 
