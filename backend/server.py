@@ -4999,8 +4999,14 @@ async def get_customers(
     if sort_by not in allowed_sort_fields:
         sort_by = "created_at"
     
+    # If sorting by net_ltv, sort in Python after enrichment
+    if sort_by == "net_ltv":
+        db_sort_by = "total_spent"
+    else:
+        db_sort_by = sort_by
+    
     sort_dir = 1 if sort_order == "asc" else -1
-    customers = await db.customers.find(query, {"_id": 0}).sort(sort_by, sort_dir).to_list(limit)
+    customers = await db.customers.find(query, {"_id": 0}).sort(db_sort_by, sort_dir).to_list(limit)
     
     # Enrich customers with mentor deposit/withdrawal totals for LTV
     student_ids = [c.get("student_id") for c in customers if c.get("student_id")]
@@ -5026,6 +5032,10 @@ async def get_customers(
                 c["net_ltv"] = round((c.get("total_spent", 0) + dep_total - wd_total), 2)
             else:
                 c["net_ltv"] = c.get("total_spent", 0)
+    
+    # Sort by net_ltv in Python after enrichment
+    if sort_by == "net_ltv":
+        customers.sort(key=lambda x: x.get("net_ltv", 0), reverse=(sort_order == "desc"))
     
     return customers
 
