@@ -11,40 +11,34 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 
 ## What's Been Implemented
 
-### Session - March 23, 2026 (Current)
+### Session - March 23, 2026
 
 **Batch 1 - P0 Fixes (Iteration 59: 100% pass)**
-1. Dashboard Operational KPI Row - 6 clickable cards: Active Pipeline→/sales, New Leads Today→dialog, Pending Activations→/cs, Mentor Students→/mentor, Enrolled YTD (994), Enrolled MTD
-2. New Leads Today Dialog with table
-3. Mentor Revenue AED Fix (Dashboard + MentorCRM) - Changed from USD `amount` to AED `amount_aed`
-4. Period filtering fix for mentors - Uses `date` field instead of `created_at`
-5. Enrolled Leads Descending Sort
-6. Advanced Sales Search Fallback
+- Dashboard Operational KPI Row (6 clickable cards), New Leads Dialog, Mentor Revenue AED fix, Period filtering fix, Enrolled Sort, Sales Search Fallback
 
 **Batch 2 - Mentor Closings, CS Dates, Customer LTV (Iteration 60: ~96% pass)**
-1. Mentor CRM Monthly Closings Dialog - Click "Net Active" in banner → dialog with Sr, Name, Email, Mobile, Deposit, Withdrawal, Net per student
-2. CS Kanban Upgrade Date - Shows last upgrade date badge on student cards  
-3. Customer Master Net LTV - Includes mentor deposits/withdrawals in customer lifetime value
-4. Customer Detail shows full LTV breakdown: Enrollment + Deposits - Withdrawals = Net LTV
+- Mentor CRM Monthly Closings Dialog (Net Revenue + students table)
+- CS Kanban Upgrade Date badge, Customer Master Net LTV with deposits/withdrawals
+
+**Batch 3 - Mentor Scoping & Reassignment (Iteration 61: Backend 100%, Frontend 85%)**
+1. Mentor CRM revenue scoped to logged-in user (non-super-admin sees only own data)
+2. Super Admin mentor reassignment via student card dropdown menu
+3. Mentor list includes mentor, master_of_academics, academic_master roles
+4. Net Revenue dialog tested and verified working
 
 ### Previous Sessions
 - Dashboard Custom Date Range, Top 10 Sales Chart, Course Commissions
 - Mentor Historical Import, Double-Count Bug Fix, CS Runtime Error Fix
 - SMTP Templates, Student Export, Mentor Bonus Fix
 
-## Revenue Verification (March 23, 2026)
-| Period | Sales | CS | Academics | Total |
-|--------|-------|-----|-----------|-------|
-| This Month | AED 299,065 | AED 65,903 | AED 113,828 | AED 478,796 |
-
 ## Prioritized Backlog
 
 ### P1
-- Per-Course Commission Calculation (wire commission fields into Sales Dashboard "My Earnings")
+- Per-Course Commission Calculation
 - Post-Deployment Checks (Google Cloud redirect_uri, CORS)
 
 ### P2
-- Refactor `server.py` into domain-driven route files  
+- Refactor `server.py` into domain-driven route files
 - Admin UI for dynamic commission configuration
 - Payslip generation feature
 - Google Ads API integration
@@ -52,4 +46,5 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 
 ## Credentials
 - **Super Admin:** aqib@clt-academy.com / @Aqib1234
+- **Edwin (MoA):** edwin@clt-academy.com
 - **CS Head:** falja@clt-academy.com / Falja@123
