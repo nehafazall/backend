@@ -3220,6 +3220,9 @@ async def get_leads(
     assigned_to: Optional[str] = None,
     team_id: Optional[str] = None,
     search: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_field: Optional[str] = None,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -3267,6 +3270,18 @@ async def get_leads(
             {"phone": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}}
         ]
+    
+    # Date range filtering for leads
+    if date_from or date_to:
+        df = date_field or "created_at"
+        if df not in ("created_at", "enrolled_at"):
+            df = "created_at"
+        date_cond = {}
+        if date_from:
+            date_cond["$gte"] = date_from
+        if date_to:
+            date_cond["$lte"] = date_to + "T23:59:59"
+        query[df] = date_cond
     
     # Sort: enrolled leads by enrolled_at desc, others by created_at desc
     sort_field = "enrolled_at" if stage == "enrolled" else "created_at"
@@ -5340,6 +5355,9 @@ async def get_students(
     mentor_id: Optional[str] = None,
     search: Optional[str] = None,
     activated_only: Optional[bool] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_field: Optional[str] = None,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -5369,6 +5387,42 @@ async def get_students(
             {"phone": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}}
         ]
+    
+    # Date range filtering
+    if date_from or date_to:
+        df = date_field or "created_at"
+        if df == "upgrade_date":
+            # Filter by cs_upgrades date — get student_ids that have upgrades in range
+            upgrade_match = {}
+            if date_from:
+                upgrade_match["$gte"] = date_from
+            if date_to:
+                upgrade_match["$lte"] = date_to + "T23:59:59"
+            upgraded_ids = await db.cs_upgrades.distinct("student_id", {"date": upgrade_match})
+            if upgraded_ids:
+                query["id"] = {"$in": upgraded_ids}
+            else:
+                return []  # No upgrades in this period
+        elif df == "deposit_date":
+            # Filter by mentor_redeposits date — get student_ids that have deposits in range
+            dep_match = {}
+            if date_from:
+                dep_match["$gte"] = date_from
+            if date_to:
+                dep_match["$lte"] = date_to + "T23:59:59"
+            deposit_ids = await db.mentor_redeposits.distinct("student_id", {"date": dep_match})
+            if deposit_ids:
+                query["id"] = {"$in": deposit_ids}
+            else:
+                return []  # No deposits in this period
+        else:
+            # Filter by student's own date field (created_at, etc.)
+            date_cond = {}
+            if date_from:
+                date_cond["$gte"] = date_from
+            if date_to:
+                date_cond["$lte"] = date_to + "T23:59:59"
+            query[df] = date_cond
     
     students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     

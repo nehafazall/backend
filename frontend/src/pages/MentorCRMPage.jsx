@@ -36,6 +36,7 @@ import {
     DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import { PeriodFilter } from '@/components/PeriodFilter';
 import {
     DndContext,
     DragOverlay,
@@ -294,6 +295,7 @@ const MentorCRMPage = () => {
     const [showClosingsDialog, setShowClosingsDialog] = useState(false);
     const [monthlyClosings, setMonthlyClosings] = useState(null);
     const [loadingClosings, setLoadingClosings] = useState(false);
+    const [mentorPeriodFilter, setMentorPeriodFilter] = useState(null);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -308,7 +310,7 @@ const MentorCRMPage = () => {
     useEffect(() => {
         fetchStudents();
         fetchRevenueSummary();
-    }, [viewMode, filterMentorAgent]);
+    }, [viewMode, filterMentorAgent, mentorPeriodFilter]);
 
     const isHeadOrAdmin = ['academic_master', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
@@ -389,6 +391,12 @@ const MentorCRMPage = () => {
             // Agent filter for super admin / academic master
             if (filterMentorAgent !== 'all') {
                 params.mentor_id = filterMentorAgent;
+            }
+            // Period filter by deposit date
+            if (mentorPeriodFilter) {
+                params.date_from = mentorPeriodFilter.date_from;
+                params.date_to = mentorPeriodFilter.date_to;
+                params.date_field = 'deposit_date';
             }
             const response = await studentApi.getAll(params);
             const mentorStudents = response.data.filter(s => s.mentor_id || s.mentor_stage);
@@ -588,6 +596,10 @@ const MentorCRMPage = () => {
                             </SelectContent>
                         </Select>
                     )}
+                    <PeriodFilter
+                        dateFields={[{ value: 'deposit_date', label: 'Deposit Date' }]}
+                        onChange={setMentorPeriodFilter}
+                    />
                     {['super_admin', 'admin', 'academic_master'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />

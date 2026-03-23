@@ -54,6 +54,7 @@ import { CSS } from '@dnd-kit/utilities';
 import UpgradePricingModal from '@/components/UpgradePricingModal';
 import UpgradeConfirmPaymentModal from '@/components/UpgradeConfirmPaymentModal';
 import { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
+import { PeriodFilter } from '@/components/PeriodFilter';
 import {
     Search,
     Phone,
@@ -366,6 +367,7 @@ const CustomerServicePage = () => {
     // Upgrade confirm + payment modal (upgraded)
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmStudent, setConfirmStudent] = useState(null);
+    const [csPeriodFilter, setCsPeriodFilter] = useState(null);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -384,7 +386,7 @@ const CustomerServicePage = () => {
 
     useEffect(() => {
         fetchStudents();
-    }, [viewMode, filterCSAgent]);
+    }, [viewMode, filterCSAgent, csPeriodFilter]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
@@ -404,6 +406,12 @@ const CustomerServicePage = () => {
             // Agent filter for super admin
             if (filterCSAgent !== 'all') {
                 params.cs_agent_id = filterCSAgent;
+            }
+            // Period filter by upgrade date
+            if (csPeriodFilter) {
+                params.date_from = csPeriodFilter.date_from;
+                params.date_to = csPeriodFilter.date_to;
+                params.date_field = 'upgrade_date';
             }
             const response = await studentApi.getAll(params);
             setStudents(response.data);
@@ -653,6 +661,10 @@ const CustomerServicePage = () => {
                             </SelectContent>
                         </Select>
                     )}
+                    <PeriodFilter
+                        dateFields={[{ value: 'upgrade_date', label: 'Upgrade Date' }]}
+                        onChange={setCsPeriodFilter}
+                    />
                     {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />

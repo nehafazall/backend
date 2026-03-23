@@ -32,6 +32,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
+import { PeriodFilter } from '@/components/PeriodFilter';
 import EnrollmentPaymentModal from '@/components/EnrollmentPaymentModal';
 import RejectionReasonModal from '@/components/RejectionReasonModal';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
@@ -406,6 +407,7 @@ const SalesCRMPage = () => {
     const [filterTeam, setFilterTeam] = useState('all');
     const [deepSearchResults, setDeepSearchResults] = useState(null);
     const [deepSearching, setDeepSearching] = useState(false);
+    const [periodFilter, setPeriodFilter] = useState(null);
 
     const isSuperAdmin = user?.role === 'super_admin';
 
@@ -424,7 +426,7 @@ const SalesCRMPage = () => {
 
     useEffect(() => {
         fetchLeads();
-    }, [filterAgent, filterTeam]);
+    }, [filterAgent, filterTeam, periodFilter]);
 
     // Fetch agents and teams for super admin
     useEffect(() => {
@@ -487,6 +489,11 @@ const SalesCRMPage = () => {
             const params = { search: searchTerm || undefined };
             if (filterAgent !== 'all') params.assigned_to = filterAgent;
             if (filterTeam !== 'all') params.team_id = filterTeam;
+            if (periodFilter) {
+                params.date_from = periodFilter.date_from;
+                params.date_to = periodFilter.date_to;
+                params.date_field = periodFilter.date_field;
+            }
             const response = await leadApi.getAll(params);
             setLeads(response.data);
         } catch (error) {
@@ -866,6 +873,13 @@ const SalesCRMPage = () => {
                             </SelectContent>
                         </Select>
                     )}
+                    <PeriodFilter
+                        dateFields={[
+                            { value: 'created_at', label: 'Lead Created' },
+                            { value: 'enrolled_at', label: 'Enrolled' },
+                        ]}
+                        onChange={setPeriodFilter}
+                    />
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="leads" title="Import Leads" onSuccess={fetchLeads} />
