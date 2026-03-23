@@ -10,7 +10,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-drilldown.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://sales-search-boost.preview.emergentagent.com').rstrip('/')
 
 @pytest.fixture(scope="module")
 def auth_token():

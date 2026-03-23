@@ -1,160 +1,178 @@
 <analysis>**original_problem_statement:**
-The user reported a wide range of bugs and feature requests across multiple dashboards and pages:
-1.  **CS Dashboard Bug:** The agent drill-down view incorrectly shows 0 revenue for all students.
-2.  **Sales Dashboard Bug:** The Top 10 Agents chart is sorted by the number of deals instead of by revenue.
-3.  **Sales Dashboard Bug:** The Pipeline Revenue for the Enrolled stage shows a very low, incorrect value.
-4.  **Overall Dashboard Enhancements:**
-    *   Make the main revenue cards (Sales, CS, Academics) and treasury cards (Cash in Bank, etc.) clickable to navigate to their respective detailed pages.
-    *   Rename all instances of Mentor Revenue to Academics Revenue.
-    *   Implement a drill-down feature for the Revenue Bifurcation chart, allowing users to click through Sales -> Teams -> Agents.
-    *   Fix the Gender Bifurcation chart where the text labels were not visible.
-5.  **Kanban Filtering:** Add filters to the Sales, CS, and Academics Kanban boards to allow super admins to filter leads/students by team and agent.
+The user has requested continuous improvements, bug fixes, and feature additions for the CLT Synapse ERP system. The most recent (and currently unfulfilled) requests involve:
+1. Making top dashboard KPI buttons clickable with specific navigation routing (Active Pipeline -> Sales, New Leads -> Dialog box of today's leads, Pending Activations -> CS, Mentor Students -> Mentor CRM). 
+2. Correcting YTD and MTD metrics on the dashboard (Enrolled YTD should explicitly be 994, MTD should dynamically count this month's enrollments).
+3. Fixing a data inaccuracy for sales agent Mohammed Shanif: A student named LAMIZ incorrectly shows 4104 AED revenue instead of 2204 AED due to a finance rejection/resubmission glitch.
+4. Enhancing the sales search function to provide a detailed fallback search by phone, email, and name if standard search yields no results.
+5. Ensuring the Enrolled leads list on the Sales page is sorted in descending order based on closing value/date.
 
 **User's preferred language**: English
+*(INSTRUCTION TO NEXT AGENT: You MUST respond in English)*
 
-**what currently exists?**
-The application is a comprehensive ERP system for an educational academy. The agent has just implemented a large batch of fixes and enhancements to address all the user's latest requests.
-- **Backend:** All relevant API endpoints for dashboards (, , , ) have been modified to fix data inaccuracies and add new filtering capabilities.
-- **Frontend:** The Overall Dashboard () has been significantly updated with clickable cards, a new revenue drill-down chart, and UI text fixes. The Sales () and Customer Service () Kanban pages now include filter dropdowns for super admins.
+**what currently exists?** 
+A comprehensive full-stack ERP for an educational academy (Sales, Customer Service, Mentors, HR, Finance). The application has recently undergone extensive dashboard stabilization, fixing double-counting revenue bugs, implementing Mentor historical data imports, adding student export functionalities, and updating commission structures for Upgrade courses. 
 
 **Last working item**:
--   **Last item agent was working:** The agent implemented fixes for all the user-reported issues and requests. This involved a combination of backend API corrections and extensive frontend updates across three major dashboard/Kanban pages. The agent has performed initial  and screenshot verification, confirming the CS drill-down revenue and Sales pipeline revenue are now correct.
--   **Status:** IN PROGRESS
--   **Agent Testing Done:** N
--   **Which testing method agent to use?** both
--   **User Testing Done:** N
+- **Last item agent was working:** Investigating the most recent batch of user requests (making dashboard top buttons clickable, fixing the LAMIZ revenue discrepancy for agent Mohammed Shanif, and enhancing the sales search). The agent ran DB queries to find the LAMIZ record but had not yet applied fixes.
+- **Status:** IN PROGRESS
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** both (backend testing for the data/sorting fix, frontend testing via screenshot/testing agent for dashboard clickability and search UI).
+- **User Testing Done:** N
 
-**All Pending/In progress Issue list**:
--   **Issue 1: Verify all dashboard and filter fixes (P0)**
-    -   **Description:** The agent has implemented fixes for a wide range of issues. A full testing cycle is required to verify that all bugs are resolved and no regressions were introduced. This includes: CS drill-down revenue, Sales top 10 sorting, Sales pipeline value, Overall Dashboard clickability and drill-downs, gender chart visibility, and Kanban filters.
-    -   **Status:** TESTING PENDING
--   **Issue 2:  (P2)**
-    -   **Description:** A persistent frontend build error originating from . This has been carried over from previous sessions and has not been addressed.
-    -   **Status:** NOT STARTED
-    -   **Is recurring issue?** Y
+**All Pending/In progress Issue list**: 
+Issue 1: Mohammed Shanif / LAMIZ Revenue Data Glitch (P0)
+- Attempted fixes: Investigated DB using bash. Found the student LAMIZ has  and  in the  collection.
+- Next debug checklist: Modify the specific lead record for LAMIZ to reflect the correct 2204 AED amount, or correct the aggregation logic in  that handles finance rejections. Ensure the sales dashboard reflects the corrected revenue.
+- Why fix this issue and what will be achieved with the fix? Corrects agent performance metrics and financial dashboard accuracy.
+- Status: IN PROGRESS
+- Is recurring issue? N
+- Should Test frontend/backend/both after fix? both
+- Blocked on other issue: None
+
+Issue 2:  (P2)
+- Attempted fixes: None in this session.
+- Next debug checklist: Investigate the  and its interaction with React components during frontend build/hot-reload.
+- Why fix this issue and what will be achieved with the fix? Removes recurring warning from the frontend build process, improving stability.
+- Status: NOT STARTED
+- Is recurring issue? Y
+- Should Test frontend/backend/both after fix? frontend
+- Blocked on other issue: None
 
 **In progress Task List**:
--   **Task 1: Add Filters to Academics Kanban (P1)**
-    -   **Description:** The user requested filters for Sales, CS, and Academics Kanbans. The agent has implemented them for Sales and CS but missed the Academics page.
-    -   **Where to resume:** The agent needs to modify the Academics/Mentor Kanban page ( or similar) to add agent/team filter dropdowns, similar to the changes made in  and .
-    -   **What will be achieved with this?** Fulfills the user's complete requirement for filtering across all major Kanban boards.
-    -   **Status:** NOT STARTED
+Task 1: Dashboard Top Buttons Navigation & Metrics (P0)
+- Where to resume: . Implement  navigation for: Active pipeline -> , Pending activations -> , Mentor students -> .
+- What will be achieved with this? Seamless navigation from high-level metrics to operational Kanbans.
+- Status: NOT STARTED
+- Should Test frontend/backend/both after fix? frontend
+- Blocked on something: None
+
+Task 2: Dashboard New Leads Dialog & YTD/MTD Enrolled Counts (P0)
+- Where to resume: . Enrolled YTD needs to be hardcoded/calculated as 994. Enrolled MTD needs dynamic counting. New Leads button needs to trigger a new Dialog showing today's leads.
+- What will be achieved with this? Accurate historical tracking and immediate daily operational oversight.
+- Status: NOT STARTED
+- Should Test frontend/backend/both after fix? both
+- Blocked on something: None
+
+Task 3: Advanced Sales Search Fallback (P0)
+- Where to resume: . When  yields no results, implement a UI state that allows deep searching by phone, email, or name specifically.
+- What will be achieved with this? Better lead discoverability for sales agents.
+- Status: NOT STARTED
+- Should Test frontend/backend/both after fix? both
+- Blocked on something: None
+
+Task 4: Enrolled List Descending Sort (P0)
+- Where to resume:  and backend  endpoint. Ensure leads in the enrolled stage are sorted descending.
+- What will be achieved with this? Prioritizes most recent/highest value closings.
+- Status: NOT STARTED
+- Should Test frontend/backend/both after fix? both
+- Blocked on something: None
 
 **Upcoming and Future Tasks**
-**Upcoming Tasks:**
-*   **P1: Custom Date Range Picker:** Implement a calendar UI for the Custom date option on the Overall Dashboard filter.
-*   **P1: Per-Course Commission Calculation:** Wire the commission fields from the  into the Sales Dashboard's My Earnings card.
-*   **P1: Post-Deployment Checks:** Remind the user to update their Google Cloud  and tighten the backend CORS policy after deployment.
+Upcoming Tasks:
+- P1: Per-Course Commission Calculation (Wire commission fields into actual HR/Finance payouts).
+- P1: Post-Deployment Checks (Ensure Google Cloud  is updated and backend CORS policy is tightened).
 
-**Future Tasks:**
-*   **P2:** Refactor the monolithic  into a domain-driven route structure.
-*   **P2:** Build a UI for admins to dynamically configure commission structures.
-*   **P2:** Implement a payslip generation feature.
-*   **P2:** Integrate with the Google Ads API.
+Future Tasks:
+- P2: Refactor the monolithic  into a domain-driven route structure (, , etc.).
+- P2: Build a UI for admins to dynamically configure generic commission structures.
+- P2: Implement a payslip generation feature.
+- P2: Integrate with Google Ads API.
 
 **Completed work in this session**
-- **Bug Fix (CS Dashboard):** Corrected the agent drill-down endpoint () to query the  collection, ensuring student-level revenue is now displayed correctly.
-- **Bug Fix (Sales Dashboard):** Modified the  endpoint to sort agents by  instead of .
-- **Bug Fix (Sales Dashboard):** Fixed the  endpoint to correctly sum  for the Enrolled stage, resolving the inaccurate pipeline value.
-- **Enhancement (Overall Dashboard):**
-    - Made all key metric cards (Sales, CS, Academics, Treasury) clickable using  and .
-    - Renamed all Mentor labels and data keys to Academics.
-    - Implemented a new drill-down bar chart for the Revenue Bifurcation section.
-    - Fixed the CSS for the Gender Bifurcation chart to make labels visible.
-- **Enhancement (Kanban Filters):**
-    - Added Agent and Team filter dropdowns to  for super admins.
-    - Added an Agent filter dropdown to  for super admins.
-    - Updated the backend  endpoint to support filtering by .
+- Verified dashboard fixes with Testing Agent (Iteration 58 passed 100%).
+- Implemented Custom Date Range Picker for Overall Dashboard.
+- Fixed Sales Dashboard Top 10 Agents chart (converted to vertical bar chart sorted by revenue).
+- Added , , and  fields to Upgrade courses in  and backend.
+- Fixed Double-Count Bug: Modified  to prevent  from resetting to today on subsequent edits.
+- Built Mentor Historical Import feature (API + Page + 3-sheet Excel template).
+- Fixed CS Dashboard Kanban Runtime Error ( with ).
+- Fixed Data Issue: Corrected malformed dates (29/20/2025 -> 2025-12-29) in  which broke monthly trend charts.
+- Generated and tested 7 SMTP Email Templates (Welcome, SLA, Leave Request, etc.).
+- Appended a 4th Students reference sheet to the CS Historical Import template.
+- Created  endpoint and added an Export All button to the CS Kanban page.
+- Fixed Mentor Dashboard Bonus calculation for Super Admins.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: **
-    -   **Debug checklist:** Investigate the  and its interaction with React components. This may require updating dependencies or changing the babel configuration.
-    -   **Why to solve this issue and what will be achieved with this?** Fixing this will remove the recurring warning from the frontend build process, improving stability.
-    -   **Should Test frontend/backend/both after fix:** frontend
-    -   **Is recurring issue?** Y
+Issue 1: 
+- Debug checklist: Check 
+- Why to solve this issue and what will be achieved with this? Resolves frontend build errors.
+- Should Test frontend/backend/both after fix: frontend
+- Is recurring issue? Y
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork:**  in .
--   **Recurrence count:** High.
--   **Status:** NOT STARTED
+- Issue recurrence in previous fork:  in .
+- Recurrence count: High
+- Status: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend API Fixes:** Correcting MongoDB aggregation pipelines by changing  keys, fixing field names in  stages, and ensuring correct data sources are queried.
-- **Frontend Interactivity:** Using  to make dashboard cards clickable, implementing a multi-level drill-down chart with state management, and adding filter dropdowns that trigger data refetching.
-- **State Management & Data Flow:** Adding  for new filters, updating  dependency arrays to react to filter changes, and passing props through component hierarchies to enable new UI features.
+- Backend: FastAPI, Python, MongoDB (Motor AsyncIO), openpyxl (Excel read/write), PyJWT (Authentication).
+- Frontend: React, Tailwind CSS, Shadcn UI, Recharts, React-Day-Picker.
+- Architecture: Monolithic backend with JWT role-based access control. Extensive use of MongoDB Aggregation pipelines for dashboard metrics.
 
 **key DB schema**
-- **:** The  endpoint was modified to allow filtering by .
-- **:** The  endpoint was fixed to correctly query this collection for revenue data.
+- : {stage, enrollment_amount, sale_amount, enrolled_at, ...}
+- : {id, lead_id, full_name, email, phone, cs_agent_id, mentor_id, ...}
+- : {date, amount, ...}
+- : {name, base_price, commission_cs_agent, commission_mentor, ...}
+- : {amount, mentor_id, date, ...}
+
+**changes in tech stack**
+- None. Note: Agent fixed a JWT auth issue in  replacing  with . 
 
 **All files of reference**
-- 
-- 
-- 
-- 
-- 
+-  (Core logic for DB fix and sorting)
+-  (Needs UI updates for clickable cards and modals)
+-  (Needs advanced search and sort updates)
 
 **Areas that need refactoring**:
-- **:** This monolithic file is now over 24,400 lines and is a primary source of technical debt.
-- **:** Has a lint warning () that should be resolved.
+- : Currently ~25,000 lines. Needs modularization into distinct API routers.
 
 **key api endpoints**
-- **MODIFIED:**
-    - : Now returns correct student-level revenue.
-    - : Now correctly sorts by revenue.
-    - : Now returns the correct total enrolled revenue.
-    - : Now accepts a  query parameter for filtering.
+-  (Used by BirdsEyeDashboard)
+-  (Used by SalesCRMPage - needs sorting update)
+-  (Newly created)
 
 **Critical Info for New Agent**
-- The agent has just implemented a large number of fixes and enhancements across multiple dashboards in response to user feedback.
-- The immediate next step is to perform a thorough test of all the recent changes. Use the testing agent to cover both frontend and backend flows.
-- The user also requested filters for the Academics Kanban, which was missed. This should be implemented after verifying the current set of fixes.
+- **Database Context:** The production backend runs with .
+- **Environment:** Always rely on  for token logic, not .
+- **Date Handling:** Be extremely careful with date formats when querying MongoDB. The system enforces strict  or ISO strings.
+- **Workflow:** The user has provided 4-5 distinct requests in their last message. Start by asking for confirmation of the plan, fix the Mohammed Shanif (LAMIZ) data error first, then proceed to the dashboard UI changes.
 
 **documents and test reports created in this job**
--  (Updated)
+- 
 - 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Reports CS drill-down revenue is 0, Sales Top 10 is sorted wrong, and requests multiple enhancements for the Overall Dashboard.
-2.  **Assistant:** Proposes a plan to fix all reported issues.
-3.  **User:** Approves the plan.
-4.  **User:** Reports an additional bug about incorrect Sales Pipeline revenue and requests agent/team filters for Sales, CS, and Academics Kanbans.
-5.  **Assistant:** Investigates all new issues in parallel.
-6.  **Assistant:** Implements backend fixes for CS drill-down, Sales Top 10 sorting, and Sales Pipeline revenue.
-7.  **Assistant:** Implements frontend enhancements for the Overall Dashboard (clickable cards, drill-down chart, text fixes).
-8.  **Assistant:** Implements frontend filters for the Sales and CS Kanban pages.
-9.  **Assistant:** Performs partial verification using  and confirms the backend data is now correct.
-10. **Assistant:** Takes a final screenshot of the working Overall Dashboard.
+1. User asked for export option for students.
+2. Agent created Excel export backend and frontend button.
+3. User reported mentor dashboard bonus not calculating.
+4. Agent fixed backend calculation for super admin view.
+5. **(PENDING)** User requested: Top dashboard buttons clickable (routes), New Leads dialog, YTD/MTD enrollment specific counts, Fix LAMIZ revenue (Shanif), Detailed advanced search fallback in Sales, and descending sort for enrolled sales leads.
 
 **Project Health Check:**
-- **Broken:** None are known to be broken, but all recent fixes are pending verification.
-- **Mocked:** None.
+- Broken: None.
+- Mocked: None. 
 
 **3rd Party Integrations**
-- MongoDB Atlas
-- Google Sheets API
-- APScheduler
-- SMTP (via Gmail)
-- Meta Ads API
-- ZK BioCloud (via web scraping)
-- 
-- 
--  (for frontend charts)
-- 
+- MongoDB Atlas — uses environment variables
+- Google Sheets API — requires Service Account JSON
+- Meta Ads API — requires User API Key
+- SMTP (Gmail) — requires User App Password
+- 3CX / ZK BioCloud — configured via env vars
 
 **Testing status**
-- **Testing agent used after significant changes:** YES (in a previous step, but needed again now)
-- **Troubleshoot agent used after agent stuck in loop:** NO
-- **Test files created:** None.
-- **Known regressions:** None known, but the risk is high due to the number of recent changes.
+- Testing agent used after significant changes: YES (iteration 58)
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: None
+- Known regressions: None currently.
 
 **Credentials to test flow:**
--   **Super Admin:**  / 
--   **Sales Executive:**  / 
--   **CS Head:**  / 
+- Super Admin:  / 
+- CS Head:  / 
+- Mentor:  (from DB query reference)
 
 **What agent forgot to execute**
-- The agent did not add the requested agent/team filters to the **Academics Kanban** page, only to the Sales and CS pages.</analysis>
+- The agent gathered context for the final prompt (the 5 pending items) but did not write any code or provide a response before context ended. All items in the final user prompt must be addressed.</analysis>
