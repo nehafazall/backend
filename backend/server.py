@@ -5511,6 +5511,53 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
     updated = await db.students.find_one({"id": student_id}, {"_id": 0})
     return updated
 
+
+@api_router.post("/students/{student_id}/reassign-mentor")
+async def reassign_student_mentor(
+    student_id: str,
+    new_mentor_id: str,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Reassign a student from one mentor to another. Super admin only."""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Support both mentor and master_of_academics roles
+    new_mentor = await db.users.find_one({
+        "id": new_mentor_id, 
+        "role": {"$in": ["mentor", "master_of_academics", "academic_master"]}
+    })
+    if not new_mentor:
+        raise HTTPException(status_code=404, detail="Mentor not found")
+    
+    old_mentor_name = student.get("mentor_name", "Unassigned")
+    
+    update_data = {
+        "mentor_id": new_mentor["id"],
+        "mentor_name": new_mentor["full_name"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    await db.students.update_one({"id": student_id}, {"$set": update_data})
+    await log_activity("student", student_id, "mentor_reassigned", user, {
+        "old_mentor": old_mentor_name,
+        "new_mentor": new_mentor["full_name"],
+    })
+    
+    # Notify new mentor
+    await create_notification(
+        new_mentor["id"],
+        "Student Reassigned to You",
+        f"{student['full_name']} has been reassigned to you by {user['full_name']}",
+        "info",
+        f"/mentor"
+    )
+    
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return updated
+
+
 @api_router.post("/students/{student_id}/initiate-upgrade")
 async def initiate_student_upgrade(
     student_id: str,

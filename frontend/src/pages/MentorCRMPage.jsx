@@ -33,6 +33,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuSeparator,
+    DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import {
@@ -65,6 +66,7 @@ import {
     Bell,
     PhoneCall,
     GripVertical,
+    RefreshCw,
 } from 'lucide-react';
 
 const MENTOR_STAGES = [
@@ -75,7 +77,7 @@ const MENTOR_STAGES = [
     { id: 'closed', label: 'Closed (Deposit)', color: 'bg-emerald-500', icon: DollarSign },
 ];
 
-const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
+const StudentCard = ({ student, onView, onSetReminder, isDragging, isSuperAdmin, mentorAgents, onReassign }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const courseLevel = student.course_level || '';
     const courseName = courseLevel || student.current_course_name || student.package_bought;
@@ -124,6 +126,22 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
                             <Bell className="h-4 w-4 mr-2" />
                             Set Reminder
                         </DropdownMenuItem>
+                        {isSuperAdmin && mentorAgents && mentorAgents.length > 0 && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-xs text-muted-foreground">Reassign to:</DropdownMenuLabel>
+                                {mentorAgents.filter(m => m.id !== student.mentor_id).map(m => (
+                                    <DropdownMenuItem 
+                                        key={m.id}
+                                        onClick={(e) => { e.stopPropagation(); onReassign(student.id, m.id); }}
+                                        data-testid={`reassign-${student.id}-to-${m.id}`}
+                                    >
+                                        <RefreshCw className="h-3 w-3 mr-2" />
+                                        {m.full_name}
+                                    </DropdownMenuItem>
+                                ))}
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -171,7 +189,7 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging }) => {
 };
 
 // Sortable wrapper for StudentCard
-const SortableStudentCard = ({ student, onView, onSetReminder }) => {
+const SortableStudentCard = ({ student, onView, onSetReminder, isSuperAdmin, mentorAgents, onReassign }) => {
     const {
         attributes,
         listeners,
@@ -193,12 +211,15 @@ const SortableStudentCard = ({ student, onView, onSetReminder }) => {
                 onView={onView}
                 onSetReminder={onSetReminder}
                 isDragging={isDragging}
+                isSuperAdmin={isSuperAdmin}
+                mentorAgents={mentorAgents}
+                onReassign={onReassign}
             />
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, students, onView, onSetReminder, onHeaderClick, headerExtra }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder, onHeaderClick, headerExtra, isSuperAdmin, mentorAgents, onReassign }) => {
     const stageStudents = students.filter(s => s.mentor_stage === stage.id);
     const studentIds = stageStudents.map(s => s.id);
     const StageIcon = stage.icon;
@@ -234,6 +255,9 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder, onHeaderClick, h
                                 student={student}
                                 onView={onView}
                                 onSetReminder={onSetReminder}
+                                isSuperAdmin={isSuperAdmin}
+                                mentorAgents={mentorAgents}
+                                onReassign={onReassign}
                             />
                         ))}
                         {stageStudents.length === 0 && (
@@ -290,17 +314,36 @@ const MentorCRMPage = () => {
     const isSuperAdmin = user?.role === 'super_admin';
 
     // Fetch mentor agents for super admin / academic master filtering
+    // Include both mentor and master_of_academics roles
     useEffect(() => {
         if (isSuperAdmin || isHeadOrAdmin) {
-            apiClient.get('/users?role=mentor').then(res => {
-                setMentorAgentsList((res.data || []).filter(u => u.is_active !== false));
+            Promise.all([
+                apiClient.get('/users?role=mentor'),
+                apiClient.get('/users?role=master_of_academics'),
+                apiClient.get('/users?role=academic_master')
+            ]).then(([mentorRes, moaRes, amRes]) => {
+                const allMentors = [
+                    ...(mentorRes.data || []),
+                    ...(moaRes.data || []),
+                    ...(amRes.data || [])
+                ].filter(u => u.is_active !== false);
+                // Remove duplicates by id
+                const uniqueMentors = Array.from(new Map(allMentors.map(m => [m.id, m])).values());
+                setMentorAgentsList(uniqueMentors);
             }).catch(() => {});
         }
     }, [isSuperAdmin, isHeadOrAdmin]);
 
     const fetchRevenueSummary = async () => {
         try {
-            const response = await apiClient.get('/mentor/revenue-summary');
+            // Non-super-admin: show only own data. Super admin: show team or filtered mentor
+            let params = '';
+            if (!isSuperAdmin) {
+                params = `?mentor_id=${user?.id}`;
+            } else if (filterMentorAgent && filterMentorAgent !== 'all') {
+                params = `?mentor_id=${filterMentorAgent}`;
+            }
+            const response = await apiClient.get(`/mentor/revenue-summary${params}`);
             setRedepositSummary(response.data);
         } catch (error) {
             console.error('Failed to fetch revenue summary:', error);
@@ -316,7 +359,13 @@ const MentorCRMPage = () => {
     const fetchMonthlyClosings = async () => {
         setLoadingClosings(true);
         try {
-            const response = await apiClient.get('/mentor/monthly-closings');
+            let params = '';
+            if (!isSuperAdmin) {
+                params = `?mentor_id=${user?.id}`;
+            } else if (filterMentorAgent && filterMentorAgent !== 'all') {
+                params = `?mentor_id=${filterMentorAgent}`;
+            }
+            const response = await apiClient.get(`/mentor/monthly-closings${params}`);
             setMonthlyClosings(response.data);
             setShowClosingsDialog(true);
         } catch (error) {
@@ -385,6 +434,17 @@ const MentorCRMPage = () => {
         setShowReminderModal(false);
         setReminderStudent(null);
         fetchStudents();
+    };
+
+    const handleReassignMentor = async (studentId, newMentorId) => {
+        try {
+            await apiClient.post(`/students/${studentId}/reassign-mentor?new_mentor_id=${newMentorId}`);
+            toast.success('Student reassigned successfully');
+            fetchStudents();
+            fetchRevenueSummary();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || 'Failed to reassign student');
+        }
     };
 
     // Drag and drop handlers
@@ -478,7 +538,7 @@ const MentorCRMPage = () => {
                                 <button 
                                     type="button"
                                     className="cursor-pointer hover:bg-emerald-800/50 rounded-lg px-3 py-1 transition-colors text-left"
-                                    onClick={() => fetchMonthlyClosings()}
+                                    onClick={(e) => { e.stopPropagation(); fetchMonthlyClosings(); }}
                                     data-testid="net-revenue-click"
                                 >
                                     <p className="text-emerald-100 text-sm">Net Active <span className="text-[10px] opacity-70">(click to view)</span></p>
@@ -601,6 +661,9 @@ const MentorCRMPage = () => {
                                 onSetReminder={handleSetReminder}
                                 onHeaderClick={undefined}
                                 headerExtra={undefined}
+                                isSuperAdmin={isSuperAdmin}
+                                mentorAgents={mentorAgentsList}
+                                onReassign={handleReassignMentor}
                             />
                         ))}
                     </div>

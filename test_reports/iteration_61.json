@@ -1,0 +1,118 @@
+{
+  "summary": "Iteration 61 Testing - Mentor CRM Scoping and Student Reassignment. Backend APIs working correctly. Fixed bug where reassign endpoint only supported 'mentor' role (now supports master_of_academics). Frontend reassign dropdown working. Monthly closings dialog has a click handler issue.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MentorCRMPage - Net Active Dialog",
+        "issue": "Monthly closings dialog does not open when clicking Net Active button. API call is made but dialog state (showClosingsDialog) doesn't update. Click handler triggers but dialog doesn't render.",
+        "selector": "[data-testid='net-revenue-click']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: GET /api/mentor/revenue-summary returns 200 with correct data",
+    "Backend: GET /api/mentor/revenue-summary?mentor_id=<id> returns filtered data for specific mentor",
+    "Backend: GET /api/mentor/monthly-closings returns 200 with 23 students, AED 113,828 deposits",
+    "Backend: GET /api/mentor/monthly-closings?mentor_id=<edwin_id> returns filtered data",
+    "Backend: POST /api/students/{id}/reassign-mentor works for mentor role",
+    "Backend: POST /api/students/{id}/reassign-mentor works for master_of_academics role (after fix)",
+    "Backend: Reassign endpoint requires super_admin or admin role",
+    "Backend: Reassign endpoint validates mentor exists",
+    "Frontend: Revenue banner displays correctly with AED 113,828 redeposits",
+    "Frontend: Mentor filter dropdown shows all mentors including master_of_academics",
+    "Frontend: Student card dropdown shows 'Reassign to:' section for super admin",
+    "Frontend: Reassign dropdown excludes current mentor from list",
+    "Frontend: Reassign dropdown includes Edwin Joy (master_of_academics)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_mentor_scoping_reassign.py",
+    "/app/test_reports/pytest/pytest_mentor_scoping_reassign.xml"
+  ],
+
+  "action_items": [
+    "FIX: Monthly closings dialog not opening - investigate why showClosingsDialog state is not being set to true after API call succeeds. The fetchMonthlyClosings function is called, API returns 200, but dialog doesn't render."
+  ],
+
+  "critical_code_review_comments": [
+    "FIXED: server.py line 5526 - reassign endpoint now supports mentor, master_of_academics, and academic_master roles",
+    "FIXED: MentorCRMPage.jsx lines 318-335 - mentor list now fetches all mentor-related roles for reassign dropdown",
+    "ISSUE: MentorCRMPage.jsx line 370 - setShowClosingsDialog(true) is called but dialog doesn't render. May be a React state update issue or Dialog component issue."
+  ],
+
+  "updated_files": [
+    "/app/backend/server.py - Fixed reassign endpoint to support master_of_academics role",
+    "/app/frontend/src/pages/MentorCRMPage.jsx - Updated mentor list fetch to include all mentor roles, added e.stopPropagation() to Net Active click handler",
+    "/app/backend/tests/test_mentor_scoping_reassign.py - New test file for mentor scoping and reassignment"
+  ],
+
+  "success_rate": {
+    "backend": "100% (12/12 pytest tests passed)",
+    "frontend": "85% (Reassign dropdown works, Monthly closings dialog has issue)"
+  },
+
+  "test_credentials": {
+    "super_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234"}
+  },
+
+  "seed_data_creation": "None - used existing production data",
+
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+
+  "context_for_next_testing_agent": "Backend APIs for mentor scoping and reassignment are fully working. The reassign endpoint was fixed to support master_of_academics role (Edwin). Frontend reassign dropdown works correctly - shows 'Reassign to:' label with mentor names excluding current mentor. The monthly closings dialog has an issue where it doesn't open when clicking Net Active button - the API call is made and returns 200 but the dialog state doesn't update. Main agent should investigate the Dialog component rendering.",
+
+  "feature_verification_details": {
+    "mentor_revenue_scoping": {
+      "api": "GET /api/mentor/revenue-summary?mentor_id=<id>",
+      "status": "WORKING",
+      "verified_data": {
+        "all_mentors": {"grand_redeposits": 113828, "unique_students": 23},
+        "edwin_only": {"total_redeposits": 53567, "redeposit_count": 10}
+      }
+    },
+    "mentor_closings_scoping": {
+      "api": "GET /api/mentor/monthly-closings?mentor_id=<id>",
+      "status": "WORKING",
+      "verified_data": {
+        "all_mentors": {"students": 23, "deposits": 113828},
+        "edwin_only": "Filtered correctly"
+      }
+    },
+    "student_reassign": {
+      "api": "POST /api/students/{id}/reassign-mentor?new_mentor_id=<id>",
+      "status": "WORKING",
+      "roles_supported": ["mentor", "master_of_academics", "academic_master"],
+      "frontend_dropdown": "WORKING - shows 'Reassign to:' with mentor names"
+    },
+    "monthly_closings_dialog": {
+      "status": "NOT WORKING",
+      "issue": "Dialog doesn't open despite API returning 200"
+    }
+  },
+
+  "bugs_fixed_this_iteration": [
+    {
+      "file": "/app/backend/server.py",
+      "line": 5526,
+      "issue": "Reassign endpoint only looked for role='mentor', excluding master_of_academics users like Edwin",
+      "fix": "Changed query to support mentor, master_of_academics, and academic_master roles"
+    },
+    {
+      "file": "/app/frontend/src/pages/MentorCRMPage.jsx",
+      "line": "318-335",
+      "issue": "Mentor list only fetched role=mentor users",
+      "fix": "Now fetches mentor, master_of_academics, and academic_master roles and deduplicates"
+    }
+  ]
+}
