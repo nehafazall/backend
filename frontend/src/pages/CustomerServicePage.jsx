@@ -238,6 +238,12 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                             {student.reminder_time || 'Set'}
                         </Badge>
                     )}
+                    {student.last_upgrade_date && (
+                        <Badge variant="outline" className="text-xs text-muted-foreground border-emerald-300" data-testid={`upgrade-date-${student.id}`}>
+                            <ArrowUp className="h-3 w-3 mr-0.5 text-emerald-500" />
+                            {new Date(student.last_upgrade_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </Badge>
+                    )}
                 </div>
                 <span className="text-xs text-muted-foreground">
                     {student.classes_attended} classes

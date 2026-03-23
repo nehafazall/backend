@@ -145,6 +145,7 @@ const CustomerMasterPage = () => {
     };
 
     const renderRow = (c) => {
+        const hasRedeposits = (c.mentor_deposits_total || 0) > 0 || (c.mentor_withdrawals_total || 0) > 0;
         return (
             <TableRow key={c.id}>
                 <TableCell>
@@ -164,6 +165,17 @@ const CustomerMasterPage = () => {
                 </TableCell>
                 <TableCell>
                     <span className="font-mono text-emerald-500">{formatCurrency(c.total_spent)}</span>
+                </TableCell>
+                <TableCell>
+                    <div className="space-y-0.5">
+                        <span className="font-mono font-bold text-blue-600" data-testid={`net-ltv-${c.id}`}>{formatCurrency(c.net_ltv || c.total_spent)}</span>
+                        {hasRedeposits && (
+                            <div className="flex items-center gap-1 text-[10px]">
+                                {c.mentor_deposits_total > 0 && <span className="text-emerald-500">+{Math.round(c.mentor_deposits_total).toLocaleString()}</span>}
+                                {c.mentor_withdrawals_total > 0 && <span className="text-red-500">-{Math.round(c.mentor_withdrawals_total).toLocaleString()}</span>}
+                            </div>
+                        )}
+                    </div>
                 </TableCell>
                 <TableCell>
                     <span className="text-muted-foreground flex items-center gap-1">
@@ -264,6 +276,7 @@ const CustomerMasterPage = () => {
                                             )}
                                         </Button>
                                     </TableHead>
+                                    <TableHead>Net LTV</TableHead>
                                     <TableHead>Enrollment Date</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
@@ -283,10 +296,10 @@ const CustomerMasterPage = () => {
             </Card>
 
             <Dialog open={showModal} onOpenChange={setShowModal}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Customer Details</DialogTitle>
-                        <DialogDescription>Transaction history</DialogDescription>
+                        <DialogDescription>Transaction history & LTV breakdown</DialogDescription>
                     </DialogHeader>
                     {selectedCustomer && (
                         <div className="space-y-4">
@@ -305,14 +318,44 @@ const CustomerMasterPage = () => {
                                         <p className="font-medium">{selectedCustomer.email || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-muted-foreground">Total Spent</p>
+                                        <p className="text-sm text-muted-foreground">Enrollment Spent</p>
                                         <p className="font-mono text-emerald-500">{formatCurrency(selectedCustomer.total_spent)}</p>
                                     </div>
                                 </CardContent>
                             </Card>
+
+                            {/* Net LTV Summary */}
+                            {selectedCustomer.mentor_totals && (
+                                <Card className="border-blue-200 bg-blue-50/30">
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-base text-blue-700">Lifetime Value (LTV)</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="grid grid-cols-4 gap-3 text-center">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Enrollment</p>
+                                                <p className="font-mono font-bold text-emerald-600">{formatCurrency(selectedCustomer.total_spent)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Deposits</p>
+                                                <p className="font-mono font-bold text-emerald-600">+ {formatCurrency(selectedCustomer.mentor_totals.total_deposits_aed)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Withdrawals</p>
+                                                <p className="font-mono font-bold text-red-500">- {formatCurrency(selectedCustomer.mentor_totals.total_withdrawals_aed)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-muted-foreground font-medium">Net LTV</p>
+                                                <p className="font-mono font-bold text-blue-700 text-lg" data-testid="customer-net-ltv">{formatCurrency(selectedCustomer.net_ltv)}</p>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             <Card>
                                 <CardHeader>
-                                    <CardTitle className="text-lg">Transactions</CardTitle>
+                                    <CardTitle className="text-lg">Enrollment Transactions</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     {selectedCustomer.transactions && selectedCustomer.transactions.length > 0 ? (
@@ -324,6 +367,50 @@ const CustomerMasterPage = () => {
                                     )}
                                 </CardContent>
                             </Card>
+
+                            {/* Mentor Deposits */}
+                            {selectedCustomer.mentor_deposits && selectedCustomer.mentor_deposits.length > 0 && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg text-emerald-600">Mentor Deposits</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-2">
+                                            {selectedCustomer.mentor_deposits.map((d, i) => (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                                                    <div>
+                                                        <p className="text-sm font-medium">Redeposit</p>
+                                                        <p className="text-xs text-muted-foreground">{formatDate(d.date)} · {d.mentor_name}</p>
+                                                    </div>
+                                                    <p className="font-mono font-bold text-emerald-600">+ {formatCurrency(d.amount_aed)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Mentor Withdrawals */}
+                            {selectedCustomer.mentor_withdrawals && selectedCustomer.mentor_withdrawals.length > 0 && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg text-red-500">Mentor Withdrawals</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-2">
+                                            {selectedCustomer.mentor_withdrawals.map((w, i) => (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                                                    <div>
+                                                        <p className="text-sm font-medium">Withdrawal</p>
+                                                        <p className="text-xs text-muted-foreground">{formatDate(w.date)} · {w.mentor_name}</p>
+                                                    </div>
+                                                    <p className="font-mono font-bold text-red-500">- {formatCurrency(w.amount_aed)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
                         </div>
                     )}
                 </DialogContent>

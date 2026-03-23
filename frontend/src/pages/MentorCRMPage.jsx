@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
 import { getCourseColor, COURSE_COLORS } from '@/components/UpgradeModal';
@@ -197,7 +198,7 @@ const SortableStudentCard = ({ student, onView, onSetReminder }) => {
     );
 };
 
-const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
+const KanbanColumn = ({ stage, students, onView, onSetReminder, onHeaderClick, headerExtra }) => {
     const stageStudents = students.filter(s => s.mentor_stage === stage.id);
     const studentIds = stageStudents.map(s => s.id);
     const StageIcon = stage.icon;
@@ -213,12 +214,15 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder }) => {
             className={`kanban-column ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`} 
             data-testid={`mentor-column-${stage.id}`}
         >
-            <div className="kanban-column-header">
+            <div className={`kanban-column-header ${onHeaderClick ? 'cursor-pointer hover:bg-muted/50 rounded-lg transition-colors' : ''}`} onClick={(e) => { e.stopPropagation(); e.preventDefault(); if (onHeaderClick) onHeaderClick(); }}>
                 <div className="flex items-center gap-2">
                     <StageIcon className={`h-4 w-4 ${stage.color.replace('bg-', 'text-')}`} />
                     <h3 className="font-semibold">{stage.label}</h3>
                 </div>
-                <Badge variant="secondary">{stageStudents.length}</Badge>
+                <div className="flex items-center gap-2">
+                    {headerExtra}
+                    <Badge variant="secondary">{stageStudents.length}</Badge>
+                </div>
             </div>
             
             <ScrollArea className="flex-1">
@@ -263,6 +267,9 @@ const MentorCRMPage = () => {
     const [redepositSummary, setRedepositSummary] = useState(null);
     const [mentorAgentsList, setMentorAgentsList] = useState([]);
     const [filterMentorAgent, setFilterMentorAgent] = useState('all');
+    const [showClosingsDialog, setShowClosingsDialog] = useState(false);
+    const [monthlyClosings, setMonthlyClosings] = useState(null);
+    const [loadingClosings, setLoadingClosings] = useState(false);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -297,13 +304,25 @@ const MentorCRMPage = () => {
             setRedepositSummary(response.data);
         } catch (error) {
             console.error('Failed to fetch revenue summary:', error);
-            // Fallback to redeposit summary
             try {
                 const fallback = await apiClient.get('/mentor/redeposits/summary');
                 setRedepositSummary(fallback.data);
             } catch (e) {
                 console.error('Failed to fetch redeposit summary:', e);
             }
+        }
+    };
+
+    const fetchMonthlyClosings = async () => {
+        setLoadingClosings(true);
+        try {
+            const response = await apiClient.get('/mentor/monthly-closings');
+            setMonthlyClosings(response.data);
+            setShowClosingsDialog(true);
+        } catch (error) {
+            toast.error('Failed to load monthly closings');
+        } finally {
+            setLoadingClosings(false);
         }
     };
 
@@ -456,12 +475,17 @@ const MentorCRMPage = () => {
                                     </p>
                                 </div>
                                 <div className="h-12 w-px bg-emerald-500"></div>
-                                <div>
-                                    <p className="text-emerald-100 text-sm">Net Active</p>
+                                <button 
+                                    type="button"
+                                    className="cursor-pointer hover:bg-emerald-800/50 rounded-lg px-3 py-1 transition-colors text-left"
+                                    onClick={() => fetchMonthlyClosings()}
+                                    data-testid="net-revenue-click"
+                                >
+                                    <p className="text-emerald-100 text-sm">Net Active <span className="text-[10px] opacity-70">(click to view)</span></p>
                                     <p className="text-2xl font-bold text-yellow-200">
                                         AED {Math.round(redepositSummary.totals?.grand_net || (redepositSummary.totals?.grand_redeposits || redepositSummary.totals?.grand_total || 0) - (redepositSummary.totals?.grand_withdrawals || 0)).toLocaleString()}
                                     </p>
-                                </div>
+                                </button>
                                 <div className="h-12 w-px bg-emerald-500"></div>
                                 <div>
                                     <p className="text-emerald-100 text-sm">Students Pitched</p>
@@ -575,6 +599,8 @@ const MentorCRMPage = () => {
                                 students={students}
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
+                                onHeaderClick={undefined}
+                                headerExtra={undefined}
                             />
                         ))}
                     </div>
@@ -757,6 +783,85 @@ const MentorCRMPage = () => {
                 entityName={reminderStudent?.full_name}
                 onSuccess={handleReminderSuccess}
             />
+
+            {/* Monthly Closings Dialog - Net Revenue Breakdown */}
+            <Dialog open={showClosingsDialog} onOpenChange={setShowClosingsDialog}>
+                <DialogContent className="max-w-4xl max-h-[85vh]" data-testid="monthly-closings-dialog">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                                <DollarSign className="h-5 w-5 text-emerald-500" />
+                                Monthly Closings — {monthlyClosings?.month || ''}
+                            </span>
+                            {monthlyClosings?.totals && (
+                                <div className="flex items-center gap-4 text-sm">
+                                    <span className="text-emerald-600 font-bold">Deposits: AED {Math.round(monthlyClosings.totals.deposits).toLocaleString()}</span>
+                                    <span className="text-red-500 font-bold">Withdrawals: AED {Math.round(monthlyClosings.totals.withdrawals).toLocaleString()}</span>
+                                    <Badge className="bg-emerald-600 text-white text-sm px-3 py-1">
+                                        Net: AED {Math.round(monthlyClosings.totals.net_revenue).toLocaleString()}
+                                    </Badge>
+                                </div>
+                            )}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[65vh]">
+                        {loadingClosings ? (
+                            <div className="flex items-center justify-center h-32">
+                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500" />
+                            </div>
+                        ) : monthlyClosings?.students?.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-10 text-xs">Sr</TableHead>
+                                        <TableHead className="text-xs">Name</TableHead>
+                                        <TableHead className="text-xs">Email</TableHead>
+                                        <TableHead className="text-xs">Mobile</TableHead>
+                                        <TableHead className="text-xs text-right">Deposit (AED)</TableHead>
+                                        <TableHead className="text-xs text-right">Withdrawal (AED)</TableHead>
+                                        <TableHead className="text-xs text-right">Net (AED)</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {monthlyClosings.students.map((s, i) => (
+                                        <TableRow key={s.student_id || i}>
+                                            <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                                            <TableCell className="text-xs font-medium">{s.student_name}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{s.student_email}</TableCell>
+                                            <TableCell className="text-xs font-mono">{s.phone || '-'}</TableCell>
+                                            <TableCell className="text-xs text-right font-mono text-emerald-600">
+                                                {s.total_deposit > 0 ? Math.round(s.total_deposit).toLocaleString() : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-right font-mono text-red-500">
+                                                {s.total_withdrawal > 0 ? Math.round(s.total_withdrawal).toLocaleString() : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-right font-mono font-bold">
+                                                {Math.round(s.total_deposit - s.total_withdrawal).toLocaleString()}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    <TableRow className="bg-muted/50 font-bold">
+                                        <TableCell colSpan={4} className="text-xs text-right">Total</TableCell>
+                                        <TableCell className="text-xs text-right font-mono text-emerald-600">
+                                            {Math.round(monthlyClosings.totals.deposits).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-xs text-right font-mono text-red-500">
+                                            {Math.round(monthlyClosings.totals.withdrawals).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-xs text-right font-mono">
+                                            {Math.round(monthlyClosings.totals.net_revenue).toLocaleString()}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+                                No closings found for this month
+                            </div>
+                        )}
+                    </ScrollArea>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

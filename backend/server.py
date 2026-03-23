@@ -4995,12 +4995,38 @@ async def get_customers(
         ]
     
     # Validate sort_by field
-    allowed_sort_fields = ["created_at", "total_spent", "full_name", "transaction_count"]
+    allowed_sort_fields = ["created_at", "total_spent", "full_name", "transaction_count", "net_ltv"]
     if sort_by not in allowed_sort_fields:
         sort_by = "created_at"
     
     sort_dir = 1 if sort_order == "asc" else -1
     customers = await db.customers.find(query, {"_id": 0}).sort(sort_by, sort_dir).to_list(limit)
+    
+    # Enrich customers with mentor deposit/withdrawal totals for LTV
+    student_ids = [c.get("student_id") for c in customers if c.get("student_id")]
+    if student_ids:
+        dep_agg = await db.mentor_redeposits.aggregate([
+            {"$match": {"student_id": {"$in": student_ids}}},
+            {"$group": {"_id": "$student_id", "total_dep": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}}}}
+        ]).to_list(2000)
+        wd_agg = await db.mentor_withdrawals.aggregate([
+            {"$match": {"student_id": {"$in": student_ids}}},
+            {"$group": {"_id": "$student_id", "total_wd": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}}}}
+        ]).to_list(2000)
+        dep_map = {d["_id"]: d["total_dep"] for d in dep_agg}
+        wd_map = {w["_id"]: w["total_wd"] for w in wd_agg}
+        
+        for c in customers:
+            sid = c.get("student_id")
+            if sid:
+                dep_total = dep_map.get(sid, 0)
+                wd_total = wd_map.get(sid, 0)
+                c["mentor_deposits_total"] = round(dep_total, 2)
+                c["mentor_withdrawals_total"] = round(wd_total, 2)
+                c["net_ltv"] = round((c.get("total_spent", 0) + dep_total - wd_total), 2)
+            else:
+                c["net_ltv"] = c.get("total_spent", 0)
+    
     return customers
 
 @api_router.get("/customers/{customer_id}")
@@ -5025,6 +5051,29 @@ async def get_customer(customer_id: str, user = Depends(get_current_user)):
     if customer.get("student_id"):
         student = await db.students.find_one({"id": customer["student_id"]}, {"_id": 0})
         customer["student_info"] = student
+        
+        # Include mentor deposits and withdrawals for this student
+        mentor_deposits = await db.mentor_redeposits.find(
+            {"student_id": customer["student_id"]}, {"_id": 0, "date": 1, "amount": 1, "amount_aed": 1, "mentor_name": 1, "month": 1}
+        ).sort("date", -1).to_list(100)
+        
+        mentor_withdrawals = await db.mentor_withdrawals.find(
+            {"student_id": customer["student_id"]}, {"_id": 0, "date": 1, "amount": 1, "amount_aed": 1, "mentor_name": 1, "month": 1}
+        ).sort("date", -1).to_list(100)
+        
+        total_deposits_aed = sum(d.get("amount_aed") or d.get("amount", 0) for d in mentor_deposits)
+        total_withdrawals_aed = sum(w.get("amount_aed") or w.get("amount", 0) for w in mentor_withdrawals)
+        
+        customer["mentor_deposits"] = [{"date": d.get("date"), "amount_aed": round(d.get("amount_aed") or d.get("amount", 0), 2), "mentor_name": d.get("mentor_name"), "type": "deposit"} for d in mentor_deposits]
+        customer["mentor_withdrawals"] = [{"date": w.get("date"), "amount_aed": round(w.get("amount_aed") or w.get("amount", 0), 2), "mentor_name": w.get("mentor_name"), "type": "withdrawal"} for w in mentor_withdrawals]
+        customer["mentor_totals"] = {
+            "total_deposits_aed": round(total_deposits_aed, 2),
+            "total_withdrawals_aed": round(total_withdrawals_aed, 2),
+            "net_mentor_value": round(total_deposits_aed - total_withdrawals_aed, 2),
+        }
+        # Net LTV = enrollment spend + net mentor value
+        enrollment_spent = customer.get("total_spent", 0)
+        customer["net_ltv"] = round(enrollment_spent + total_deposits_aed - total_withdrawals_aed, 2)
     
     return customer
 
@@ -5312,6 +5361,23 @@ async def get_students(
         ]
     
     students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # Enrich with last_upgrade_date from cs_upgrades
+    student_ids = [s["id"] for s in students]
+    if student_ids:
+        upgrade_pipeline = [
+            {"$match": {"student_id": {"$in": student_ids}}},
+            {"$sort": {"date": -1}},
+            {"$group": {"_id": "$student_id", "last_upgrade_date": {"$first": "$date"}, "last_upgrade_course": {"$first": "$upgrade_to_course"}}}
+        ]
+        upgrades = await db.cs_upgrades.aggregate(upgrade_pipeline).to_list(1000)
+        upgrade_map = {u["_id"]: u for u in upgrades}
+        for s in students:
+            up = upgrade_map.get(s["id"])
+            if up:
+                s["last_upgrade_date"] = up["last_upgrade_date"]
+                s["last_upgrade_course"] = up.get("last_upgrade_course")
+    
     return students
 
 
@@ -12183,6 +12249,87 @@ async def import_mentor_redeposits(data: List[Dict], user = Depends(require_role
             results["errors"].append(f"Row {i+1}: {str(e)}")
     
     return results
+
+
+@api_router.get("/mentor/monthly-closings")
+async def get_mentor_monthly_closings(
+    month: Optional[str] = None,
+    mentor_id: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get monthly closings with deposits and withdrawals per student for Net Revenue dialog."""
+    if not month:
+        now = datetime.now(timezone.utc)
+        month = now.strftime("%Y-%m")
+    
+    dep_query = {"month": month}
+    wd_query = {"month": month}
+    
+    if mentor_id:
+        dep_query["mentor_id"] = mentor_id
+        wd_query["mentor_id"] = mentor_id
+    elif user["role"] == "mentor":
+        dep_query["mentor_id"] = user["id"]
+        wd_query["mentor_id"] = user["id"]
+    
+    # Fetch deposits and withdrawals for the month
+    deposits = await db.mentor_redeposits.find(dep_query, {"_id": 0}).to_list(500)
+    withdrawals = await db.mentor_withdrawals.find(wd_query, {"_id": 0}).to_list(500)
+    
+    # Build a map: student_id -> {name, email, phone, deposit, withdrawal}
+    student_map = {}
+    for d in deposits:
+        sid = d.get("student_id", "")
+        if sid not in student_map:
+            # Try to get phone from students collection
+            stu = await db.students.find_one({"id": sid}, {"_id": 0, "phone": 1})
+            student_map[sid] = {
+                "student_id": sid,
+                "student_name": d.get("student_name", ""),
+                "student_email": d.get("student_email", ""),
+                "phone": (stu or {}).get("phone", ""),
+                "total_deposit": 0,
+                "total_withdrawal": 0,
+                "deposit_count": 0,
+                "withdrawal_count": 0,
+            }
+        amt = d.get("amount_aed") or d.get("amount", 0)
+        student_map[sid]["total_deposit"] += round(amt, 2)
+        student_map[sid]["deposit_count"] += 1
+    
+    for w in withdrawals:
+        sid = w.get("student_id", "")
+        if sid not in student_map:
+            stu = await db.students.find_one({"id": sid}, {"_id": 0, "phone": 1})
+            student_map[sid] = {
+                "student_id": sid,
+                "student_name": w.get("student_name", ""),
+                "student_email": w.get("student_email", ""),
+                "phone": (stu or {}).get("phone", ""),
+                "total_deposit": 0,
+                "total_withdrawal": 0,
+                "deposit_count": 0,
+                "withdrawal_count": 0,
+            }
+        amt = w.get("amount_aed") or w.get("amount", 0)
+        student_map[sid]["total_withdrawal"] += round(amt, 2)
+        student_map[sid]["withdrawal_count"] += 1
+    
+    students_list = sorted(student_map.values(), key=lambda x: x["total_deposit"], reverse=True)
+    total_deposits = round(sum(s["total_deposit"] for s in students_list), 2)
+    total_withdrawals = round(sum(s["total_withdrawal"] for s in students_list), 2)
+    net_revenue = round(total_deposits - total_withdrawals, 2)
+    
+    return {
+        "month": month,
+        "students": students_list,
+        "totals": {
+            "deposits": total_deposits,
+            "withdrawals": total_withdrawals,
+            "net_revenue": net_revenue,
+            "student_count": len(students_list),
+        }
+    }
 
 @api_router.get("/mentor/redeposits/summary")
 async def get_mentor_redeposits_summary(
