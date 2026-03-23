@@ -1,55 +1,45 @@
 # CLT Synapse ERP - Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Service, Mentors, HR, Finance, and Business Development departments with dashboards, lead management, student management, and reporting.
+Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Service, Mentors, HR, Finance, Business Development, Reporting, and Analytics.
 
 ## Architecture
-- **Backend:** FastAPI + MongoDB Atlas (server.py ~25K lines)
-- **Frontend:** React + Shadcn UI + Recharts + react-window
+- **Backend:** FastAPI + MongoDB Atlas (server.py ~26K lines)
+- **Frontend:** React + Shadcn UI + Recharts + react-window + reportlab (PDF)
 - **Auth:** JWT-based with role-based access control
-- **Integrations:** Google Sheets, Meta Ads, SMTP, ZK BioCloud, APScheduler
+- **Integrations:** Google Sheets, Meta Ads, SMTP, ZK BioCloud, APScheduler, 3CX
 - **Performance:** GZip compression, MongoDB indexes, server-side pagination
 
 ## What's Been Implemented
 
-### Session - March 23, 2026 (Current)
+### Session - March 23, 2026
 
-**Performance Optimization (Iteration 66: 100% pass)**
-- Server-side pagination (25/50/100 per page) across Sales, CS, Mentor, BD Kanbans
-- Reusable `Pagination.jsx` component with page size selector and navigation
-- GZip compression via Starlette middleware (minimum_size=500)
-- MongoDB indexes: students.bd_agent_id, bd_stage, mentor_redeposits.student_id/mentor_id/date, student_notes.student_id+created_at, cs_upgrades.student_id, ltv_transactions.student_id
-- Payload reduction: ~1MB → ~20KB per request (98% reduction)
-- Response time improvement: 2.2s → 0.5s
+**Batch 7 - Five New Features (Iteration 67: 100% pass)**
+- **Notification Center**: Bell icon in header with popover panel, unread badge, mark read/all, 30s polling, notification types (info/success/warning/error/transfer/finance/certificate)
+- **Certificate Generation**: PDF via reportlab — CLT Academy branding (red/black corner accents, dual signatures COO+CEO, award emblem), types (Course Completion, Star Performer, Excellence, Best Trader, Achievement), download + history
+- **Report Builder**: 6 data sources (leads, students, cs_upgrades, mentor_redeposits, users, certificates), checkbox field selection, text/date filters, sort, limit, CSV export
+- **Revenue Forecasting**: 6-month historical (enrollments + upgrades + redeposits), 3-month projections, pipeline analysis, KPIs (avg monthly, growth rate, conversion rate), trend + stacked bar charts
+- **Student Portal Embed**: iframe of main.clt-academy.com/admin/students in CS section with "Open in New Tab" option
 
-**CS Agent Transfer Bug Fix (Iteration 66: verified)**
-- Root cause: `StudentUpdate` Pydantic model was missing `cs_agent_name` field
-- Fix: Added `cs_agent_name: Optional[str] = None` to StudentUpdate
-- Also fixed data for Anandhuraj K R (was showing Falja instead of Nasida VN)
+**Batch 6 - Performance + CS Bug (Iteration 66: 100% pass)**
+- Pagination (25/50/100) across all 4 Kanbans — 98% payload reduction
+- GZip compression, MongoDB indexes
+- CS transfer bug fix (StudentUpdate missing cs_agent_name)
 
-**3CX Calling, Notes & Reminders for BD (Iteration 65: 100% pass)**
-- 3CX ClickToCall integrated into BD CRM card detail modal
-- Call history/recordings visible in BD student cards
-- Follow-up notes system: POST/GET `/api/students/{id}/notes` with `student_notes` collection
-- Reminder functionality via existing ReminderModal (reminder badge on BD cards)
+**Batch 5 - BD Call Center (Iteration 65: 100% pass)**
+- 3CX ClickToCall in BD CRM, follow-up notes system, reminders, call recordings
 
-**Unified Transaction History (Iteration 64: code review pass)**
-- GET `/api/students/{id}/transaction-history` — aggregates enrollment, CS upgrades, mentor redeposits, withdrawals, LTV transactions
-- Reusable `TransactionHistory.jsx` component with summary bar (deposits/withdrawals/net) + scrollable timeline
-- Integrated into CS, Mentor, and BD CRM detail modals
-- BD Dashboard hides revenue/redeposit tables from BD agents (Super Admin only)
+**Batch 4 - Transaction History (Iteration 64: pass)**
+- Unified transaction history across CS/Mentor/BD modals
+- BD Dashboard visibility controls (revenue hidden from BD agents)
 
-**Business Development Module (Iteration 63: 100% pass)**
-- Backend: `/api/bd/students`, `/api/bd/dashboard`, `/api/bd/agents`, `/api/bd/record-redeposit`, stage updates, reassignment
-- Frontend: `BDCRMPage.jsx` (drag-and-drop Kanban, 5 stages), `BDDashboardPage.jsx` (KPIs, charts)
-- Sidebar: BD CRM and BD Dashboard under Academics section
-- Mentor CRM cards show BD agent name badge
+**Batch 3 - BD Module (Iteration 63: 100% pass)**
+- Full BD CRM Kanban + Dashboard, round-robin assignment, redeposits
 
 ### Previous Sessions
-- Universal Period Filter, Mentor Scoping & Reassignment, Monthly Closings
-- Dashboard KPIs, Sales Search Fallback, Currency AED fix
-- CS Upgrade Dates, Customer Master Net LTV
-- Historical Import, SMTP Templates, Student Export
+- Universal Period Filter, Mentor Scoping & Reassignment
+- Dashboard KPIs, Monthly Closings, Customer Master Net LTV
+- Sales Search Fallback, Currency AED fix, CS Upgrade Dates
 
 ## Prioritized Backlog
 
@@ -61,6 +51,15 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Refactor `server.py` into domain-driven route files
 - Payslip generation feature
 - Google Ads API integration
+- WhatsApp Business API integration
+- Email campaign system
+- Workflow automation engine
+
+### P3
+- Student self-service portal
+- Auto lead scoring
+- Scheduled report emails
+- Document management
 - Fix recurring `RangeError: Maximum call stack size exceeded` (babel plugin)
 
 ## Credentials
