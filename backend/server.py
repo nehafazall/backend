@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Res
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -488,6 +489,7 @@ class StudentUpdate(BaseModel):
     stage: Optional[str] = None
     notes: Optional[str] = None
     cs_agent_id: Optional[str] = None
+    cs_agent_name: Optional[str] = None
     mentor_id: Optional[str] = None
     mentor_stage: Optional[str] = None
     onboarding_complete: bool = False
@@ -3218,7 +3220,7 @@ async def remove_team_member(
 
 # ==================== LEADS (SALES CRM) ====================
 
-@api_router.get("/leads", response_model=List[LeadResponse])
+@api_router.get("/leads")
 async def get_leads(
     stage: Optional[str] = None,
     assigned_to: Optional[str] = None,
@@ -3227,6 +3229,8 @@ async def get_leads(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     date_field: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -3289,7 +3293,12 @@ async def get_leads(
     
     # Sort: enrolled leads by enrolled_at desc, others by created_at desc
     sort_field = "enrolled_at" if stage == "enrolled" else "created_at"
-    leads = await db.leads.find(query, {"_id": 0}).sort(sort_field, -1).to_list(1000)
+    
+    # Pagination
+    page_size = min(max(page_size, 10), 200)
+    skip = (max(page, 1) - 1) * page_size
+    total_count = await db.leads.count_documents(query)
+    leads = await db.leads.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Batch fetch assigned user names (avoid N+1)
     assigned_ids = list({l["assigned_to"] for l in leads if l.get("assigned_to")})
@@ -3316,7 +3325,13 @@ async def get_leads(
         if sla_update:
             lead.update(sla_update)
     
-    return leads
+    return {
+        "items": leads,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size,
+    }
 
 @api_router.post("/leads", response_model=LeadResponse)
 async def create_lead(data: LeadCreate, background_tasks: BackgroundTasks, user = Depends(get_current_user)):
@@ -5351,7 +5366,7 @@ async def record_activation_call(student_id: str, call_recording_url: Optional[s
 
 # ==================== STUDENTS (CS & MENTOR CRM) ====================
 
-@api_router.get("/students", response_model=List[StudentResponse])
+@api_router.get("/students")
 async def get_students(
     stage: Optional[str] = None,
     mentor_stage: Optional[str] = None,
@@ -5362,6 +5377,8 @@ async def get_students(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     date_field: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     user = Depends(get_current_user)
 ):
     query = {}
@@ -5406,7 +5423,7 @@ async def get_students(
             if upgraded_ids:
                 query["id"] = {"$in": upgraded_ids}
             else:
-                return []  # No upgrades in this period
+                return {"items": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
         elif df == "deposit_date":
             # Filter by mentor_redeposits date — get student_ids that have deposits in range
             dep_match = {}
@@ -5418,7 +5435,7 @@ async def get_students(
             if deposit_ids:
                 query["id"] = {"$in": deposit_ids}
             else:
-                return []  # No deposits in this period
+                return {"items": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
         else:
             # Filter by student's own date field (created_at, etc.)
             date_cond = {}
@@ -5428,7 +5445,11 @@ async def get_students(
                 date_cond["$lte"] = date_to + "T23:59:59"
             query[df] = date_cond
     
-    students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    # Pagination
+    page_size = min(max(page_size, 10), 200)
+    skip = (max(page, 1) - 1) * page_size
+    total_count = await db.students.count_documents(query)
+    students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with last_upgrade_date from cs_upgrades
     student_ids = [s["id"] for s in students]
@@ -5446,7 +5467,13 @@ async def get_students(
                 s["last_upgrade_date"] = up["last_upgrade_date"]
                 s["last_upgrade_course"] = up.get("last_upgrade_course")
     
-    return students
+    return {
+        "items": students,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size,
+    }
 
 
 @api_router.get("/students/export/excel")
@@ -5767,6 +5794,8 @@ async def get_bd_students(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     bd_agent_id: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     user = Depends(get_current_user)
 ):
     """Get students assigned to BD agents. BD sees own, super_admin sees all."""
@@ -5801,16 +5830,26 @@ async def get_bd_students(
         if deposit_student_ids:
             query["id"] = {"$in": deposit_student_ids}
         else:
-            return JSONResponse(content=[])
+            return JSONResponse(content={"items": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0})
     
-    students_cursor = db.students.find(query, {"_id": 0}).sort("created_at", -1)
-    students = await students_cursor.to_list(2000)
+    # Pagination
+    page_size = min(max(page_size, 10), 200)
+    skip = (max(page, 1) - 1) * page_size
+    total_count = await db.students.count_documents(query)
+    students_cursor = db.students.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(page_size)
+    students = await students_cursor.to_list(page_size)
     # Serialize any remaining ObjectId fields
     result = []
     for s in students:
         clean = {k: (str(v) if hasattr(v, '__str__') and type(v).__name__ == 'ObjectId' else v) for k, v in s.items()}
         result.append(clean)
-    return JSONResponse(content=result)
+    return JSONResponse(content={
+        "items": result,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size,
+    })
 
 
 @api_router.put("/bd/students/{student_id}/stage")
@@ -25224,6 +25263,8 @@ async def get_pending_deactivations(user = Depends(require_roles(["super_admin",
 
 # Include the router in the main app
 app.include_router(api_router)
+
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,

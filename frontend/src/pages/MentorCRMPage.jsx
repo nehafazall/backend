@@ -38,6 +38,7 @@ import {
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { PeriodFilter } from '@/components/PeriodFilter';
+import { Pagination } from '@/components/Pagination';
 import {
     DndContext,
     DragOverlay,
@@ -304,6 +305,10 @@ const MentorCRMPage = () => {
     const [monthlyClosings, setMonthlyClosings] = useState(null);
     const [loadingClosings, setLoadingClosings] = useState(false);
     const [mentorPeriodFilter, setMentorPeriodFilter] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -318,7 +323,7 @@ const MentorCRMPage = () => {
     useEffect(() => {
         fetchStudents();
         fetchRevenueSummary();
-    }, [viewMode, filterMentorAgent, mentorPeriodFilter]);
+    }, [viewMode, filterMentorAgent, mentorPeriodFilter, currentPage, pageSize]);
 
     const isHeadOrAdmin = ['academic_master', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
@@ -390,26 +395,28 @@ const MentorCRMPage = () => {
             setLoading(true);
             const params = { 
                 search: searchTerm || undefined,
-                activated_only: true
+                activated_only: true,
+                page: currentPage,
+                page_size: pageSize,
             };
-            // In "my_work" mode, filter by mentor_id
             if (viewMode === 'my_work' || !isHeadOrAdmin) {
                 params.mentor_id = user.id;
             }
-            // Agent filter for super admin / academic master
             if (filterMentorAgent !== 'all') {
                 params.mentor_id = filterMentorAgent;
             }
-            // Period filter by deposit date
             if (mentorPeriodFilter) {
                 params.date_from = mentorPeriodFilter.date_from;
                 params.date_to = mentorPeriodFilter.date_to;
                 params.date_field = 'deposit_date';
             }
             const response = await studentApi.getAll(params);
-            const mentorStudents = response.data.filter(s => s.mentor_id || s.mentor_stage);
+            const data = response.data;
+            const items = data?.items || (Array.isArray(data) ? data : []);
+            const mentorStudents = items.filter(s => s.mentor_id || s.mentor_stage);
             setStudents(mentorStudents);
-            // Build team mentor summary for team view
+            setTotalRecords(data?.total || mentorStudents.length);
+            setTotalPages(data?.total_pages || 0);
             if (viewMode === 'team' && isHeadOrAdmin) {
                 const mentorMap = {};
                 mentorStudents.forEach(s => {
@@ -698,6 +705,18 @@ const MentorCRMPage = () => {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
+            )}
+
+            {/* Pagination */}
+            {!loading && students.length > 0 && (
+                <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    total={totalRecords}
+                    pageSize={pageSize}
+                    onPageChange={(p) => setCurrentPage(p)}
+                    onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
             )}
 
             {/* Student Detail Modal */}

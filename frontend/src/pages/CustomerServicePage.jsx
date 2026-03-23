@@ -56,6 +56,7 @@ import UpgradePricingModal from '@/components/UpgradePricingModal';
 import UpgradeConfirmPaymentModal from '@/components/UpgradeConfirmPaymentModal';
 import { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
 import { PeriodFilter } from '@/components/PeriodFilter';
+import { Pagination } from '@/components/Pagination';
 import {
     Search,
     Phone,
@@ -370,6 +371,10 @@ const CustomerServicePage = () => {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [confirmStudent, setConfirmStudent] = useState(null);
     const [csPeriodFilter, setCsPeriodFilter] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -388,7 +393,7 @@ const CustomerServicePage = () => {
 
     useEffect(() => {
         fetchStudents();
-    }, [viewMode, filterCSAgent, csPeriodFilter]);
+    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
@@ -400,27 +405,27 @@ const CustomerServicePage = () => {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const params = { search: searchTerm || undefined };
-            // In "my_work" mode for cs_head, show only their students
+            const params = { search: searchTerm || undefined, page: currentPage, page_size: pageSize };
             if (viewMode === 'my_work' && isHeadOrAdmin) {
                 params.cs_agent_id = user.id;
             }
-            // Agent filter for super admin
             if (filterCSAgent !== 'all') {
                 params.cs_agent_id = filterCSAgent;
             }
-            // Period filter by upgrade date
             if (csPeriodFilter) {
                 params.date_from = csPeriodFilter.date_from;
                 params.date_to = csPeriodFilter.date_to;
                 params.date_field = 'upgrade_date';
             }
             const response = await studentApi.getAll(params);
-            setStudents(response.data);
-            // Build team agent summary for team view
+            const data = response.data;
+            const items = data?.items || (Array.isArray(data) ? data : []);
+            setStudents(items);
+            setTotalRecords(data?.total || items.length);
+            setTotalPages(data?.total_pages || 0);
             if (viewMode === 'team' && isHeadOrAdmin) {
                 const agentMap = {};
-                response.data.forEach(s => {
+                items.forEach(s => {
                     const key = s.cs_agent_id || 'unassigned';
                     if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
                     agentMap[key].count++;
@@ -755,6 +760,18 @@ const CustomerServicePage = () => {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
+            )}
+
+            {/* Pagination */}
+            {!loading && students.length > 0 && (
+                <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    total={totalRecords}
+                    pageSize={pageSize}
+                    onPageChange={(p) => setCurrentPage(p)}
+                    onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
             )}
 
             {/* Student Detail Modal */}

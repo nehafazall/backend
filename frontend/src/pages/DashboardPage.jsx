@@ -138,7 +138,8 @@ const DashboardPage = () => {
                 count: item.count || 0,
                 fill: PAYMENT_COLORS[index % PAYMENT_COLORS.length],
             })));
-            setRecentLeads(leadsRes.data.slice(0, 5));
+            const leadsData = leadsRes.data?.items || (Array.isArray(leadsRes.data) ? leadsRes.data : []);
+            setRecentLeads(leadsData.slice(0, 5));
             
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error);

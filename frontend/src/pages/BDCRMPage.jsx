@@ -22,6 +22,7 @@ import { PeriodFilter } from '@/components/PeriodFilter';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import ReminderModal from '@/components/ReminderModal';
+import { Pagination } from '@/components/Pagination';
 import {
     DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor,
     useSensor, useSensors, useDroppable,
@@ -194,6 +195,10 @@ export default function BDCRMPage() {
     const [newNote, setNewNote] = useState('');
     const [savingNote, setSavingNote] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     const isSuperAdmin = ['super_admin', 'admin'].includes(user?.role);
     const isBD = user?.role === 'business_development';
@@ -205,7 +210,7 @@ export default function BDCRMPage() {
 
     useEffect(() => {
         fetchStudents();
-    }, [filterAgent, periodFilter]);
+    }, [filterAgent, periodFilter, currentPage, pageSize]);
 
     useEffect(() => {
         if (isSuperAdmin || isBD) {
@@ -216,7 +221,7 @@ export default function BDCRMPage() {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const params = {};
+            const params = { page: currentPage, page_size: pageSize };
             if (filterAgent !== 'all') params.bd_agent_id = filterAgent;
             if (searchTerm) params.search = searchTerm;
             if (periodFilter) {
@@ -224,7 +229,11 @@ export default function BDCRMPage() {
                 params.date_to = periodFilter.date_to;
             }
             const res = await apiClient.get('/bd/students', { params });
-            setStudents(Array.isArray(res.data) ? res.data : []);
+            const data = res.data;
+            const items = data?.items || (Array.isArray(data) ? data : []);
+            setStudents(items);
+            setTotalRecords(data?.total || items.length);
+            setTotalPages(data?.total_pages || 0);
         } catch (err) {
             toast.error('Failed to load BD students');
         } finally {
@@ -398,6 +407,18 @@ export default function BDCRMPage() {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
+            )}
+
+            {/* Pagination */}
+            {!loading && students.length > 0 && (
+                <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    total={totalRecords}
+                    pageSize={pageSize}
+                    onPageChange={(p) => setCurrentPage(p)}
+                    onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
             )}
 
             {/* Student Detail Modal */}

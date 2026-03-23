@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
 import { PeriodFilter } from '@/components/PeriodFilter';
+import { Pagination } from '@/components/Pagination';
 import EnrollmentPaymentModal from '@/components/EnrollmentPaymentModal';
 import RejectionReasonModal from '@/components/RejectionReasonModal';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
@@ -408,6 +409,10 @@ const SalesCRMPage = () => {
     const [deepSearchResults, setDeepSearchResults] = useState(null);
     const [deepSearching, setDeepSearching] = useState(false);
     const [periodFilter, setPeriodFilter] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     const isSuperAdmin = user?.role === 'super_admin';
 
@@ -426,7 +431,7 @@ const SalesCRMPage = () => {
 
     useEffect(() => {
         fetchLeads();
-    }, [filterAgent, filterTeam, periodFilter]);
+    }, [filterAgent, filterTeam, periodFilter, currentPage, pageSize]);
 
     // Fetch agents and teams for super admin
     useEffect(() => {
@@ -486,7 +491,7 @@ const SalesCRMPage = () => {
     const fetchLeads = async () => {
         try {
             setLoading(true);
-            const params = { search: searchTerm || undefined };
+            const params = { search: searchTerm || undefined, page: currentPage, page_size: pageSize };
             if (filterAgent !== 'all') params.assigned_to = filterAgent;
             if (filterTeam !== 'all') params.team_id = filterTeam;
             if (periodFilter) {
@@ -495,7 +500,14 @@ const SalesCRMPage = () => {
                 params.date_field = periodFilter.date_field;
             }
             const response = await leadApi.getAll(params);
-            setLeads(response.data);
+            const data = response.data;
+            if (data && data.items) {
+                setLeads(data.items);
+                setTotalRecords(data.total || 0);
+                setTotalPages(data.total_pages || 0);
+            } else {
+                setLeads(Array.isArray(data) ? data : []);
+            }
         } catch (error) {
             toast.error('Failed to fetch leads');
             console.error(error);
@@ -516,7 +528,8 @@ const SalesCRMPage = () => {
         setDeepSearching(true);
         try {
             const response = await leadApi.getAll({ search: searchTerm.trim() });
-            setDeepSearchResults(response.data || []);
+            const data = response.data;
+            setDeepSearchResults(data?.items || (Array.isArray(data) ? data : []));
         } catch (error) {
             toast.error('Deep search failed');
         } finally {
@@ -933,6 +946,18 @@ const SalesCRMPage = () => {
                         ) : null}
                     </DragOverlay>
                 </DndContext>
+            )}
+            
+            {/* Pagination */}
+            {!loading && leads.length > 0 && (
+                <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    total={totalRecords}
+                    pageSize={pageSize}
+                    onPageChange={(p) => setCurrentPage(p)}
+                    onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                />
             )}
 
             {/* Advanced Search Fallback - When no results found */}
