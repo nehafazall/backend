@@ -21,10 +21,15 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - CS Kanban Upgrade Date badge, Customer Master Net LTV with deposits/withdrawals
 
 **Batch 3 - Mentor Scoping & Reassignment (Iteration 61: Backend 100%, Frontend 85%)**
-1. Mentor CRM revenue scoped to logged-in user (non-super-admin sees only own data)
-2. Super Admin mentor reassignment via student card dropdown menu
-3. Mentor list includes mentor, master_of_academics, academic_master roles
-4. Net Revenue dialog tested and verified working
+- Mentor CRM revenue scoped to logged-in user (non-super-admin sees only own data)
+- Super Admin mentor reassignment via student card dropdown menu
+
+**Batch 4 - Universal Period Filter (Iteration 62: 100% pass)**
+- Reusable `PeriodFilter` component: Today, Tomorrow, This Week, Last Week, This Month, Last Month, This Quarter, Last Quarter, This Year, Custom Range
+- **Sales CRM**: 2 date field toggle (Lead Created / Enrolled)
+- **Customer Service**: Filter by Upgrade Date (queries cs_upgrades collection)
+- **Mentor CRM**: Filter by Deposit Date (queries mentor_redeposits collection)
+- Backend supports `date_from`, `date_to`, `date_field` params on `/api/leads` and `/api/students`
 
 ### Previous Sessions
 - Dashboard Custom Date Range, Top 10 Sales Chart, Course Commissions
@@ -43,6 +48,14 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Payslip generation feature
 - Google Ads API integration
 - Fix recurring `RangeError: Maximum call stack size exceeded` (babel plugin)
+
+## Key Components
+- `/app/frontend/src/components/PeriodFilter.jsx` — Reusable period filter
+- `/app/frontend/src/pages/SalesCRMPage.jsx` — Sales Kanban
+- `/app/frontend/src/pages/CustomerServicePage.jsx` — CS Kanban
+- `/app/frontend/src/pages/MentorCRMPage.jsx` — Mentor Kanban
+- `/app/frontend/src/pages/BirdsEyeDashboard.jsx` — Overall Dashboard
+- `/app/frontend/src/pages/CustomerMasterPage.jsx` — Customer Master with Net LTV
 
 ## Credentials
 - **Super Admin:** aqib@clt-academy.com / @Aqib1234
