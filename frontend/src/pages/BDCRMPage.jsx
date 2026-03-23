@@ -19,6 +19,7 @@ import {
     DropdownMenuSeparator, DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { PeriodFilter } from '@/components/PeriodFilter';
+import { TransactionHistory } from '@/components/TransactionHistory';
 import {
     DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor,
     useSensor, useSensors, useDroppable,
@@ -387,6 +388,13 @@ export default function BDCRMPage() {
                                     <p className="text-sm mt-1 whitespace-pre-wrap bg-muted/50 p-2 rounded">{selectedStudent.notes}</p>
                                 </div>
                             )}
+                            {/* Customer Transaction History */}
+                            <div>
+                                <Label className="text-muted-foreground flex items-center gap-1.5 mb-2">
+                                    <DollarSign className="h-3.5 w-3.5 text-emerald-500" /> Transaction History
+                                </Label>
+                                <TransactionHistory studentId={selectedStudent.id} />
+                            </div>
                         </div>
                     )}
                     <DialogFooter>

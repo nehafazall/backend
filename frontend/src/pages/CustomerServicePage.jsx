@@ -35,6 +35,7 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import { TransactionHistory } from '@/components/TransactionHistory';
 import {
     DndContext,
     DragOverlay,
@@ -70,6 +71,7 @@ import {
     GripVertical,
     ArrowUp,
     Download,
+    DollarSign,
 } from 'lucide-react';
 
 const CS_STAGES = [
@@ -885,6 +887,19 @@ const CustomerServicePage = () => {
                                         {/* Call History */}
                                         <CallHistory contactId={selectedStudent.id} />
                                     </div>
+                                </CardContent>
+                            </Card>
+                            
+                            {/* Customer Transaction History */}
+                            <Card>
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <DollarSign className="h-4 w-4 text-emerald-500" />
+                                        Transaction History
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <TransactionHistory studentId={selectedStudent.id} />
                                 </CardContent>
                             </Card>
                             

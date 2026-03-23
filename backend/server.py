@@ -5616,6 +5616,107 @@ async def reassign_student_mentor(
     return updated
 
 
+# ===================== STUDENT TRANSACTION HISTORY =====================
+
+@api_router.get("/students/{student_id}/transaction-history")
+async def get_student_transaction_history(student_id: str, user=Depends(get_current_user)):
+    """Get unified financial transaction history for a student across all modules."""
+    allowed = ["super_admin", "admin", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "business_development", "finance"]
+    if user["role"] not in allowed:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student = await db.students.find_one({"id": student_id}, {"_id": 0, "id": 1, "full_name": 1, "lead_id": 1, "enrollment_amount": 1, "created_at": 1})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    transactions = []
+
+    # 1. Enrollment payment
+    enrollment_amt = student.get("enrollment_amount")
+    if enrollment_amt:
+        transactions.append({
+            "type": "enrollment",
+            "label": "Enrollment Payment",
+            "amount_aed": round(float(enrollment_amt), 2),
+            "date": (student.get("created_at") or "")[:10],
+            "recorded_by": None,
+            "details": None,
+        })
+
+    # 2. CS Upgrades
+    upgrades = await db.cs_upgrades.find({"student_id": student_id}, {"_id": 0}).sort("date", 1).to_list(200)
+    for u in upgrades:
+        amt = u.get("amount") or u.get("course_amount") or 0
+        transactions.append({
+            "type": "upgrade",
+            "label": f"CS Upgrade — {u.get('course_upgrade', '')}".strip(" —"),
+            "amount_aed": round(float(amt), 2),
+            "date": u.get("date") or (u.get("created_at") or "")[:10],
+            "recorded_by": u.get("cs_agent_name"),
+            "details": u.get("course_upgrade"),
+        })
+
+    # 3. Mentor Redeposits
+    redeposits = await db.mentor_redeposits.find({"student_id": student_id}, {"_id": 0}).sort("date", 1).to_list(200)
+    for r in redeposits:
+        amt = r.get("amount_aed") or r.get("amount") or 0
+        transactions.append({
+            "type": "redeposit",
+            "label": "Redeposit",
+            "amount_aed": round(float(amt), 2),
+            "date": r.get("date") or (r.get("created_at") or "")[:10],
+            "recorded_by": r.get("mentor_name") or r.get("bd_agent_name"),
+            "details": None,
+        })
+
+    # 4. Mentor Withdrawals
+    withdrawals = await db.mentor_withdrawals.find({"student_id": student_id}, {"_id": 0}).sort("date", 1).to_list(200)
+    for w in withdrawals:
+        amt = w.get("amount_aed") or w.get("amount") or 0
+        transactions.append({
+            "type": "withdrawal",
+            "label": "Withdrawal",
+            "amount_aed": round(float(amt), 2),
+            "date": w.get("date") or (w.get("created_at") or "")[:10],
+            "recorded_by": w.get("mentor_name"),
+            "details": w.get("reason"),
+        })
+
+    # 5. LTV Transactions (catch-all for any other type)
+    ltv_txns = await db.ltv_transactions.find({"student_id": student_id}, {"_id": 0}).sort("date", 1).to_list(200)
+    for t in ltv_txns:
+        txn_type = t.get("type", "other")
+        if txn_type == "enrollment":
+            continue  # already captured above
+        transactions.append({
+            "type": txn_type,
+            "label": t.get("description") or txn_type.replace("_", " ").title(),
+            "amount_aed": round(float(t.get("amount") or 0), 2),
+            "date": t.get("date") or (t.get("created_at") or "")[:10],
+            "recorded_by": t.get("agent_name"),
+            "details": t.get("course_name"),
+        })
+
+    # Sort by date descending (most recent first)
+    transactions.sort(key=lambda x: x.get("date") or "", reverse=True)
+
+    # Compute totals
+    total_in = sum(t["amount_aed"] for t in transactions if t["type"] != "withdrawal")
+    total_out = sum(t["amount_aed"] for t in transactions if t["type"] == "withdrawal")
+
+    return {
+        "student_id": student_id,
+        "student_name": student.get("full_name"),
+        "transactions": transactions,
+        "summary": {
+            "total_deposits": round(total_in, 2),
+            "total_withdrawals": round(total_out, 2),
+            "net_value": round(total_in - total_out, 2),
+            "transaction_count": len(transactions),
+        },
+    }
+
+
 # ===================== BUSINESS DEVELOPMENT ENDPOINTS =====================
 
 @api_router.get("/bd/students")

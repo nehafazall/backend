@@ -125,12 +125,16 @@ export default function BDDashboardPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-2 ${isSuperAdmin ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
                 <StatCard title="Total Students" value={data.total_students} icon={Users} colorClass="bg-sky-500/10 text-sky-500" />
-                <StatCard title="Period Revenue" value={fmtAED(data.period_revenue)} subtitle={`${data.period_deposits} deposits`}
-                    icon={DollarSign} colorClass="bg-emerald-500/10 text-emerald-500" />
-                <StatCard title="All-Time Revenue" value={fmtAED(data.all_time_revenue)} icon={TrendingUp} colorClass="bg-violet-500/10 text-violet-500" />
                 <StatCard title="Closed Deals" value={data.stage_counts?.closed || 0} icon={CheckCircle} colorClass="bg-lime-500/10 text-lime-500" />
+                {isSuperAdmin && (
+                    <>
+                        <StatCard title="Period Revenue" value={fmtAED(data.period_revenue)} subtitle={`${data.period_deposits} deposits`}
+                            icon={DollarSign} colorClass="bg-emerald-500/10 text-emerald-500" />
+                        <StatCard title="All-Time Revenue" value={fmtAED(data.all_time_revenue)} icon={TrendingUp} colorClass="bg-violet-500/10 text-violet-500" />
+                    </>
+                )}
             </div>
 
             {/* Charts Row */}
@@ -209,7 +213,8 @@ export default function BDDashboardPage() {
                 </Card>
             )}
 
-            {/* Recent Deposits */}
+            {/* Recent Deposits - Super Admin only */}
+            {isSuperAdmin && (
             <Card data-testid="bd-dash-recent-deposits">
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
@@ -243,6 +248,7 @@ export default function BDDashboardPage() {
                     )}
                 </CardContent>
             </Card>
+            )}
         </div>
     );
 }
