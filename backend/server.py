@@ -205,6 +205,10 @@ MENTOR_STAGES = [
     "interested", "closed"
 ]
 
+BD_STAGES = [
+    "new_student", "contacted", "pitched", "interested", "closed"
+]
+
 PAYMENT_STAGES = [
     "new_payment", "pending_verification", "verified", 
     "reconciled", "discrepancy", "completed"
@@ -5610,6 +5614,262 @@ async def reassign_student_mentor(
     
     updated = await db.students.find_one({"id": student_id}, {"_id": 0})
     return updated
+
+
+# ===================== BUSINESS DEVELOPMENT ENDPOINTS =====================
+
+@api_router.get("/bd/students")
+async def get_bd_students(
+    bd_stage: Optional[str] = None,
+    search: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    bd_agent_id: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get students assigned to BD agents. BD sees own, super_admin sees all."""
+    if user["role"] not in ["super_admin", "admin", "business_development"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {"bd_agent_id": {"$exists": True, "$ne": None}}
+    
+    if user["role"] == "business_development":
+        query["bd_agent_id"] = user["id"]
+    elif bd_agent_id:
+        query["bd_agent_id"] = bd_agent_id
+    
+    if bd_stage:
+        query["bd_stage"] = bd_stage
+    
+    if search:
+        query["$or"] = [
+            {"full_name": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}}
+        ]
+    
+    # Date filtering by deposit date
+    if date_from or date_to:
+        dep_match = {}
+        if date_from:
+            dep_match["$gte"] = date_from
+        if date_to:
+            dep_match["$lte"] = date_to + "T23:59:59"
+        deposit_student_ids = await db.mentor_redeposits.distinct("student_id", {"date": dep_match})
+        if deposit_student_ids:
+            query["id"] = {"$in": deposit_student_ids}
+        else:
+            return JSONResponse(content=[])
+    
+    students_cursor = db.students.find(query, {"_id": 0}).sort("created_at", -1)
+    students = await students_cursor.to_list(2000)
+    # Serialize any remaining ObjectId fields
+    result = []
+    for s in students:
+        clean = {k: (str(v) if hasattr(v, '__str__') and type(v).__name__ == 'ObjectId' else v) for k, v in s.items()}
+        result.append(clean)
+    return JSONResponse(content=result)
+
+
+@api_router.put("/bd/students/{student_id}/stage")
+async def update_bd_student_stage(
+    student_id: str,
+    data: Dict,
+    user = Depends(get_current_user)
+):
+    """Update BD stage for a student."""
+    if user["role"] not in ["super_admin", "admin", "business_development"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    new_stage = data.get("bd_stage")
+    if new_stage not in BD_STAGES:
+        raise HTTPException(status_code=400, detail=f"Invalid BD stage. Must be one of: {BD_STAGES}")
+    
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # BD agents can only update their own students
+    if user["role"] == "business_development" and student.get("bd_agent_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Cannot update another agent's student")
+    
+    update = {
+        "bd_stage": new_stage,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.students.update_one({"id": student_id}, {"$set": update})
+    await log_activity("student", student_id, "bd_stage_changed", user, {"new_stage": new_stage})
+    
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return updated
+
+
+@api_router.post("/bd/record-redeposit")
+async def bd_record_redeposit(
+    data: Dict,
+    user = Depends(get_current_user)
+):
+    """BD agent records a redeposit for a student."""
+    if user["role"] not in ["super_admin", "admin", "business_development", "finance"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    student_id = data.get("student_id")
+    amount = data.get("amount", 0)
+    amount_aed = data.get("amount_aed", amount)
+    date = data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Get mentor info for the student
+    mentor_id = student.get("mentor_id")
+    mentor_name = student.get("mentor_name", "")
+    
+    month = date[:7]  # YYYY-MM
+    
+    redeposit_record = {
+        "id": str(uuid.uuid4()),
+        "student_id": student_id,
+        "student_name": student.get("full_name", ""),
+        "student_email": student.get("email", ""),
+        "mentor_id": mentor_id,
+        "mentor_name": mentor_name,
+        "bd_agent_id": user["id"] if user["role"] == "business_development" else data.get("bd_agent_id", student.get("bd_agent_id")),
+        "bd_agent_name": user["full_name"] if user["role"] == "business_development" else data.get("bd_agent_name", student.get("bd_agent_name")),
+        "amount": amount,
+        "amount_aed": amount_aed,
+        "date": date,
+        "month": month,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+        "recorded_by_role": user["role"],
+    }
+    
+    await db.mentor_redeposits.insert_one(redeposit_record)
+    
+    # Move student to "closed" in BD kanban
+    await db.students.update_one({"id": student_id}, {"$set": {"bd_stage": "closed", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    
+    await log_activity("student", student_id, "bd_redeposit_recorded", user, {"amount_aed": amount_aed})
+    
+    return {"status": "success", "redeposit_id": redeposit_record["id"], "amount_aed": amount_aed}
+
+
+@api_router.get("/bd/dashboard")
+async def get_bd_dashboard(
+    period: str = "this_month",
+    bd_agent_id: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """BD Dashboard metrics. BD sees own, super_admin sees all or filtered."""
+    if user["role"] not in ["super_admin", "admin", "business_development"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    agent_filter = {}
+    student_filter = {"bd_agent_id": {"$exists": True, "$ne": None}}
+    
+    if user["role"] == "business_development":
+        agent_filter["bd_agent_id"] = user["id"]
+        student_filter["bd_agent_id"] = user["id"]
+    elif bd_agent_id:
+        agent_filter["bd_agent_id"] = bd_agent_id
+        student_filter["bd_agent_id"] = bd_agent_id
+    
+    # Date range
+    now = datetime.now(timezone.utc)
+    period_start, period_end = _get_date_range(period)
+    
+    dep_query = {**agent_filter}
+    if period_start:
+        dep_query["date"] = {"$gte": period_start}
+        if period_end:
+            dep_query["date"]["$lt"] = period_end
+    
+    # Stats
+    total_students = await db.students.count_documents(student_filter)
+    
+    stage_counts = {}
+    for stage in BD_STAGES:
+        stage_counts[stage] = await db.students.count_documents({**student_filter, "bd_stage": stage})
+    
+    # Revenue from redeposits
+    revenue_pipeline = [
+        {"$match": dep_query},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}}, "count": {"$sum": 1}}}
+    ]
+    rev_result = await db.mentor_redeposits.aggregate(revenue_pipeline).to_list(1)
+    period_revenue = round(rev_result[0]["total"], 2) if rev_result else 0
+    period_deposits = rev_result[0]["count"] if rev_result else 0
+    
+    # All-time revenue
+    all_time_pipeline = [
+        {"$match": agent_filter},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}}, "count": {"$sum": 1}}}
+    ]
+    all_rev = await db.mentor_redeposits.aggregate(all_time_pipeline).to_list(1)
+    all_time_revenue = round(all_rev[0]["total"], 2) if all_rev else 0
+    
+    # BD agent performance (for super admin view)
+    agent_perf = []
+    if user["role"] in ["super_admin", "admin"]:
+        perf_pipeline = [
+            {"$match": dep_query},
+            {"$group": {"_id": "$bd_agent_id", "name": {"$first": "$bd_agent_name"}, "revenue": {"$sum": {"$ifNull": ["$amount_aed", "$amount"]}}, "deposits": {"$sum": 1}}},
+            {"$sort": {"revenue": -1}}
+        ]
+        agent_perf = await db.mentor_redeposits.aggregate(perf_pipeline).to_list(10)
+        agent_perf = [{"bd_agent_id": a["_id"], "name": a.get("name", ""), "revenue": round(a["revenue"], 2), "deposits": a["deposits"]} for a in agent_perf]
+    
+    # Recent redeposits
+    recent_deps = await db.mentor_redeposits.find(
+        dep_query, {"_id": 0, "student_name": 1, "amount_aed": 1, "amount": 1, "date": 1, "bd_agent_name": 1}
+    ).sort("date", -1).to_list(10)
+    
+    return {
+        "total_students": total_students,
+        "stage_counts": stage_counts,
+        "period_revenue": period_revenue,
+        "period_deposits": period_deposits,
+        "all_time_revenue": all_time_revenue,
+        "agent_performance": agent_perf,
+        "recent_deposits": [{"name": d.get("student_name"), "amount": round(d.get("amount_aed") or d.get("amount", 0), 2), "date": d.get("date"), "agent": d.get("bd_agent_name")} for d in recent_deps],
+    }
+
+
+@api_router.get("/bd/agents")
+async def get_bd_agents(user = Depends(get_current_user)):
+    """Get list of BD agents."""
+    if user["role"] not in ["super_admin", "admin", "business_development"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    agents = await db.users.find({"role": "business_development", "is_active": True}, {"_id": 0, "id": 1, "full_name": 1, "email": 1}).to_list(20)
+    return agents
+
+
+@api_router.post("/bd/students/{student_id}/reassign")
+async def reassign_bd_student(
+    student_id: str,
+    new_bd_agent_id: str,
+    user = Depends(require_roles(["super_admin", "admin"]))
+):
+    """Reassign a student to a different BD agent. Super admin only."""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    new_agent = await db.users.find_one({"id": new_bd_agent_id, "role": "business_development"})
+    if not new_agent:
+        raise HTTPException(status_code=404, detail="BD agent not found")
+    
+    await db.students.update_one({"id": student_id}, {"$set": {
+        "bd_agent_id": new_agent["id"],
+        "bd_agent_name": new_agent["full_name"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    
+    updated = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return updated
+
 
 
 @api_router.post("/students/{student_id}/initiate-upgrade")
@@ -14083,7 +14343,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://sales-search-boost.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://business-dev-sync.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>

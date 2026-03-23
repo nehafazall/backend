@@ -128,11 +128,13 @@ const SECTIONS = {
         title: 'Academics',
         icon: GraduationCap,
         color: 'bg-orange-500',
-        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'],
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'business_development'],
         items: [
-            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor' },
-            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard' },
-            { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard' },
+            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
+            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
+            { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
+            { title: 'BD CRM', icon: Briefcase, path: '/bd', roles: ['super_admin', 'admin', 'business_development'] },
+            { title: 'BD Dashboard', icon: TrendingUp, path: '/bd/dashboard', roles: ['super_admin', 'admin', 'business_development'] },
             { title: 'Historical Import', icon: Upload, path: '/mentor/historical-import', roles: ['super_admin'] },
         ],
     },
@@ -407,7 +409,7 @@ function Layout() {
     }
 
     function getRoleBadgeColor(r) {
-        const map = { super_admin: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500' };
+        const map = { super_admin: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500', business_development: 'bg-sky-500' };
         return map[r] || 'bg-slate-500';
     }
 

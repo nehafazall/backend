@@ -34,6 +34,8 @@ import RolesPage from "@/pages/RolesPage";
 import TeamsPage from "@/pages/TeamsPage";
 import MentorLeaderboard from "@/pages/MentorLeaderboard";
 import MentorHistoricalImportPage from "@/pages/academics/MentorHistoricalImportPage";
+import BDCRMPage from "@/pages/BDCRMPage";
+import BDDashboardPage from "@/pages/BDDashboardPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -268,6 +270,18 @@ function AppRoutes() {
                 <Route path="mentor/historical-import" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <MentorHistoricalImportPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Business Development */}
+                <Route path="bd" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development']}>
+                        <BDCRMPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="bd/dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development']}>
+                        <BDDashboardPage />
                     </ProtectedRoute>
                 } />
                 

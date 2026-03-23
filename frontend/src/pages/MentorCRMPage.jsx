@@ -179,11 +179,18 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging, isSuperAdmin,
                         </Badge>
                     )}
                 </div>
-                {student.mentor_name && (
-                    <Badge variant="outline" className="text-xs">
-                        {student.mentor_name}
-                    </Badge>
-                )}
+                <div className="flex items-center gap-1">
+                    {student.bd_agent_name && (
+                        <Badge variant="outline" className="text-xs bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-900/30 dark:border-sky-700 dark:text-sky-300">
+                            BD: {student.bd_agent_name.split(' ')[0]}
+                        </Badge>
+                    )}
+                    {student.mentor_name && (
+                        <Badge variant="outline" className="text-xs">
+                            {student.mentor_name}
+                        </Badge>
+                    )}
+                </div>
             </div>
         </div>
     );

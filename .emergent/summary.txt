@@ -1,103 +1,82 @@
-<analysis>**original_problem_statement:**
-The user has requested continuous improvements, bug fixes, and feature additions for the CLT Synapse ERP system. The most recent (and currently unfulfilled) requests involve:
-1. Making top dashboard KPI buttons clickable with specific navigation routing (Active Pipeline -> Sales, New Leads -> Dialog box of today's leads, Pending Activations -> CS, Mentor Students -> Mentor CRM). 
-2. Correcting YTD and MTD metrics on the dashboard (Enrolled YTD should explicitly be 994, MTD should dynamically count this month's enrollments).
-3. Fixing a data inaccuracy for sales agent Mohammed Shanif: A student named LAMIZ incorrectly shows 4104 AED revenue instead of 2204 AED due to a finance rejection/resubmission glitch.
-4. Enhancing the sales search function to provide a detailed fallback search by phone, email, and name if standard search yields no results.
-5. Ensuring the Enrolled leads list on the Sales page is sorted in descending order based on closing value/date.
+<analysis>**original_problem_statement**: 
+The user is driving continuous enhancements for the CLT Synapse ERP system. The requests in this session included:
+1. Fixing Dashboard KPIs (making them clickable with routing) and setting accurate YTD/MTD enrolled metrics.
+2. Fixing currency display (USD to AED) in Mentor and Academics revenue.
+3. Adding a Monthly Closings dialog in Mentor CRM showing net revenue with student-level deposits/withdrawals.
+4. Adding  to Customer Service Kanban cards.
+5. Updating Customer Master to show Net LTV and mentor transactions.
+6. Scoping Mentor CRM revenue to the specific logged-in mentor (while Super Admin sees the whole team).
+7. Allowing Super Admins to reassign students between mentors.
+8. Implementing a Universal Period Filter (Today, This Week, This Month, Custom, etc.) across Sales, CS, and Mentor Kanbans with specific date fields for each.
+9. **(CURRENT)** Introducing a new Business Development (BD) role. Two existing users (Rashida and Farsana) need to be converted to BD Managers. They will share the student pool via round-robin. They need their own Sidebar section, BD CRM Kanban, BD Dashboard, and the ability to record redeposits.
 
 **User's preferred language**: English
-*(INSTRUCTION TO NEXT AGENT: You MUST respond in English)*
+*(INSTRUCTION TO NEXT AGENT: You MUST respond in English only)*
 
 **what currently exists?** 
-A comprehensive full-stack ERP for an educational academy (Sales, Customer Service, Mentors, HR, Finance). The application has recently undergone extensive dashboard stabilization, fixing double-counting revenue bugs, implementing Mentor historical data imports, adding student export functionalities, and updating commission structures for Upgrade courses. 
+A mature, full-stack ERP for an educational academy featuring Sales, Customer Service, Mentors, HR, and Finance modules. The app has advanced MongoDB aggregations for dashboard metrics, drag-and-drop Kanbans, robust universal period filtering, and hierarchical role-based access.
 
 **Last working item**:
-- **Last item agent was working:** Investigating the most recent batch of user requests (making dashboard top buttons clickable, fixing the LAMIZ revenue discrepancy for agent Mohammed Shanif, and enhancing the sales search). The agent ran DB queries to find the LAMIZ record but had not yet applied fixes.
-- **Status:** IN PROGRESS
-- **Agent Testing Done:** N
-- **Which testing method agent to use?** both (backend testing for the data/sorting fix, frontend testing via screenshot/testing agent for dashboard clickability and search UI).
-- **User Testing Done:** N
+- **Last item agent was working**: Implementing the new Business Development (BD) module. The agent successfully changed user roles to  via bash, created the  endpoints, but realized that  was returning . 
+- **Reasoning**: The agent discovered that upon backend hot-reload/startup, the  (or ) is re-initializing students and wiping out the  fields that were just assigned. The agent was inspecting  around line 25101 () to fix the seeding behavior when the context window ended. The frontend UI for BD has not been started yet.
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: both (backend curl for BD data persistence, testing_agent_v3_fork for full BD module completion)
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-Issue 1: Mohammed Shanif / LAMIZ Revenue Data Glitch (P0)
-- Attempted fixes: Investigated DB using bash. Found the student LAMIZ has  and  in the  collection.
-- Next debug checklist: Modify the specific lead record for LAMIZ to reflect the correct 2204 AED amount, or correct the aggregation logic in  that handles finance rejections. Ensure the sales dashboard reflects the corrected revenue.
-- Why fix this issue and what will be achieved with the fix? Corrects agent performance metrics and financial dashboard accuracy.
-- Status: IN PROGRESS
-- Is recurring issue? N
-- Should Test frontend/backend/both after fix? both
-- Blocked on other issue: None
+Issue 1: DB Seeder Overwriting BD Assignments (P0)
+- **Attempted fixes**: Agent queried the DB, saw 924 students initially had  applied. After a hot reload, the query returned 0. Agent isolated the issue to the startup sequence.
+- **Next debug checklist**: 
+  - Check  or  . Ensure that when mock/seed data is generated, it either includes  mapping OR the seeder bypasses existing student records if they already exist.
+- **Why fix this issue and what will be achieved with the fix?**: Unblocks the entire BD module. Currently, backend logic cannot be tested because data is wiped on reload.
+- **Status**: IN PROGRESS
+- **Is recurring issue?**: N
+- **Should Test frontend/backend/both after fix?**: backend
+- **Blocked on other issue**: None
 
 Issue 2:  (P2)
-- Attempted fixes: None in this session.
-- Next debug checklist: Investigate the  and its interaction with React components during frontend build/hot-reload.
-- Why fix this issue and what will be achieved with the fix? Removes recurring warning from the frontend build process, improving stability.
-- Status: NOT STARTED
-- Is recurring issue? Y
-- Should Test frontend/backend/both after fix? frontend
-- Blocked on other issue: None
+- **Attempted fixes**: None. (Carried over from previous forks).
+- **Next debug checklist**: Investigate  and React component hot-reloading configurations.
+- **Why fix this issue and what will be achieved with the fix?**: Stabilizes frontend build environment.
+- **Status**: NOT STARTED
+- **Is recurring issue?**: Y
+- **Should Test frontend/backend/both after fix?**: frontend
+- **Blocked on other issue**: None
 
 **In progress Task List**:
-Task 1: Dashboard Top Buttons Navigation & Metrics (P0)
-- Where to resume: . Implement  navigation for: Active pipeline -> , Pending activations -> , Mentor students -> .
-- What will be achieved with this? Seamless navigation from high-level metrics to operational Kanbans.
-- Status: NOT STARTED
-- Should Test frontend/backend/both after fix? frontend
-- Blocked on something: None
-
-Task 2: Dashboard New Leads Dialog & YTD/MTD Enrolled Counts (P0)
-- Where to resume: . Enrolled YTD needs to be hardcoded/calculated as 994. Enrolled MTD needs dynamic counting. New Leads button needs to trigger a new Dialog showing today's leads.
-- What will be achieved with this? Accurate historical tracking and immediate daily operational oversight.
-- Status: NOT STARTED
-- Should Test frontend/backend/both after fix? both
-- Blocked on something: None
-
-Task 3: Advanced Sales Search Fallback (P0)
-- Where to resume: . When  yields no results, implement a UI state that allows deep searching by phone, email, or name specifically.
-- What will be achieved with this? Better lead discoverability for sales agents.
-- Status: NOT STARTED
-- Should Test frontend/backend/both after fix? both
-- Blocked on something: None
-
-Task 4: Enrolled List Descending Sort (P0)
-- Where to resume:  and backend  endpoint. Ensure leads in the enrolled stage are sorted descending.
-- What will be achieved with this? Prioritizes most recent/highest value closings.
-- Status: NOT STARTED
-- Should Test frontend/backend/both after fix? both
-- Blocked on something: None
+Task 1: Complete Business Development (BD) Module (P0)
+- **Where to resume**: Fix the backend data persistence issue first (Issue 1). Then, ensure , , and  return correct data. 
+- **Next Steps**: 
+  1. Add a specific endpoint for BD agents to record redeposit.
+  2. Create Frontend  and .
+  3. Add the BD section to the Sidebar ( or ).
+- **What will be achieved with this?**: Fulfills the user's latest major requirement for a new departmental flow.
+- **Status**: IN PROGRESS
+- **Should Test frontend/backend/both after fix?**: both
+- **Blocked on something**: Issue 1 (DB Seeder wipe)
 
 **Upcoming and Future Tasks**
-Upcoming Tasks:
-- P1: Per-Course Commission Calculation (Wire commission fields into actual HR/Finance payouts).
-- P1: Post-Deployment Checks (Ensure Google Cloud  is updated and backend CORS policy is tightened).
-
-Future Tasks:
-- P2: Refactor the monolithic  into a domain-driven route structure (, , etc.).
-- P2: Build a UI for admins to dynamically configure generic commission structures.
-- P2: Implement a payslip generation feature.
-- P2: Integrate with Google Ads API.
+- **P1**: Build UI for admins to dynamically configure commission structures.
+- **P1**: Post-Deployment Checks (Ensure Google Cloud  is updated and backend CORS policy is tightened).
+- **P2**: Refactor monolithic  (~25,000 lines) into domain-driven route structure (, , etc.).
+- **P2**: Implement a payslip generation feature.
+- **P2**: Integrate with Google Ads API.
 
 **Completed work in this session**
-- Verified dashboard fixes with Testing Agent (Iteration 58 passed 100%).
-- Implemented Custom Date Range Picker for Overall Dashboard.
-- Fixed Sales Dashboard Top 10 Agents chart (converted to vertical bar chart sorted by revenue).
-- Added , , and  fields to Upgrade courses in  and backend.
-- Fixed Double-Count Bug: Modified  to prevent  from resetting to today on subsequent edits.
-- Built Mentor Historical Import feature (API + Page + 3-sheet Excel template).
-- Fixed CS Dashboard Kanban Runtime Error ( with ).
-- Fixed Data Issue: Corrected malformed dates (29/20/2025 -> 2025-12-29) in  which broke monthly trend charts.
-- Generated and tested 7 SMTP Email Templates (Welcome, SLA, Leave Request, etc.).
-- Appended a 4th Students reference sheet to the CS Historical Import template.
-- Created  endpoint and added an Export All button to the CS Kanban page.
-- Fixed Mentor Dashboard Bonus calculation for Super Admins.
+- Converted Mentor and Academics revenue from USD to AED in all charts and endpoints (DONE).
+- Made Dashboard KPIs clickable and corrected YTD/MTD tracking logic (DONE).
+- Implemented Advanced Sales Search fallback when no leads are found (DONE).
+- Enrolled Leads in Sales CRM now sort descending by enrollment date (DONE).
+- Added Mentor Monthly Closings Net Revenue Dialog Table (DONE).
+- Added  to Customer Service Kanban cards (DONE).
+- Updated Customer Master to calculate/display  and mentor deposits/withdrawals (DONE).
+- Scoped Mentor CRM revenue to logged-in user while keeping Super Admin view global (DONE).
+- Added Mentor Reassignment Dropdown for Super Admins (DONE).
+- Created  and integrated Universal Period Filtering across Sales, CS, and Mentor Kanbans (DONE).
 
 **Earlier issues found/mentioned but not fixed**
-Issue 1: 
-- Debug checklist: Check 
-- Why to solve this issue and what will be achieved with this? Resolves frontend build errors.
-- Should Test frontend/backend/both after fix: frontend
-- Is recurring issue? Y
+- Issue 1: Babel plugin RangeError (Noted above).
 
 **Known issue recurrence from previous fork**
 - Issue recurrence in previous fork:  in .
@@ -108,71 +87,86 @@ Issue 1:
 
 
 **Key Technical Concepts**
-- Backend: FastAPI, Python, MongoDB (Motor AsyncIO), openpyxl (Excel read/write), PyJWT (Authentication).
-- Frontend: React, Tailwind CSS, Shadcn UI, Recharts, React-Day-Picker.
-- Architecture: Monolithic backend with JWT role-based access control. Extensive use of MongoDB Aggregation pipelines for dashboard metrics.
+- Backend: FastAPI, Python, MongoDB (Motor AsyncIO). Highly reliant on MongoDB Aggregation pipelines.
+- Frontend: React, Tailwind CSS, Shadcn UI, dnd-kit for Kanbans.
+- Architecture: Monolithic backend with JWT role-based access control.
 
 **key DB schema**
 - : {stage, enrollment_amount, sale_amount, enrolled_at, ...}
-- : {id, lead_id, full_name, email, phone, cs_agent_id, mentor_id, ...}
-- : {date, amount, ...}
-- : {name, base_price, commission_cs_agent, commission_mentor, ...}
-- : {amount, mentor_id, date, ...}
+- : {id, lead_id, full_name, cs_agent_id, mentor_id, bd_agent_id (NEW), mentor_stage, bd_stage (NEW)...}
+- : {date, amount, student_id, ...}
+- : {amount, amount_aed, mentor_id, date, student_id...}
 
 **changes in tech stack**
-- None. Note: Agent fixed a JWT auth issue in  replacing  with . 
+- None. 
 
 **All files of reference**
--  (Core logic for DB fix and sorting)
--  (Needs UI updates for clickable cards and modals)
--  (Needs advanced search and sort updates)
+-  (Added  endpoints, needs startup event fix)
+-  (Likely wiping BD data)
+-  (New file)
+-  (Heavily updated with net revenue and reassign features)
 
 **Areas that need refactoring**:
-- : Currently ~25,000 lines. Needs modularization into distinct API routers.
+- : Currently over 25,000 lines. Badly needs router modularization.
 
 **key api endpoints**
--  (Used by BirdsEyeDashboard)
--  (Used by SalesCRMPage - needs sorting update)
--  (Newly created)
+-  (New, currently returning empty array due to seeder issue)
+-  (New)
+-  (New)
+-  (New)
 
 **Critical Info for New Agent**
-- **Database Context:** The production backend runs with .
-- **Environment:** Always rely on  for token logic, not .
-- **Date Handling:** Be extremely careful with date formats when querying MongoDB. The system enforces strict  or ISO strings.
-- **Workflow:** The user has provided 4-5 distinct requests in their last message. Start by asking for confirmation of the plan, fix the Mohammed Shanif (LAMIZ) data error first, then proceed to the dashboard UI changes.
+- **Blocker Context**: The previous agent successfully mapped  to students in the database via Bash, but the hot-reloader triggered a backend restart. On restart, the system's seeder script wiped the  mapping from the students collection. You **must** fix the seeder or  in  so it does not overwrite custom fields on existing records before you can test the BD backend endpoints.
+- **Roles**: Rashida Puthu Veetil and Farsana are already updated to the role .
+- **BD Visibility**: The Business Development module should be inside the Academics umbrella. BD agents see their own data, Super Admin sees all. Mentors should be able to see who the assigned BD agent is on their student cards.
 
 **documents and test reports created in this job**
-- 
+-  (Dashboard KPIs/Sorting)
+-  (Mentor net revenue, CS upgrade dates)
+-  (Mentor user scoping & reassign)
+-  (Universal Period Filter)
 - 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1. User asked for export option for students.
-2. Agent created Excel export backend and frontend button.
-3. User reported mentor dashboard bonus not calculating.
-4. Agent fixed backend calculation for super admin view.
-5. **(PENDING)** User requested: Top dashboard buttons clickable (routes), New Leads dialog, YTD/MTD enrollment specific counts, Fix LAMIZ revenue (Shanif), Detailed advanced search fallback in Sales, and descending sort for enrolled sales leads.
+1. User asked for Monthly Closings net revenue dialog for Mentors, CS upgrade date on Kanban, and Customer Master updates.
+2. Agent implemented and verified features.
+3. User clarified that Mentor monthly deposits should be scoped only to the logged-in mentor (e.g., Edwin), not the whole team. Super Admin can reassign.
+4. Agent implemented scoping and reassignment dropdown.
+5. User asked for a Universal Period filter across all Kanbans.
+6. Agent built  and updated all 3 Kanbans.
+7. **(PENDING)** User asked to convert Rashida and Farsana to Business Development Managers. They need to share the student base (round-robin), have their own BD Kanban, Dashboard, and ability to log redeposits. Mentors should see who the BD agent is.
 
 **Project Health Check:**
-- Broken: None.
-- Mocked: None. 
+- Broken: DB Seeder wiping  from students collection on restart.
+- Mocked: None.
 
 **3rd Party Integrations**
 - MongoDB Atlas — uses environment variables
 - Google Sheets API — requires Service Account JSON
 - Meta Ads API — requires User API Key
 - SMTP (Gmail) — requires User App Password
-- 3CX / ZK BioCloud — configured via env vars
 
 **Testing status**
-- Testing agent used after significant changes: YES (iteration 58)
+- Testing agent used after significant changes: YES (Iterations 59, 60, 61, 62)
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created: None
-- Known regressions: None currently.
+- Known regressions: BD data wiping on reload.
 
 **Credentials to test flow:**
 - Super Admin:  / 
 - CS Head:  / 
-- Mentor:  (from DB query reference)
+- Master of Academics: 
+- BD Agent (New):  or  (Check DB for exact emails)
 
 **What agent forgot to execute**
-- The agent gathered context for the final prompt (the 5 pending items) but did not write any code or provide a response before context ended. All items in the final user prompt must be addressed.</analysis>
+- The agent was in the middle of diagnosing why  was returning  and realized the DB seeder was at fault. The context window ended before the agent could write the fix to the seeder, create the BD frontend UI components (, ), or link them in the sidebar.
+
+**Debugging checklist for current issue**
+    Issue: BD Agent mappings disappearing on hot-reload.
+
+    Backend files to check: 
+    -  (Check if it is dropping or replacing students)
+    -  (Check lines ~25101 around )
+  
+    Database to check:
+    -  collection: verify if  and  fields survive a container restart.</analysis>
