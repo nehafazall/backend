@@ -4,48 +4,54 @@
 Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Service, Mentors, HR, and Finance departments with dashboards, lead management, student management, and reporting.
 
 ## Architecture
-- **Backend:** FastAPI + MongoDB Atlas (server.py ~24K lines)
+- **Backend:** FastAPI + MongoDB Atlas (server.py ~25K lines)
 - **Frontend:** React + Shadcn UI + Recharts
 - **Auth:** JWT-based with role-based access control
 - **Integrations:** Google Sheets, Meta Ads, SMTP, ZK BioCloud, APScheduler
 
 ## What's Been Implemented
 
-### Latest Session (March 19, 2026)
-1. **P0 Verification** - All recent dashboard and Kanban fixes verified via testing agent (iteration_58). Pipeline revenue, sales agent sorting, CS drill-down revenue, clickable cards, gender chart, "Academics" rename — all passing.
-2. **Academics Kanban Filters** - Added mentor agent filter dropdown on MentorCRMPage for super_admin/academic_master. Filters students by `mentor_id` param. Matches the filter pattern on Sales and CS Kanban pages.
-3. **Custom Date Range Picker** - Added "Custom Range" option to the Overall Dashboard period filter. When selected, a Calendar popover (dual-month, range mode) appears. Selecting start/end dates sends `period=custom&custom_start=YYYY-MM-DD&custom_end=YYYY-MM-DD` to the backend, which already supports custom date ranges via `_get_date_range()`.
-4. **Sales Dashboard Top 10 Fix** - Changed from horizontal bar chart showing deal count (`closings`) to vertical bar chart showing revenue per agent, color-coded bars, sorted by revenue desc, linked with period filter.
-5. **Course Catalog Upgrade Commissions** - Added per-role commission fields for upgrade courses (CS Agent, CS Head, Mentor). Regular courses keep SE/TL/SM fields. Both types show "Total Commission Out" summary. Backend stores new fields: `commission_cs_agent`, `commission_cs_head`, `commission_mentor`. Form shows contextual fields based on course type.
-7. **Mentor Historical Import** - New feature: Excel import page for mentor redeposit records. 3-sheet template (Redeposit Data, Mentors ref, Students ref). Preview → Validate → Confirm flow. Creates `mentor_redeposits` records, links to students, auto-converts USD→AED. Per-mentor revenue summary on import completion. Sidebar nav added under Academics.
-6. **Double-Count Bug Fix** - Fixed two root causes: (a) `update_lead` was resetting `enrolled_at` to today on every edit of an enrolled lead, making old enrollments appear as "new today". Now only sets `enrolled_at` on first transition to enrolled. (b) `today-transactions` dedup was broken — used `lead_id` from ltv_transactions which doesn't exist. Now maps `student_id` → students → `lead_id` for proper dedup.
+### Latest Session (March 23, 2026)
+1. **Dashboard Operational KPI Row** - Added 6 clickable KPI cards: Active Pipeline (→/sales), New Leads Today (→dialog), Pending Activations (→/cs), Mentor Students (→/mentor), Enrolled YTD (994), Enrolled MTD (dynamic).
+2. **New Leads Today Dialog** - Clicking "New Leads Today" card opens a table dialog showing all leads created today with name, phone, source, assigned agent, and stage.
+3. **YTD/MTD Enrolled Counts** - Enrolled YTD hardcoded to 994, Enrolled MTD dynamically counts this month's enrollments from DB.
+4. **Mentor Revenue AED Fix (Dashboard)** - Fixed Overall Dashboard to aggregate `amount_aed` instead of `amount` (USD) for mentor_redeposits. Also changed period filtering from `created_at` (seed date) to `date` (actual date) for accurate time-based filtering.
+5. **Mentor Revenue AED Fix (CRM)** - Fixed `/mentor/revenue-summary` and `/mentor/redeposits/summary` endpoints to use `amount_aed` with fallback. Added `unique_students` to revenue-summary response. MentorCRM banner now shows rounded AED values.
+6. **Enrolled Leads Descending Sort** - Backend sorts enrolled leads by `enrolled_at` desc. Frontend KanbanColumn also sorts enrolled stage by `enrolled_at` desc for correct display order.
+7. **Advanced Sales Search Fallback** - When search yields no results in Sales CRM, a deep search panel appears with a "Search All Leads" button that searches by phone, email, and name across all leads.
 
-### Session (March 18, 2026) - Batch Fixes
-1. **Dashboard Time Period Filters** - 11 filter options (Today, Yesterday, This/Last Week, This/Last Month, This/Last Quarter, This/Last Year, All Time) with full backend support via `_get_date_range()` and dynamic period queries
-2. **Performance Optimization** - TTLCache (60s TTL) for dashboard endpoints, pre-serialized JSON responses via orjson (5.5s→0.001s cached), user auth caching (30s), compound MongoDB indexes on leads/cs_upgrades/ltv_transactions/customers
-3. **Customer Master Backfill** - 137 new customer records created from enrolled leads, 12 existing updated with transaction history
-4. **Quick Reassign from Kanban** - Super admin can click agent name (blue text) on Sales/CS Kanban cards → dropdown shows available agents → instant reassignment without approval
-5. **CS Historical Import Fix** - Fixed `import io` error, corrected field mapping (`course_amount`→`amount`, `upgraded_at`→`date`), auto-creates student records on import
-6. **Team-wise Revenue Chart Fix** - Added `resolve_agent_team_name()` helper, patched 446 leads with missing team_name
-7. **Top CS Performers Fix** - Fixed `agent_id`→`cs_agent_id` in aggregation query
+### Previous Sessions (March 19, 2026)
+- Dashboard verification (iteration_58 100% pass)
+- Custom Date Range Picker for Overall Dashboard
+- Sales Dashboard Top 10 Agents vertical bar chart
+- Course Catalog Upgrade Commissions
+- Mentor Historical Import (Excel 3-sheet template)
+- Double-Count Bug Fix (enrolled_at reset)
+- CS Dashboard Kanban Runtime Error fix
+- Data Issue: Corrected malformed dates in cs_upgrades
+- 7 SMTP Email Templates
+- CS Historical Import 4th sheet
+- Student Export Excel endpoint
+- Mentor Dashboard Bonus calculation fix
 
-### Previous Sessions
-- Overall Dashboard with revenue, treasury, HR stats, top performers
-- Sales recording bug fix (enrolled_at timestamp)
-- Super Admin direct lead assignment
-- Customer Master sorting
-- API optimization with asyncio.gather
-
-## Revenue Verification (March 18, 2026)
-| Period | Sales | CS | Mentors | Total |
-|--------|-------|-----|---------|-------|
-| This Month | AED 225,898 | AED 61,693 | AED 0 | AED 287,591 |
-| All Time | AED 488,152 | AED 198,592 | AED 0 | AED 686,744 |
+## Revenue Verification (March 23, 2026)
+| Period | Sales | CS | Academics | Total |
+|--------|-------|-----|-----------|-------|
+| This Month | AED 299,065 | AED 65,903 | AED 113,828 | AED 478,796 |
 
 ## Prioritized Backlog
+### P0 - COMPLETED
+- Dashboard operational KPI buttons with navigation
+- New Leads Today dialog
+- YTD/MTD enrolled counts
+- Mentor revenue AED fix (Dashboard + CRM)
+- Advanced Sales Search Fallback
+- Enrolled leads descending sort
+
 ### P1
-- Per-Course Commission Calculation (wire commission fields from course_catalog into Sales Dashboard "My Earnings")
+- Per-Course Commission Calculation (wire commission fields into Sales Dashboard "My Earnings")
 - Post-Deployment Checks (Google Cloud redirect_uri, CORS)
+- LAMIZ Revenue Data investigation (currently `new_lead` stage with no revenue fields - may need user clarification)
 
 ### P2
 - Refactor `server.py` into domain-driven route files
