@@ -109,6 +109,7 @@ const SECTIONS = {
         items: [
             { title: 'Sales CRM', icon: Phone, path: '/sales' },
             { title: 'Sales Dashboard', icon: TrendingUp, path: '/sales/dashboard' },
+            { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard' },
             { title: "Today's Follow-ups", icon: Bell, path: '/followups' },
             { title: 'Historical Import', icon: Upload, path: '/sales/historical-import', roles: ['super_admin'] },
         ],
@@ -121,6 +122,7 @@ const SECTIONS = {
         roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
         items: [
             { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
+            { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard' },
             { title: 'Merge Approvals', icon: GitMerge, path: '/cs/merge-approvals', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'Customer Service', icon: Users, path: '/cs' },
             { title: 'Student Portal', icon: GraduationCap, path: '/cs/student-portal', roles: ['super_admin', 'admin', 'cs_head'] },
@@ -207,6 +209,7 @@ const SECTIONS = {
             { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications' },
             { title: 'Mentor Withdrawals', icon: ArrowDownRight, path: '/finance/mentor-withdrawals' },
             { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
+            { title: 'Commission Dashboard', icon: DollarSign, path: '/commission-dashboard' },
             { title: 'Revenue Forecast', icon: TrendingUp, path: '/forecasting', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Report Builder', icon: BarChart3, path: '/reports', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin'] },

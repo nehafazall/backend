@@ -26309,46 +26309,48 @@ async def get_commission_dashboard(month: str = None, user=Depends(get_current_u
             result["total_cs_head_pending"] = my_comm["pending_cs_head"] + sum(t["pending_cs_head"] for t in team_data)
 
     elif role == "super_admin":
-        # CEO: see everything
-        # Sales commissions
+        # CEO: see everything — parallelize agent calculations
         sales_agents = await db.users.find(
             {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
             {"_id": 0, "id": 1, "full_name": 1, "role": 1}
         ).to_list(100)
+        cs_agents = await db.users.find(
+            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
+        ).to_list(50)
+
+        sales_tasks = [_calc_sales_commissions(a["id"], month) for a in sales_agents]
+        cs_tasks = [_calc_cs_commissions(a["id"], a["full_name"], month) for a in cs_agents]
+        all_results = await asyncio.gather(*sales_tasks, *cs_tasks)
+
+        sales_results = all_results[:len(sales_agents)]
+        cs_results = all_results[len(sales_agents):]
+
         sales_data = []
-        total_sm_pool = 0
-        for a in sales_agents:
-            sc = await _calc_sales_commissions(a["id"], month)
+        for i, a in enumerate(sales_agents):
+            sc = sales_results[i]
             sc["agent_name"] = a["full_name"]
             sc["agent_role"] = a["role"]
             sales_data.append(sc)
-            total_sm_pool += sc["sm_pool"]
 
         result["sales_commissions"] = sales_data
         result["total_sales_earned"] = sum(s["earned_commission"] for s in sales_data)
         result["total_sales_pending"] = sum(s["pending_commission"] for s in sales_data)
         result["total_tl_earned"] = sum(s["earned_tl"] for s in sales_data)
         result["total_tl_pending"] = sum(s["pending_tl"] for s in sales_data)
-        result["sm_bonus_pool"] = total_sm_pool
+        result["sm_bonus_pool"] = sum(s["sm_pool"] for s in sales_data)
 
-        # CS commissions
-        cs_agents = await db.users.find(
-            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
-            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
-        ).to_list(50)
         cs_data = []
-        total_mentor = 0
-        for a in cs_agents:
-            cc = await _calc_cs_commissions(a["id"], a["full_name"], month)
+        for i, a in enumerate(cs_agents):
+            cc = cs_results[i]
             cc["agent_role"] = a["role"]
             cs_data.append(cc)
-            total_mentor += cc["earned_mentor"] + cc["pending_mentor"]
 
         result["cs_commissions"] = cs_data
         result["total_cs_earned"] = sum(c["earned_commission"] for c in cs_data)
         result["total_cs_pending"] = sum(c["pending_commission"] for c in cs_data)
         result["total_cs_head_earned"] = sum(c["earned_cs_head"] for c in cs_data)
-        result["mentor_pool"] = total_mentor
+        result["mentor_pool"] = sum(c["earned_mentor"] + c["pending_mentor"] for c in cs_data)
 
     return result
 
@@ -26365,27 +26367,30 @@ async def get_commission_scatter_data(user_id: str = None, months: int = 6, user
     emp = await db.hr_employees.find_one({"user_id": target_id}, {"_id": 0, "basic_salary": 1, "salary_structure": 1})
     base_salary = 0
     if emp:
-        ss = emp.get("salary_structure", {})
+        ss = emp.get("salary_structure") or {}
         base_salary = ss.get("gross_salary") or ss.get("net_salary") or emp.get("basic_salary", 0)
 
     now = datetime.now(timezone.utc)
     data_points = []
     is_sales = target_user["role"] in ["sales_executive", "team_leader"]
 
+    month_ranges = []
     for i in range(months - 1, -1, -1):
         dt = now - timedelta(days=i * 30)
-        m = dt.strftime("%Y-%m")
-        m_label = dt.strftime("%b %Y")
+        month_ranges.append((dt.strftime("%Y-%m"), dt.strftime("%b %Y")))
 
-        if is_sales:
-            comm = await _calc_sales_commissions(target_id, m)
-            earned = comm["earned_commission"]
-            if target_user["role"] == "team_leader":
-                earned += comm.get("earned_tl", 0)
-        else:
-            comm = await _calc_cs_commissions(target_id, target_user["full_name"], m)
-            earned = comm["earned_commission"]
+    if is_sales:
+        tasks = [_calc_sales_commissions(target_id, mr[0]) for mr in month_ranges]
+    else:
+        tasks = [_calc_cs_commissions(target_id, target_user["full_name"], mr[0]) for mr in month_ranges]
+    results = await asyncio.gather(*tasks)
 
+    data_points = []
+    for idx, (m, m_label) in enumerate(month_ranges):
+        comm = results[idx]
+        earned = comm["earned_commission"]
+        if is_sales and target_user["role"] == "team_leader":
+            earned += comm.get("earned_tl", 0)
         data_points.append({
             "month": m,
             "label": m_label,
@@ -26415,9 +26420,11 @@ async def get_ceo_commission_drill(dept: str = "sales", month: str = None, user=
             {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
             {"_id": 0, "id": 1, "full_name": 1, "role": 1}
         ).to_list(100)
+        tasks = [_calc_sales_commissions(a["id"], month) for a in agents]
+        results = await asyncio.gather(*tasks)
         rows = []
         for idx, a in enumerate(agents):
-            sc = await _calc_sales_commissions(a["id"], month)
+            sc = results[idx]
             rows.append({
                 "sr": idx + 1,
                 "name": a["full_name"],
@@ -26440,9 +26447,11 @@ async def get_ceo_commission_drill(dept: str = "sales", month: str = None, user=
             {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
             {"_id": 0, "id": 1, "full_name": 1, "role": 1}
         ).to_list(50)
+        tasks = [_calc_cs_commissions(a["id"], a["full_name"], month) for a in agents]
+        results = await asyncio.gather(*tasks)
         rows = []
         for idx, a in enumerate(agents):
-            cc = await _calc_cs_commissions(a["id"], a["full_name"], month)
+            cc = results[idx]
             rows.append({
                 "sr": idx + 1,
                 "name": a["full_name"],

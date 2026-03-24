@@ -41,6 +41,7 @@ import CertificatePage from "@/pages/CertificatePage";
 import ReportBuilderPage from "@/pages/ReportBuilderPage";
 import RevenueForecastPage from "@/pages/RevenueForecastPage";
 import StudentPortalPage from "@/pages/StudentPortalPage";
+import CommissionDashboard from "@/pages/CommissionDashboard";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -483,6 +484,13 @@ function AppRoutes() {
                 <Route path="commissions" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance']}>
                         <CommissionEnginePage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Commission Dashboard */}
+                <Route path="commission-dashboard" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'finance', 'sales_executive', 'team_leader', 'sales_manager', 'cs_agent', 'cs_head']}>
+                        <CommissionDashboard />
                     </ProtectedRoute>
                 } />
                 
