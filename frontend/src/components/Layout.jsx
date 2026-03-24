@@ -61,6 +61,7 @@ import {
     Timer,
     ArrowDownRight,
     Upload,
+    GitMerge,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -120,6 +121,7 @@ const SECTIONS = {
         roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
         items: [
             { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
+            { title: 'Merge Approvals', icon: GitMerge, path: '/cs/merge-approvals', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'Customer Service', icon: Users, path: '/cs' },
             { title: 'Student Portal', icon: GraduationCap, path: '/cs/student-portal', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'CS Historical Import', icon: Upload, path: '/cs/historical-import', roles: ['super_admin'] },

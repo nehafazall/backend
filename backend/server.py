@@ -5383,6 +5383,9 @@ async def get_students(
 ):
     query = {}
     
+    # Exclude merged students from all views
+    query["merged_into"] = {"$exists": False}
+    
     if user["role"] == "cs_agent":
         query["cs_agent_id"] = user["id"]
     elif user["role"] == "mentor":
@@ -25693,6 +25696,393 @@ async def get_pending_deactivations(user = Depends(require_roles(["super_admin",
             "recently_deactivated": len(deactivated)
         }
     }
+
+# ==================== STUDENT MERGE SYSTEM ====================
+
+@api_router.get("/students/{student_id}/duplicates")
+async def detect_student_duplicates(student_id: str, user=Depends(get_current_user)):
+    """Detect potential duplicate students based on phone, email, and name similarity."""
+    student = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "Student not found")
+    
+    conditions = []
+    phone = student.get("phone")
+    email = student.get("email")
+    name = student.get("full_name", "")
+    
+    if phone:
+        # Match by phone (exact or partial)
+        clean_phone = phone.replace("+", "").replace(" ", "").replace("-", "")[-9:]
+        conditions.append({"phone": {"$regex": clean_phone, "$options": "i"}})
+    if email:
+        conditions.append({"email": {"$regex": f"^{email}$", "$options": "i"}})
+    if name and len(name) > 2:
+        # Match by name parts
+        name_parts = name.strip().split()
+        for part in name_parts:
+            if len(part) > 2:
+                conditions.append({"full_name": {"$regex": part, "$options": "i"}})
+    
+    if not conditions:
+        return {"duplicates": [], "student": student}
+    
+    potential = await db.students.find(
+        {"$or": conditions, "id": {"$ne": student_id}, "merged_into": {"$exists": False}},
+        {"_id": 0}
+    ).to_list(20)
+    
+    # Score duplicates
+    scored = []
+    for p in potential:
+        score = 0
+        reasons = []
+        p_phone = (p.get("phone") or "").replace("+", "").replace(" ", "").replace("-", "")
+        s_phone = (phone or "").replace("+", "").replace(" ", "").replace("-", "")
+        if p_phone and s_phone and (p_phone[-9:] == s_phone[-9:]):
+            score += 50
+            reasons.append("Same phone number")
+        if email and p.get("email") and email.lower() == p.get("email", "").lower():
+            score += 40
+            reasons.append("Same email")
+        if name and p.get("full_name"):
+            s_parts = set(name.lower().split())
+            p_parts = set(p["full_name"].lower().split())
+            overlap = s_parts & p_parts
+            if len(overlap) >= 2:
+                score += 30
+                reasons.append(f"Name overlap: {', '.join(overlap)}")
+            elif len(overlap) == 1 and len(s_parts) <= 2:
+                score += 15
+                reasons.append(f"Partial name match: {', '.join(overlap)}")
+        if score >= 15:
+            p["match_score"] = min(score, 100)
+            p["match_reasons"] = reasons
+            scored.append(p)
+    
+    scored.sort(key=lambda x: x["match_score"], reverse=True)
+    return {"duplicates": scored[:10], "student": student}
+
+
+@api_router.post("/students/merge/preview")
+async def preview_student_merge(request: Request, user=Depends(get_current_user)):
+    """Preview what the merged student record will look like."""
+    body = await request.json()
+    primary_id = body.get("primary_id")
+    secondary_id = body.get("secondary_id")
+    
+    primary = await db.students.find_one({"id": primary_id}, {"_id": 0})
+    secondary = await db.students.find_one({"id": secondary_id}, {"_id": 0})
+    if not primary or not secondary:
+        raise HTTPException(404, "One or both students not found")
+    
+    # Build merged data — primary wins for same fields, secondary fills gaps
+    merged = {**primary}
+    secondary_fields = {}
+    
+    # Core fields — primary overwrites, track secondary differences
+    for field in ["full_name", "phone", "email", "country", "city"]:
+        p_val = primary.get(field)
+        s_val = secondary.get(field)
+        if p_val and s_val and str(p_val).strip().lower() != str(s_val).strip().lower():
+            sec_key = f"secondary_{field}" if field in ["full_name", "phone"] else f"additional_{field}"
+            secondary_fields[sec_key] = s_val
+        elif not p_val and s_val:
+            merged[field] = s_val
+    
+    # Numeric fields — take the higher/non-zero value
+    for field in ["classes_attended", "enrollment_amount", "upgrade_count"]:
+        p_val = primary.get(field) or 0
+        s_val = secondary.get(field) or 0
+        merged[field] = max(p_val, s_val)
+    
+    # Boolean fields — True if either is True
+    for field in ["onboarding_complete", "upgrade_eligible", "is_upgraded_student"]:
+        merged[field] = primary.get(field, False) or secondary.get(field, False)
+    
+    # Text fields — keep primary, fill from secondary if missing
+    for field in ["student_code", "package_bought", "current_course_name", "mentor_name", "mentor_employee_id", "bd_agent_name", "bd_agent_id", "source"]:
+        if not merged.get(field) and secondary.get(field):
+            merged[field] = secondary.get(field)
+    
+    # Merge upgrade_history arrays
+    p_history = primary.get("upgrade_history") or []
+    s_history = secondary.get("upgrade_history") or []
+    merged["upgrade_history"] = p_history + s_history
+    
+    # Add secondary fields
+    merged.update(secondary_fields)
+    
+    # Get LTV transactions from both
+    p_ltv = await db.ltv_transactions.find({"student_id": primary_id}, {"_id": 0}).to_list(100)
+    s_ltv = await db.ltv_transactions.find({"student_id": secondary_id}, {"_id": 0}).to_list(100)
+    
+    # Get cs_upgrades from both
+    p_cs = await db.cs_upgrades.find({"student_id": primary_id}, {"_id": 0}).to_list(100)
+    s_cs = await db.cs_upgrades.find({"student_id": secondary_id}, {"_id": 0}).to_list(100)
+    
+    # Get notes from both
+    p_notes = await db.student_notes.find({"student_id": primary_id}, {"_id": 0}).to_list(100)
+    s_notes = await db.student_notes.find({"student_id": secondary_id}, {"_id": 0}).to_list(100)
+    
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "merged_preview": merged,
+        "secondary_fields_added": secondary_fields,
+        "transactions_summary": {
+            "primary_ltv": len(p_ltv),
+            "secondary_ltv": len(s_ltv),
+            "total_ltv": len(p_ltv) + len(s_ltv),
+            "primary_upgrades": len(p_cs),
+            "secondary_upgrades": len(s_cs),
+            "total_upgrades": len(p_cs) + len(s_cs),
+            "primary_notes": len(p_notes),
+            "secondary_notes": len(s_notes),
+            "total_notes": len(p_notes) + len(s_notes),
+        }
+    }
+
+
+@api_router.post("/students/merge/request")
+async def create_merge_request(request: Request, user=Depends(get_current_user)):
+    """Create a merge request pending approval."""
+    body = await request.json()
+    primary_id = body.get("primary_id")
+    secondary_id = body.get("secondary_id")
+    merged_data = body.get("merged_data", {})
+    
+    primary = await db.students.find_one({"id": primary_id}, {"_id": 0, "id": 1, "full_name": 1})
+    secondary = await db.students.find_one({"id": secondary_id}, {"_id": 0, "id": 1, "full_name": 1})
+    if not primary or not secondary:
+        raise HTTPException(404, "One or both students not found")
+    
+    # Check for existing pending merge
+    existing = await db.merge_requests.find_one({
+        "$or": [
+            {"primary_student_id": primary_id, "secondary_student_id": secondary_id},
+            {"primary_student_id": secondary_id, "secondary_student_id": primary_id},
+        ],
+        "status": {"$in": ["pending_cs_head", "pending_ceo"]}
+    })
+    if existing:
+        raise HTTPException(409, "A merge request already exists for these students")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    merge_req = {
+        "id": str(uuid.uuid4()),
+        "primary_student_id": primary_id,
+        "primary_student_name": primary["full_name"],
+        "secondary_student_id": secondary_id,
+        "secondary_student_name": secondary["full_name"],
+        "merged_data_preview": merged_data,
+        "status": "pending_cs_head",
+        "requested_by": user["id"],
+        "requested_by_name": user.get("full_name", ""),
+        "requested_at": now,
+        "cs_head_approved_by": None,
+        "cs_head_approved_at": None,
+        "ceo_approved_by": None,
+        "ceo_approved_at": None,
+        "rejected_by": None,
+        "rejected_at": None,
+        "rejection_reason": None,
+        "executed_at": None,
+        "created_at": now,
+    }
+    await db.merge_requests.insert_one(merge_req)
+    
+    # Notify CS heads
+    cs_heads = await db.users.find({"role": {"$in": ["cs_head", "super_admin"]}, "is_active": True}, {"_id": 0, "id": 1}).to_list(20)
+    for head in cs_heads:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": head["id"],
+            "title": "Student Merge Request",
+            "message": f"{user.get('full_name', 'Agent')} requested to merge '{secondary['full_name']}' into '{primary['full_name']}'",
+            "type": "merge_request",
+            "reference_id": merge_req["id"],
+            "read": False,
+            "created_at": now,
+        })
+    
+    merge_req.pop("_id", None)
+    return merge_req
+
+
+@api_router.get("/students/merge/requests")
+async def get_merge_requests(status: str = None, user=Depends(get_current_user)):
+    """Get merge requests. CS Head sees pending_cs_head, CEO sees pending_ceo, admins see all."""
+    query = {}
+    if status:
+        query["status"] = status
+    elif user["role"] == "cs_head":
+        query["status"] = {"$in": ["pending_cs_head", "pending_ceo", "approved", "rejected"]}
+    elif user["role"] == "super_admin":
+        pass  # see all
+    else:
+        query["requested_by"] = user["id"]
+    
+    requests = await db.merge_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return requests
+
+
+@api_router.post("/students/merge/{request_id}/approve")
+async def approve_merge_request(request_id: str, request: Request, user=Depends(get_current_user)):
+    """Approve a merge request. CS Head first, then CEO."""
+    merge_req = await db.merge_requests.find_one({"id": request_id}, {"_id": 0})
+    if not merge_req:
+        raise HTTPException(404, "Merge request not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if merge_req["status"] == "pending_cs_head":
+        if user["role"] not in ["cs_head", "super_admin"]:
+            raise HTTPException(403, "Only CS Head or Super Admin can approve at this stage")
+        await db.merge_requests.update_one({"id": request_id}, {"$set": {
+            "status": "pending_ceo",
+            "cs_head_approved_by": user["id"],
+            "cs_head_approved_by_name": user.get("full_name", ""),
+            "cs_head_approved_at": now,
+        }})
+        # Notify CEO
+        ceos = await db.users.find({"role": "super_admin", "is_active": True}, {"_id": 0, "id": 1}).to_list(5)
+        for ceo in ceos:
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": ceo["id"],
+                "title": "Merge Awaiting Final Approval",
+                "message": f"CS Head approved merge of '{merge_req['secondary_student_name']}' into '{merge_req['primary_student_name']}'. Your approval needed.",
+                "type": "merge_request",
+                "reference_id": request_id,
+                "read": False,
+                "created_at": now,
+            })
+        return {"status": "pending_ceo", "message": "Approved by CS Head. Awaiting CEO approval."}
+    
+    elif merge_req["status"] == "pending_ceo":
+        if user["role"] != "super_admin":
+            raise HTTPException(403, "Only Super Admin / CEO can give final approval")
+        
+        # Execute the merge
+        primary_id = merge_req["primary_student_id"]
+        secondary_id = merge_req["secondary_student_id"]
+        merged_data = merge_req.get("merged_data_preview", {})
+        
+        # Remove fields that shouldn't be updated
+        for key in ["id", "lead_id", "created_at", "match_score", "match_reasons"]:
+            merged_data.pop(key, None)
+        merged_data["updated_at"] = now
+        
+        # 1. Update primary student with merged data
+        await db.students.update_one({"id": primary_id}, {"$set": merged_data})
+        
+        # 2. Move secondary's ltv_transactions to primary
+        await db.ltv_transactions.update_many(
+            {"student_id": secondary_id},
+            {"$set": {"student_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 3. Move secondary's cs_upgrades to primary
+        await db.cs_upgrades.update_many(
+            {"student_id": secondary_id},
+            {"$set": {"student_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 4. Move secondary's notes to primary
+        await db.student_notes.update_many(
+            {"student_id": secondary_id},
+            {"$set": {"student_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 5. Move reminders
+        await db.reminders.update_many(
+            {"entity_id": secondary_id},
+            {"$set": {"entity_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 6. Move finance verifications
+        await db.finance_verifications.update_many(
+            {"student_id": secondary_id},
+            {"$set": {"student_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 7. Move cs_commissions
+        await db.cs_commissions.update_many(
+            {"student_id": secondary_id},
+            {"$set": {"student_id": primary_id, "merged_from": secondary_id}}
+        )
+        
+        # 8. Soft-delete secondary student
+        await db.students.update_one({"id": secondary_id}, {"$set": {
+            "merged_into": primary_id,
+            "merged_at": now,
+            "stage": "merged",
+            "original_stage": merge_req.get("secondary_student_name"),
+        }})
+        
+        # 9. Update merge request
+        await db.merge_requests.update_one({"id": request_id}, {"$set": {
+            "status": "approved",
+            "ceo_approved_by": user["id"],
+            "ceo_approved_by_name": user.get("full_name", ""),
+            "ceo_approved_at": now,
+            "executed_at": now,
+        }})
+        
+        # 10. Notify requester
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": merge_req["requested_by"],
+            "title": "Merge Completed",
+            "message": f"'{merge_req['secondary_student_name']}' has been merged into '{merge_req['primary_student_name']}'.",
+            "type": "merge_complete",
+            "reference_id": request_id,
+            "read": False,
+            "created_at": now,
+        })
+        
+        return {"status": "approved", "message": "Merge executed successfully."}
+    
+    else:
+        raise HTTPException(400, f"Cannot approve request with status '{merge_req['status']}'")
+
+
+@api_router.post("/students/merge/{request_id}/reject")
+async def reject_merge_request(request_id: str, request: Request, user=Depends(get_current_user)):
+    """Reject a merge request."""
+    body = await request.json()
+    reason = body.get("reason", "")
+    
+    merge_req = await db.merge_requests.find_one({"id": request_id})
+    if not merge_req:
+        raise HTTPException(404, "Merge request not found")
+    if merge_req["status"] not in ["pending_cs_head", "pending_ceo"]:
+        raise HTTPException(400, "Cannot reject this request")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.merge_requests.update_one({"id": request_id}, {"$set": {
+        "status": "rejected",
+        "rejected_by": user["id"],
+        "rejected_by_name": user.get("full_name", ""),
+        "rejected_at": now,
+        "rejection_reason": reason,
+    }})
+    
+    # Notify requester
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": merge_req["requested_by"],
+        "title": "Merge Request Rejected",
+        "message": f"Merge of '{merge_req['secondary_student_name']}' into '{merge_req['primary_student_name']}' was rejected. {reason}",
+        "type": "merge_rejected",
+        "reference_id": request_id,
+        "read": False,
+        "created_at": now,
+    })
+    
+    return {"status": "rejected", "message": "Merge request rejected."}
+
 
 # Include the router in the main app
 app.include_router(api_router)

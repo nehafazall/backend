@@ -20,6 +20,7 @@ import CoursesPage from "@/pages/CoursesPage";
 import CommissionEnginePage from "@/pages/CommissionEnginePage";
 import AccessControlPage from "@/pages/AccessControlPage";
 import CSDashboard from "@/pages/CSDashboard";
+import MergeApprovalsPage from "@/pages/MergeApprovalsPage";
 import LeadsPoolPage from "@/pages/LeadsPoolPage";
 import CustomerMasterPage from "@/pages/CustomerMasterPage";
 import FollowupsPage from "@/pages/FollowupsPage";
@@ -252,6 +253,11 @@ function AppRoutes() {
                 <Route path="cs/dashboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent']}>
                         <CSDashboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="cs/merge-approvals" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head']}>
+                        <MergeApprovalsPage />
                     </ProtectedRoute>
                 } />
                 

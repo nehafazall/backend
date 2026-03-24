@@ -57,6 +57,7 @@ import UpgradeConfirmPaymentModal from '@/components/UpgradeConfirmPaymentModal'
 import { getCourseColor, UpgradeHistoryCard, UpgradePathIndicator } from '@/components/UpgradeModal';
 import { PeriodFilter } from '@/components/PeriodFilter';
 import { Pagination } from '@/components/Pagination';
+import MergeStudentModal from '@/components/MergeStudentModal';
 import {
     Search,
     Phone,
@@ -73,6 +74,7 @@ import {
     ArrowUp,
     Download,
     DollarSign,
+    GitMerge,
 } from 'lucide-react';
 
 const CS_STAGES = [
@@ -363,6 +365,9 @@ const CustomerServicePage = () => {
     // Upgrade modal state
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [upgradeStudent, setUpgradeStudent] = useState(null);
+    // Merge modal state
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [mergeStudent, setMergeStudent] = useState(null);
     // Upgrade pricing modal (pitched_for_upgrade)
     const [showPricingModal, setShowPricingModal] = useState(false);
     const [pricingStudent, setPricingStudent] = useState(null);
@@ -863,6 +868,19 @@ const CustomerServicePage = () => {
                                                 {selectedStudent.upgrade_eligible && (
                                                     <Badge className="bg-yellow-500">Upgrade Eligible</Badge>
                                                 )}
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="ml-auto text-xs gap-1"
+                                                    data-testid="merge-student-btn"
+                                                    onClick={() => {
+                                                        setMergeStudent(selectedStudent);
+                                                        setShowMergeModal(true);
+                                                    }}
+                                                >
+                                                    <GitMerge className="h-3.5 w-3.5" />
+                                                    Merge
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -1081,6 +1099,19 @@ const CustomerServicePage = () => {
                     setConfirmStudent(null);
                     fetchStudents();
                     toast.success(`Upgrade confirmed for ${updatedStudent.full_name}. Student moved to New Student — please re-activate.`, { duration: 6000 });
+                }}
+            />
+
+            {/* Student Merge Modal */}
+            <MergeStudentModal
+                open={showMergeModal}
+                onClose={() => { setShowMergeModal(false); setMergeStudent(null); }}
+                student={mergeStudent}
+                onMergeSubmitted={() => {
+                    setShowMergeModal(false);
+                    setMergeStudent(null);
+                    setShowDetailModal(false);
+                    fetchStudents();
                 }}
             />
         </div>
