@@ -80,6 +80,17 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 **Fix - CS Kanban "Upgraded" Column Sort Order**
 - Changed "Upgraded" stage sort to `updated_at DESC` so freshest closings appear on top
 
+**Feature - Student Duplicate Merge System (Complete)**
+- Merge button on student detail modal detects duplicates by phone/email/name with confidence scoring
+- 3-step wizard: Select Duplicate → Review Merged Preview → Submit for Approval
+- Merge preview: primary data overwrites, secondary fills gaps (secondary_name, secondary_phone, additional_email)
+- All transactions (ltv_transactions, cs_upgrades, notes, reminders, commissions) merged
+- 2-stage approval: CS Head → CEO → merge executed
+- Secondary student soft-deleted (stage=merged, merged_into=primary_id)
+- Dedicated Merge Approvals page (/cs/merge-approvals) for CS Head and CEO
+- Notifications sent at each approval stage
+- Tested: 20/20 backend, 100% frontend (iteration_68)
+
 ## Prioritized Backlog
 
 ### P1
