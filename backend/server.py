@@ -6460,6 +6460,30 @@ async def confirm_upgrade(
     }
     await db.ltv_transactions.insert_one(ltv_record)
 
+    # --- Create cs_upgrades record for dashboard aggregation ---
+    cs_upgrade_record = {
+        "id": str(uuid.uuid4()),
+        "student_id": student_id,
+        "student_name": student["full_name"],
+        "full_name": student["full_name"],
+        "phone": student.get("phone"),
+        "email": student.get("email"),
+        "course_upgrade": package["label"],
+        "upgrade_to_course": new_course_name,
+        "course_amount": final_price,
+        "amount": final_price,
+        "date": now_iso[:10],
+        "month": now_iso[:7],
+        "cs_agent_id": agent_id,
+        "cs_agent_name": agent_name,
+        "upgraded_at": now_iso,
+        "is_historical": False,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "created_by": user["id"],
+    }
+    await db.cs_upgrades.insert_one(cs_upgrade_record)
+
     # --- Create finance receivable ---
     receivable = {
         "id": str(uuid.uuid4()),

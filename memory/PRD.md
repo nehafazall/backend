@@ -49,6 +49,13 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Fixed all 3 collections: `leads`, `ltv_transactions`, `students` — all now show 2204.0 AED
 - Verified via API: dashboard/overall, student transaction-history, and direct DB queries
 
+**Bug Fix - Nasida VN Dashboard Transactions Missing (P0)**
+- 2 new CS upgrade transactions (Thasleem: 1600, Kassim Kunju: 3899) not reflected on dashboard
+- Root cause: `confirm_upgrade` endpoint created `ltv_transactions` but never inserted into `cs_upgrades` — which is the collection the dashboard aggregates from
+- Code fix: Added `cs_upgrades` insert to `/api/cs/confirm-upgrade/{student_id}` endpoint
+- Data fix: Backfilled 2 missing `cs_upgrades` records
+- Nasida VN now shows 33,495 AED (11 upgrades), CS Revenue updated to 71,402 AED (27 upgrades)
+
 ## Prioritized Backlog
 
 ### P1
