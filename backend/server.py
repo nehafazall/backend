@@ -5449,7 +5449,9 @@ async def get_students(
     page_size = min(max(page_size, 10), 200)
     skip = (max(page, 1) - 1) * page_size
     total_count = await db.students.count_documents(query)
-    students = await db.students.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(page_size).to_list(page_size)
+    # Sort upgraded students by most recent upgrade; others by created_at
+    sort_field = "updated_at" if stage == "upgraded" else "created_at"
+    students = await db.students.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with last_upgrade_date from cs_upgrades
     student_ids = [s["id"] for s in students]
@@ -8765,7 +8767,7 @@ async def get_cs_dashboard_stats(
     """CS Dashboard key metrics: revenue from cs_upgrades, pipeline from students."""
     date_filter = {}
     if period != "overall":
-        date_filter = _build_date_filter("created_at", period)
+        date_filter = _build_date_filter("date", period)
     
     # Revenue from cs_upgrades
     upgrade_query = {**date_filter}
@@ -8843,7 +8845,7 @@ async def get_cs_agent_revenue(
     """Revenue closed per CS agent from cs_upgrades collection."""
     date_filter = {}
     if period != "overall":
-        date_filter = _build_date_filter("created_at", period)
+        date_filter = _build_date_filter("date", period)
     pipeline = [
         {"$match": {**date_filter}},
         {"$group": {
@@ -8962,7 +8964,7 @@ async def get_cs_commission_leaderboard(
     """CS agent leaderboard by revenue from cs_upgrades."""
     date_filter = {}
     if period != "overall":
-        date_filter = _build_date_filter("created_at", period)
+        date_filter = _build_date_filter("date", period)
     pipeline = [
         {"$match": {**date_filter}},
         {"$group": {
@@ -9638,43 +9640,76 @@ async def get_pipeline_stage_drill(
 @api_router.get("/cs/drill/agent-students")
 async def get_cs_agent_students_drill(
     agent_name: str,
+    period: str = "overall",
     user=Depends(get_current_user)
 ):
-    """Get students handled by a specific CS agent (by name) with upgrade details."""
-    query = {"cs_agent_name": agent_name}
-    students = await db.students.find(query, {"_id": 0}).sort("updated_at", -1).to_list(500)
-    
-    # Get all upgrades for this agent from cs_upgrades collection
+    """Get students handled by a specific CS agent (by name) with upgrade details, filtered by period."""
+    # Build date filter for cs_upgrades based on period — use 'date' field for actual upgrade dates
+    date_filter = {}
+    if period != "overall":
+        date_filter = _build_date_filter("date", period)
+
+    # Get all upgrades for this agent from cs_upgrades collection, filtered by period
+    upgrade_query = {"cs_agent_name": agent_name, **date_filter}
     agent_upgrades = await db.cs_upgrades.find(
-        {"cs_agent_name": agent_name},
-        {"_id": 0, "phone": 1, "amount": 1, "course_amount": 1, "upgrade_to_course": 1, "course_upgrade": 1, "date": 1, "upgraded_at": 1}
-    ).to_list(5000)
-    
-    # Group upgrades by student phone
-    upgrades_by_phone = {}
+        upgrade_query,
+        {"_id": 0, "student_id": 1, "phone": 1, "amount": 1, "course_amount": 1, "upgrade_to_course": 1, "course_upgrade": 1, "date": 1, "upgraded_at": 1, "student_name": 1}
+    ).sort("date", -1).to_list(5000)
+
+    # Group upgrades by student_id (more reliable than phone)
+    upgrades_by_student = {}
+    upgraded_student_ids = set()
     for u in agent_upgrades:
-        phone = u.get("phone")
-        if phone:
-            upgrades_by_phone.setdefault(phone, []).append(u)
-    
+        sid = u.get("student_id")
+        if sid:
+            upgrades_by_student.setdefault(sid, []).append(u)
+            upgraded_student_ids.add(sid)
+
+    # If a period is selected, only show students who had upgrades in that period
+    if period != "overall" and upgraded_student_ids:
+        students = await db.students.find(
+            {"id": {"$in": list(upgraded_student_ids)}},
+            {"_id": 0}
+        ).sort("updated_at", -1).to_list(500)
+    elif period != "overall":
+        students = []
+    else:
+        students = await db.students.find(
+            {"cs_agent_name": agent_name},
+            {"_id": 0}
+        ).sort("updated_at", -1).to_list(500)
+
     result = []
+    total_revenue = 0
+    total_upgrades = 0
     for s in students:
-        phone = s.get("phone", "")
-        student_upgrades = upgrades_by_phone.get(phone, [])
-        total_upgrade_revenue = sum(u.get("amount") or u.get("course_amount", 0) for u in student_upgrades)
+        sid = s.get("id")
+        student_upgrades = upgrades_by_student.get(sid, [])
+        upgrade_revenue = sum(u.get("amount") or u.get("course_amount", 0) for u in student_upgrades)
+        total_revenue += upgrade_revenue
+        total_upgrades += len(student_upgrades)
         result.append({
             "student_name": s.get("full_name") or s.get("student_name") or "Unknown",
             "student_code": s.get("student_code") or s.get("id", "")[:8],
             "stage": s.get("stage", ""),
             "course": s.get("current_course_name") or s.get("package_bought") or s.get("course_name") or "",
             "upgrade_count": len(student_upgrades),
-            "upgrade_revenue": total_upgrade_revenue,
+            "upgrade_revenue": upgrade_revenue,
             "upgrades": [{"package": u.get("upgrade_to_course") or u.get("course_upgrade", ""), "amount": u.get("amount") or u.get("course_amount", 0), "date": str(u.get("date") or u.get("upgraded_at") or "")[:10]} for u in student_upgrades],
             "pitched_label": s.get("pitched_upgrade_label", ""),
             "pitched_price": s.get("pitched_upgrade_price", 0),
-            "phone": phone,
+            "phone": s.get("phone", ""),
         })
-    return result
+
+    # Sort: students with upgrades first, then by revenue desc
+    result.sort(key=lambda x: x["upgrade_revenue"], reverse=True)
+
+    return {
+        "students": result,
+        "total_revenue": total_revenue,
+        "total_upgrades": total_upgrades,
+        "period": period,
+    }
 
 @api_router.get("/cs/drill/pipeline-stage")
 async def get_cs_pipeline_stage_drill(

@@ -84,23 +84,27 @@ const CSDashboard = () => {
     const drillCsAgent = async (agentName) => {
         openDrillLoading(`${agentName} — Student Details`);
         try {
-            const res = await apiClient.get(`/cs/drill/agent-students?agent_name=${encodeURIComponent(agentName)}`);
-            const students = res.data || [];
+            const res = await apiClient.get(`/cs/drill/agent-students?agent_name=${encodeURIComponent(agentName)}&period=${period}`);
+            const data = res.data || {};
+            const students = data.students || (Array.isArray(data) ? data : []);
             const withUpgrades = students.filter(s => s.upgrade_count > 0);
-            const totalRev = students.reduce((s, st) => s + (st.upgrade_revenue || 0), 0);
+            const totalRev = data.total_revenue ?? students.reduce((s, st) => s + (st.upgrade_revenue || 0), 0);
+            const totalUps = data.total_upgrades ?? withUpgrades.reduce((s, st) => s + st.upgrade_count, 0);
+            const periodLabel = PERIOD_OPTIONS.find(o => o.value === period)?.label || period;
             setDrill(prev => ({
                 ...prev, loading: false,
                 content: (
                     <div className="space-y-4">
                         <div className="flex items-center gap-3 flex-wrap">
-                            <Badge variant="secondary">{students.length} total students</Badge>
-                            <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">{withUpgrades.length} upgraded</Badge>
-                            <Badge variant="outline" className="text-amber-500 border-amber-500/30">{fmtCur(totalRev)} upgrade revenue</Badge>
+                            <Badge variant="secondary">{students.length} students</Badge>
+                            <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">{totalUps} upgrades</Badge>
+                            <Badge variant="outline" className="text-amber-500 border-amber-500/30">{fmtCur(totalRev)} revenue</Badge>
+                            <Badge variant="default" className="text-xs">{periodLabel}</Badge>
                         </div>
                         <Table>
                             <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Code</TableHead><TableHead>Stage</TableHead><TableHead>Course</TableHead><TableHead className="text-right">Upgrades</TableHead><TableHead className="text-right">Revenue</TableHead></TableRow></TableHeader>
                             <TableBody>
-                                {students.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No students found</TableCell></TableRow>}
+                                {students.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No upgrades in this period</TableCell></TableRow>}
                                 {students.map((s, i) => (
                                     <TableRow key={i}>
                                         <TableCell className="font-medium">{s.student_name}</TableCell>

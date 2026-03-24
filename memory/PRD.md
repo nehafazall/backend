@@ -71,6 +71,15 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Fix: Skipped `type="upgrade"` from ltv_transactions in `/students/{id}/transaction-history` endpoint (canonical source is cs_upgrades)
 - Vighanesh total_deposits corrected: 11,632 (inflated) → 7,733 (accurate)
 
+**Enhancement - Leaderboard Period-Filtered Drill-Down (P0)**
+- Leaderboard drill-down now respects the selected period (This Month, This Quarter, etc.)
+- When clicking an agent in the leaderboard, only students with upgrades in that period are shown
+- Drill-down shows per-student upgrade count, revenue, and period badge for clarity
+- All CS Dashboard endpoints (stats, leaderboard, agent-revenue, drill) now consistently use the `date` field for period filtering
+
+**Fix - CS Kanban "Upgraded" Column Sort Order**
+- Changed "Upgraded" stage sort to `updated_at DESC` so freshest closings appear on top
+
 ## Prioritized Backlog
 
 ### P1
