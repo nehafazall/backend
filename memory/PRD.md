@@ -65,6 +65,12 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Fix: Implemented per-stage Kanban fetching (25 students per column, parallel API calls) — ensures all pipeline stages always show their students
 - Verified: "Pitched Upgrade" column now shows 2 students (Akhil Madhu, Hussain PS) correctly
 
+**Bug Fix - Transaction History Duplication / Dashboard Mismatch (P0)**
+- Student card showed duplicate upgrade entries (same upgrade from both cs_upgrades AND ltv_transactions)
+- Users saw 2 entries on card but leaderboard counted 1, causing confusion about "missing" dashboard data
+- Fix: Skipped `type="upgrade"` from ltv_transactions in `/students/{id}/transaction-history` endpoint (canonical source is cs_upgrades)
+- Vighanesh total_deposits corrected: 11,632 (inflated) → 7,733 (accurate)
+
 ## Prioritized Backlog
 
 ### P1

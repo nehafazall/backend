@@ -5754,8 +5754,8 @@ async def get_student_transaction_history(student_id: str, user=Depends(get_curr
     ltv_txns = await db.ltv_transactions.find({"student_id": student_id}, {"_id": 0}).sort("date", 1).to_list(200)
     for t in ltv_txns:
         txn_type = t.get("type", "other")
-        if txn_type == "enrollment":
-            continue  # already captured above
+        if txn_type in ("enrollment", "upgrade"):
+            continue  # already captured from students/cs_upgrades above
         transactions.append({
             "type": txn_type,
             "label": t.get("description") or txn_type.replace("_", " ").title(),
