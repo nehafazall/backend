@@ -41,7 +41,20 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Dashboard KPIs, Monthly Closings, Customer Master Net LTV
 - Sales Search Fallback, Currency AED fix, CS Upgrade Dates
 
-### Session - March 24, 2026
+### Session - March 24, 2026 (continued)
+
+**Feature - Commission Dashboard (Complete)**
+- Built full Commission Dashboard frontend (`/commission-dashboard`) with role-based views:
+  - CEO: 3 tabs (Sales Commissions, CS Commissions, CEO Pools) with aggregate stats, drill-down tables
+  - Sales Executive: Earned/Pending cards, 18K AED benchmark alert, deal stats
+  - Team Leader: Personal + team commission table
+  - CS Agent/Head: Earned/pending upgrade commissions, team breakdown
+- Monthly XY scatter chart showing Net Pay (Salary + Commission) trend over 6 months
+- CEO drill-down dialogs for Sales and CS showing per-agent breakdown
+- Sidebar nav: "My Commissions" in Sales/CS sections, "Commission Dashboard" in Finance section
+- Backend performance: Parallelized commission calculations with asyncio.gather (32s → 7.5s for CEO view)
+- Fixed NoneType bug in salary_structure lookup for scatter-data endpoint
+- Tested: Backend 21/26 passed (5 skipped: CS Head credential issue), Frontend 100% (iteration_69)
 
 **Bug Fix - LAMIZ Data Discrepancy (P0)**
 - Fixed student "LAMIZ" (ID: 2f8ebfcb) enrollment amount showing 4104 instead of 2204
@@ -92,6 +105,9 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Tested: 20/20 backend, 100% frontend (iteration_68)
 
 ## Prioritized Backlog
+
+### P0
+- ~~Commission Dashboard~~ (DONE)
 
 ### P1
 - Invoice Generation — Auto-generate professional PDF invoices for enrollments/upgrades
