@@ -56,6 +56,16 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Fixed NoneType bug in salary_structure lookup for scatter-data endpoint
 - Tested: Backend 21/26 passed (5 skipped: CS Head credential issue), Frontend 100% (iteration_69)
 
+**Feature - Commission Decomposition + Sales Dashboard Integration (Complete)**
+- Fixed commission calculation: enrollment amounts now decompose as Course + Addon
+  - e.g., AED 2,204 = Offer Course (1,599) + Full Pack (605) → Commission 75 + 300 = 375
+  - e.g., AED 4,104 = Intermediate (3,499) + Full Pack (605) → Commission 130 + 300 = 430
+- Algorithm: 1) Exact match → 2) Course+Addon decomposition (AED 20 tolerance) → 3) Closest 15% fallback
+- Integrated per-deal commission table + Net Pay Trend chart into Sales Dashboard (not a separate tab)
+- Updated sales-commission-info endpoint to include deal_earned, deal_pending, deal_details, benchmark_crossed
+- TL/Manager view updated with Deal Commission + Total On Hand cards + deal breakdown table
+- Tested: Backend 18/18 passed, Frontend 100% (iteration_70)
+
 **Bug Fix - LAMIZ Data Discrepancy (P0)**
 - Fixed student "LAMIZ" (ID: 2f8ebfcb) enrollment amount showing 4104 instead of 2204
 - Root cause: `leads.enrollment_amount`, `ltv_transactions.amount` had incorrect value (4104) while `payment_amount` was correct (2204)
