@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 # Configuration
-API_URL = "https://business-dev-sync.preview.emergentagent.com"
+API_URL = "https://data-integrity-check-12.preview.emergentagent.com"
 EMAIL = "aqib@clt-academy.com"
 PASSWORD = "@Aqib1234"
 OUTPUT_DIR = "./exported_data"

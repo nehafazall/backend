@@ -41,26 +41,35 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Dashboard KPIs, Monthly Closings, Customer Master Net LTV
 - Sales Search Fallback, Currency AED fix, CS Upgrade Dates
 
+### Session - March 24, 2026
+
+**Bug Fix - LAMIZ Data Discrepancy (P0)**
+- Fixed student "LAMIZ" (ID: 2f8ebfcb) enrollment amount showing 4104 instead of 2204
+- Root cause: `leads.enrollment_amount`, `ltv_transactions.amount` had incorrect value (4104) while `payment_amount` was correct (2204)
+- Fixed all 3 collections: `leads`, `ltv_transactions`, `students` — all now show 2204.0 AED
+- Verified via API: dashboard/overall, student transaction-history, and direct DB queries
+
 ## Prioritized Backlog
 
 ### P1
+- Invoice Generation — Auto-generate professional PDF invoices for enrollments/upgrades
+- WhatsApp Integration — Send templated messages via WhatsApp Business API
 - Build UI for admins to dynamically configure commission structures
-- Post-Deployment Checks (Google Cloud redirect_uri, CORS)
 
 ### P2
+- Executive Dashboard (CEO View) — Single page high-level overview
+- Workflow Automation Engine (Trigger-based actions)
+- Scheduled Email Reports — Auto-send daily/weekly revenue summaries to managers
 - Refactor `server.py` into domain-driven route files
-- Payslip generation feature
-- Google Ads API integration
-- WhatsApp Business API integration
-- Email campaign system
-- Workflow automation engine
+- Fix recurring `RangeError: Maximum call stack size exceeded` (babel plugin)
 
 ### P3
+- Payslip generation feature
+- Google Ads API integration
+- Email campaign system
 - Student self-service portal
 - Auto lead scoring
-- Scheduled report emails
 - Document management
-- Fix recurring `RangeError: Maximum call stack size exceeded` (babel plugin)
 
 ## Credentials
 - **Super Admin:** aqib@clt-academy.com / @Aqib1234
