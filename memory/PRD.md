@@ -56,6 +56,15 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Data fix: Backfilled 2 missing `cs_upgrades` records
 - Nasida VN now shows 33,495 AED (11 upgrades), CS Revenue updated to 71,402 AED (27 upgrades)
 
+**Bug Fix - CS Kanban Pitched Upgrade Students Disappearing on Refresh (P0)**
+- Students added to "Pitched Upgrade" stage disappeared on page refresh
+- Root cause (2 issues):
+  1. Default view was `my_work` for CS Head/Admin, filtering by their own agent ID — hiding other agents' students
+  2. Global pagination (50 per page) loaded only newest 50 students, burying older stage entries
+- Fix: Changed default view to `team` for CS Head and Super Admin roles
+- Fix: Implemented per-stage Kanban fetching (25 students per column, parallel API calls) — ensures all pipeline stages always show their students
+- Verified: "Pitched Upgrade" column now shows 2 students (Akhil Madhu, Hussain PS) correctly
+
 ## Prioritized Backlog
 
 ### P1

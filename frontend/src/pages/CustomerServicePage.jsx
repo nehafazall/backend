@@ -345,7 +345,6 @@ const CustomerServicePage = () => {
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState('my_work'); // 'my_work' | 'team'
     const [teamAgents, setTeamAgents] = useState([]);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
@@ -388,6 +387,9 @@ const CustomerServicePage = () => {
 
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
+    const [viewMode, setViewMode] = useState(
+        ['cs_head', 'super_admin', 'admin'].includes(user?.role) ? 'team' : 'my_work'
+    );
     const [csAgentsList, setCsAgentsList] = useState([]);
     const [filterCSAgent, setFilterCSAgent] = useState('all');
 
@@ -405,32 +407,67 @@ const CustomerServicePage = () => {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const params = { search: searchTerm || undefined, page: currentPage, page_size: pageSize };
+            const baseParams = {};
             if (viewMode === 'my_work' && isHeadOrAdmin) {
-                params.cs_agent_id = user.id;
+                baseParams.cs_agent_id = user.id;
             }
             if (filterCSAgent !== 'all') {
-                params.cs_agent_id = filterCSAgent;
+                baseParams.cs_agent_id = filterCSAgent;
             }
             if (csPeriodFilter) {
-                params.date_from = csPeriodFilter.date_from;
-                params.date_to = csPeriodFilter.date_to;
-                params.date_field = 'upgrade_date';
+                baseParams.date_from = csPeriodFilter.date_from;
+                baseParams.date_to = csPeriodFilter.date_to;
+                baseParams.date_field = 'upgrade_date';
             }
-            const response = await studentApi.getAll(params);
-            const data = response.data;
-            const items = data?.items || (Array.isArray(data) ? data : []);
-            setStudents(items);
-            setTotalRecords(data?.total || items.length);
-            setTotalPages(data?.total_pages || 0);
-            if (viewMode === 'team' && isHeadOrAdmin) {
+
+            // For Kanban: fetch per-stage in parallel so every column shows its students
+            if (!searchTerm && !csPeriodFilter) {
+                const stageIds = CS_STAGES.map(s => s.id);
+                const perStageLimit = 25;
+                const promises = stageIds.map(stage =>
+                    studentApi.getAll({ ...baseParams, stage, page: 1, page_size: perStageLimit })
+                );
+                const results = await Promise.all(promises);
+                let allItems = [];
+                let totalCount = 0;
                 const agentMap = {};
-                items.forEach(s => {
-                    const key = s.cs_agent_id || 'unassigned';
-                    if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
-                    agentMap[key].count++;
+                results.forEach((res) => {
+                    const data = res.data;
+                    const items = data?.items || (Array.isArray(data) ? data : []);
+                    allItems = allItems.concat(items);
+                    totalCount += data?.total || items.length;
+                    if (viewMode === 'team' && isHeadOrAdmin) {
+                        items.forEach(s => {
+                            const key = s.cs_agent_id || 'unassigned';
+                            if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
+                            agentMap[key].count++;
+                        });
+                    }
                 });
-                setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
+                setStudents(allItems);
+                setTotalRecords(totalCount);
+                setTotalPages(1);
+                if (viewMode === 'team' && isHeadOrAdmin) {
+                    setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
+                }
+            } else {
+                // Search or period filter: use single paginated query
+                const params = { ...baseParams, search: searchTerm || undefined, page: currentPage, page_size: pageSize };
+                const response = await studentApi.getAll(params);
+                const data = response.data;
+                const items = data?.items || (Array.isArray(data) ? data : []);
+                setStudents(items);
+                setTotalRecords(data?.total || items.length);
+                setTotalPages(data?.total_pages || 0);
+                if (viewMode === 'team' && isHeadOrAdmin) {
+                    const agentMap = {};
+                    items.forEach(s => {
+                        const key = s.cs_agent_id || 'unassigned';
+                        if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
+                        agentMap[key].count++;
+                    });
+                    setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
+                }
             }
         } catch (error) {
             toast.error('Failed to fetch students');
