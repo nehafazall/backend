@@ -9381,11 +9381,12 @@ SALES_CATEGORIES = [
 async def get_sales_commission_info(user=Depends(get_current_user)):
     """
     Returns commission/category info for the logged-in sales user.
-    - Sales Executive: Full category breakdown with salary, gain/loss, pipeline
+    - Sales Executive: Category breakdown + per-deal commission from engine
     - Team Leader / Sales Manager: Commission + salary = total on hand
     """
     role = user.get("role", "")
     now = datetime.now(timezone.utc)
+    this_month = now.strftime("%Y-%m")
     this_month_start = now.replace(day=1).strftime("%Y-%m-%d")
 
     # Get current net salary from HR
@@ -9409,19 +9410,17 @@ async def get_sales_commission_info(user=Depends(get_current_user)):
         category = SALES_CATEGORIES[-1]  # Default to D
         for cat in SALES_CATEGORIES:
             if month_revenue >= cat["min_revenue"]:
-                # Check account requirement
                 if cat["min_accounts"] > 0 and month_accounts < cat["min_accounts"]:
                     continue
                 category = cat
                 break
 
         category_salary = category["salary"]
-        # Commission = 0 if below 18k; otherwise difference between category salary and current
         has_commission = month_revenue >= 18000 and category_salary > 0
         earned_commission = max(0, category_salary - current_net_salary) if has_commission else 0
         salary_diff = category_salary - current_net_salary if category_salary > 0 else -current_net_salary
 
-        # Pipeline expected: sum of hot_lead + interested leads' estimated amounts
+        # Pipeline expected
         pipeline_stages = ["hot_lead", "interested"]
         pipeline_result = await db.leads.aggregate([
             {"$match": {"assigned_to": user["id"], "stage": {"$in": pipeline_stages}}},
@@ -9429,6 +9428,9 @@ async def get_sales_commission_info(user=Depends(get_current_user)):
         ]).to_list(1)
         pipeline_expected = pipeline_result[0]["total"] if pipeline_result else 0
         pipeline_count = pipeline_result[0]["count"] if pipeline_result else 0
+
+        # Per-deal commission from engine
+        deal_comm = await _calc_sales_commissions(user["id"], this_month)
 
         return {
             "role": "sales_executive",
@@ -9444,11 +9446,14 @@ async def get_sales_commission_info(user=Depends(get_current_user)):
             "pipeline_expected": pipeline_expected,
             "pipeline_count": pipeline_count,
             "all_categories": SALES_CATEGORIES,
+            "deal_earned": deal_comm.get("earned_commission", 0),
+            "deal_pending": deal_comm.get("pending_commission", 0),
+            "deal_details": deal_comm.get("earned_details", []) + deal_comm.get("pending_details", []),
+            "benchmark_crossed": deal_comm.get("benchmark_crossed", False),
+            "deals_closed": deal_comm.get("deals_closed", 0),
         }
 
     elif role in ["team_leader", "sales_manager"]:
-        # TL/Manager: their own commission + salary
-        # Commission for TL/Manager = their personal enrolled revenue this month
         rev_pipeline = [
             {"$match": {"stage": "enrolled", "assigned_to": user["id"], "enrolled_at": {"$gte": this_month_start}}},
             {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}}, "accounts": {"$sum": 1}}}
@@ -9457,12 +9462,21 @@ async def get_sales_commission_info(user=Depends(get_current_user)):
         own_revenue = rev_result[0]["total"] if rev_result else 0
         own_accounts = rev_result[0]["accounts"] if rev_result else 0
 
+        # Per-deal commission
+        deal_comm = await _calc_sales_commissions(user["id"], this_month)
+
         return {
             "role": role,
             "month_revenue": own_revenue,
             "month_accounts": own_accounts,
             "current_net_salary": current_net_salary,
             "total_on_hand": current_net_salary,
+            "deal_earned": deal_comm.get("earned_commission", 0),
+            "deal_pending": deal_comm.get("pending_commission", 0),
+            "tl_earned": deal_comm.get("earned_tl", 0),
+            "deal_details": deal_comm.get("earned_details", []) + deal_comm.get("pending_details", []),
+            "benchmark_crossed": deal_comm.get("benchmark_crossed", False),
+            "deals_closed": deal_comm.get("deals_closed", 0),
         }
 
     return {"role": role, "message": "Commission info not applicable for this role"}
@@ -26090,19 +26104,59 @@ async def reject_merge_request(request_id: str, request: Request, user=Depends(g
 SALES_BENCHMARK_AED = 18000  # Sales agents earn 0 until they hit this monthly revenue
 
 async def _match_course_commission(amount: float, course_type: str = "course"):
-    """Match an amount to the closest course in course_catalog and return commission rates."""
+    """Match enrollment amount to course(s) in course_catalog.
+    
+    Handles composite enrollments (e.g. Course + Addon Pack):
+    1. Try exact single-item match
+    2. Try decomposing as Course + Addon (sum of commissions)
+    3. Fallback to closest single course within 15%
+    """
     catalog = await db.course_catalog.find(
         {"is_active": True, "type": {"$in": [course_type, "addon"] if course_type == "course" else [course_type]}},
         {"_id": 0}
     ).to_list(100)
     if not catalog:
         return {}
-    # Exact price match first
+
+    courses = [c for c in catalog if c.get("type") != "addon"]
+    addons = [c for c in catalog if c.get("type") == "addon"]
+    comm_fields = [
+        "commission_sales_executive", "commission_team_leader",
+        "commission_sales_manager", "commission_cs_agent",
+        "commission_cs_head", "commission_mentor",
+    ]
+
+    # 1. Exact single-item match (course or addon)
     for c in catalog:
         if c.get("price") == amount:
             return c
-    # Closest price match
-    closest = min(catalog, key=lambda c: abs((c.get("price") or 0) - amount))
+
+    # 2. Decompose as Course + Addon
+    tolerance = 20  # AED tolerance for rounding
+    best = None
+    best_diff = tolerance + 1
+    for course in courses:
+        residual = amount - (course.get("price") or 0)
+        if residual <= 0:
+            continue
+        for addon in addons:
+            diff = abs(residual - (addon.get("price") or 0))
+            if diff <= tolerance and diff < best_diff:
+                combined = {
+                    "name": f"{course.get('name')} + {addon.get('name')}",
+                    "price": amount,
+                    "type": course_type,
+                }
+                for f in comm_fields:
+                    combined[f] = (course.get(f) or 0) + (addon.get(f) or 0)
+                best = combined
+                best_diff = diff
+
+    if best:
+        return best
+
+    # 3. Fallback: closest single course within 15%
+    closest = min(courses or catalog, key=lambda c: abs((c.get("price") or 0) - amount))
     if abs((closest.get("price") or 0) - amount) <= amount * 0.15:
         return closest
     return {}

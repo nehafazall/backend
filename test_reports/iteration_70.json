@@ -1,0 +1,115 @@
+{
+  "summary": "Commission Decomposition Feature - Complete Testing. Backend: 18/18 tests passed. All commission calculations working correctly with Course + Addon decomposition. Frontend: Fixed Net Pay Trend chart display issue (API returns 'data' not 'data_points'). All features verified working.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Net Pay Trend chart", "issue": "FIXED - Chart was not displaying because frontend checked for scatterData.data_points but API returns scatterData.data", "affected_selectors": ["LineChart in SalesDashboard.jsx"]}
+    ],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: Aleesha login successful (sales_executive)",
+    "Backend: GET /api/dashboard/sales-commission-info returns deal_earned, deal_pending, deal_details, benchmark_crossed",
+    "Backend: Aleesha has deal_earned=2665 for March 2026 (5 deals: 375+430+430+430+1000)",
+    "Backend: Course decomposition AED 2204 → Offer Course + Addons - Full Pack (commission 75+300=375)",
+    "Backend: Course decomposition AED 4104 → Intermediate + Addons - Full Pack (commission 130+300=430)",
+    "Backend: 18K benchmark correctly shows as cleared for Aleesha (revenue 49016)",
+    "Backend: GET /api/commissions/scatter-data returns 200",
+    "Backend: scatter-data returns 6 data points with commission and net_pay fields",
+    "Backend: scatter-data includes agent_name: Aleesha, role: sales_executive",
+    "Backend: CEO dashboard returns 200",
+    "Backend: CEO dashboard has 21 sales agents",
+    "Backend: CEO dashboard total_sales_earned: 17579",
+    "Backend: CEO drill-down shows Aleesha with achieved=49016, deals=5, earned_commission=2665",
+    "Frontend: Sales Dashboard loads at /sales/dashboard",
+    "Frontend: Deal-wise Commission table shows 5 deals with correct decomposition",
+    "Frontend: Commission values AED 375, AED 430, AED 1,000 displayed correctly",
+    "Frontend: Total commission AED 2,665 displayed correctly",
+    "Frontend: 18K Benchmark cleared indicator visible",
+    "Frontend: Net Pay Trend chart now displays correctly (after fix)",
+    "Frontend: Chart shows Base Salary, Commission, Net Pay lines over 6 months"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_commission_decomposition.py",
+    "/app/test_reports/pytest/pytest_commission_decomposition.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Commission decomposition logic in _match_course_commission correctly handles Course + Addon combinations",
+    "18K benchmark logic correctly implemented - earned commission is 0 until benchmark crossed",
+    "Deal-wise Commission table shows all required fields: Student, Course Matched, Amount, Commission",
+    "Net Pay Trend chart displays 6 months of salary + commission data"
+  ],
+
+  "updated_files": [
+    "/app/frontend/src/pages/SalesDashboard.jsx - Fixed Net Pay Trend chart to use scatterData.data instead of scatterData.data_points"
+  ],
+
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "100% (All features verified after fix)"
+  },
+
+  "test_credentials": {
+    "sales_executive": {"email": "aleesha@clt-academy.com", "password": "Aleesha@123", "role": "sales_executive"},
+    "ceo": {"email": "aqib@clt-academy.com", "password": "@Aqib1234", "role": "super_admin"}
+  },
+
+  "seed_data_creation": "Used existing enrolled leads data for Aleesha in March 2026",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Commission decomposition feature fully tested and working. Key endpoints: GET /api/dashboard/sales-commission-info (returns deal_earned, deal_pending, deal_details with decomposed commissions), GET /api/commissions/scatter-data (returns data array with commission and net_pay fields). Frontend route: /sales/dashboard. Fixed issue: Net Pay Trend chart was checking for data_points but API returns data - updated SalesDashboard.jsx to handle both.",
+
+  "feature_verification_details": {
+    "commission_decomposition": {
+      "description": "Enrollment amounts are decomposed as Course + Addon to calculate correct commissions",
+      "examples": [
+        {"amount": 2204, "decomposition": "Offer Course (1599) + Full Pack (605)", "commission": "75 + 300 = 375"},
+        {"amount": 4104, "decomposition": "Intermediate (3499) + Full Pack (605)", "commission": "130 + 300 = 430"}
+      ],
+      "status": "WORKING"
+    },
+    "sales_commission_info_endpoint": {
+      "endpoint": "GET /api/dashboard/sales-commission-info",
+      "response_fields": ["deal_earned", "deal_pending", "deal_details", "benchmark_crossed", "month_revenue", "deals_closed"],
+      "aleesha_march_2026": {"deal_earned": 2665, "deals_closed": 5, "month_revenue": 49016, "benchmark_crossed": true},
+      "status": "WORKING"
+    },
+    "scatter_data_endpoint": {
+      "endpoint": "GET /api/commissions/scatter-data",
+      "response_format": {"agent_name": "string", "role": "string", "base_salary": "number", "data": "array of {month, label, commission, net_pay, base_salary}"},
+      "note": "API returns 'data' not 'data_points' - frontend fixed to handle both",
+      "status": "WORKING"
+    },
+    "deal_wise_commission_table": {
+      "location": "Sales Dashboard (/sales/dashboard)",
+      "columns": ["Student", "Course Matched", "Amount", "Commission"],
+      "shows_decomposed_courses": true,
+      "status": "WORKING"
+    },
+    "net_pay_trend_chart": {
+      "location": "Sales Dashboard (/sales/dashboard)",
+      "chart_type": "LineChart (Recharts)",
+      "lines": ["Base Salary (dashed blue)", "Commission (green)", "Net Pay (red)"],
+      "data_source": "/api/commissions/scatter-data",
+      "status": "WORKING (after fix)"
+    },
+    "benchmark_indicator": {
+      "threshold": "18000 AED",
+      "behavior": "Shows 'Benchmark cleared — commissions unlocked' when revenue >= 18000",
+      "status": "WORKING"
+    }
+  }
+}

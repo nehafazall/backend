@@ -11,11 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PipelineRevenueWidget } from '@/components/PipelineRevenueWidget';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line,
+    PieChart, Pie, Cell, Legend, AreaChart, Area, LineChart, Line, ScatterChart, Scatter,
 } from 'recharts';
 import {
     DollarSign, TrendingUp, Users, Target, Award, Eye, EyeOff, Filter,
-    BarChart3, PieChart as PieChartIcon, Layers, ChevronRight, Wallet, ArrowUp, ArrowDown, Upload,
+    BarChart3, PieChart as PieChartIcon, Layers, ChevronRight, Wallet, ArrowUp, ArrowDown, Upload, CheckCircle, Clock,
 } from 'lucide-react';
 import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
 
@@ -50,6 +50,7 @@ const SalesDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [commissionInfo, setCommissionInfo] = useState(null);
     const [showEarnings, setShowEarnings] = useState(false);
+    const [scatterData, setScatterData] = useState(null);
     const [drill, setDrill] = useState({ open: false, title: '', content: null, loading: false, breadcrumbs: [] });
 
     const periodQuery = useCallback(() => {
@@ -73,6 +74,7 @@ const SalesDashboard = () => {
                 apiClient.get(`/dashboard/today-transactions?view_mode=${vm}`),
                 apiClient.get(`/dashboard/month-comparison?view_mode=${vm}`),
                 apiClient.get('/dashboard/sales-commission-info'),
+                apiClient.get('/commissions/scatter-data?months=6'),
             ]);
             const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
             const funnelData = val(0, []);
@@ -88,6 +90,7 @@ const SalesDashboard = () => {
             setTodayTxns(val(3, { count: 0, total_amount: 0, transactions: [] }));
             setMonthComparison(val(4, null));
             setCommissionInfo(val(5, null));
+            setScatterData(val(6, null));
         } catch (err) { console.error(err); }
         setLoading(false);
     };
@@ -307,93 +310,188 @@ const SalesDashboard = () => {
                 const toNext = nextCat ? nextCat.min_revenue - ci.month_revenue : 0;
                 const progressMax = nextCat ? nextCat.min_revenue : (ci.all_categories?.[0]?.min_revenue || 50000);
                 const progressPct = Math.min(100, (ci.month_revenue / progressMax) * 100);
+                const benchmarkPct = Math.min(100, (ci.month_revenue / 18000) * 100);
 
                 return (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" data-testid="sales-commission-section">
-                        {/* Category & Salary Card */}
-                        <Card className="lg:col-span-1">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
-                                    <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
-                                        {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                                    </button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Current Salary</span>
-                                    <span className="font-semibold font-mono">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Revised Salary</span>
-                                    <span className="font-semibold font-mono text-primary">{showEarnings ? fmtCur(ci.category_salary) : MASKED}</span>
-                                </div>
-                                <div className="flex items-center justify-between border-t border-border/50 pt-2">
-                                    <span className="text-sm text-muted-foreground">{ci.salary_diff >= 0 ? 'Gain' : 'Loss'}</span>
-                                    <span className={`font-bold font-mono flex items-center gap-1 ${ci.salary_diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                        {ci.salary_diff >= 0 ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
-                                        {showEarnings ? fmtCur(Math.abs(ci.salary_diff)) : MASKED}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between border-t border-border pt-2">
-                                    <span className="font-medium text-sm">Earned Commission</span>
-                                    <span className="text-lg font-bold font-mono text-primary">{showEarnings ? fmtCur(ci.earned_commission) : MASKED}</span>
-                                </div>
-                                {!ci.has_commission && ci.month_revenue < 18000 && (
-                                    <p className="text-xs text-amber-400 bg-amber-500/10 p-2 rounded">Commission unlocks at AED 18,000 revenue. You need {fmtCur(18000 - ci.month_revenue)} more.</p>
-                                )}
-                            </CardContent>
-                        </Card>
+                    <div className="space-y-4" data-testid="sales-commission-section">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            {/* Salary & Deal Commission Card */}
+                            <Card className="lg:col-span-1">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
+                                        <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
+                                            {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-muted-foreground">Current Salary</span>
+                                        <span className="font-semibold font-mono">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-muted-foreground">Revised Salary</span>
+                                        <span className="font-semibold font-mono text-primary">{showEarnings ? fmtCur(ci.category_salary) : MASKED}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between border-t border-border/50 pt-2">
+                                        <span className="text-sm text-muted-foreground">{ci.salary_diff >= 0 ? 'Gain' : 'Loss'}</span>
+                                        <span className={`font-bold font-mono flex items-center gap-1 ${ci.salary_diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                            {ci.salary_diff >= 0 ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+                                            {showEarnings ? fmtCur(Math.abs(ci.salary_diff)) : MASKED}
+                                        </span>
+                                    </div>
+                                    {/* Per-deal commission */}
+                                    <div className="border-t border-border pt-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-500" />Earned Commission</span>
+                                            <span className="text-lg font-bold font-mono text-emerald-500">{showEarnings ? fmtCur(ci.deal_earned) : MASKED}</span>
+                                        </div>
+                                        {ci.deal_pending > 0 && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-amber-500" />Pending</span>
+                                                <span className="font-semibold font-mono text-amber-500">{showEarnings ? fmtCur(ci.deal_pending) : MASKED}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* 18K Benchmark */}
+                                    {!ci.benchmark_crossed && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg space-y-1.5">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-amber-400 font-medium">18K Benchmark</span>
+                                                <span className="text-amber-400">{fmtCur(ci.month_revenue)} / {fmtCur(18000)}</span>
+                                            </div>
+                                            <Progress value={benchmarkPct} className="h-1.5" />
+                                            <p className="text-xs text-amber-400/80">Need {fmtCur(18000 - ci.month_revenue)} more to unlock commissions</p>
+                                        </div>
+                                    )}
+                                    {ci.benchmark_crossed && (
+                                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
+                                            <p className="text-xs text-emerald-400 font-medium flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" />18K Benchmark cleared — commissions unlocked</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
 
-                        {/* Category Progress Card */}
-                        <Card className="lg:col-span-2">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <Target className="h-5 w-5 text-amber-500" />
-                                            Category Progress
-                                        </CardTitle>
-                                        <CardDescription>This month: {fmtCur(ci.month_revenue)} revenue &middot; {ci.month_accounts} accounts</CardDescription>
-                                    </div>
-                                    <Badge className={`text-sm px-3 py-1 border ${catColor}`} data-testid="category-badge">
-                                        {ci.category_name}
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {/* Progress bar */}
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span>Category {ci.category_name} achieved</span>
-                                        {nextCat && <span>{fmtCur(toNext)} to Category {nextCat.name}</span>}
-                                    </div>
-                                    <Progress value={progressPct} className="h-2.5" />
-                                </div>
-                                {/* All categories grid */}
-                                <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 text-center">
-                                    {[...(ci.all_categories || [])].reverse().map((c) => (
-                                        <div key={c.name} className={`p-2 rounded-lg text-[10px] border transition-colors ${ci.month_revenue >= c.min_revenue && (c.min_accounts === 0 || ci.month_accounts >= c.min_accounts) ? `${catColors[c.name] || 'bg-muted'}` : 'bg-muted/30 text-muted-foreground border-transparent'}`}>
-                                            <p className="font-bold text-xs">{c.name}</p>
-                                            <p>{fmtCur(c.min_revenue).replace('AED', '').trim()}</p>
-                                            <p className="font-semibold">{fmtCur(c.salary).replace('AED', '').trim()}</p>
-                                            {c.min_accounts > 0 && <p className="opacity-70">{c.min_accounts}+ accts</p>}
-                                        </div>
-                                    ))}
-                                </div>
-                                {/* Pipeline expected */}
-                                {ci.pipeline_count > 0 && (
-                                    <div className="bg-blue-500/10 rounded-lg p-3 flex items-center justify-between border border-blue-500/20">
+                            {/* Category Progress Card */}
+                            <Card className="lg:col-span-2">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-sm font-medium">Expected Pipeline</p>
-                                            <p className="text-xs text-muted-foreground">{ci.pipeline_count} leads (Hot + Interested)</p>
+                                            <CardTitle className="flex items-center gap-2 text-base">
+                                                <Target className="h-5 w-5 text-amber-500" />
+                                                Category Progress
+                                            </CardTitle>
+                                            <CardDescription>This month: {fmtCur(ci.month_revenue)} revenue &middot; {ci.month_accounts} accounts</CardDescription>
                                         </div>
-                                        <p className="text-lg font-bold text-blue-500 font-mono">{fmtCur(ci.pipeline_expected)}</p>
+                                        <Badge className={`text-sm px-3 py-1 border ${catColor}`} data-testid="category-badge">
+                                            {ci.category_name}
+                                        </Badge>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {/* Progress bar */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                            <span>Category {ci.category_name} achieved</span>
+                                            {nextCat && <span>{fmtCur(toNext)} to Category {nextCat.name}</span>}
+                                        </div>
+                                        <Progress value={progressPct} className="h-2.5" />
+                                    </div>
+                                    {/* All categories grid */}
+                                    <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 text-center">
+                                        {[...(ci.all_categories || [])].reverse().map((c) => (
+                                            <div key={c.name} className={`p-2 rounded-lg text-[10px] border transition-colors ${ci.month_revenue >= c.min_revenue && (c.min_accounts === 0 || ci.month_accounts >= c.min_accounts) ? `${catColors[c.name] || 'bg-muted'}` : 'bg-muted/30 text-muted-foreground border-transparent'}`}>
+                                                <p className="font-bold text-xs">{c.name}</p>
+                                                <p>{fmtCur(c.min_revenue).replace('AED', '').trim()}</p>
+                                                <p className="font-semibold">{fmtCur(c.salary).replace('AED', '').trim()}</p>
+                                                {c.min_accounts > 0 && <p className="opacity-70">{c.min_accounts}+ accts</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Pipeline expected */}
+                                    {ci.pipeline_count > 0 && (
+                                        <div className="bg-blue-500/10 rounded-lg p-3 flex items-center justify-between border border-blue-500/20">
+                                            <div>
+                                                <p className="text-sm font-medium">Expected Pipeline</p>
+                                                <p className="text-xs text-muted-foreground">{ci.pipeline_count} leads (Hot + Interested)</p>
+                                            </div>
+                                            <p className="text-lg font-bold text-blue-500 font-mono">{fmtCur(ci.pipeline_expected)}</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Per-deal Commission Breakdown + Net Pay Trend */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {/* Deal-wise Commission Table */}
+                            {ci.deal_details && ci.deal_details.length > 0 && (
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-5 w-5 text-emerald-500" />Deal-wise Commission</CardTitle>
+                                        <CardDescription>{ci.deals_closed} deals &middot; {ci.benchmark_crossed ? 'Benchmark cleared' : 'Below 18K benchmark'}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Student</TableHead>
+                                                        <TableHead>Course Matched</TableHead>
+                                                        <TableHead className="text-right">Amount</TableHead>
+                                                        <TableHead className="text-right">Commission</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {ci.deal_details.map((d, i) => (
+                                                        <TableRow key={i}>
+                                                            <TableCell className="font-medium text-sm">{d.lead_name}</TableCell>
+                                                            <TableCell className="text-xs text-muted-foreground">{d.course_matched}</TableCell>
+                                                            <TableCell className="text-right font-mono text-sm">{fmtCur(d.amount)}</TableCell>
+                                                            <TableCell className="text-right font-mono font-semibold text-sm">
+                                                                <span className={ci.benchmark_crossed ? 'text-emerald-500' : 'text-amber-500'}>{fmtCur(d.se_commission)}</span>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    <TableRow className="border-t-2 border-border">
+                                                        <TableCell colSpan={3} className="font-bold text-sm">Total</TableCell>
+                                                        <TableCell className="text-right font-mono font-bold text-primary">{fmtCur(ci.deal_earned + ci.deal_pending)}</TableCell>
+                                                    </TableRow>
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Net Pay Trend Chart */}
+                            {scatterData && (scatterData.data_points || scatterData.data) && (scatterData.data_points || scatterData.data).length > 0 && (
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="h-5 w-5 text-primary" />Net Pay Trend</CardTitle>
+                                        <CardDescription>Salary + Commission over last 6 months</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ResponsiveContainer width="100%" height={280}>
+                                            <LineChart data={scatterData.data_points || scatterData.data}>
+                                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" opacity={0.3} />
+                                                <XAxis dataKey="label" tick={{ className: 'fill-muted-foreground', fontSize: 10 }} />
+                                                <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
+                                                <Tooltip
+                                                    formatter={(v, n) => [fmtCur(v), n]}
+                                                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                                                />
+                                                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                                <Line type="monotone" dataKey="base_salary" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} name="Base Salary" />
+                                                <Line type="monotone" dataKey="commission" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="Commission" />
+                                                <Line type="monotone" dataKey="net_pay" stroke="#EF3340" strokeWidth={2.5} dot={{ r: 4, fill: '#EF3340' }} name="Net Pay" />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
                     </div>
                 );
             })()}
@@ -403,33 +501,99 @@ const SalesDashboard = () => {
                 const ci = commissionInfo;
                 const MASKED = '••••••';
                 return (
-                    <Card data-testid="tl-earnings-card">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
-                                <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
-                                    {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                                </button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                    <p className="text-xs text-muted-foreground uppercase">Salary</p>
-                                    <p className="text-xl font-bold font-mono mt-1">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</p>
+                    <div className="space-y-4" data-testid="tl-earnings-section">
+                        <Card data-testid="tl-earnings-card">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base"><Wallet className="h-5 w-5 text-purple-500" />My Earnings</CardTitle>
+                                    <button onClick={() => setShowEarnings(!showEarnings)} className="p-1.5 rounded-lg hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground" data-testid="toggle-earnings-btn">
+                                        {showEarnings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                    </button>
                                 </div>
-                                <div className="text-center p-3 bg-muted/30 rounded-lg">
-                                    <p className="text-xs text-muted-foreground uppercase">Revenue</p>
-                                    <p className="text-xl font-bold font-mono text-emerald-500 mt-1">{fmtCur(ci.month_revenue)}</p>
-                                    <p className="text-xs text-muted-foreground">{ci.month_accounts} deals</p>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                        <p className="text-xs text-muted-foreground uppercase">Salary</p>
+                                        <p className="text-xl font-bold font-mono mt-1">{showEarnings ? fmtCur(ci.current_net_salary) : MASKED}</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-muted/30 rounded-lg">
+                                        <p className="text-xs text-muted-foreground uppercase">Revenue</p>
+                                        <p className="text-xl font-bold font-mono text-emerald-500 mt-1">{fmtCur(ci.month_revenue)}</p>
+                                        <p className="text-xs text-muted-foreground">{ci.month_accounts} deals</p>
+                                    </div>
+                                    <div className="text-center p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                        <p className="text-xs text-muted-foreground uppercase">Deal Commission</p>
+                                        <p className="text-xl font-bold font-mono text-emerald-500 mt-1">{showEarnings ? fmtCur((ci.deal_earned || 0) + (ci.tl_earned || 0)) : MASKED}</p>
+                                        {ci.deal_pending > 0 && <p className="text-xs text-amber-500">+{fmtCur(ci.deal_pending)} pending</p>}
+                                    </div>
+                                    <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                                        <p className="text-xs text-muted-foreground uppercase">Total On Hand</p>
+                                        <p className="text-xl font-bold font-mono text-primary mt-1">{showEarnings ? fmtCur(ci.current_net_salary + (ci.deal_earned || 0) + (ci.tl_earned || 0)) : MASKED}</p>
+                                    </div>
                                 </div>
-                                <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
-                                    <p className="text-xs text-muted-foreground uppercase">Total On Hand</p>
-                                    <p className="text-xl font-bold font-mono text-primary mt-1">{showEarnings ? fmtCur(ci.total_on_hand) : MASKED}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+
+                        {/* TL Deal Breakdown + Net Pay Trend */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {ci.deal_details && ci.deal_details.length > 0 && (
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-5 w-5 text-emerald-500" />Deal-wise Commission</CardTitle>
+                                        <CardDescription>{ci.deals_closed} deals &middot; {ci.benchmark_crossed ? 'Benchmark cleared' : 'Below 18K'}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Student</TableHead>
+                                                        <TableHead>Course</TableHead>
+                                                        <TableHead className="text-right">SE Comm</TableHead>
+                                                        <TableHead className="text-right">TL Comm</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {ci.deal_details.map((d, i) => (
+                                                        <TableRow key={i}>
+                                                            <TableCell className="font-medium text-sm">{d.lead_name}</TableCell>
+                                                            <TableCell className="text-xs text-muted-foreground">{d.course_matched}</TableCell>
+                                                            <TableCell className="text-right font-mono text-sm">{fmtCur(d.se_commission)}</TableCell>
+                                                            <TableCell className="text-right font-mono text-sm text-primary">{fmtCur(d.tl_commission)}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {(scatterData && (scatterData.data_points || scatterData.data) && (scatterData.data_points || scatterData.data).length > 0) && (
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="h-5 w-5 text-primary" />Net Pay Trend</CardTitle>
+                                        <CardDescription>Salary + Commission over last 6 months</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ResponsiveContainer width="100%" height={280}>
+                                            <LineChart data={scatterData.data_points || scatterData.data}>
+                                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" opacity={0.3} />
+                                                <XAxis dataKey="label" tick={{ className: 'fill-muted-foreground', fontSize: 10 }} />
+                                                <YAxis tick={{ className: 'fill-muted-foreground', fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
+                                                <Tooltip formatter={(v, n) => [fmtCur(v), n]} contentStyle={{ backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
+                                                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                                <Line type="monotone" dataKey="base_salary" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} name="Base Salary" />
+                                                <Line type="monotone" dataKey="commission" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="Commission" />
+                                                <Line type="monotone" dataKey="net_pay" stroke="#EF3340" strokeWidth={2.5} dot={{ r: 4, fill: '#EF3340' }} name="Net Pay" />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+                    </div>
                 );
             })()}
 
