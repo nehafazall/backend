@@ -797,7 +797,7 @@ def get_employee_welcome_template(
                 
                 <!-- Login Button -->
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="https://data-integrity-check-12.preview.emergentagent.com/login" 
+                    <a href="https://net-pay-scatter.preview.emergentagent.com/login" 
                        style="display: inline-block; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 8px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);">
                         Login to CLT Synapse →
                     </a>

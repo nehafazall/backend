@@ -1,34 +1,22 @@
 <analysis>**original_problem_statement**: 
-The user is driving continuous enhancements for the CLT Synapse ERP system. Over this session, the application evolved into a full-fledged ERP.
-The final, immediate request is a data discrepancy bug: A student named Lamiz is showing an enrollment amount of 4104 instead of 2204 on the dashboard and student card.
+The user is driving continuous enhancements for the CLT Synapse ERP system. Over this session, the focus shifted from fixing data discrepancies and UI bugs to building a robust **Student Duplicate Merge Approval Workflow** and a comprehensive **Commission Engine & Dashboard**. 
+Current requirement: Build a Commission Dashboard showing Earned vs Pending commissions. Sales executives have an 18,000 AED revenue benchmark before commissions move from Pending to Earned. CS agents earn based on upgrade stages. Team Leaders, CEOs, and Mentors have specific hierarchy roll-ups. The dashboard requires an XY scatter graph showing Net Pay (Salary + Commission) across months.
 
 **User's preferred language**: English
 *(INSTRUCTION TO NEXT AGENT: You MUST respond in English only)*
 
 **what currently exists?** 
-A highly optimized, mature full-stack ERP (React + FastAPI + MongoDB). It features comprehensive modules for Sales, Customer Service, Mentors, Business Development (BD), HR, and Finance. The app includes drag-and-drop paginated Kanbans, advanced MongoDB aggregations, a 3CX Click-to-Call integration, an In-app Notification Center, PDF Certificate Generation, a dynamic Report Builder, Revenue Forecasting, and an embedded Student Portal. The backend utilizes Gzip compression and optimized indexing for speed.
+A mature full-stack ERP (React + FastAPI + MongoDB). Recently updated with per-stage Kanban fetching, fixed dashboard financial aggregations, and a complete 3-step Student Duplicate Merge system with CS Head and CEO approvals. A newly written backend commission engine () calculates the 18k Sales benchmark, CS upgrade commissions, and role-based pools.
 
 **Last working item**:
-    - **Last item agent was working**: Investigating the data discrepancy for the student Lamiz. The agent queried the database and found that while the  collection shows an  and  of 2204.0, the  collection has an enrollment record of 4104.0 for this student, which is causing dashboard/card mismatches.
+    - **Last item agent was working**: Building the frontend  UI and wiring it to the backend. The backend logic for the commission engine is written and verified via bash, and the frontend file was *just* created.
     - **Status**: IN PROGRESS
     - **Agent Testing Done**: N
-    - **Which testing method agent to use?**: manual testing by curl/ python -c / screenshot tool to verify the card and dashboard values update correctly after the fix.
+    - **Which testing method agent to use?**: Frontend testing agent / manual testing by screenshot tool to verify role-based views (Sales vs TL vs CEO) and chart rendering.
     - **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Lamiz Student Amount Discrepancy (P0)
-     - **Attempted fixes**: Agent queried the DB to isolate the issue. Discovered that  has , whereas  is .
-     - **Next debug checklist**: 
-        - Update the  record for student  to reflect 2204.0.
-        - Check if the  collection also holds an incorrect cached .
-        - Verify if this discrepancy is an isolated data entry error or a bug in the enrollment conversion flow.
-     - **Why fix this issue and what will be achieved with the fix?**: Ensures accurate revenue reporting and dashboard KPIs.
-     - **Status**: IN PROGRESS
-     - **Is recurring issue?**: N
-     - **Should Test frontend/backend/both after fix?**: both (verify DB update, then check UI)
-     - **Blocked on other issue**: None
-
-  Issue 2:  (P2)
+  Issue 1:  (P2)
      - **Attempted fixes**: None.
      - **Next debug checklist**: Investigate  and React component hot-reloading configurations.
      - **Why fix this issue and what will be achieved with the fix?**: Stabilizes frontend build environment.
@@ -37,31 +25,33 @@ A highly optimized, mature full-stack ERP (React + FastAPI + MongoDB). It featur
      - **Should Test frontend/backend/both after fix?**: frontend
      - **Blocked on other issue**: None
 
-**In progress Task List**: None
+**In progress Task List**:
+  Task 1: Complete Commission Dashboard Frontend (P0)
+     - **Where to resume**: Implement the UI in . Add the route to  and  navigation.
+     - **What will be achieved with this?**: Users will see Earned vs Pending commissions. CEO gets an overview of all agents, SM bonus pools, and Mentor pools. Includes an XY scatter chart for Net Pay vs Months.
+     - **Status**: IN PROGRESS
+     - **Should Test frontend/backend/both after fix?**: both (Ensure UI accurately reflects backend payloads).
+     - **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
 - **P1**: Invoice Generation — Auto-generate professional PDF invoices for enrollments/upgrades and email them.
 - **P1**: WhatsApp Integration — Send templated messages via WhatsApp Business API.
-- **P1**: Build UI for admins to dynamically configure commission structures.
 - **P2**: Executive Dashboard (CEO View) — Single page high-level overview.
 - **P2**: Workflow Automation Engine (Trigger-based actions).
 - **P2**: Scheduled Email Reports — Auto-send daily/weekly revenue summaries to managers.
-- **P3**: Refactor monolithic  (>25,000 lines) into domain-driven route structure.
+- **P3**: Refactor monolithic  (>26,000 lines) into domain-driven route structure.
 
 **Completed work in this session**
-- Business Development (BD) Module Completed (CRM Kanban, Dashboard, roles configured, round-robin assignments fixed in production Atlas DB) (DONE).
-- BD CRM enhanced with 3CX Click-to-call, Student Notes, and Reminders (DONE).
-- Global Customer  component added to CS, Mentor, and BD student detail modals (DONE).
-- CS Agent Transfer Bug fixed ( was missing from Pydantic model) (DONE).
-- App-wide Performance Optimization: Gzip Middleware, comprehensive MongoDB indexes, and Server-Side Pagination (25/50/100) added to all Kanbans (DONE).
-- In-App Notification Center built (bell icon with dropdown) (DONE).
-- Student Portal (iframe embed) added to CS section (DONE).
-- PDF Certificate Generation using  added (DONE).
-- Custom Report Builder (drag-and-drop metrics) added (DONE).
-- Revenue Forecasting Module added (DONE).
+- LAMIZ student amount discrepancy fixed across , , and  (DONE).
+- Nasida VN dashboard missing transactions fixed ( now correctly inserts into ) (DONE).
+- CS Kanban Pitched Upgrade vanishing students fixed (switched to per-stage fetching, default 'team' view for admins) (DONE).
+- Duplicate transactions in Student Card history fixed (filtered out  upgrades) (DONE).
+- Dashboard Leaderboard and Drill-down period sync fixed (unified on Tue Mar 24 09:29:09 UTC 2026 field) (DONE).
+- Student Duplicate Merge Workflow (UI + Backend + CS Head/CEO Approval flows) (DONE).
+- Backend Commission Engine calculating 18k benchmarks and hierarchy pools (DONE).
 
 **Earlier issues found/mentioned but not fixed**
-- None noted.
+- None.
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork:  during frontend compilation.
@@ -72,64 +62,55 @@ A highly optimized, mature full-stack ERP (React + FastAPI + MongoDB). It featur
 
 
 **Key Technical Concepts**
-- Backend: FastAPI, Python, MongoDB (Motor AsyncIO),  for PDFs, GzipMiddleware for compression.
-- Frontend: React, Tailwind CSS, Shadcn UI, dnd-kit for Kanbans.
-- Architecture: Server-side pagination for large datasets, role-based JWT access, monolithic backend.
+- Backend: FastAPI, Python, MongoDB (Motor AsyncIO).
+- Frontend: React, Tailwind CSS, Shadcn UI, Recharts (Needed for XY Scatter graph).
+- Architecture: Complex MongoDB aggregations for commissions, 2-stage approval state machines for merging.
 
 **key DB schema**
-- : {stage, enrollment_amount, sale_amount, ...}
-- : {id, lead_id, full_name, cs_agent_name, bd_agent_id, ...}
-- : {type, amount, date...} *(Note: Check this for the Lamiz bug)*
-- : {id, student_id, note, author_name, created_at}
-- : {id, user_id, title, message, read, ...}
+- : contains commission fields (, , etc.)
+- : source of truth for CS closed commissions.
+- : {id, primary_student_id, secondary_student_id, status, ...}
+- : contains salary data (, ) for net pay calculations.
 
 **changes in tech stack**
-- Added  to  for backend PDF generation.
-- Added FastAPI  for payload compression.
+- None.
 
 **All files of reference**
-- 
-- 
-- 
+-  (Search for )
+-  (Currently just created, needs code)
 - 
 
 **Areas that need refactoring**:
-- : Currently over 25,600 lines. Badly needs router modularization. Pydantic models must be carefully checked when adding fields (e.g., the  bug).
+- : Currently over 26,000 lines. Desperately needs router modularization. 
 
 **key api endpoints**
-- , ,  (Now highly optimized with  and  query parameters)
-- 
--  & 
-- 
-- 
+-  (NEW - Aggregates all commission data)
+-  (NEW)
+-  (NEW)
 
 **Critical Info for New Agent**
-- **Data Update vs UI Update:** When updating backend records directly via script to solve data mismatches (like the Lamiz bug), ensure you check , , and  collections to ensure the fix is propagated across all aggregated sources.
-- **Pydantic Models:** Be extremely careful when adding fields to frontend requests. If a field is sent by the frontend but not defined in the backend Pydantic model (like ), FastAPI will silently drop it without throwing an error.
+- **Commission Logic**: The backend logic for the commission engine is already complete. It successfully handles the 18,000 AED Sales benchmark (showing 0 earned if below), CS pending logic (pitched/in-progress/interested), and Mentor/CEO pools. **Do not rebuild the backend logic** unless a bug is found; focus on consuming it in .
+- **Salaries**: Employee salaries are stored in the  collection. 
+- **Recharts**: Use Shadcn/Recharts for the requested XY Scatter graph comparing Salary + Commissions over time.
 
 **documents and test reports created in this job**
--  (BD Module)
--  (Transaction History)
--  (BD CRM 3CX, Notes, Reminders)
--  (Pagination, Indexes, CS Bug Fix)
--  (5 New ERP Features)
-- 
+-  (Merge System - 100% Passed)
+-  (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1. User asked to add the entire transaction history to CS, Mentor, and BD student cards.
-2. Agent implemented the  component.
-3. User asked to add 3CX calling, notes, and reminders to the BD CRM (like Sales).
-4. Agent implemented features.
-5. User asked how to find DB credentials for their deployed app. Agent answered.
-6. User asked to improve kanban loading speed, and reported a bug where transferring a CS lead updates the agent ID but the displayed name remains the old agent.
-7. Agent fixed the bug, added MongoDB indexes, Gzip compression, and pagination.
-8. User asked what features could make the app a full-fledged ERP. Agent provided a list.
-9. User selected: In-app notification center, Student portal iframe embed, Certificate generation, Report builder, and Revenue forecasting.
-10. Agent built all 5 features.
-11. **(PENDING)** User reported: Lamiz student still counted as 4104 instead of 2204. kindly fix that in the dashboard as well as the student card.
+1. User asked to fix Nasida VN's missing dashboard upgrades. Agent fixed  endpoint.
+2. User reported Pitched upgrade students disappearing on refresh. Agent fixed view mode and Kanban pagination logic.
+3. User reported duplicate upgrade entries for a student (Vighanesh) and leaderboard sync issues. Agent fixed endpoint deduplication and period filters.
+4. User requested a Manual Duplicate Merge tool with CS Head -> CEO approval flow.
+5. Agent built full backend and frontend merge approval workflow.
+6. User requested a **Commission Dashboard** (Earned vs Pending, 18k Sales Benchmark, CS upgrade stages, TL/CEO hierarchy roll-ups, and an XY Scatter graph for Net Pay).
+7. Agent clarified commission storage (Operations > Courses) and salary storage (HR > Employee Master).
+8. Agent clarified rules for CS pending stages and Mentor cash pools.
+9. User provided a test scenario (CLT Vantage sale + upgrades) to verify agent's math.
+10. Agent provided correct math, user approved. Agent built the backend and created the frontend file. (PENDING FRONTEND UI).
 
 **Project Health Check:**
-- Broken: Data discrepancy for student Lamiz (Revenue amounts don't match across collections).
+- Broken: None known.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -139,27 +120,31 @@ A highly optimized, mature full-stack ERP (React + FastAPI + MongoDB). It featur
 - 3CX Web Client — URL-based integration (Click-to-call)
 
 **Testing status**
-- Testing agent used after significant changes: YES (Iterations 63, 64, 65, 66, 67 - all passed)
+- Testing agent used after significant changes: YES (Iteration 68 for Merge System - Passed)
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created: None
 - Known regressions: None currently known.
 
 **Credentials to test flow:**
-- Super Admin:  / 
+- Super Admin / CEO:  / 
 - CS Head:  / 
 - Master of Academics: 
-- BD Agent:  /  (Reset during session)
+- BD Agent:  / 
 
 **What agent forgot to execute**
-- The agent was in the middle of executing Bash scripts to diagnose the Lamiz data discrepancy bug but the context window ended before a database fix script could be applied.
+- The previous agent successfully generated the backend commission endpoint and created the  file, but ran out of context before writing the React code, routing it, and adding it to the sidebar.
 
 **Debugging checklist for current issue**
-    Issue: Lamiz student enrollment amount mismatch (2204 vs 4104).
+    Task: Commission Dashboard Frontend UI
 
-    Backend/Database to check:
-    - Run DB update for  matching  and date  for student  to set amount to .
-    - Ensure  collection  is correctly set to .
-    - Check if the dashboard aggregation queries recalculate properly post-update.
-    
-    Frontend to check:
-    - Navigate to Sales/CS/BD CRM and Dashboard to confirm the visual figure updates to 2204.</analysis>
+    Frontend files to update:
+    - : Implement UI. Needs Role-based rendering.
+      - **CEO View**: Table of all agents, SM Pool, Mentor Pool.
+      - **TL View**: Team commissions + personal.
+      - **Sales/CS View**: Earned vs Pending cards.
+      - **Chart**: XY Scatter graph for Net Pay (Salary + Commission) across months.
+    - : Add route for .
+    - : Add sidebar navigation link.
+  
+    Backend files to check (if needed):
+    -  (Line ~26000+,  endpoint).</analysis>

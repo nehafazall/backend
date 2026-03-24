@@ -11,7 +11,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://data-integrity-check-12.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://net-pay-scatter.preview.emergentagent.com')
 
 # Test credentials
 SUPER_ADMIN_EMAIL = "aqib@clt-academy.com"

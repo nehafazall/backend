@@ -14960,7 +14960,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://data-integrity-check-12.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://net-pay-scatter.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -26082,6 +26082,384 @@ async def reject_merge_request(request_id: str, request: Request, user=Depends(g
     })
     
     return {"status": "rejected", "message": "Merge request rejected."}
+
+
+
+# ==================== COMMISSION DASHBOARD SYSTEM ====================
+
+SALES_BENCHMARK_AED = 18000  # Sales agents earn 0 until they hit this monthly revenue
+
+async def _match_course_commission(amount: float, course_type: str = "course"):
+    """Match an amount to the closest course in course_catalog and return commission rates."""
+    catalog = await db.course_catalog.find(
+        {"is_active": True, "type": {"$in": [course_type, "addon"] if course_type == "course" else [course_type]}},
+        {"_id": 0}
+    ).to_list(100)
+    if not catalog:
+        return {}
+    # Exact price match first
+    for c in catalog:
+        if c.get("price") == amount:
+            return c
+    # Closest price match
+    closest = min(catalog, key=lambda c: abs((c.get("price") or 0) - amount))
+    if abs((closest.get("price") or 0) - amount) <= amount * 0.15:
+        return closest
+    return {}
+
+
+async def _calc_sales_commissions(agent_id: str, month: str):
+    """Calculate sales commissions for an agent for a given month (YYYY-MM)."""
+    month_start = f"{month}-01"
+    month_end = f"{month}-31"
+
+    # Get all enrolled leads for this agent this month
+    enrolled = await db.leads.find({
+        "assigned_to": agent_id,
+        "stage": "enrolled",
+        "enrolled_at": {"$gte": month_start, "$lte": month_end + "T23:59:59"},
+    }, {"_id": 0, "id": 1, "full_name": 1, "enrollment_amount": 1, "sale_amount": 1, "course_name": 1, "enrolled_at": 1}).to_list(500)
+
+    total_revenue = sum((l.get("enrollment_amount") or l.get("sale_amount") or 0) for l in enrolled)
+    benchmark_crossed = total_revenue >= SALES_BENCHMARK_AED
+
+    earned_details = []
+    for lead in enrolled:
+        amt = lead.get("enrollment_amount") or lead.get("sale_amount") or 0
+        course = await _match_course_commission(amt, "course")
+        se_comm = course.get("commission_sales_executive", 0)
+        tl_comm = course.get("commission_team_leader", 0)
+        sm_comm = course.get("commission_sales_manager", 0)
+        earned_details.append({
+            "lead_name": lead.get("full_name"),
+            "amount": amt,
+            "course_matched": course.get("name", "Unknown"),
+            "se_commission": se_comm,
+            "tl_commission": tl_comm,
+            "sm_commission": sm_comm,
+            "date": str(lead.get("enrolled_at", ""))[:10],
+        })
+
+    total_se = sum(d["se_commission"] for d in earned_details)
+    total_tl = sum(d["tl_commission"] for d in earned_details)
+    total_sm = sum(d["sm_commission"] for d in earned_details)
+
+    # Pipeline (pending) — leads in hot_lead, in_progress, warm_lead stages
+    pipeline_leads = await db.leads.find({
+        "assigned_to": agent_id,
+        "stage": {"$in": ["hot_lead", "in_progress", "warm_lead"]},
+    }, {"_id": 0, "id": 1, "full_name": 1, "estimated_value": 1, "enrollment_amount": 1, "course_name": 1, "course_of_interest": 1, "stage": 1}).to_list(200)
+
+    pipeline_details = []
+    for lead in pipeline_leads:
+        est = lead.get("estimated_value") or lead.get("enrollment_amount") or 0
+        if est > 0:
+            course = await _match_course_commission(est, "course")
+            pipeline_details.append({
+                "lead_name": lead.get("full_name"),
+                "amount": est,
+                "course_matched": course.get("name", "Unknown"),
+                "se_commission": course.get("commission_sales_executive", 0),
+                "tl_commission": course.get("commission_team_leader", 0),
+                "sm_commission": course.get("commission_sales_manager", 0),
+                "stage": lead.get("stage"),
+            })
+
+    pending_se = sum(d["se_commission"] for d in pipeline_details)
+    pending_tl = sum(d["tl_commission"] for d in pipeline_details)
+
+    return {
+        "agent_id": agent_id,
+        "month": month,
+        "total_revenue": total_revenue,
+        "benchmark": SALES_BENCHMARK_AED,
+        "benchmark_crossed": benchmark_crossed,
+        "earned_commission": total_se if benchmark_crossed else 0,
+        "pending_commission": (pending_se + (total_se if not benchmark_crossed else 0)),
+        "earned_tl": total_tl if benchmark_crossed else 0,
+        "pending_tl": (pending_tl + (total_tl if not benchmark_crossed else 0)),
+        "sm_pool": total_sm,
+        "earned_details": earned_details,
+        "pipeline_details": pipeline_details,
+        "deals_closed": len(enrolled),
+        "pipeline_count": len(pipeline_details),
+    }
+
+
+async def _calc_cs_commissions(agent_id: str, agent_name: str, month: str):
+    """Calculate CS commissions for an agent for a given month."""
+    month_start = f"{month}-01"
+    month_end = f"{month}-31"
+
+    # Earned: closed upgrades this month
+    upgrades = await db.cs_upgrades.find({
+        "cs_agent_id": agent_id,
+        "date": {"$gte": month_start, "$lte": month_end},
+    }, {"_id": 0}).to_list(200)
+
+    earned_details = []
+    for u in upgrades:
+        amt = u.get("amount") or u.get("course_amount") or 0
+        course = await _match_course_commission(amt, "upgrade")
+        earned_details.append({
+            "student_name": u.get("student_name"),
+            "amount": amt,
+            "course_matched": course.get("name", "Unknown"),
+            "cs_commission": course.get("commission_cs_agent", 0),
+            "cs_head_commission": course.get("commission_cs_head", 0),
+            "mentor_commission": course.get("commission_mentor", 0),
+            "date": u.get("date"),
+        })
+
+    total_cs = sum(d["cs_commission"] for d in earned_details)
+    total_csh = sum(d["cs_head_commission"] for d in earned_details)
+    total_mentor = sum(d["mentor_commission"] for d in earned_details)
+
+    # Pending: students in pitched_for_upgrade, in_progress, interested stages
+    pipeline_students = await db.students.find({
+        "cs_agent_id": agent_id,
+        "stage": {"$in": ["pitched_for_upgrade", "in_progress", "interested"]},
+        "pitched_upgrade_price": {"$exists": True, "$gt": 0},
+    }, {"_id": 0, "id": 1, "full_name": 1, "pitched_upgrade_price": 1, "pitched_upgrade_path": 1, "stage": 1}).to_list(200)
+
+    pipeline_details = []
+    for s in pipeline_students:
+        amt = s.get("pitched_upgrade_price", 0)
+        course = await _match_course_commission(amt, "upgrade")
+        pipeline_details.append({
+            "student_name": s.get("full_name"),
+            "amount": amt,
+            "course_matched": course.get("name", "Unknown"),
+            "cs_commission": course.get("commission_cs_agent", 0),
+            "cs_head_commission": course.get("commission_cs_head", 0),
+            "mentor_commission": course.get("commission_mentor", 0),
+            "stage": s.get("stage"),
+        })
+
+    pending_cs = sum(d["cs_commission"] for d in pipeline_details)
+    pending_csh = sum(d["cs_head_commission"] for d in pipeline_details)
+    pending_mentor = sum(d["mentor_commission"] for d in pipeline_details)
+
+    return {
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "month": month,
+        "earned_commission": total_cs,
+        "pending_commission": pending_cs,
+        "earned_cs_head": total_csh,
+        "pending_cs_head": pending_csh,
+        "earned_mentor": total_mentor,
+        "pending_mentor": pending_mentor,
+        "earned_details": earned_details,
+        "pipeline_details": pipeline_details,
+        "upgrades_closed": len(upgrades),
+        "pipeline_count": len(pipeline_details),
+    }
+
+
+@api_router.get("/commissions/dashboard")
+async def get_commission_dashboard(month: str = None, user=Depends(get_current_user)):
+    """Main commission dashboard — returns data based on user's role."""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+
+    role = user["role"]
+    result = {"month": month, "role": role}
+
+    if role in ["sales_executive", "team_leader"]:
+        # My commissions
+        my_comm = await _calc_sales_commissions(user["id"], month)
+        result["my_commission"] = my_comm
+
+        if role == "team_leader":
+            # Team commissions
+            team = await db.teams.find_one({"leader_id": user["id"]}, {"_id": 0, "id": 1})
+            if team:
+                members = await db.users.find(
+                    {"team_id": team["id"], "role": "sales_executive", "is_active": True},
+                    {"_id": 0, "id": 1, "full_name": 1}
+                ).to_list(50)
+                team_data = []
+                for m in members:
+                    mc = await _calc_sales_commissions(m["id"], month)
+                    mc["agent_name"] = m["full_name"]
+                    team_data.append(mc)
+                result["team_commissions"] = team_data
+                result["team_total_earned"] = sum(t["earned_commission"] for t in team_data)
+                result["team_total_pending"] = sum(t["pending_commission"] for t in team_data)
+                # TL earns TL commission from all team members' deals
+                result["my_tl_earned"] = my_comm["earned_tl"] + sum(t["earned_tl"] for t in team_data)
+                result["my_tl_pending"] = my_comm["pending_tl"] + sum(t["pending_tl"] for t in team_data)
+
+    elif role in ["cs_agent", "cs_head"]:
+        my_comm = await _calc_cs_commissions(user["id"], user.get("full_name", ""), month)
+        result["my_commission"] = my_comm
+
+        if role == "cs_head":
+            agents = await db.users.find(
+                {"role": "cs_agent", "is_active": True},
+                {"_id": 0, "id": 1, "full_name": 1}
+            ).to_list(50)
+            team_data = []
+            for a in agents:
+                ac = await _calc_cs_commissions(a["id"], a["full_name"], month)
+                team_data.append(ac)
+            result["team_commissions"] = team_data
+            result["total_cs_head_earned"] = my_comm["earned_cs_head"] + sum(t["earned_cs_head"] for t in team_data)
+            result["total_cs_head_pending"] = my_comm["pending_cs_head"] + sum(t["pending_cs_head"] for t in team_data)
+
+    elif role == "super_admin":
+        # CEO: see everything
+        # Sales commissions
+        sales_agents = await db.users.find(
+            {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
+        ).to_list(100)
+        sales_data = []
+        total_sm_pool = 0
+        for a in sales_agents:
+            sc = await _calc_sales_commissions(a["id"], month)
+            sc["agent_name"] = a["full_name"]
+            sc["agent_role"] = a["role"]
+            sales_data.append(sc)
+            total_sm_pool += sc["sm_pool"]
+
+        result["sales_commissions"] = sales_data
+        result["total_sales_earned"] = sum(s["earned_commission"] for s in sales_data)
+        result["total_sales_pending"] = sum(s["pending_commission"] for s in sales_data)
+        result["total_tl_earned"] = sum(s["earned_tl"] for s in sales_data)
+        result["total_tl_pending"] = sum(s["pending_tl"] for s in sales_data)
+        result["sm_bonus_pool"] = total_sm_pool
+
+        # CS commissions
+        cs_agents = await db.users.find(
+            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
+        ).to_list(50)
+        cs_data = []
+        total_mentor = 0
+        for a in cs_agents:
+            cc = await _calc_cs_commissions(a["id"], a["full_name"], month)
+            cc["agent_role"] = a["role"]
+            cs_data.append(cc)
+            total_mentor += cc["earned_mentor"] + cc["pending_mentor"]
+
+        result["cs_commissions"] = cs_data
+        result["total_cs_earned"] = sum(c["earned_commission"] for c in cs_data)
+        result["total_cs_pending"] = sum(c["pending_commission"] for c in cs_data)
+        result["total_cs_head_earned"] = sum(c["earned_cs_head"] for c in cs_data)
+        result["mentor_pool"] = total_mentor
+
+    return result
+
+
+@api_router.get("/commissions/scatter-data")
+async def get_commission_scatter_data(user_id: str = None, months: int = 6, user=Depends(get_current_user)):
+    """XY scatter data: months horizontal, commission + net pay lines."""
+    target_id = user_id or user["id"]
+    target_user = await db.users.find_one({"id": target_id}, {"_id": 0, "id": 1, "full_name": 1, "role": 1})
+    if not target_user:
+        raise HTTPException(404, "User not found")
+
+    # Get salary from HR
+    emp = await db.hr_employees.find_one({"user_id": target_id}, {"_id": 0, "basic_salary": 1, "salary_structure": 1})
+    base_salary = 0
+    if emp:
+        ss = emp.get("salary_structure", {})
+        base_salary = ss.get("gross_salary") or ss.get("net_salary") or emp.get("basic_salary", 0)
+
+    now = datetime.now(timezone.utc)
+    data_points = []
+    is_sales = target_user["role"] in ["sales_executive", "team_leader"]
+
+    for i in range(months - 1, -1, -1):
+        dt = now - timedelta(days=i * 30)
+        m = dt.strftime("%Y-%m")
+        m_label = dt.strftime("%b %Y")
+
+        if is_sales:
+            comm = await _calc_sales_commissions(target_id, m)
+            earned = comm["earned_commission"]
+            if target_user["role"] == "team_leader":
+                earned += comm.get("earned_tl", 0)
+        else:
+            comm = await _calc_cs_commissions(target_id, target_user["full_name"], m)
+            earned = comm["earned_commission"]
+
+        data_points.append({
+            "month": m,
+            "label": m_label,
+            "commission": earned,
+            "net_pay": base_salary + earned,
+            "base_salary": base_salary,
+        })
+
+    return {
+        "agent_name": target_user["full_name"],
+        "role": target_user["role"],
+        "base_salary": base_salary,
+        "data": data_points,
+    }
+
+
+@api_router.get("/commissions/ceo/drill")
+async def get_ceo_commission_drill(dept: str = "sales", month: str = None, user=Depends(get_current_user)):
+    """CEO drill-down: table of Sr No, Name, Achieved, Commission Amount."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "CEO only")
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+
+    if dept == "sales":
+        agents = await db.users.find(
+            {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
+        ).to_list(100)
+        rows = []
+        for idx, a in enumerate(agents):
+            sc = await _calc_sales_commissions(a["id"], month)
+            rows.append({
+                "sr": idx + 1,
+                "name": a["full_name"],
+                "role": a["role"].replace("_", " ").title(),
+                "achieved": sc["total_revenue"],
+                "deals": sc["deals_closed"],
+                "earned_commission": sc["earned_commission"],
+                "pending_commission": sc["pending_commission"],
+                "benchmark_crossed": sc["benchmark_crossed"],
+                "tl_commission": sc["earned_tl"],
+                "sm_pool": sc["sm_pool"],
+            })
+        rows.sort(key=lambda x: x["achieved"], reverse=True)
+        for i, r in enumerate(rows):
+            r["sr"] = i + 1
+        return {"department": "sales", "month": month, "rows": rows}
+
+    elif dept == "cs":
+        agents = await db.users.find(
+            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1, "role": 1}
+        ).to_list(50)
+        rows = []
+        for idx, a in enumerate(agents):
+            cc = await _calc_cs_commissions(a["id"], a["full_name"], month)
+            rows.append({
+                "sr": idx + 1,
+                "name": a["full_name"],
+                "role": a["role"].replace("_", " ").title(),
+                "upgrades": cc["upgrades_closed"],
+                "earned_commission": cc["earned_commission"],
+                "pending_commission": cc["pending_commission"],
+                "cs_head_commission": cc["earned_cs_head"],
+                "mentor_commission": cc["earned_mentor"],
+            })
+        rows.sort(key=lambda x: x["earned_commission"], reverse=True)
+        for i, r in enumerate(rows):
+            r["sr"] = i + 1
+        return {"department": "cs", "month": month, "rows": rows}
+
+    return {"rows": []}
+
 
 
 # Include the router in the main app
