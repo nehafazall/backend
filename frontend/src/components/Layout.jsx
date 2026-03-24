@@ -460,7 +460,7 @@ function Layout() {
     }
 
     const notificationItems = [];
-    const notifSlice = notifications.slice(0, 10);
+    const notifSlice = (notifications || []).slice(0, 10);
     for (let i = 0; i < notifSlice.length; i++) {
         const n = notifSlice[i];
         const isLeadNotification = getNotificationType(n) === 'lead';
