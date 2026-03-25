@@ -23,8 +23,7 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 - AsyncIO parallelization for CEO dashboard
 
 ### Auto-Trigger Commission Transactions (Complete — Mar 25, 2026)
-- **Instant trigger**: When a lead enrolls, CS upgrade records, or BD redeposit happens, a pending commission approval request is AUTOMATICALLY created
-- Wired at: server.py enrollment handler, CS upgrade insert, BD redeposit insert
+- Instant trigger: When a lead enrolls, CS upgrade records, or BD redeposit happens, pending commission approval is AUTOMATICALLY created
 - `commission_auto.py` handles all transaction creation logic
 - Creates both SE and TL transactions for sales enrollments
 - Creates CS agent transactions for CS upgrades
@@ -36,15 +35,24 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 - CEO "Approve Transactions" tab with line-item table
 - Individual approve/edit buttons per transaction
 - Bulk approve all pending by department
-- CEO can edit commission amounts with audit trail (original vs modified)
-- CEO notes field for modification justification
-- Non-CEO agents see "My Transactions" table with deal-level status
+- CEO can edit commission amounts with audit trail
 
-### TL Commission Duplication Fix (Complete — Mar 25, 2026)
-- `total_tl_earned` only sums TL/SM rows
+### CRM Kanban: My vs Team Separation (Complete — Mar 25, 2026)
+- Sales CRM: "My Leads" / "Team Overview" toggle for team_leader, sales_manager, master_of_academics, admin, super_admin
+- CS CRM: "My Students" / "Team Overview" toggle for cs_head, admin, super_admin
+- Team leaders see only their own leads in "My Leads" mode
+- Team overview shows all team leads with agent filter dropdown
 
-### CS Dashboard Commission Sync (Complete — Mar 25, 2026)
-- Real-time calculation from `cs_upgrades` + `course_catalog`
+### Default Monthly Filter (Complete — Mar 25, 2026)
+- PeriodFilter component now accepts `defaultPeriod` prop
+- Sales CRM defaults to "This Month" filter on page load
+- CS CRM defaults to "This Month" filter on page load
+- Enrolled/closed deals visible by default without manual filter
+
+### CS Commission Transaction Generation Fix (Complete — Mar 25, 2026)
+- Fixed `commission_generator.py` date field: `upgrade_date` → `date` for cs_upgrades
+- Generated 77 missing CS commission transactions across all months
+- Verified: Nasida=1,475 (11 upgrades), Della=500 (3 upgrades), Falja=1,100 (11 upgrades)
 
 ### Other Fixes (Complete — Mar 25, 2026)
 - Department head assignment: all active users shown
@@ -57,6 +65,7 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
 - CS Head: falja@clt-academy.com / Falja@123
+- Team Leader (Ajmal): ajmal@clt-academy.com / Ajmal@123
 - Sales Exec: aleesha@clt-academy.com / Aleesha@123
 
 ## Prioritized Backlog
@@ -64,11 +73,14 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ### P1
 - Invoice Generation — Auto-generate PDF invoices for enrollments/upgrades
 - WhatsApp Integration — Send templated messages via WhatsApp Business API
+- CS Head personal vs team commission split on CS Dashboard (separate from Kanban)
 
 ### P2
 - Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine
 - Scheduled Email Reports
+- Commission Audit Log
 
 ### P3
 - Refactor monolithic `server.py` into domain-driven routes
+- Background sheet sync error investigation
