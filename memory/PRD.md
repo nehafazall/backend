@@ -5,7 +5,7 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## Architecture
 - **Frontend**: React (CRA + Craco) with Shadcn/UI, Tailwind CSS
-- **Backend**: FastAPI monolith (`server.py` ~27K lines) + `commission_generator.py`
+- **Backend**: FastAPI monolith (`server.py` ~27K lines) + `commission_auto.py` + `commission_generator.py`
 - **Database**: MongoDB Atlas (`clt_academy_erp`)
 - **Integrations**: Google Sheets, Meta Ads, SMTP, 3CX, BioCloud
 
@@ -13,57 +13,46 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ### Commission Engine (Complete)
 - Course + Addon decomposition logic in `_match_course_commission`
+- Course catalog caching for performance
 - Sales Executive commission with 18K AED benchmark
 - Team Leader commission (no benchmark, earns from team deals)
 - CS Agent and CS Head commissions from upgrades
 - Mentor commission pool, SM/CEO bonus pool
 - Commission Engine page with Course Commissions tab
 - Scatter chart (Net Pay = Salary + Commission)
-- AsyncIO parallelization for CEO dashboard (~7.5s load)
-- Course catalog caching for performance
+- AsyncIO parallelization for CEO dashboard
+
+### Auto-Trigger Commission Transactions (Complete — Mar 25, 2026)
+- **Instant trigger**: When a lead enrolls, CS upgrade records, or BD redeposit happens, a pending commission approval request is AUTOMATICALLY created
+- Wired at: server.py enrollment handler, CS upgrade insert, BD redeposit insert
+- `commission_auto.py` handles all transaction creation logic
+- Creates both SE and TL transactions for sales enrollments
+- Creates CS agent transactions for CS upgrades
+- Creates BD agent transactions for BD redeposits
+- Idempotent: won't create duplicates for same source_id
 
 ### Per-Transaction Commission Approval (Complete — Mar 25, 2026)
 - `commission_transactions` MongoDB collection
-- Auto-generate transactions from enrolled leads + CS upgrades
-- `POST /api/commissions/generate-transactions` — scans and creates pending transactions
-- `GET /api/commissions/transactions` — list with month/department/status/agent filters
-- `POST /api/commissions/transactions/{id}/approve` — CEO approves single transaction
-- `POST /api/commissions/transactions/bulk-approve` — approve all pending by department
-- `PUT /api/commissions/transactions/{id}` — CEO edits commission amount + notes (audit trail)
-- CEO "Approve Transactions" tab with line-item table, approve/edit buttons
-- Edit dialog shows original vs modified commission, CEO notes
-- Non-CEO agents see only their own transactions
+- CEO "Approve Transactions" tab with line-item table
+- Individual approve/edit buttons per transaction
+- Bulk approve all pending by department
+- CEO can edit commission amounts with audit trail (original vs modified)
+- CEO notes field for modification justification
+- Non-CEO agents see "My Transactions" table with deal-level status
 
 ### TL Commission Duplication Fix (Complete — Mar 25, 2026)
-- `total_tl_earned` now only sums from TL/SM rows (not SE rows which were informational)
-- `is_tl_or_sm` flag used for correct filtering
+- `total_tl_earned` only sums TL/SM rows
 
 ### CS Dashboard Commission Sync (Complete — Mar 25, 2026)
-- CS Dashboard stats now calculates commissions in real-time from `cs_upgrades` + `course_catalog`
-- No longer reads from stale `cs_commissions` collection
-- CS Head sees correct head commission from ALL team upgrades
+- Real-time calculation from `cs_upgrades` + `course_catalog`
 
-### Department Head Assignment Fix (Complete — Mar 25, 2026)
-- Department head dropdown now shows ALL active users (removed role filter)
-
-### Multi-Team Leadership (Complete — Mar 25, 2026)
-- Setting a team leader no longer overwrites their existing `team_id`
-- Same person can lead multiple teams
-
-### Student Portal Session (Complete — Mar 25, 2026)
-- JWT expiry extended to 7 days (168 hours)
-- iframe sandbox removed, uses `allow="storage-access"`
-
-### BD CRM Stage Fix (Complete — Mar 25, 2026)
-- Fixed drag-and-drop to handle drops on cards in middle of columns
-- Added stage dropdown in student detail modal for direct stage changes
-- Uses `closestCorners` collision detection
-
-### Access Control (Complete — Mar 25, 2026)
-- All pages added to MODULE_HIERARCHY: BD CRM, BD Dashboard, Student Portal, CS Merge Approvals, SSHR, Commission Dashboard, Reports, Forecasting, Transfer Requests, Round Robin, SLA Management, Mentor Withdrawals, Certificates
-
-### Certificate Move (Complete — Mar 25, 2026)
-- Certificates moved from Finance to Operations in sidebar
+### Other Fixes (Complete — Mar 25, 2026)
+- Department head assignment: all active users shown
+- Multi-team leadership: same person can lead multiple teams
+- Student Portal: 7-day JWT, storage-access iframe
+- BD CRM: drag-and-drop fix + stage dropdown in modal
+- Access Control: all pages added to MODULE_HIERARCHY
+- Certificates moved from Finance to Operations
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -78,9 +67,8 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ### P2
 - Executive Dashboard (CEO single-page overview)
-- Workflow Automation Engine (Trigger-based actions)
-- Scheduled Email Reports — Auto-send daily/weekly revenue summaries
+- Workflow Automation Engine
+- Scheduled Email Reports
 
 ### P3
 - Refactor monolithic `server.py` into domain-driven routes
-- Speed optimization for commission generate-transactions endpoint
