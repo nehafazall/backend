@@ -47,6 +47,8 @@ const BD_STAGES = [
 
 const fmtAED = (v) => new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(v || 0);
 
+const BD_ROLES_SET = new Set(['business_development', 'business_development_manager_']);
+
 const BDStudentCard = ({ student, onView, isDragging, isSuperAdmin, bdAgents, onReassign }) => {
     return (
         <div
@@ -199,9 +201,10 @@ export default function BDCRMPage() {
     const [pageSize, setPageSize] = useState(50);
     const [totalRecords, setTotalRecords] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
+    const [allTimeTotals, setAllTimeTotals] = useState({ total: 0, stages: {}, revenue: 0 });
 
     const isSuperAdmin = ['super_admin', 'admin'].includes(user?.role);
-    const isBD = user?.role === 'business_development';
+    const isBD = BD_ROLES_SET.has(user?.role);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -216,7 +219,17 @@ export default function BDCRMPage() {
         if (isSuperAdmin || isBD) {
             apiClient.get('/bd/agents').then(r => setBdAgents(r.data || [])).catch(() => {});
         }
-    }, []);
+        // Fetch all-time stage totals (unfiltered)
+        const agentParam = (isBD && !isSuperAdmin) ? '' : (filterAgent !== 'all' ? `&bd_agent_id=${filterAgent}` : '');
+        apiClient.get(`/bd/dashboard?period=all_time${agentParam}`).then(r => {
+            const d = r.data || {};
+            setAllTimeTotals({
+                total: d.total_students || 0,
+                stages: d.stage_counts || {},
+                revenue: d.all_time_revenue || 0,
+            });
+        }).catch(() => {});
+    }, [filterAgent]);
 
     const fetchStudents = async () => {
         try {
@@ -341,11 +354,6 @@ export default function BDCRMPage() {
     const filteredStudents = students;
     const draggedStudent = students.find(s => s.id === activeId);
 
-    const totalByStage = BD_STAGES.reduce((acc, st) => {
-        acc[st.id] = students.filter(s => s.bd_stage === st.id).length;
-        return acc;
-    }, {});
-
     return (
         <div className="space-y-6" data-testid="bd-crm-page">
             {/* Header */}
@@ -374,14 +382,22 @@ export default function BDCRMPage() {
                 </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {/* All-Time Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                <Card className="relative overflow-hidden" data-testid="bd-stat-total">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Students</p>
+                        <p className="text-2xl font-bold mt-1">{allTimeTotals.total}</p>
+                        <p className="text-xs text-muted-foreground">{fmtAED(allTimeTotals.revenue)} revenue</p>
+                    </CardContent>
+                </Card>
                 {BD_STAGES.map(st => (
                     <Card key={st.id} className="relative overflow-hidden" data-testid={`bd-stat-${st.id}`}>
                         <CardContent className="pt-4 pb-3 px-4">
                             <div className={`absolute top-0 left-0 w-1 h-full ${st.color}`} />
                             <p className="text-xs text-muted-foreground uppercase tracking-wider">{st.label}</p>
-                            <p className="text-2xl font-bold mt-1">{totalByStage[st.id] || 0}</p>
+                            <p className="text-2xl font-bold mt-1">{allTimeTotals.stages[st.id] || 0}</p>
                         </CardContent>
                     </Card>
                 ))}
