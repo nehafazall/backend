@@ -104,6 +104,7 @@ export default function CommissionDashboard() {
     const [editCommission, setEditCommission] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [generating, setGenerating] = useState(false);
+    const [myTxns, setMyTxns] = useState([]);
     const monthOpts = months();
 
     const isCEO = user?.role === 'super_admin';
@@ -117,12 +118,15 @@ export default function CommissionDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [commRes, scatterRes] = await Promise.all([
+            const promises = [
                 apiClient.get(`/commissions/dashboard?month=${month}`),
-                apiClient.get(`/commissions/scatter-data?months=6${isCEO ? '' : ''}`),
-            ]);
-            setData(commRes.data);
-            setScatterData(scatterRes.data);
+                apiClient.get(`/commissions/scatter-data?months=6`),
+            ];
+            if (!isCEO) promises.push(apiClient.get(`/commissions/transactions?month=${month}`));
+            const results = await Promise.all(promises);
+            setData(results[0].data);
+            setScatterData(results[1].data);
+            if (results[2]) setMyTxns(results[2].data.transactions || []);
         } catch (e) { toast.error('Failed to load commission data'); console.error(e); }
         finally { setLoading(false); }
     };
@@ -234,6 +238,45 @@ export default function CommissionDashboard() {
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2" data-testid="approval-status-pending">
                             <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>.
                         </div>
+                    )}
+
+                    {/* My Transactions */}
+                    {myTxns.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><DollarSign className="h-4 w-4" /> My Transactions ({myTxns.length})</CardTitle></CardHeader>
+                            <CardContent className="p-0">
+                                <Table>
+                                    <TableHeader><TableRow>
+                                        <TableHead>Student</TableHead>
+                                        <TableHead>Course</TableHead>
+                                        <TableHead className="text-right">Amount</TableHead>
+                                        <TableHead className="text-right">Commission</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow></TableHeader>
+                                    <TableBody>
+                                        {myTxns.map(txn => (
+                                            <TableRow key={txn.id} className={txn.status === 'approved' ? 'bg-emerald-500/5' : ''}>
+                                                <TableCell className="text-sm">{txn.student_name}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{txn.course_matched}</TableCell>
+                                                <TableCell className="text-right text-sm">{fmtCur(txn.amount)}</TableCell>
+                                                <TableCell className="text-right font-semibold text-sm">
+                                                    {txn.final_commission !== txn.original_commission ? (
+                                                        <span><span className="line-through text-muted-foreground mr-1">{fmtCur(txn.original_commission)}</span>{fmtCur(txn.final_commission)}</span>
+                                                    ) : fmtCur(txn.final_commission)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {txn.status === 'approved' ? (
+                                                        <Badge className="bg-emerald-500/10 text-emerald-600 text-xs">Approved</Badge>
+                                                    ) : (
+                                                        <Badge className="bg-amber-500/10 text-amber-600 text-xs">Pending</Badge>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard title="Earned Commission" value={fmtCur(my.earned_commission)} subtitle={my.benchmark_crossed ? 'Benchmark crossed' : `${fmtCur(my.total_revenue)} / ${fmtCur(my.benchmark)} benchmark`} icon={CheckCircle} color="text-emerald-500" bgColor="bg-emerald-500/10" />

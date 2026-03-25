@@ -3548,6 +3548,20 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                                 team_leader["role"]
                             )
             
+            # Auto-create commission transaction for approval
+            try:
+                from commission_auto import auto_create_commission_txn
+                lead_data = {**existing, **update_data}
+                lead_data["enrolled_at"] = update_data.get("enrolled_at", now.isoformat())
+                agent_user_for_txn = await db.users.find_one({"id": existing["assigned_to"]}, {"_id": 0, "full_name": 1})
+                await auto_create_commission_txn(
+                    db, "enrollment", lead_id, lead_data,
+                    existing["assigned_to"],
+                    (agent_user_for_txn or {}).get("full_name", "Unknown"),
+                )
+            except Exception as e:
+                logger.error(f"Auto commission txn failed for lead {lead_id}: {e}")
+
             # Create student record with SLA tracking
             student_data = {
                 "id": str(uuid.uuid4()),
@@ -5938,6 +5952,16 @@ async def bd_record_redeposit(
     
     await db.mentor_redeposits.insert_one(redeposit_record)
     
+    # Auto-create commission transaction for approval
+    try:
+        from commission_auto import auto_create_commission_txn
+        await auto_create_commission_txn(
+            db, "bd_redeposit", redeposit_record["id"], redeposit_record,
+            redeposit_record["bd_agent_id"], redeposit_record["bd_agent_name"],
+        )
+    except Exception as e:
+        logger.error(f"Auto commission txn failed for BD redeposit {redeposit_record['id']}: {e}")
+
     # Move student to "closed" in BD kanban
     await db.students.update_one({"id": student_id}, {"$set": {"bd_stage": "closed", "updated_at": datetime.now(timezone.utc).isoformat()}})
     
@@ -6492,6 +6516,16 @@ async def confirm_upgrade(
         "created_by": user["id"],
     }
     await db.cs_upgrades.insert_one(cs_upgrade_record)
+
+    # Auto-create commission transaction for approval
+    try:
+        from commission_auto import auto_create_commission_txn
+        await auto_create_commission_txn(
+            db, "cs_upgrade", cs_upgrade_record["id"], cs_upgrade_record,
+            agent_id, agent_name,
+        )
+    except Exception as e:
+        logger.error(f"Auto commission txn failed for CS upgrade {cs_upgrade_record['id']}: {e}")
 
     # --- Create finance receivable ---
     receivable = {
@@ -12223,6 +12257,16 @@ async def confirm_cs_historical(preview_id: str, user = Depends(require_roles(["
             }
             await db.cs_upgrades.insert_one(upgrade_record)
             
+            # Auto-create commission transaction for approval
+            try:
+                from commission_auto import auto_create_commission_txn
+                await auto_create_commission_txn(
+                    db, "cs_upgrade", upgrade_id, upgrade_record,
+                    resolved["agent_id"], resolved["agent_name"],
+                )
+            except Exception as e:
+                logger.error(f"Auto commission txn failed for historical CS upgrade {upgrade_id}: {e}")
+
             # Find or create student record and mark as upgraded
             student = await db.students.find_one({"phone": data["phone"]})
             if student:
