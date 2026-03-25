@@ -13,54 +13,41 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ### Commission Engine (Complete)
 - Course + Addon decomposition logic in `_match_course_commission`
-- Course catalog caching for performance
-- Sales Executive commission with 18K AED benchmark
-- Team Leader commission (no benchmark, earns from team deals)
-- CS Agent and CS Head commissions from upgrades
-- Mentor commission pool, SM/CEO bonus pool
-- Commission Engine page with Course Commissions tab
-- Scatter chart (Net Pay = Salary + Commission)
-- AsyncIO parallelization for CEO dashboard
+- Per-transaction CEO approval workflow with approve/edit/bulk-approve
+- Auto-trigger: commission transactions created instantly on enrollment or CS upgrade
+- CS commission transaction generation fixed (date field bug)
+- Retroactive corrections for "Advance Course-2"
 
-### Auto-Trigger Commission Transactions (Complete — Mar 25, 2026)
-- Instant trigger: When a lead enrolls, CS upgrade records, or BD redeposit happens, pending commission approval is AUTOMATICALLY created
-- `commission_auto.py` handles all transaction creation logic
-- Creates both SE and TL transactions for sales enrollments
-- Creates CS agent transactions for CS upgrades
-- Creates BD agent transactions for BD redeposits
-- Idempotent: won't create duplicates for same source_id
+### CRM Kanban Enhancements (Complete — Mar 25, 2026)
+- "My Leads" / "Team Overview" toggle on Sales CRM for team leaders/heads
+- "My Students" / "Team Overview" on CS CRM for cs_head
+- Default "This Month" filter on all CRM Kanban boards
+- Unified date filter: `date_field=any` shows leads created OR enrolled in period (no toggle needed)
 
-### Per-Transaction Commission Approval (Complete — Mar 25, 2026)
-- `commission_transactions` MongoDB collection
-- CEO "Approve Transactions" tab with line-item table
-- Individual approve/edit buttons per transaction
-- Bulk approve all pending by department
-- CEO can edit commission amounts with audit trail
+### Lead Closure Time Tracking (Complete — Mar 25, 2026)
+- Tracks `closure_days` and `closure_hours` from lead assignment to enrollment
+- Backfilled 976 existing enrolled leads
+- New endpoint: `GET /api/dashboard/closure-time` with role-based visibility
+  - Sales executives: see own stats
+  - Team leaders: see team results
+  - CEO/admin: see entire floor
+- Closure Time Analytics table on Sales Dashboard
 
-### CRM Kanban: My vs Team Separation (Complete — Mar 25, 2026)
-- Sales CRM: "My Leads" / "Team Overview" toggle for team_leader, sales_manager, master_of_academics, admin, super_admin
-- CS CRM: "My Students" / "Team Overview" toggle for cs_head, admin, super_admin
-- Team leaders see only their own leads in "My Leads" mode
-- Team overview shows all team leads with agent filter dropdown
+### Dashboard Performance Optimization (Complete — Mar 25, 2026)
+- SLA breach calculation: replaced Python loop over 10K leads with single MongoDB count_documents query
+- Added `avg_closure_days` and `closures_this_month` to dashboard stats
 
-### Default Monthly Filter (Complete — Mar 25, 2026)
-- PeriodFilter component now accepts `defaultPeriod` prop
-- Sales CRM defaults to "This Month" filter on page load
-- CS CRM defaults to "This Month" filter on page load
-- Enrolled/closed deals visible by default without manual filter
+### Personnel Changes (Complete — Mar 25, 2026)
+- Anzil transferred from cs_agent to quality_control
+- His 6 students reassigned: 3 to Della, 3 to Falja
 
-### CS Commission Transaction Generation Fix (Complete — Mar 25, 2026)
-- Fixed `commission_generator.py` date field: `upgrade_date` → `date` for cs_upgrades
-- Generated 77 missing CS commission transactions across all months
-- Verified: Nasida=1,475 (11 upgrades), Della=500 (3 upgrades), Falja=1,100 (11 upgrades)
-
-### Other Fixes (Complete — Mar 25, 2026)
-- Department head assignment: all active users shown
-- Multi-team leadership: same person can lead multiple teams
-- Student Portal: 7-day JWT, storage-access iframe
-- BD CRM: drag-and-drop fix + stage dropdown in modal
-- Access Control: all pages added to MODULE_HIERARCHY
-- Certificates moved from Finance to Operations
+### Other Completed Features
+- Multi-team leadership, BD CRM drag-and-drop fix
+- Student portal session persistence (7-day JWT)
+- Access control page updated with all modules
+- Certificates moved from Finance to Operations in sidebar
+- Testing environment badge hidden from non-admins
+- Role-based sidebar filtering (strict)
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -73,7 +60,6 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ### P1
 - Invoice Generation — Auto-generate PDF invoices for enrollments/upgrades
 - WhatsApp Integration — Send templated messages via WhatsApp Business API
-- CS Head personal vs team commission split on CS Dashboard (separate from Kanban)
 
 ### P2
 - Executive Dashboard (CEO single-page overview)
