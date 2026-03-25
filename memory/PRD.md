@@ -11,43 +11,40 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## What's Been Implemented
 
-### Commission Engine (Complete)
-- Course + Addon decomposition logic in `_match_course_commission`
-- Per-transaction CEO approval workflow with approve/edit/bulk-approve
-- Auto-trigger: commission transactions created instantly on enrollment or CS upgrade
-- CS commission transaction generation fixed (date field bug)
-- Retroactive corrections for "Advance Course-2"
+### Sidebar Navigation Fix (Complete — Mar 25, 2026)
+- Fixed critical bug: clicking links shared across sections (e.g. "My Commissions" in CS) no longer jumps to a different section (e.g. Sales)
+- Navigation now prioritizes the currently active section when matching paths
+- Applies to all shared paths: `/commission-dashboard`, `/dashboard`, etc.
+
+### CS Dashboard: Commission & Net Pay (Complete — Mar 25, 2026)
+- 5-box commission summary for CS Head: Agent Commission, Head Commission, Total Commission, Base Salary, Net Pay
+- Fixed commission table showing 0 (was using `agent_commission` field instead of `cs_commission`)
+- Fetches salary from `/commissions/scatter-data` endpoint for Net Pay calculation
+- CS agents see: Agent Commission, Base Salary, Net Pay (3 boxes)
+
+### CS CRM Pagination Fix (Complete — Mar 25, 2026)
+- Fixed Kanban `perStageLimit` from hardcoded 25 to respect `pageSize` state (default 50)
+
+### Anzil Transfer (Complete — Mar 25, 2026)
+- Role changed from `cs_agent` to `quality_control`
+- 6 students reassigned: 3 to Della, 3 to Falja
 
 ### CRM Kanban Enhancements (Complete — Mar 25, 2026)
 - "My Leads" / "Team Overview" toggle on Sales CRM for team leaders/heads
-- "My Students" / "Team Overview" on CS CRM for cs_head
 - Default "This Month" filter on all CRM Kanban boards
-- Unified date filter: `date_field=any` shows leads created OR enrolled in period (no toggle needed)
+- Unified date filter: `date_field=any` shows leads created OR enrolled in period
 
 ### Lead Closure Time Tracking (Complete — Mar 25, 2026)
-- Tracks `closure_days` and `closure_hours` from lead assignment to enrollment
-- Backfilled 976 existing enrolled leads
-- New endpoint: `GET /api/dashboard/closure-time` with role-based visibility
-  - Sales executives: see own stats
-  - Team leaders: see team results
-  - CEO/admin: see entire floor
+- Tracks `closure_days` from assignment to enrollment
+- Backfilled 976 existing leads
+- `GET /api/dashboard/closure-time` endpoint with role-based visibility
 - Closure Time Analytics table on Sales Dashboard
 
-### Dashboard Performance Optimization (Complete — Mar 25, 2026)
-- SLA breach calculation: replaced Python loop over 10K leads with single MongoDB count_documents query
-- Added `avg_closure_days` and `closures_this_month` to dashboard stats
-
-### Personnel Changes (Complete — Mar 25, 2026)
-- Anzil transferred from cs_agent to quality_control
-- His 6 students reassigned: 3 to Della, 3 to Falja
-
-### Other Completed Features
-- Multi-team leadership, BD CRM drag-and-drop fix
-- Student portal session persistence (7-day JWT)
-- Access control page updated with all modules
-- Certificates moved from Finance to Operations in sidebar
-- Testing environment badge hidden from non-admins
-- Role-based sidebar filtering (strict)
+### Commission Engine (Complete)
+- Per-transaction CEO approval workflow
+- Auto-trigger on enrollment/CS upgrade
+- CS commission transactions generated (77 records)
+- Course + Addon decomposition logic
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -58,8 +55,8 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ## Prioritized Backlog
 
 ### P1
-- Invoice Generation — Auto-generate PDF invoices for enrollments/upgrades
-- WhatsApp Integration — Send templated messages via WhatsApp Business API
+- Invoice Generation — Auto-generate PDF invoices
+- WhatsApp Integration — Send templated messages
 
 ### P2
 - Executive Dashboard (CEO single-page overview)

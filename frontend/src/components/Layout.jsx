@@ -350,6 +350,19 @@ function Layout() {
             return;
         }
         
+        // First: check if the path exists in the CURRENTLY active section (don't switch away)
+        if (activeSection) {
+            const currentSec = SECTIONS[activeSection];
+            if (currentSec) {
+                for (let j = 0; j < currentSec.items.length; j++) {
+                    if (currentPath === currentSec.items[j].path || currentPath.startsWith(currentSec.items[j].path + '/')) {
+                        return; // Stay in current section
+                    }
+                }
+            }
+        }
+
+        // Otherwise: find the best matching section for this path
         const sectionKeys = Object.keys(SECTIONS);
         for (let i = 0; i < sectionKeys.length; i++) {
             const key = sectionKeys[i];
