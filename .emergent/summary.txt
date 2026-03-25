@@ -1,150 +1,213 @@
 <analysis>**original_problem_statement**: 
-The user is driving continuous enhancements for the CLT Synapse ERP system. Over this session, the focus shifted from fixing data discrepancies and UI bugs to building a robust **Student Duplicate Merge Approval Workflow** and a comprehensive **Commission Engine & Dashboard**. 
-Current requirement: Build a Commission Dashboard showing Earned vs Pending commissions. Sales executives have an 18,000 AED revenue benchmark before commissions move from Pending to Earned. CS agents earn based on upgrade stages. Team Leaders, CEOs, and Mentors have specific hierarchy roll-ups. The dashboard requires an XY scatter graph showing Net Pay (Salary + Commission) across months.
+The user wants to resolve several issues and add new features to the CLT Synapse ERP system. The key requirements from the last set of interactions are:
+
+**PRODUCT REQUIREMENTS:**
+1.  **Fix Net Pay Chart**: The Net Pay chart on the Sales Dashboard is not displaying correct figures. It should accurately reflect .
+2.  **Fix CS Dashboard**: The Customer Service (CS) dashboard should display the agent's commission information directly, without requiring them to navigate to the My Commissions page.
+3.  **Correct Team Leader (TL) Commission Logic**: The 18,000 AED revenue benchmark should NOT apply to Team Leaders. They should earn their commission from their team's sales, regardless of whether the individual sales executive crosses the benchmark.
+4.  **CEO Commission Approval Workflow**: Implement a new feature where the CEO must approve monthly commissions. Until approved, commissions should appear as Pending for the user. Once approved, they move to Earned.
+5.  **Color-Code Closed Leads**: All closed leads in the system should be color-coded for easy differentiation.
+6.  **Fix Sidebar Visibility**: Users should only see icons/links for pages they have access to. For example, Sales Executives and Mentors should not see links for Operations or Customer Service.
+7.  **Fix 'Master of Academics' Role**: This role should have team data visibility similar to a Team Leader.
+8.  **Centralize Commission Rules**: The commission rules from the Mentor Dashboard and Course Page should be manageable from the central Commission Engine page.
+9.  **Fix Environment Visibility**: The testing server badge/switcher should not be visible to regular users; it should only be for admins.
+10. **Resolve Recurring Error**: Fix the unwanted error that keeps appearing, identified as a .
 
 **User's preferred language**: English
 *(INSTRUCTION TO NEXT AGENT: You MUST respond in English only)*
 
 **what currently exists?** 
-A mature full-stack ERP (React + FastAPI + MongoDB). Recently updated with per-stage Kanban fetching, fixed dashboard financial aggregations, and a complete 3-step Student Duplicate Merge system with CS Head and CEO approvals. A newly written backend commission engine () calculates the 18k Sales benchmark, CS upgrade commissions, and role-based pools.
+A mature full-stack ERP (React + FastAPI + MongoDB). The commission engine has been significantly enhanced to handle complex Course + Addon decomposition logic, correctly calculating commissions for bundled sales. The Sales and CS dashboards have been updated with more accurate commission data. A major UI/UX fix was implemented to strictly enforce role-based access to sidebar navigation links, hiding irrelevant sections from users. A new Course Commissions tab was added to the Commission Engine page, centralizing the management of course-specific commission rates.
 
-**Last working item**:
-    - **Last item agent was working**: Building the frontend  UI and wiring it to the backend. The backend logic for the commission engine is written and verified via bash, and the frontend file was *just* created.
+**Last working item**: 
+    - **Last item agent was working**: Investigating the recurring  error, which was mentioned by the user as an unwanted error. The agent identified that this error is linked to  and was disabled in . No fix has been attempted yet.
     - **Status**: IN PROGRESS
     - **Agent Testing Done**: N
-    - **Which testing method agent to use?**: Frontend testing agent / manual testing by screenshot tool to verify role-based views (Sales vs TL vs CEO) and chart rendering.
+    - **Which testing method agent to use?**: Frontend testing agent. This is a build-level issue, so the test agent can verify if the frontend remains stable after any attempted fix.
     - **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1:  (P2)
-     - **Attempted fixes**: None.
-     - **Next debug checklist**: Investigate  and React component hot-reloading configurations.
-     - **Why fix this issue and what will be achieved with the fix?**: Stabilizes frontend build environment.
+  Issue 1:  in frontend build (P0)
+  Issue 2: Net Pay chart shows incorrect salary/net pay (P1)
+  Issue 3: Closed leads need color-coding (P2)
+  Issue 4: Background sheet sync shows errors in logs (P3)
+  
+  **Issues Detail**:
+  - **Issue 1**: 
+     - **Attempted fixes**: None. The agent only located the source of the issue in  and confirmed it was disabled in .
+     - **Next debug checklist**:
+        1. Review the code in  to understand why it might be causing an infinite loop or excessive recursion during the Babel transform process.
+        2. Since it's disabled via  in , the error might not be actively crashing the app, but its presence is a risk.
+        3. Attempt to simplify or fix the plugin's logic. If not possible, confirm its removal is safe and does not break other functionality.
+     - **Why fix this issue and what will be achieved with the fix?**: This is a recurring high-priority issue that destabilizes the frontend development environment. Fixing it will prevent random build failures and improve stability.
      - **Status**: NOT STARTED
      - **Is recurring issue?**: Y
      - **Should Test frontend/backend/both after fix?**: frontend
      - **Blocked on other issue**: None
 
-**In progress Task List**:
-  Task 1: Complete Commission Dashboard Frontend (P0)
-     - **Where to resume**: Implement the UI in . Add the route to  and  navigation.
-     - **What will be achieved with this?**: Users will see Earned vs Pending commissions. CEO gets an overview of all agents, SM bonus pools, and Mentor pools. Includes an XY scatter chart for Net Pay vs Months.
+  - **Issue 2**: Net Pay chart shows incorrect salary/net pay
+     - **Attempted fixes**: The agent identified that the  endpoint was not correctly fetching salary from the  collection. The agent started debugging but did not complete the fix.
+     - **Next debug checklist**:
+        1. Modify the  function in .
+        2. Ensure it queries the  collection using the  to get the  or .
+        3. The current logic  is incorrect and needs to be changed to .
+        4. Verify that the  variable is correctly populated and returned in the API response.
+     - **Why fix this issue and what will be achieved with the fix?**: The Net Pay chart is a key feature for sales agents and managers. This fix will ensure it displays accurate financial data, building trust in the system.
      - **Status**: IN PROGRESS
-     - **Should Test frontend/backend/both after fix?**: both (Ensure UI accurately reflects backend payloads).
-     - **Blocked on something**: None.
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: both
+     - **Blocked on other issue**: None
+
+  - **Issue 3**: Closed leads need color-coding
+     - **Attempted fixes**: None.
+     - **Next debug checklist**:
+        1. Identify the component(s) where leads are displayed (e.g., Sales CRM, lead lists).
+        2. Check the data structure for leads to identify the closed status field.
+        3. Apply conditional styling (e.g., a specific background color or text color) in the React components based on this status.
+     - **Why fix this issue and what will be achieved with the fix?**: To provide better visual differentiation for users managing leads.
+     - **Status**: NOT STARTED
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: frontend
+     - **Blocked on other issue**: None
+  
+  - **Issue 4**: Background sheet sync shows errors in logs
+     - **Attempted fixes**: None. Agent only observed the log entry: .
+     - **Next debug checklist**:
+        1. Search  for Sheet sync complete to find the relevant logging and function.
+        2. Add more detailed logging to identify which rows or data points are causing the errors.
+        3. Investigate the Google Sheets API integration code for potential failure points.
+     - **Why fix this issue and what will be achieved with the fix?**: To ensure data integrity and reliable synchronization from external lead sheets.
+     - **Status**: NOT STARTED
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: backend
+     - **Blocked on other issue**: None
+
+**In progress Task List**:
+  - **Task 1**: CEO Commission Approval Workflow (P1)
+     - **Where to resume**: This is a new feature.
+        1.  **Backend**:
+            -   Create a new MongoDB collection, e.g., , to store the approval status per user/role per month ().
+            -   Create new API endpoints:  for the CEO and  for users.
+            -   Modify  and  in . The  should only be calculated if the corresponding month is approved for that user. Otherwise, it should all be categorized under .
+        2.  **Frontend**:
+            -   On the  page (CEO view), add an Approve Commissions button for each user/month.
+            -   On the user-facing My Commissions page, display an Approval Pending status if the month's commissions have not yet been approved by the CEO.
+     - **What will be achieved with this?**: It will give the CEO final control over commission payouts, ensuring accuracy before they become visible to employees as Earned.
+     - **Status**: NOT STARTED
+     - **Should Test frontend/backend/both after fix?**: both
+     - **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 - **P1**: Invoice Generation — Auto-generate professional PDF invoices for enrollments/upgrades and email them.
 - **P1**: WhatsApp Integration — Send templated messages via WhatsApp Business API.
-- **P2**: Executive Dashboard (CEO View) — Single page high-level overview.
+- **P2**: Executive Dashboard (CEO View) — A dedicated single-page, high-level overview.
 - **P2**: Workflow Automation Engine (Trigger-based actions).
 - **P2**: Scheduled Email Reports — Auto-send daily/weekly revenue summaries to managers.
-- **P3**: Refactor monolithic  (>26,000 lines) into domain-driven route structure.
+- **P3**: Refactor monolithic  (>26,000 lines) into a domain-driven route structure.
 
 **Completed work in this session**
-- LAMIZ student amount discrepancy fixed across , , and  (DONE).
-- Nasida VN dashboard missing transactions fixed ( now correctly inserts into ) (DONE).
-- CS Kanban Pitched Upgrade vanishing students fixed (switched to per-stage fetching, default 'team' view for admins) (DONE).
-- Duplicate transactions in Student Card history fixed (filtered out  upgrades) (DONE).
-- Dashboard Leaderboard and Drill-down period sync fixed (unified on Tue Mar 24 09:29:09 UTC 2026 field) (DONE).
-- Student Duplicate Merge Workflow (UI + Backend + CS Head/CEO Approval flows) (DONE).
-- Backend Commission Engine calculating 18k benchmarks and hierarchy pools (DONE).
+- **Commission Logic Fixed**: Correctly implemented Course + Addon commission decomposition in  in .
+- **Sales Dashboard Integrated**: Embedded the revised commission data, a deal-wise breakdown, and a Net Pay scatter chart into .
+- **Team Leader (TL) Commission Fixed**: Removed the 18k benchmark for TLs and ensured they earn commissions from their team members' deals.
+- **CS Dashboard Updated**: Added a My Commission summary section directly into .
+- **UI/UX & Access Control Fixed**:
+  - Hid the Testing environment badge from non-admin users in .
+  - Enforced strict role-based filtering for the sidebar in , hiding inaccessible sections.
+  - Granted 'Master of Academics' role permissions equivalent to 'Team Leader' across frontend and backend.
+- **Commission Rules Centralized**: Added a Course Commissions tab to  to manage course commission rates directly, using the  endpoints.
+- **Performance Optimized**: Parallelized multiple commission calculation loops in  using , reducing load times for CEO views from ~32s to ~7.5s.
 
 **Earlier issues found/mentioned but not fixed**
-- None.
+   - **Issue 1**: Sheet sync errors found in backend logs (). Was not investigated.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork:  during frontend compilation.
-  - Recurrence count: High
-  - Status: NOT STARTED
+  - **Issue recurrence in previous fork**:  during frontend compilation.
+  - **Recurrence count**: High
+  - **Status**: IN PROGRESS
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- Backend: FastAPI, Python, MongoDB (Motor AsyncIO).
-- Frontend: React, Tailwind CSS, Shadcn UI, Recharts (Needed for XY Scatter graph).
-- Architecture: Complex MongoDB aggregations for commissions, 2-stage approval state machines for merging.
+- **Commission Decomposition**: A key business logic change where a single transaction amount is broken down into a base course and one or more addons, with commissions calculated on each part. Implemented in  in .
+- **Role-based Rendering**: Heavy use of role checks in React (, ) and FastAPI () to control UI visibility and API access. This was just hardened in .
+- **AsyncIO Parallelization**: Use of  to speed up backend endpoints that perform multiple independent database lookups (e.g., calculating commissions for all agents for the CEO dashboard).
 
 **key DB schema**
-- : contains commission fields (, , etc.)
-- : source of truth for CS closed commissions.
-- : {id, primary_student_id, secondary_student_id, status, ...}
-- : contains salary data (, ) for net pay calculations.
+- : **Source of truth for commission rates**. Contains course/addon  and commission fields (, , etc.). Managed from the Commission Engine page.
+- : Contains official salary data (, , ).
+- : Contains enrollment data, , and  used for calculating sales commissions.
+- : Source for Customer Service commissions.
 
 **changes in tech stack**
 - None.
 
 **All files of reference**
--  (Search for )
--  (Currently just created, needs code)
-- 
+- : Contains all core logic, especially , , and dashboard endpoints.
+- : Primary sales view, now with integrated commission data.
+- : Contains the critical sidebar rendering and role-filtering logic.
+- : Contains the new UI for managing course commission rates.
+- : CS view, now with integrated commission data.
+- : Known source of the recurring .
 
 **Areas that need refactoring**:
-- : Currently over 26,000 lines. Desperately needs router modularization. 
+- : Now exceeds 26,900 lines and is critically in need of being broken down into a modular router structure (e.g., , , etc.).
 
 **key api endpoints**
--  (NEW - Aggregates all commission data)
--  (NEW)
--  (NEW)
+- : The main commission engine endpoint.
+- : Provides data for the Net Pay chart. **(Needs fix)**
+- : Used by the Commission Engine page to manage course rates.
+- : Saves updates to course commission rates.
 
 **Critical Info for New Agent**
-- **Commission Logic**: The backend logic for the commission engine is already complete. It successfully handles the 18,000 AED Sales benchmark (showing 0 earned if below), CS pending logic (pitched/in-progress/interested), and Mentor/CEO pools. **Do not rebuild the backend logic** unless a bug is found; focus on consuming it in .
-- **Salaries**: Employee salaries are stored in the  collection. 
-- **Recharts**: Use Shadcn/Recharts for the requested XY Scatter graph comparing Salary + Commissions over time.
+- **Commission Source of Truth**: The  collection in the production MongoDB Atlas database is the definitive source for all commission rates. It is populated/seeded from  in  ONLY if the collection is empty on startup. The agent spent significant time debugging due to local test scripts hitting a different, unseeded database. **Always verify against the Atlas DB data**.
+- **Commission Logic**: The logic now decomposes sales into . Do not revert to the simpler closest match logic.
+- **Sidebar Filtering**: The sidebar filtering in  has been intentionally made very strict. If a user can't see a page, it's likely due to a missing role in the  configuration object in that file.
 
 **documents and test reports created in this job**
--  (Merge System - 100% Passed)
+- 
+- 
+- 
+- 
 -  (Updated)
 
-**Last 10 User Messages and any pending HUMAN messages**
-1. User asked to fix Nasida VN's missing dashboard upgrades. Agent fixed  endpoint.
-2. User reported Pitched upgrade students disappearing on refresh. Agent fixed view mode and Kanban pagination logic.
-3. User reported duplicate upgrade entries for a student (Vighanesh) and leaderboard sync issues. Agent fixed endpoint deduplication and period filters.
-4. User requested a Manual Duplicate Merge tool with CS Head -> CEO approval flow.
-5. Agent built full backend and frontend merge approval workflow.
-6. User requested a **Commission Dashboard** (Earned vs Pending, 18k Sales Benchmark, CS upgrade stages, TL/CEO hierarchy roll-ups, and an XY Scatter graph for Net Pay).
-7. Agent clarified commission storage (Operations > Courses) and salary storage (HR > Employee Master).
-8. Agent clarified rules for CS pending stages and Mentor cash pools.
-9. User provided a test scenario (CLT Vantage sale + upgrades) to verify agent's math.
-10. Agent provided correct math, user approved. Agent built the backend and created the frontend file. (PENDING FRONTEND UI).
+**Last 10 User Messages and any pending HUMAN messages** 
+1.  **User**: Pointed out the commission calculation was wrong, explaining that sales amounts are composed of a base course + addons, and commission should be summed accordingly.
+2.  **Agent**: Fixed the commission decomposition logic and integrated it into the Sales Dashboard.
+3.  **User**: Asked why the testing server badge is visible to all users and why it's not using the production environment.
+4.  **User**: Confirmed the testing badge should be hidden. Also requested that sidebar icons for inaccessible pages be hidden entirely. Stated that 'Master of Academics' should have TL-like access and that commission rules should be managed in the Commission Engine.
+5.  **Agent**: Implemented all four fixes: hid the testing badge, fixed sidebar role filtering, gave 'Master of Academics' the correct access, and added a Course Commissions tab to the Commission Engine page.
+6.  **User**: Reported the Net Pay chart is wrong, CS agents can't see their commissions on their dashboard, the 18K TL rule is incorrect, and requested a new CEO approval workflow for commissions.
+7.  **Agent**: Asked for clarification on the Net Pay chart issue.
+8.  **User**: Clarified the Net Pay chart for 'Mohammed Sanjeed' shows only salary, not commission. Confirmed the 18K rule doesn't apply to TLs. Stated the CS commission tab exists but requires navigation away from the CS dashboard.
+9.  **Agent**: Implemented fixes for the TL commission logic (removing the 18K rule and adding team earnings) and added a commission summary to the CS Dashboard.
+10. **User**: Asked the agent to fix the last unwanted error they had seen.
 
 **Project Health Check:**
-- Broken: None known.
-- Mocked: None.
+- **Broken**: The frontend build process is unstable due to the recurring . The Net Pay chart is functionally broken as it doesn't display correct salary data.
+- **Mocked**: None.
 
 **3rd Party Integrations**
 - MongoDB Atlas — uses environment variables
 - Meta Ads API — requires User API Key
 - SMTP (Gmail) — requires User App Password
 - 3CX Web Client — URL-based integration (Click-to-call)
+- Google Sheets API — for lead syncing
 
 **Testing status**
-- Testing agent used after significant changes: YES (Iteration 68 for Merge System - Passed)
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None
-- Known regressions: None currently known.
+  - Testing agent used after significant changes: YES (Iterations 69, 70, 71, 72 - all passed with high success rates)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: None known, but the  is a persistent stability risk.
 
 **Credentials to test flow:**
 - Super Admin / CEO:  / 
 - CS Head:  / 
-- Master of Academics: 
-- BD Agent:  / 
+- Master of Academics:  / 
+- Sales Executive:  / 
+- Team Leader:  (password unknown)
 
 **What agent forgot to execute**
-- The previous agent successfully generated the backend commission endpoint and created the  file, but ran out of context before writing the React code, routing it, and adding it to the sidebar.
-
-**Debugging checklist for current issue**
-    Task: Commission Dashboard Frontend UI
-
-    Frontend files to update:
-    - : Implement UI. Needs Role-based rendering.
-      - **CEO View**: Table of all agents, SM Pool, Mentor Pool.
-      - **TL View**: Team commissions + personal.
-      - **Sales/CS View**: Earned vs Pending cards.
-      - **Chart**: XY Scatter graph for Net Pay (Salary + Commission) across months.
-    - : Add route for .
-    - : Add sidebar navigation link.
-  
-    Backend files to check (if needed):
-    -  (Line ~26000+,  endpoint).</analysis>
+- Implement the requested color-coding for closed leads.
+- Fully resolve the Net Pay chart salary data issue (identified root cause but didn't finish the fix).
+- Start the new CEO Commission Approval workflow feature.</analysis>

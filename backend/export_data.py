@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 # Configuration
-API_URL = "https://net-pay-scatter.preview.emergentagent.com"
+API_URL = "https://dashboard-update-21.preview.emergentagent.com"
 EMAIL = "aqib@clt-academy.com"
 PASSWORD = "@Aqib1234"
 OUTPUT_DIR = "./exported_data"

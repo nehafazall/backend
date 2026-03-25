@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Users, ArrowUpRight, Target, Award } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Users, ArrowUpRight, Target, Award, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmtCur = (n) => `AED ${(n || 0).toLocaleString()}`;
@@ -95,6 +95,7 @@ export default function CommissionDashboard() {
     const [drillDept, setDrillDept] = useState(null);
     const [drillData, setDrillData] = useState(null);
     const [drillLoading, setDrillLoading] = useState(false);
+    const [approving, setApproving] = useState(false);
     const monthOpts = months();
 
     const isCEO = user?.role === 'super_admin';
@@ -128,6 +129,19 @@ export default function CommissionDashboard() {
         finally { setDrillLoading(false); }
     };
 
+    const handleApproval = async (department, action) => {
+        setApproving(true);
+        try {
+            await apiClient.post('/commissions/approve', { department, month, action });
+            toast.success(`${department.toUpperCase()} commissions ${action === 'approve' ? 'approved' : 'revoked'} for ${monthOpts.find(o => o.value === month)?.label}`);
+            fetchData();
+        } catch (e) { toast.error('Failed to update approval'); }
+        finally { setApproving(false); }
+    };
+
+    const getApprovalStatus = (dept) => data?.approvals?.[dept]?.status === 'approved';
+    const userApprovalStatus = data?.approval_status;
+
     if (loading) return <div className="text-center py-12 text-muted-foreground">Loading commission data...</div>;
     if (!data) return null;
 
@@ -150,6 +164,16 @@ export default function CommissionDashboard() {
             {/* === SALES EXECUTIVE / TEAM LEADER VIEW === */}
             {isSales && (
                 <>
+                    {/* Approval Status Banner */}
+                    {userApprovalStatus === 'approved' ? (
+                        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2" data-testid="approval-status-approved">
+                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>.
+                        </div>
+                    ) : (
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2" data-testid="approval-status-pending">
+                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>.
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard title="Earned Commission" value={fmtCur(my.earned_commission)} subtitle={my.benchmark_crossed ? 'Benchmark crossed' : `${fmtCur(my.total_revenue)} / ${fmtCur(my.benchmark)} benchmark`} icon={CheckCircle} color="text-emerald-500" bgColor="bg-emerald-500/10" />
                         <StatCard title="Pending Commission" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count || 0} pipeline + ${!my.benchmark_crossed ? my.deals_closed + ' closed (below 18K)' : ''}`} icon={Clock} color="text-amber-500" bgColor="bg-amber-500/10" />
@@ -193,6 +217,16 @@ export default function CommissionDashboard() {
             {/* === CS AGENT / CS HEAD VIEW === */}
             {isCS && (
                 <>
+                    {/* Approval Status Banner */}
+                    {userApprovalStatus === 'approved' ? (
+                        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2" data-testid="cs-approval-status-approved">
+                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>.
+                        </div>
+                    ) : (
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2" data-testid="cs-approval-status-pending">
+                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>.
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard title="Earned Commission" value={fmtCur(my.earned_commission)} subtitle={`${my.upgrades_closed} upgrades closed`} icon={CheckCircle} color="text-emerald-500" bgColor="bg-emerald-500/10" />
                         <StatCard title="Pending Commission" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count} in pipeline`} icon={Clock} color="text-amber-500" bgColor="bg-amber-500/10" />
@@ -242,6 +276,25 @@ export default function CommissionDashboard() {
                             <StatCard title="TL Earned" value={fmtCur(data.total_tl_earned)} icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />
                             <StatCard title="SM / CEO Pool" value={fmtCur(data.sm_bonus_pool)} icon={DollarSign} color="text-blue-500" bgColor="bg-blue-500/10" />
                         </div>
+                        {/* CEO Approval Control */}
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-card" data-testid="ceo-sales-approval-control">
+                            <div className="flex items-center gap-2">
+                                {getApprovalStatus('sales') ? (
+                                    <><ShieldCheck className="h-5 w-5 text-emerald-500" /><span className="text-sm font-medium text-emerald-600">Sales commissions approved for {monthOpts.find(o => o.value === month)?.label}</span></>
+                                ) : (
+                                    <><ShieldAlert className="h-5 w-5 text-amber-500" /><span className="text-sm font-medium text-amber-600">Sales commissions pending approval</span></>
+                                )}
+                            </div>
+                            {getApprovalStatus('sales') ? (
+                                <Button variant="outline" size="sm" onClick={() => handleApproval('sales', 'revoke')} disabled={approving} data-testid="revoke-sales-btn" className="text-red-500 border-red-500/30 hover:bg-red-500/10">
+                                    Revoke Approval
+                                </Button>
+                            ) : (
+                                <Button size="sm" onClick={() => handleApproval('sales', 'approve')} disabled={approving} data-testid="approve-sales-btn" className="bg-emerald-500 hover:bg-emerald-600 text-white">
+                                    <ShieldCheck className="h-4 w-4 mr-1" /> Approve Sales Commissions
+                                </Button>
+                            )}
+                        </div>
                         <Button variant="outline" size="sm" onClick={() => openDrill('sales')} data-testid="drill-sales-commission">
                             <ArrowUpRight className="h-3.5 w-3.5 mr-1" /> View Full Sales Commission Table
                         </Button>
@@ -253,6 +306,25 @@ export default function CommissionDashboard() {
                             <StatCard title="CS Pending" value={fmtCur(data.total_cs_pending)} icon={Clock} color="text-amber-500" bgColor="bg-amber-500/10" />
                             <StatCard title="CS Head Earned" value={fmtCur(data.total_cs_head_earned)} icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />
                             <StatCard title="Mentor Pool" value={fmtCur(data.mentor_pool)} subtitle="Edwin — Cash bonus (confidential)" icon={DollarSign} color="text-red-500" bgColor="bg-red-500/10" />
+                        </div>
+                        {/* CEO Approval Control */}
+                        <div className="flex items-center justify-between p-3 rounded-lg border bg-card" data-testid="ceo-cs-approval-control">
+                            <div className="flex items-center gap-2">
+                                {getApprovalStatus('cs') ? (
+                                    <><ShieldCheck className="h-5 w-5 text-emerald-500" /><span className="text-sm font-medium text-emerald-600">CS commissions approved for {monthOpts.find(o => o.value === month)?.label}</span></>
+                                ) : (
+                                    <><ShieldAlert className="h-5 w-5 text-amber-500" /><span className="text-sm font-medium text-amber-600">CS commissions pending approval</span></>
+                                )}
+                            </div>
+                            {getApprovalStatus('cs') ? (
+                                <Button variant="outline" size="sm" onClick={() => handleApproval('cs', 'revoke')} disabled={approving} data-testid="revoke-cs-btn" className="text-red-500 border-red-500/30 hover:bg-red-500/10">
+                                    Revoke Approval
+                                </Button>
+                            ) : (
+                                <Button size="sm" onClick={() => handleApproval('cs', 'approve')} disabled={approving} data-testid="approve-cs-btn" className="bg-emerald-500 hover:bg-emerald-600 text-white">
+                                    <ShieldCheck className="h-4 w-4 mr-1" /> Approve CS Commissions
+                                </Button>
+                            )}
                         </div>
                         <Button variant="outline" size="sm" onClick={() => openDrill('cs')} data-testid="drill-cs-commission">
                             <ArrowUpRight className="h-3.5 w-3.5 mr-1" /> View Full CS Commission Table

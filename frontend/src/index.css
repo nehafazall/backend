@@ -159,11 +159,11 @@
 }
 
 .stage-enrolled, .stage-closed, .stage-completed, .stage-reconciled {
-    @apply border-l-4 border-l-emerald-500;
+    @apply border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/30;
 }
 
 .stage-rejected, .stage-not_interested, .stage-discrepancy {
-    @apply border-l-4 border-l-rose-500;
+    @apply border-l-4 border-l-rose-500 bg-rose-50 dark:bg-rose-950/30;
 }
 
 /* Sidebar */

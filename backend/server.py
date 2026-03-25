@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, UploadFile, Request, File, Form, Body
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -14974,7 +14974,7 @@ async def get_3cx_crm_template():
     Download this and upload to your 3CX server
     """
     # Get the backend URL
-    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://net-pay-scatter.preview.emergentagent.com'))
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('REACT_APP_BACKEND_URL', 'https://dashboard-update-21.preview.emergentagent.com'))
     
     # 3CX compatible XML template - matching exact schema from working 3MBK template
     template = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -26451,6 +26451,17 @@ async def get_commission_dashboard(month: str = None, user=Depends(get_current_u
         result["total_cs_head_earned"] = sum(c["earned_cs_head"] for c in cs_data)
         result["mentor_pool"] = sum(c["earned_mentor"] + c["pending_mentor"] for c in cs_data)
 
+        # Include approval status for CEO view
+        approvals = await db.commission_approvals.find({"month": month}, {"_id": 0}).to_list(10)
+        result["approvals"] = {a["department"]: {"status": a["status"], "approved_by": a.get("approved_by_name", ""), "approved_at": a.get("approved_at", "")} for a in approvals}
+
+    # For non-CEO: include their department's approval status
+    if role not in ["super_admin"]:
+        dept = "sales" if role in ["sales_executive", "team_leader"] else "cs" if role in ["cs_agent", "cs_head"] else None
+        if dept:
+            approval = await db.commission_approvals.find_one({"month": month, "department": dept}, {"_id": 0})
+            result["approval_status"] = approval["status"] if approval else "pending"
+
     return result
 
 
@@ -26504,6 +26515,59 @@ async def get_commission_scatter_data(user_id: str = None, months: int = 6, user
         "base_salary": base_salary,
         "data": data_points,
     }
+
+
+@api_router.get("/commissions/approval-status")
+async def get_commission_approval_status(month: str = None, user=Depends(get_current_user)):
+    """Get commission approval status for a given month."""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    approvals = await db.commission_approvals.find(
+        {"month": month}, {"_id": 0}
+    ).to_list(10)
+    approval_map = {}
+    for a in approvals:
+        approval_map[a["department"]] = {
+            "status": a["status"],
+            "approved_by": a.get("approved_by_name", ""),
+            "approved_at": a.get("approved_at", ""),
+        }
+    return {"month": month, "approvals": approval_map}
+
+
+@api_router.post("/commissions/approve")
+async def approve_commissions(data: dict = Body(...), user=Depends(get_current_user)):
+    """CEO approves commissions for a department and month."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "Only CEO can approve commissions")
+    department = data.get("department")
+    month = data.get("month")
+    action = data.get("action", "approve")
+    if not department or not month:
+        raise HTTPException(400, "department and month are required")
+    if department not in ("sales", "cs"):
+        raise HTTPException(400, "department must be 'sales' or 'cs'")
+
+    now = datetime.now(timezone.utc).isoformat()
+    if action == "approve":
+        await db.commission_approvals.update_one(
+            {"month": month, "department": department},
+            {"$set": {
+                "month": month,
+                "department": department,
+                "status": "approved",
+                "approved_by": user["id"],
+                "approved_by_name": user.get("full_name", ""),
+                "approved_at": now,
+            }},
+            upsert=True,
+        )
+        return {"message": f"{department.upper()} commissions approved for {month}"}
+    elif action == "revoke":
+        await db.commission_approvals.delete_one({"month": month, "department": department})
+        return {"message": f"{department.upper()} commission approval revoked for {month}"}
+    else:
+        raise HTTPException(400, "action must be 'approve' or 'revoke'")
 
 
 @api_router.get("/commissions/ceo/drill")

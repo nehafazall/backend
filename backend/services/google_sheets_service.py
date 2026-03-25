@@ -268,6 +268,7 @@ class GoogleSheetsService:
                     
                     if not phone and not secondary_phone:
                         stats["errors"] += 1
+                        logger.warning(f"Sheet sync row skipped (no phone): name={parsed.get('full_name', 'N/A')}, city={parsed.get('city', 'N/A')}")
                         continue
                     
                     # Check for duplicates
@@ -329,7 +330,7 @@ class GoogleSheetsService:
                         })
                 
                 except Exception as e:
-                    logger.error(f"Error processing row: {e}")
+                    logger.error(f"Error processing sheet row: {e} | parsed={parsed.get('full_name', 'N/A') if 'parsed' in dir() else 'N/A'}")
                     stats["errors"] += 1
             
             # Update connector with sync stats
