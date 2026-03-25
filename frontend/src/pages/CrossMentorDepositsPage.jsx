@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
-import apiClient from '../api/axiosConfig';
-import { PeriodFilter } from '../components/PeriodFilter';
+import { useAuth } from '@/lib/api';
+import apiClient from '@/lib/api';
+import { PeriodFilter } from '@/components/PeriodFilter';
 import { Plus, Search, DollarSign, TrendingUp, Award, Users, ArrowRight } from 'lucide-react';
 
 const fmt = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v || 0);

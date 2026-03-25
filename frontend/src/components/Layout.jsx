@@ -139,6 +139,7 @@ const SECTIONS = {
             { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
+            { title: 'Cross-Mentor Deposits', icon: ArrowRightLeft, path: '/mentor/cross-deposits', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'BD CRM', icon: Briefcase, path: '/bd', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_'] },
             { title: 'BD Dashboard', icon: TrendingUp, path: '/bd/dashboard', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_'] },
             { title: 'Historical Import', icon: Upload, path: '/mentor/historical-import', roles: ['super_admin'] },

@@ -42,6 +42,7 @@ import ReportBuilderPage from "@/pages/ReportBuilderPage";
 import RevenueForecastPage from "@/pages/RevenueForecastPage";
 import StudentPortalPage from "@/pages/StudentPortalPage";
 import CommissionDashboard from "@/pages/CommissionDashboard";
+import CrossMentorDepositsPage from "@/pages/CrossMentorDepositsPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -276,6 +277,11 @@ function AppRoutes() {
                 <Route path="mentor/leaderboard" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <MentorLeaderboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="mentor/cross-deposits" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
+                        <CrossMentorDepositsPage />
                     </ProtectedRoute>
                 } />
                 <Route path="mentor/historical-import" element={

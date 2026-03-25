@@ -8414,18 +8414,31 @@ async def get_mentor_dashboard(
 
     total_commission_aed = flat_commission_aed + net_commission_aed + team_override_aed
 
-    # ---------- BONUS SLAB ----------
-    # Current month net deposits in USD for bonus calculation
+    # ---------- BONUS SLAB (Effort-Based) ----------
+    # Bonus is based on total "effort" — all deposits the mentor brought in
+    # (own students + cross-mentor deposits they secured for others)
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1).isoformat()[:10]
-    bonus_dep_q = {"date": {"$gte": month_start}}
     bonus_wd_q = {"date": {"$gte": month_start}}
+
     if effective_view == "individual" and not is_admin:
-        bonus_dep_q["mentor_id"] = user["id"]
-        bonus_wd_q["mentor_id"] = user["id"]
+        uid = user["id"]
+        # Effort-based: own deposits (no effort_by or effort_by=self) + cross deposits they secured
+        bonus_dep_q = {"date": {"$gte": month_start}, "$or": [
+            {"effort_by_id": uid},
+            {"mentor_id": uid, "effort_by_id": {"$in": [None]}},
+            {"mentor_id": uid, "effort_by_id": {"$exists": False}},
+        ]}
+        bonus_wd_q["mentor_id"] = uid
     elif mentor_ids:
-        bonus_dep_q["mentor_id"] = {"$in": mentor_ids}
+        bonus_dep_q = {"date": {"$gte": month_start}, "$or": [
+            {"effort_by_id": {"$in": mentor_ids}},
+            {"mentor_id": {"$in": mentor_ids}, "effort_by_id": {"$in": [None]}},
+            {"mentor_id": {"$in": mentor_ids}, "effort_by_id": {"$exists": False}},
+        ]}
         bonus_wd_q["mentor_id"] = {"$in": mentor_ids}
+    else:
+        bonus_dep_q = {"date": {"$gte": month_start}}
 
     month_deposits_usd = 0
     async for d in db.mentor_redeposits.find(bonus_dep_q, {"_id": 0, "amount": 1}):
@@ -8471,8 +8484,12 @@ async def get_mentor_dashboard(
         total_salary = 0
         total_bonus = 0
         for mid in bonus_mentor_ids:
-            # Get this mentor's month net
-            m_dep_q = {"date": {"$gte": month_start}, "mentor_id": mid}
+            # Effort-based: own deposits + cross deposits they secured
+            m_dep_q = {"date": {"$gte": month_start}, "$or": [
+                {"effort_by_id": mid},
+                {"mentor_id": mid, "effort_by_id": {"$in": [None]}},
+                {"mentor_id": mid, "effort_by_id": {"$exists": False}},
+            ]}
             m_wd_q = {"date": {"$gte": month_start}, "mentor_id": mid}
             m_dep = sum([d.get("amount", 0) async for d in db.mentor_redeposits.find(m_dep_q, {"_id": 0, "amount": 1})])
             m_wd = sum([w.get("amount", 0) async for w in db.mentor_withdrawals.find(m_wd_q, {"_id": 0, "amount": 1})])
