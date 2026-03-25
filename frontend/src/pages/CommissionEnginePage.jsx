@@ -45,6 +45,8 @@ import {
     Percent,
     DollarSign,
     Calculator,
+    BookOpen,
+    Save,
 } from 'lucide-react';
 
 const ROLES = [
@@ -67,6 +69,9 @@ const CommissionEnginePage = () => {
     const [rules, setRules] = useState([]);
     const [courses, setCourses] = useState([]);
     const [commissions, setCommissions] = useState([]);
+    const [catalog, setCatalog] = useState({ items: [], grouped: {} });
+    const [editingCatalog, setEditingCatalog] = useState({}); // {itemId: {field: value}}
+    const [savingCatalog, setSavingCatalog] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -90,14 +95,16 @@ const CommissionEnginePage = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [rulesRes, coursesRes, commissionsRes] = await Promise.all([
+            const [rulesRes, coursesRes, commissionsRes, catalogRes] = await Promise.all([
                 apiClient.get('/commission-rules'),
                 apiClient.get('/courses'),
                 apiClient.get('/commissions'),
+                apiClient.get('/course-catalog'),
             ]);
             setRules(rulesRes.data);
             setCourses(coursesRes.data);
             setCommissions(commissionsRes.data);
+            setCatalog(catalogRes.data || { items: [], grouped: {} });
         } catch (error) {
             toast.error('Failed to fetch data');
         } finally {
@@ -179,6 +186,36 @@ const CommissionEnginePage = () => {
         }
     };
 
+    const handleCatalogFieldChange = (itemId, field, value) => {
+        setEditingCatalog(prev => ({
+            ...prev,
+            [itemId]: { ...(prev[itemId] || {}), [field]: value },
+        }));
+    };
+
+    const handleSaveCatalogItem = async (item) => {
+        const changes = editingCatalog[item.id];
+        if (!changes || Object.keys(changes).length === 0) return;
+        setSavingCatalog(item.id);
+        try {
+            const payload = {};
+            for (const [k, v] of Object.entries(changes)) {
+                payload[k] = parseFloat(v) || 0;
+            }
+            await apiClient.put(`/course-catalog/${item.id}`, payload);
+            toast.success(`Updated commissions for ${item.name}`);
+            setEditingCatalog(prev => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+            fetchData();
+        } catch (error) {
+            toast.error('Failed to update: ' + (error.response?.data?.detail || error.message));
+        }
+        setSavingCatalog(null);
+    };
+
     const resetForm = () => {
         setFormData({
             name: '',
@@ -222,6 +259,7 @@ const CommissionEnginePage = () => {
             <Tabs defaultValue="rules" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="rules">Commission Rules</TabsTrigger>
+                    <TabsTrigger value="catalog">Course Commissions</TabsTrigger>
                     <TabsTrigger value="history">Commission History</TabsTrigger>
                 </TabsList>
 
@@ -351,6 +389,94 @@ const CommissionEnginePage = () => {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Course Commissions Tab */}
+                <TabsContent value="catalog" className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Edit commission amounts for each course/addon/upgrade in the catalog. These values are used by the commission engine to calculate per-deal commissions.
+                    </p>
+                    {['courses', 'addons', 'upgrades'].map(group => {
+                        const items = (catalog.grouped || {})[group] || [];
+                        if (items.length === 0) return null;
+                        const COMM_FIELDS = group === 'upgrades'
+                            ? [{ key: 'commission_cs_agent', label: 'CS Agent' }, { key: 'commission_cs_head', label: 'CS Head' }, { key: 'commission_mentor', label: 'Mentor' }]
+                            : [{ key: 'commission_sales_executive', label: 'Sales Exec' }, { key: 'commission_team_leader', label: 'Team Leader' }, { key: 'commission_sales_manager', label: 'SM/CEO' }];
+
+                        return (
+                            <Card key={group}>
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-base capitalize flex items-center gap-2">
+                                        <BookOpen className="h-4 w-4" />{group} ({items.length})
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Name</TableHead>
+                                                    <TableHead className="text-right">Price (AED)</TableHead>
+                                                    {COMM_FIELDS.map(f => (
+                                                        <TableHead key={f.key} className="text-right w-[120px]">{f.label}</TableHead>
+                                                    ))}
+                                                    <TableHead className="text-right w-[80px]">Status</TableHead>
+                                                    {isSuperAdmin && <TableHead className="text-right w-[60px]" />}
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {items.sort((a, b) => (a.price || 0) - (b.price || 0)).map(item => {
+                                                    const edits = editingCatalog[item.id] || {};
+                                                    const hasEdits = Object.keys(edits).length > 0;
+                                                    return (
+                                                        <TableRow key={item.id}>
+                                                            <TableCell className="font-medium">{item.name}</TableCell>
+                                                            <TableCell className="text-right font-mono">{formatCurrency(item.price)}</TableCell>
+                                                            {COMM_FIELDS.map(f => (
+                                                                <TableCell key={f.key} className="text-right">
+                                                                    {isSuperAdmin ? (
+                                                                        <Input
+                                                                            type="number"
+                                                                            className="w-[100px] text-right h-8 ml-auto font-mono"
+                                                                            value={edits[f.key] !== undefined ? edits[f.key] : (item[f.key] || 0)}
+                                                                            onChange={(e) => handleCatalogFieldChange(item.id, f.key, e.target.value)}
+                                                                            data-testid={`catalog-${item.id}-${f.key}`}
+                                                                        />
+                                                                    ) : (
+                                                                        <span className="font-mono">{formatCurrency(item[f.key] || 0)}</span>
+                                                                    )}
+                                                                </TableCell>
+                                                            ))}
+                                                            <TableCell className="text-right">
+                                                                <Badge className={item.is_active ? 'bg-emerald-500' : 'bg-gray-500'}>
+                                                                    {item.is_active ? 'Active' : 'Off'}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            {isSuperAdmin && (
+                                                                <TableCell className="text-right">
+                                                                    {hasEdits && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => handleSaveCatalogItem(item)}
+                                                                            disabled={savingCatalog === item.id}
+                                                                            data-testid={`save-catalog-${item.id}`}
+                                                                        >
+                                                                            <Save className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                </TableCell>
+                                                            )}
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
                 </TabsContent>
 
                 <TabsContent value="history" className="space-y-4">

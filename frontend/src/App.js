@@ -193,7 +193,7 @@ function AppRoutes() {
                 
                 {/* Today's Follow-ups */}
                 <Route path="followups" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <FollowupsPage />
                     </ProtectedRoute>
                 } />
@@ -264,17 +264,17 @@ function AppRoutes() {
                 
                 {/* Mentor CRM */}
                 <Route path="mentor" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <MentorCRMPage />
                     </ProtectedRoute>
                 } />
                 <Route path="mentor/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <MentorDashboardPage />
                     </ProtectedRoute>
                 } />
                 <Route path="mentor/leaderboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <MentorLeaderboard />
                     </ProtectedRoute>
                 } />
@@ -538,7 +538,7 @@ function AppRoutes() {
                 
                 {/* Transfer Requests (Dual Approval) */}
                 <Route path="transfer-requests" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager', 'team_leader', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <TransferRequestsPage />
                     </ProtectedRoute>
                 } />

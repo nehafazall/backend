@@ -94,7 +94,7 @@ const SECTIONS = {
         title: 'My Self-Service',
         icon: UserCog,
         color: 'bg-teal-500',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control'],
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'staff'],
         items: [
             { title: 'SSHR Dashboard', icon: UserCog, path: '/sshr' },
             { title: 'My Payslips', icon: Receipt, path: '/sshr/payslips' },
@@ -119,10 +119,10 @@ const SECTIONS = {
         title: 'Customer Service',
         icon: Headphones,
         color: 'bg-emerald-500',
-        roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'],
+        roles: ['super_admin', 'admin', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'],
         items: [
             { title: 'CS Dashboard', icon: Headphones, path: '/cs/dashboard' },
-            { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard' },
+            { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard', roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'] },
             { title: 'Merge Approvals', icon: GitMerge, path: '/cs/merge-approvals', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'Customer Service', icon: Users, path: '/cs' },
             { title: 'Student Portal', icon: GraduationCap, path: '/cs/student-portal', roles: ['super_admin', 'admin', 'cs_head'] },
@@ -134,11 +134,11 @@ const SECTIONS = {
         title: 'Academics',
         icon: GraduationCap,
         color: 'bg-orange-500',
-        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'business_development'],
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'business_development'],
         items: [
-            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
-            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
-            { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics'] },
+            { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
+            { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
+            { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'BD CRM', icon: Briefcase, path: '/bd', roles: ['super_admin', 'admin', 'business_development'] },
             { title: 'BD Dashboard', icon: TrendingUp, path: '/bd/dashboard', roles: ['super_admin', 'admin', 'business_development'] },
             { title: 'Historical Import', icon: Upload, path: '/mentor/historical-import', roles: ['super_admin'] },
@@ -169,9 +169,9 @@ const SECTIONS = {
         title: 'Operations',
         icon: Briefcase,
         color: 'bg-purple-500',
-        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations', 'team_leader', 'sales_executive', 'cs_agent', 'mentor', 'academic_master', 'marketing', 'quality_control'],
+        roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations', 'team_leader', 'master_of_academics_'],
         items: [
-            { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+            { title: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance', 'hr', 'operations', 'team_leader', 'master_of_academics_'] },
             { title: 'QC Dashboard', icon: Headphones, path: '/qc-dashboard', roles: ['super_admin', 'admin', 'cs_head', 'sales_manager'] },
             { title: 'Leads Pool', icon: Inbox, path: '/leads/pool', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
             { title: 'Approvals', icon: CheckSquare, path: '/approvals', roles: ['super_admin', 'admin', 'sales_manager', 'team_leader'] },
@@ -195,7 +195,7 @@ const SECTIONS = {
             { title: 'Teams Management', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'sales_manager'] },
             { title: 'Password Resets', icon: Key, path: '/password-resets', roles: ['super_admin'] },
             { title: 'Audit Log', icon: FileText, path: '/audit-log', roles: ['super_admin', 'admin'] },
-            { title: 'User Management', icon: UserCircle, path: '/users' },
+            { title: 'User Management', icon: UserCircle, path: '/users', roles: ['super_admin', 'admin', 'hr'] },
         ],
     },
     finance: {
@@ -205,11 +205,11 @@ const SECTIONS = {
         color: 'bg-cyan-500',
         roles: ['super_admin', 'admin', 'finance', 'ceo'],
         items: [
-            { title: 'Finance', icon: DollarSign, path: '/finance' },
-            { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications' },
-            { title: 'Mentor Withdrawals', icon: ArrowDownRight, path: '/finance/mentor-withdrawals' },
-            { title: 'Commission Engine', icon: Calculator, path: '/commissions' },
-            { title: 'Commission Dashboard', icon: DollarSign, path: '/commission-dashboard' },
+            { title: 'Finance', icon: DollarSign, path: '/finance', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Payment Verifications', icon: FileCheck, path: '/finance/verifications', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Mentor Withdrawals', icon: ArrowDownRight, path: '/finance/mentor-withdrawals', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Commission Engine', icon: Calculator, path: '/commissions', roles: ['super_admin', 'admin', 'finance'] },
+            { title: 'Commission Dashboard', icon: DollarSign, path: '/commission-dashboard', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Revenue Forecast', icon: TrendingUp, path: '/forecasting', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Report Builder', icon: BarChart3, path: '/reports', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin'] },
@@ -428,7 +428,7 @@ function Layout() {
     const currentSection = activeSection ? SECTIONS[activeSection] : null;
     const isHomePage = !activeSection || currentPath === '/home';
 
-    // Determine visible sections using permission system (Access Control is primary authority)
+    // Determine visible sections using BOTH role restrictions and permission system
     const visibleSections = [];
     const sectionKeys = Object.keys(SECTIONS);
     for (let i = 0; i < sectionKeys.length; i++) {
@@ -438,22 +438,30 @@ function Layout() {
         if (userRole === 'super_admin') {
             visibleSections.push(section);
         } else {
-            // Check if user can access ANY item in the section via permission system
-            const hasAccessToAnyItem = section.items.some(item => canAccess(item.path));
-            if (hasAccessToAnyItem) {
+            // First check: user's role must be in the section's allowed roles
+            if (section.roles && !section.roles.includes(userRole)) continue;
+            // Second check: at least one item must be accessible
+            const hasAccessibleItem = section.items.some(item => {
+                // If item has specific role restrictions, check those first
+                if (item.roles && !item.roles.includes(userRole)) return false;
+                return true;
+            });
+            if (hasAccessibleItem) {
                 visibleSections.push(section);
             }
         }
     }
 
-    // Determine sidebar items using permission system
+    // Determine sidebar items using role restrictions
     const sidebarItems = [];
     if (currentSection) {
         for (let i = 0; i < currentSection.items.length; i++) {
             const item = currentSection.items[i];
-            // If item has specific roles, check against user role
-            if (item.roles && !item.roles.includes(userRole)) continue;
-            if (userRole === 'super_admin' || canAccess(item.path)) {
+            if (userRole === 'super_admin') {
+                sidebarItems.push(item);
+            } else {
+                // If item has specific roles, check against user role
+                if (item.roles && !item.roles.includes(userRole)) continue;
                 sidebarItems.push(item);
             }
         }
@@ -604,7 +612,7 @@ function Layout() {
                         <h1 className="text-lg font-semibold text-foreground">CLT Synapse</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <EnvironmentSwitcher />
+                        {userRole === 'super_admin' && <EnvironmentSwitcher />}
                         <Button variant="ghost" size="icon" onClick={toggleTheme} title={`Theme: ${themeMode || 'auto'}`} data-testid="theme-toggle">
                             {themeMode === 'auto' ? <Monitor className="h-5 w-5" /> : theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                         </Button>

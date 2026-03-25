@@ -163,7 +163,7 @@ logger.info(f"🔧 Environment: {CURRENT_APP_ENV} | Database: {CURRENT_DB_NAME}"
 ROLES = [
     "super_admin", "admin", "sales_manager", "team_leader", 
     "sales_executive", "cs_head", "cs_agent", "mentor", 
-    "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control",
+    "academic_master", "master_of_academics", "master_of_academics_", "finance", "hr", "marketing", "operations", "quality_control",
     # Finance-specific roles
     "finance_manager", "finance_admin", "finance_treasurer", 
     "finance_verifier", "financier", "accounts"
@@ -1312,7 +1312,7 @@ async def get_round_robin_agent(role: str, region: str = None, department: str =
         ]).to_list(len(agent_ids))
         for item in cs_counts:
             assignment_counts[item["_id"]] = item["count"]
-    elif role in ["mentor", "academic_master", "master_of_academics"]:
+    elif role in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         # Get student counts for mentors
         mentor_counts = await db.students.aggregate([
             {"$match": {"mentor_id": {"$in": agent_ids}}},
@@ -2725,7 +2725,7 @@ def get_default_permissions(role: str) -> Dict[str, str]:
         permissions["dashboard"] = "view"
         permissions["customer_service"] = "edit"
         permissions["settings"] = "view"
-    elif role in ["mentor", "academic_master", "master_of_academics"]:
+    elif role in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         permissions["dashboard"] = "view"
         permissions["mentor_crm"] = "edit"
         permissions["settings"] = "view"
@@ -4849,14 +4849,14 @@ async def get_todays_followups(user = Depends(get_current_user)):
         lead_query = {**query_base, "assigned_to": user["id"]}
     elif user["role"] in ["cs_agent", "cs_head"]:
         lead_query = {**query_base}  # CS doesn't have leads
-    elif user["role"] in ["mentor", "academic_master", "master_of_academics"]:
+    elif user["role"] in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         lead_query = {**query_base}  # Mentors don't have leads
     else:
         lead_query = query_base
     
     # Get leads with reminders
     leads = []
-    if user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics"]:
+    if user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         if user["role"] == "sales_executive":
             leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
         else:
@@ -4875,7 +4875,7 @@ async def get_todays_followups(user = Depends(get_current_user)):
             students = await db.students.find({**student_query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
             students = await db.students.find(student_query_base, {"_id": 0}).to_list(1000)
-    elif user["role"] in ["mentor", "academic_master", "master_of_academics"]:
+    elif user["role"] in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         if user["role"] == "mentor":
             students = await db.students.find({**student_query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
         else:
@@ -4973,7 +4973,7 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
     leads = []
     if user["role"] == "sales_executive":
         leads = await db.leads.find({**query_base, "assigned_to": user["id"]}, {"_id": 0}).to_list(1000)
-    elif user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics"]:
+    elif user["role"] not in ["cs_agent", "cs_head", "mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         leads = await db.leads.find(query_base, {"_id": 0}).to_list(1000)
     
     # Get students
@@ -4982,7 +4982,7 @@ async def get_upcoming_followups(days: int = 7, user = Depends(get_current_user)
         students = await db.students.find({**query_base, "cs_agent_id": user["id"]}, {"_id": 0}).to_list(1000)
     elif user["role"] == "mentor":
         students = await db.students.find({**query_base, "mentor_id": user["id"]}, {"_id": 0}).to_list(1000)
-    elif user["role"] in ["super_admin", "admin", "cs_head", "academic_master", "master_of_academics"]:
+    elif user["role"] in ["super_admin", "admin", "cs_head", "academic_master", "master_of_academics", "master_of_academics_"]:
         students = await db.students.find(query_base, {"_id": 0}).to_list(1000)
     
     # Group by date
@@ -5616,7 +5616,7 @@ async def reassign_student_mentor(
     # Support both mentor and master_of_academics roles
     new_mentor = await db.users.find_one({
         "id": new_mentor_id, 
-        "role": {"$in": ["mentor", "master_of_academics", "academic_master"]}
+        "role": {"$in": ["mentor", "master_of_academics", "master_of_academics_", "academic_master"]}
     })
     if not new_mentor:
         raise HTTPException(status_code=404, detail="Mentor not found")
@@ -5694,7 +5694,7 @@ async def add_student_note(student_id: str, request: Request, user=Depends(get_c
 @api_router.get("/students/{student_id}/transaction-history")
 async def get_student_transaction_history(student_id: str, user=Depends(get_current_user)):
     """Get unified financial transaction history for a student across all modules."""
-    allowed = ["super_admin", "admin", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "business_development", "finance"]
+    allowed = ["super_admin", "admin", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "master_of_academics_", "business_development", "finance"]
     if user["role"] not in allowed:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -7198,7 +7198,7 @@ async def get_viewable_users(user = Depends(get_current_user)):
             {"_id": 0, "id": 1, "full_name": 1, "email": 1, "role": 1, "department": 1}
         ).to_list(100)
         viewable_users = cs_agents
-    elif user_role in ("academic_master", "master_of_academics"):
+    elif user_role in ("academic_master", "master_of_academics", "master_of_academics_"):
         # Academic master can view mentors
         mentors = await db.users.find(
             {"is_active": True, "role": "mentor"},
@@ -7479,7 +7479,7 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         elif current_role == "cs_head":
             target = await db.users.find_one({"id": view_as, "role": "cs_agent"}, {"_id": 0})
             can_view = target is not None
-        elif current_role in ("academic_master", "master_of_academics"):
+        elif current_role in ("academic_master", "master_of_academics", "master_of_academics_"):
             target = await db.users.find_one({"id": view_as, "role": "mentor"}, {"_id": 0})
             can_view = target is not None
         
@@ -7618,9 +7618,9 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         stats["avg_satisfaction_score"] = round(sat_result[0]["avg"], 1) if sat_result else 0
     
     # Mentor stats
-    if user_role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics"]:
+    if user_role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
         mentor_query = {}
-        if user_role in ["mentor", "academic_master", "master_of_academics"]:
+        if user_role in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
             mentor_query["mentor_id"] = user_id
         
         stats["mentor_students"] = await db.students.count_documents(mentor_query)
@@ -8209,10 +8209,10 @@ async def get_mentor_dashboard(
     """Enhanced mentor dashboard with role-based views, commissions, and bonus slabs."""
     USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
     role = user.get("role")
-    is_master = role == "master_of_academics"
+    is_master = role in ("master_of_academics", "master_of_academics_")
     is_admin = role in ["super_admin", "admin"]
 
-    if role not in ["mentor", "master_of_academics", "super_admin", "admin"]:
+    if role not in ["mentor", "master_of_academics", "master_of_academics_", "super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Determine effective view
@@ -8226,7 +8226,7 @@ async def get_mentor_dashboard(
         mentor_ids = [user["id"]]
     elif is_master and effective_view == "team":
         team_mentors = await db.users.find(
-            {"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")},
+            {"role": {"$in": ["mentor", "master_of_academics", "master_of_academics_"]}, "team_id": user.get("team_id")},
             {"_id": 0, "id": 1}
         ).to_list(100)
         mentor_ids = [m["id"] for m in team_mentors] if team_mentors else [user["id"]]
@@ -8283,7 +8283,7 @@ async def get_mentor_dashboard(
     team_override_aed = 0
     if is_master:
         all_team_dep_q = {**date_q}
-        team_m = await db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
+        team_m = await db.users.find({"role": {"$in": ["mentor", "master_of_academics", "master_of_academics_"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
         all_team_ids = [m["id"] for m in team_m]
         if all_team_ids:
             all_team_dep_q["mentor_id"] = {"$in": all_team_ids}
@@ -8354,7 +8354,7 @@ async def get_mentor_dashboard(
         bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
     else:
         # Team/admin view: calculate each mentor's individual bonus and sum
-        bonus_mentor_ids = mentor_ids or [m["id"] async for m in db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}}, {"_id": 0, "id": 1})]
+        bonus_mentor_ids = mentor_ids or [m["id"] async for m in db.users.find({"role": {"$in": ["mentor", "master_of_academics", "master_of_academics_"]}}, {"_id": 0, "id": 1})]
         total_salary = 0
         total_bonus = 0
         for mid in bonus_mentor_ids:
@@ -8418,17 +8418,17 @@ async def get_mentor_monthly_trend(view_mode: str = "individual", user=Depends(g
     """Monthly deposit/withdrawal trend for mentors."""
     USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
     role = user.get("role")
-    is_master = role == "master_of_academics"
+    is_master = role in ("master_of_academics", "master_of_academics_")
     is_admin = role in ["super_admin", "admin"]
 
-    if role not in ["mentor", "master_of_academics", "super_admin", "admin"]:
+    if role not in ["mentor", "master_of_academics", "master_of_academics_", "super_admin", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     mentor_filter = {}
     if view_mode == "individual" and not is_admin:
         mentor_filter = {"mentor_id": user["id"]}
     elif is_master and view_mode == "team":
-        tm = await db.users.find({"role": {"$in": ["mentor", "master_of_academics"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
+        tm = await db.users.find({"role": {"$in": ["mentor", "master_of_academics", "master_of_academics_"]}, "team_id": user.get("team_id")}, {"_id": 0, "id": 1}).to_list(100)
         mentor_filter = {"mentor_id": {"$in": [m["id"] for m in tm]}} if tm else {"mentor_id": user["id"]}
 
     dep_pipeline = [
@@ -9949,7 +9949,7 @@ Notes:
             "required": ["email", "full_name", "role", "password"],
             "optional": ["department", "phone", "region", "team_leader_email"]
         },
-        "valid_roles": ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control"],
+        "valid_roles": ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "master_of_academics_", "finance", "hr", "marketing", "operations", "quality_control"],
         "valid_departments": ["Sales", "Customer Service", "Mentorship", "Finance", "HR", "Marketing", "Operations", "Management"],
         "valid_regions": ["UAE", "India", "International"]
     }
@@ -10048,7 +10048,7 @@ async def import_users(file: UploadFile, user = Depends(require_roles(["super_ad
     results = {"created": 0, "skipped": 0, "errors": []}
     now = datetime.now(timezone.utc).isoformat()
     
-    valid_roles = ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "finance", "hr", "marketing", "operations", "quality_control"]
+    valid_roles = ["admin", "sales_manager", "team_leader", "sales_executive", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "master_of_academics_", "finance", "hr", "marketing", "operations", "quality_control"]
     
     for row_num, row in enumerate(reader, start=2):
         try:
@@ -10741,7 +10741,7 @@ async def download_mentor_historical_template(token: str = None, request: Reques
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
     mentors = await db.users.find(
-        {"role": {"$in": ["mentor", "academic_master", "master_of_academics"]}},
+        {"role": {"$in": ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]}},
         {"_id": 0, "full_name": 1, "role": 1}
     ).sort("full_name", 1).to_list(50)
     for ri, m in enumerate(mentors, 2):
@@ -11427,7 +11427,7 @@ async def import_students_cs(data: List[Dict], user = Depends(require_roles(["su
     return results
 
 @api_router.post("/import/students/mentor")
-async def import_students_mentor(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics"]))):
+async def import_students_mentor(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics", "master_of_academics_"]))):
     """Import students for Mentor CRM"""
     results = {"success": 0, "failed": 0, "skipped": 0, "errors": []}
     now = datetime.now(timezone.utc).isoformat()
@@ -13144,7 +13144,7 @@ async def import_historical_students_xlsx(
     }
 
 @api_router.post("/import/mentor-redeposits")
-async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics"]))):
+async def import_mentor_redeposits(data: List[Dict], user = Depends(require_roles(["super_admin", "admin", "academic_master", "master_of_academics", "master_of_academics_"]))):
     """
     Import mentor redeposits.
     After import, student moves to 'discussion_started' in mentor kanban.
@@ -13346,7 +13346,7 @@ async def get_mentor_redeposits_summary(
     """
     # If not admin/super_admin, only show own data
     target_mentor_id = mentor_id
-    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics"]:
+    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics", "master_of_academics_"]:
         if user.get("role") in ["mentor"]:
             target_mentor_id = user["id"]
         else:
@@ -13824,7 +13824,7 @@ async def import_employees(data: List[Dict], user = Depends(require_roles(["supe
     
     # Valid role options
     valid_roles = ["super_admin", "admin", "hr", "finance", "sales_manager", "team_leader", 
-                   "sales_agent", "cs_head", "cs_agent", "academic_master", "master_of_academics", "mentor", 
+                   "sales_agent", "cs_head", "cs_agent", "academic_master", "master_of_academics", "master_of_academics_", "mentor", 
                    "operations", "marketing", "employee"]
     
     for i, row in enumerate(data):
@@ -14087,7 +14087,7 @@ async def get_mentor_revenue_summary(
     Get revenue summary for mentors including redeposits, withdrawals, and net
     """
     target_mentor_id = mentor_id
-    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics", "finance"]:
+    if user.get("role") not in ["super_admin", "admin", "academic_master", "master_of_academics", "master_of_academics_", "finance"]:
         if user.get("role") == "mentor":
             target_mentor_id = user["id"]
         else:
@@ -16910,7 +16910,7 @@ async def get_mentor_leaderboard(
     
     # Get all mentors
     mentors = await db.users.find(
-        {"role": {"$in": ["mentor", "academic_master", "master_of_academics"]}, "is_active": True},
+        {"role": {"$in": ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]}, "is_active": True},
         {"_id": 0, "password": 0}
     ).to_list(100)
     
@@ -17050,8 +17050,8 @@ async def get_quick_stats(user = Depends(get_current_user)):
             "created_at": {"$gte": today_start.isoformat(), "$regex": "^20"}
         })
     
-    if role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics"]:
-        if role in ["mentor", "academic_master", "master_of_academics"]:
+    if role in ["super_admin", "admin", "mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
+        if role in ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]:
             mentor_query = {"mentor_id": user["id"]}
         else:
             mentor_query = {}
@@ -17295,7 +17295,7 @@ async def get_employee_sync_options(user = Depends(require_roles(["super_admin",
         {"value": "cs_agent", "label": "CS Agent", "description": "Customer service access"},
         {"value": "mentor", "label": "Mentor", "description": "Academic mentoring"},
         {"value": "academic_master", "label": "Academic Master", "description": "Academic management"},
-        {"value": "master_of_academics", "label": "Master of Academics", "description": "Academic team leader"},
+        {"value": "master_of_academics_", "label": "Master of Academics", "description": "Academic team leader"},
         {"value": "finance", "label": "Finance", "description": "Finance access"},
         {"value": "hr", "label": "HR", "description": "Human resources access"},
         {"value": "marketing", "label": "Marketing", "description": "Marketing access"},
@@ -22008,7 +22008,7 @@ async def get_pending_approvals_for_me(user = Depends(get_current_user)):
         # HR sees pending_hr
         leave_query = {"status": "pending_hr"}
         reg_query = {"status": "pending_hr"}
-    elif user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics"]:
+    elif user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "master_of_academics_"]:
         # Managers see requests from their team members
         # Check if they are the assigned manager in approval chain
         leave_query = {
@@ -22049,7 +22049,7 @@ async def action_leave_request(
     can_act = False
     current_level = None
     
-    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "admin", "super_admin"]:
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "master_of_academics_", "admin", "super_admin"]:
         # Check if user is the assigned manager
         for chain in request["approval_chain"]:
             if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
@@ -22358,7 +22358,7 @@ async def action_regularization_request(
     can_act = False
     current_level = None
     
-    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "admin", "super_admin"]:
+    if current_status == "pending_manager" and user_role in ["sales_manager", "team_leader", "cs_head", "academic_master", "master_of_academics", "master_of_academics_", "admin", "super_admin"]:
         for chain in request["approval_chain"]:
             if chain["level"] == "manager" and (chain["user_id"] == user["id"] or user_role in ["admin", "super_admin"]):
                 can_act = True
