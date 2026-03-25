@@ -11,32 +11,37 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## What's Been Implemented
 
+### Cross-Mentor Deposits & Effort-Based Bonus (Complete — Mar 25, 2026)
+- New page at /mentor/cross-deposits for recording deposits mentors secure for other mentors' students
+- Backend CRUD: GET/POST /api/mentor/cross-deposits, GET /api/mentor/cross-deposits/search-student, GET /api/mentor/effort-summary
+- Effort summary cards: Own Deposits, Cross-Mentor Deposits, Total Effort, Bonus Status
+- Bonus progress bar with 5 tiers ($10K/10%, $20K/15%, $30K/17.5%, $40K/20%, $50K/25%)
+- Effort Leaderboard for admins/Master of Academics
+- Bonus calculation updated to effort-based: includes own deposits + cross-mentor deposits
+- Sidebar link added under Academics section
+- Testing: 100% pass rate (21/21 backend + all frontend verified)
+
+### Mentor Dashboard Commission Breakdown (Complete — Mar 25, 2026)
+- Commission card displays: Flat (1% of deposits), Net (1% of net), Team Override (0.5%), Total
+- Sensitive data toggle (eye icon) for privacy
+- Team Override only visible for Master of Academics role
+
 ### Customer Master Auto-Population (Complete — Mar 25, 2026)
 - Fixed enrollment flow to pass sale_amount as payment data to create_or_update_customer
-- Fixed CS upgrade flow to update customer master with upgrade revenue
-- Backfilled 976 enrolled leads → customer records with proper revenue, course names, LTV
-- Backfilled CS upgrade revenue into customer transaction histories
-- All 976 enrolled leads linked to customer_master_id
-- Only 7 zero-revenue records remain (all test data)
+- Backfilled 976 enrolled leads with proper revenue, course names, LTV
 
 ### Sidebar Navigation Fix (Complete — Mar 25, 2026)
-- Fixed section switching bug: shared paths (e.g. /commission-dashboard) no longer jump between sections
-- Prioritizes currently active section when matching paths
+- Fixed section switching bug: shared paths no longer jump between sections
 
 ### CS Dashboard: Commission & Net Pay (Complete — Mar 25, 2026)
 - 5-box summary: Agent Commission, Head Commission, Total Commission, Base Salary, Net Pay
-- Fixed commission table showing 0 (wrong field reference)
 
 ### CRM Kanban Enhancements (Complete — Mar 25, 2026)
 - "My Leads" / "Team Overview" toggle for team leaders/heads
-- Default "This Month" filter on all CRM Kanban boards
-- Unified date filter (date_field=any) shows created + enrolled leads together
-- CS CRM pagination fixed (25 → 50 per stage)
+- Default "This Month" filter, CS CRM pagination fixed (25 to 50)
 
 ### Lead Closure Time Tracking (Complete — Mar 25, 2026)
 - closure_days tracked on enrollment, backfilled 976 leads
-- GET /api/dashboard/closure-time endpoint with role-based visibility
-- Closure Time Analytics table on Sales Dashboard
 
 ### Commission Engine (Complete)
 - Per-transaction CEO approval, auto-trigger, CS commission transactions
@@ -45,7 +50,8 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
 - CS Head: falja@clt-academy.com / Falja@123
-- Team Leader (Ajmal): ajmal@clt-academy.com / Ajmal@123
+- Master of Academics: edwin@clt-academy.com / Edwin@123
+- BD Manager: rashidha@clt-academy.com / Rasha@123
 
 ## Prioritized Backlog
 
@@ -56,7 +62,9 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ### P2
 - Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine
-- Scheduled Email Reports, Commission Audit Log
+- Scheduled Email Reports
+- Commission Audit Log
 
 ### P3
 - Refactor monolithic `server.py` into domain-driven routes
+- Background sheet sync error investigation
