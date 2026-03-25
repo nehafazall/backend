@@ -56,7 +56,12 @@ Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Se
 - Fixed NoneType bug in salary_structure lookup for scatter-data endpoint
 - Tested: Backend 21/26 passed (5 skipped: CS Head credential issue), Frontend 100% (iteration_69)
 
-**Feature - Commission Decomposition + Sales Dashboard Integration (Complete)**
+**UI/UX Fixes (Complete)**
+- Removed "testing" environment badge from header for all non-super_admin users
+- Strict sidebar role filtering: sections/items only appear if user's role is explicitly allowed (sales execs no longer see Operations/CS/Finance)
+- Added `master_of_academics_` (Edwin's role) to CS, Academics, Operations sidebar + ProtectedRoutes + backend dashboard API
+- Added "Course Commissions" tab to Commission Engine page — inline-editable commission rates per course/addon/upgrade
+- Tested: Frontend 10/12 passed (iteration_71), remaining 2 fixed (dashboard API + CS route for master_of_academics_)
 - Fixed commission calculation: enrollment amounts now decompose as Course + Addon
   - e.g., AED 2,204 = Offer Course (1,599) + Full Pack (605) → Commission 75 + 300 = 375
   - e.g., AED 4,104 = Intermediate (3,499) + Full Pack (605) → Commission 130 + 300 = 430

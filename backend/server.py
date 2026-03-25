@@ -7227,7 +7227,7 @@ async def get_overall_dashboard(
     period: str = "this_month",
     custom_start: Optional[str] = None,
     custom_end: Optional[str] = None,
-    user = Depends(require_roles(["super_admin", "admin"]))
+    user = Depends(require_roles(["super_admin", "admin", "sales_manager", "cs_head", "team_leader", "master_of_academics_", "master_of_academics", "finance", "hr", "operations"]))
 ):
     """Comprehensive overall dashboard with revenue, HR, treasury, top performers."""
     import asyncio

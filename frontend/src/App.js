@@ -252,7 +252,7 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 <Route path="cs/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_']}>
                         <CSDashboard />
                     </ProtectedRoute>
                 } />
