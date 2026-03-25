@@ -894,11 +894,7 @@ const SalesCRMPage = () => {
                         </Select>
                     )}
                     <PeriodFilter
-                        dateFields={[
-                            { value: 'created_at', label: 'Lead Created' },
-                            { value: 'enrolled_at', label: 'Enrolled' },
-                        ]}
-                        onChange={setPeriodFilter}
+                        onChange={(f) => setPeriodFilter({...f, date_field: 'any'})}
                         defaultPeriod="this_month"
                     />
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (

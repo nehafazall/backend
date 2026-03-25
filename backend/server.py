@@ -3286,14 +3286,24 @@ async def get_leads(
     # Date range filtering for leads
     if date_from or date_to:
         df = date_field or "created_at"
-        if df not in ("created_at", "enrolled_at"):
+        if df not in ("created_at", "enrolled_at", "any"):
             df = "created_at"
         date_cond = {}
         if date_from:
             date_cond["$gte"] = date_from
         if date_to:
             date_cond["$lte"] = date_to + "T23:59:59"
-        query[df] = date_cond
+        if df == "any":
+            # Show leads where EITHER created_at or enrolled_at is in the range
+            date_or = [{"created_at": date_cond}, {"enrolled_at": date_cond}]
+            if "$or" in query:
+                # Search $or already exists — combine both with $and
+                existing_or = query.pop("$or")
+                query.setdefault("$and", []).extend([{"$or": existing_or}, {"$or": date_or}])
+            else:
+                query["$or"] = date_or
+        else:
+            query[df] = date_cond
     
     # Sort: enrolled leads by enrolled_at desc, others by created_at desc
     sort_field = "enrolled_at" if stage == "enrolled" else "created_at"
@@ -3514,6 +3524,19 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
         if update_data["stage"] == "enrolled" and existing.get("stage") != "enrolled":
             # Set enrolled_at ONLY on first transition to enrolled — not on re-edits
             update_data["enrolled_at"] = now.isoformat()
+            
+            # Calculate closure time (days from assignment to enrollment)
+            assigned_at_str = existing.get("assigned_at") or existing.get("created_at")
+            if assigned_at_str:
+                try:
+                    assigned_dt = datetime.fromisoformat(assigned_at_str.replace('Z', '+00:00'))
+                    if assigned_dt.tzinfo is None:
+                        assigned_dt = assigned_dt.replace(tzinfo=timezone.utc)
+                    closure_delta = now - assigned_dt
+                    update_data["closure_days"] = round(closure_delta.total_seconds() / 86400, 1)
+                    update_data["closure_hours"] = round(closure_delta.total_seconds() / 3600, 1)
+                except Exception:
+                    pass
             
             # Ensure enrollment_amount is set from sale_amount for dashboard aggregation
             sale_amount = update_data.get("sale_amount") or existing.get("sale_amount", 0)
@@ -7568,19 +7591,17 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         revenue_result = await db.leads.aggregate(revenue_pipeline).to_list(1)
         stats["total_revenue"] = revenue_result[0]["total"] if revenue_result else 0
         
-        # SLA breaches
-        all_leads = await db.leads.find(lead_query, {"last_activity": 1, "created_at": 1}).to_list(10000)
-        sla_breaches = 0
-        for lead in all_leads:
-            last_activity = lead.get("last_activity") or lead.get("created_at")
-            if isinstance(last_activity, str):
-                try:
-                    last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-                    if datetime.now(timezone.utc) - last_activity > timedelta(hours=24):
-                        sla_breaches += 1
-                except:
-                    pass
-        stats["sla_breaches"] = sla_breaches
+        # SLA breaches — use a server-side aggregation instead of loading all leads
+        sla_cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        sla_query = {
+            **lead_query,
+            "stage": {"$nin": ["enrolled", "rejected", "not_interested", "dead"]},
+            "$or": [
+                {"last_activity": {"$lt": sla_cutoff}},
+                {"last_activity": {"$exists": False}, "created_at": {"$lt": sla_cutoff}},
+            ]
+        }
+        stats["sla_breaches"] = await db.leads.count_documents(sla_query)
         
         # Conversion rate
         total = stats["total_leads"]
@@ -7612,6 +7633,16 @@ async def get_dashboard_stats(view_as: Optional[str] = None, user = Depends(get_
         ]
         all_comm_result = await db.commissions.aggregate(all_comm_pipeline).to_list(1)
         stats["commission_all_time"] = all_comm_result[0]["total"] if all_comm_result else 0
+
+        # Avg closure time (this month) for quick dashboard display
+        closure_q = {**lead_query, "stage": "enrolled", "closure_days": {"$exists": True},
+                     "enrolled_at": {"$gte": datetime.now(timezone.utc).replace(day=1).strftime("%Y-%m-%d")}}
+        closure_agg = await db.leads.aggregate([
+            {"$match": closure_q},
+            {"$group": {"_id": None, "avg": {"$avg": "$closure_days"}, "cnt": {"$sum": 1}}}
+        ]).to_list(1)
+        stats["avg_closure_days"] = round(closure_agg[0]["avg"], 1) if closure_agg else 0
+        stats["closures_this_month"] = closure_agg[0]["cnt"] if closure_agg else 0
     
     # Student stats for CS roles
     if user_role in ["super_admin", "admin", "cs_head", "cs_agent"]:
@@ -8762,6 +8793,80 @@ async def get_sales_agent_closings(
     ]
     result = await db.leads.aggregate(pipeline).to_list(limit)
     return [{"agent_name": r.get("name", "Unknown"), "closings": r["closings"], "revenue": r.get("revenue", 0)} for r in result]
+
+
+@api_router.get("/dashboard/closure-time")
+async def get_closure_time_analytics(
+    period: str = "this_month",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    """Closure time analytics: avg days from assignment to enrollment, by agent.
+    - Sales executives see their own stats only.
+    - Team leaders see their team.
+    - CEO/admin sees entire floor.
+    """
+    role = user["role"]
+    uid = user["id"]
+
+    match_q = {"stage": "enrolled", "closure_days": {"$exists": True}}
+    match_q.update(_build_date_filter("enrolled_at", period, custom_start, custom_end))
+
+    if role == "sales_executive":
+        match_q["assigned_to"] = uid
+    elif role == "team_leader":
+        team_members = await db.users.find({"team_leader_id": uid}, {"_id": 0, "id": 1}).to_list(100)
+        team_ids = [m["id"] for m in team_members] + [uid]
+        match_q["assigned_to"] = {"$in": team_ids}
+    # super_admin / admin / sales_manager see everything
+
+    pipeline = [
+        {"$match": match_q},
+        {"$group": {
+            "_id": "$assigned_to",
+            "agent_name": {"$first": "$assigned_to_name"},
+            "avg_days": {"$avg": "$closure_days"},
+            "min_days": {"$min": "$closure_days"},
+            "max_days": {"$max": "$closure_days"},
+            "total_closures": {"$sum": 1},
+            "total_revenue": {"$sum": {"$ifNull": ["$enrollment_amount", 0]}},
+        }},
+        {"$sort": {"avg_days": 1}},
+    ]
+    agents = await db.leads.aggregate(pipeline).to_list(200)
+
+    # Floor-level summary
+    summary_pipeline = [
+        {"$match": match_q},
+        {"$group": {
+            "_id": None,
+            "avg_days": {"$avg": "$closure_days"},
+            "min_days": {"$min": "$closure_days"},
+            "max_days": {"$max": "$closure_days"},
+            "total_closures": {"$sum": 1},
+        }},
+    ]
+    summary_res = await db.leads.aggregate(summary_pipeline).to_list(1)
+    summary = summary_res[0] if summary_res else {"avg_days": 0, "min_days": 0, "max_days": 0, "total_closures": 0}
+    summary.pop("_id", None)
+
+    return {
+        "summary": {k: round(v, 1) if isinstance(v, float) else v for k, v in summary.items()},
+        "agents": [
+            {
+                "agent_id": a["_id"],
+                "agent_name": a.get("agent_name", "Unknown"),
+                "avg_days": round(a["avg_days"], 1),
+                "min_days": round(a["min_days"], 1),
+                "max_days": round(a["max_days"], 1),
+                "total_closures": a["total_closures"],
+                "total_revenue": a.get("total_revenue", 0),
+            }
+            for a in agents
+        ],
+    }
+
 
 @api_router.get("/dashboard/cs-agent-bifurcation")
 async def get_cs_agent_bifurcation(

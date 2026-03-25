@@ -52,6 +52,7 @@ const SalesDashboard = () => {
     const [showEarnings, setShowEarnings] = useState(false);
     const [scatterData, setScatterData] = useState(null);
     const [drill, setDrill] = useState({ open: false, title: '', content: null, loading: false, breadcrumbs: [] });
+    const [closureData, setClosureData] = useState(null);
 
     const periodQuery = useCallback(() => {
         let q = `period=${period}`;
@@ -104,12 +105,14 @@ const SalesDashboard = () => {
                 apiClient.get(`/dashboard/sales-agent-closings?${pq}&limit=10`),
                 apiClient.get('/dashboard/leaderboard'),
                 apiClient.get(`/dashboard/team-revenue?${pq}`),
+                apiClient.get(`/dashboard/closure-time?${pq}`),
             ]);
             const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value.data : fb;
             setFilteredStats(val(0, {}) || {});
             setTopAgentsOverall(val(1, []) || []);
             setLeaderboard(val(2, []) || []);
             setTeamRevenue(val(3, []) || []);
+            setClosureData(val(4, null));
         } catch (err) { console.error(err); }
     };
 
@@ -770,6 +773,62 @@ const SalesDashboard = () => {
                 </Card>
                 <div className="grid grid-cols-1 gap-6"><PipelineRevenueWidget /></div>
             </div>
+
+            {/* Closure Time Analytics */}
+            {closureData && (
+                <Card data-testid="closure-time-card">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-blue-500" />
+                            <CardTitle className="text-base">Lead Closure Time</CardTitle>
+                        </div>
+                        <CardDescription>
+                            Average days from lead assignment to enrollment
+                            {closureData.summary?.total_closures > 0 && (
+                                <span className="ml-2 text-foreground font-medium">
+                                    Floor avg: {closureData.summary.avg_days} days ({closureData.summary.total_closures} deals)
+                                </span>
+                            )}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {closureData.agents?.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="text-right">Closures</TableHead>
+                                            <TableHead className="text-right">Avg Days</TableHead>
+                                            <TableHead className="text-right">Fastest</TableHead>
+                                            <TableHead className="text-right">Slowest</TableHead>
+                                            <TableHead className="text-right">Revenue</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {closureData.agents.map((a, i) => (
+                                            <TableRow key={a.agent_id || i}>
+                                                <TableCell className="font-medium text-sm">{a.agent_name}</TableCell>
+                                                <TableCell className="text-right">{a.total_closures}</TableCell>
+                                                <TableCell className="text-right font-mono">
+                                                    <span className={a.avg_days <= (closureData.summary?.avg_days || 999) ? 'text-emerald-500' : 'text-amber-500'}>
+                                                        {a.avg_days}d
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="text-right text-xs text-muted-foreground">{a.min_days}d</TableCell>
+                                                <TableCell className="text-right text-xs text-muted-foreground">{a.max_days}d</TableCell>
+                                                <TableCell className="text-right font-mono text-sm text-emerald-500">{fmtCur(a.total_revenue)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        ) : (
+                            <div className="text-center text-muted-foreground py-6">No closure data for this period</div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Drill-down Dialog */}
             <Dialog open={drill.open} onOpenChange={(o) => { if (!o) closeDrill(); }}>
