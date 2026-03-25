@@ -11,41 +11,42 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## What's Been Implemented
 
+### Salary Consistency Fix (Complete — Mar 25, 2026)
+- Created `_get_employee_salary_aed()` helper in server.py for consistent salary lookups
+- Priority: top-level `salary` (HR truth) > computed from structure components > fallback to gross/net
+- Fixed effort-summary endpoint returning salary=0 (was querying wrong field)
+- All mentor-related endpoints now use the same helper
+
+### Mentor Leaderboard Rewrite (Complete — Mar 25, 2026)
+- Leaderboard now ranks by total redeposit effort (own + cross-mentor deposits), NOT upgrades
+- Uses `$addFields` aggregation to compute effective_effort_by (handles effort_by_id vs mentor_id)
+- Columns: Rank, Mentor, Students, Deposits, Effort (USD/AED), Bonus Tier
+- Removed old columns: Upgrades, Commission, Satisfaction, Score
+
 ### Cross-Mentor Deposits & Effort-Based Bonus (Complete — Mar 25, 2026)
 - New page at /mentor/cross-deposits for recording deposits mentors secure for other mentors' students
-- Backend CRUD: GET/POST /api/mentor/cross-deposits, GET /api/mentor/cross-deposits/search-student, GET /api/mentor/effort-summary
-- Effort summary cards: Own Deposits, Cross-Mentor Deposits, Total Effort, Bonus Status
-- Bonus progress bar with 5 tiers ($10K/10%, $20K/15%, $30K/17.5%, $40K/20%, $50K/25%)
-- Effort Leaderboard for admins/Master of Academics
+- Backend CRUD: GET/POST /api/mentor/cross-deposits, search-student, effort-summary
+- Effort summary cards, bonus progress bar with 5 tiers, effort leaderboard for admins
 - Bonus calculation updated to effort-based: includes own deposits + cross-mentor deposits
-- Sidebar link added under Academics section
-- Testing: 100% pass rate (21/21 backend + all frontend verified)
 
 ### Mentor Dashboard Commission Breakdown (Complete — Mar 25, 2026)
-- Commission card displays: Flat (1% of deposits), Net (1% of net), Team Override (0.5%), Total
-- Sensitive data toggle (eye icon) for privacy
-- Team Override only visible for Master of Academics role
+- Commission card: Flat (1% of deposits), Net (1% of net), Team Override (0.5%), Total
+- Sensitive data toggle for privacy
 
 ### Customer Master Auto-Population (Complete — Mar 25, 2026)
-- Fixed enrollment flow to pass sale_amount as payment data to create_or_update_customer
-- Backfilled 976 enrolled leads with proper revenue, course names, LTV
-
-### Sidebar Navigation Fix (Complete — Mar 25, 2026)
-- Fixed section switching bug: shared paths no longer jump between sections
+- Fixed enrollment/upgrade flows, backfilled 976 leads
 
 ### CS Dashboard: Commission & Net Pay (Complete — Mar 25, 2026)
 - 5-box summary: Agent Commission, Head Commission, Total Commission, Base Salary, Net Pay
 
 ### CRM Kanban Enhancements (Complete — Mar 25, 2026)
-- "My Leads" / "Team Overview" toggle for team leaders/heads
-- Default "This Month" filter, CS CRM pagination fixed (25 to 50)
+- My Leads/Team Overview toggle, default This Month filter, pagination fix
 
 ### Lead Closure Time Tracking (Complete — Mar 25, 2026)
 - closure_days tracked on enrollment, backfilled 976 leads
 
 ### Commission Engine (Complete)
-- Per-transaction CEO approval, auto-trigger, CS commission transactions
-- Course + Addon decomposition, rate corrections
+- Per-transaction CEO approval, auto-trigger, CS commission transactions, course + addon decomposition
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
