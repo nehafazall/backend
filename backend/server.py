@@ -8474,9 +8474,7 @@ async def get_mentor_dashboard(
     if effective_view == "individual" and not is_admin:
         # Single mentor — use their salary
         hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
-        if hr_emp:
-            ss = hr_emp.get("salary_structure") or {}
-            salary_aed = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+        salary_aed = _get_employee_salary_aed(hr_emp)
         bonus_amount_aed = round(salary_aed * (current_slab["bonus_pct"] / 100), 2) if current_slab else 0
     else:
         # Team/admin view: calculate each mentor's individual bonus and sum
@@ -8503,10 +8501,7 @@ async def get_mentor_dashboard(
 
             # Get this mentor's salary
             hr_emp = await db.hr_employees.find_one({"user_id": mid}, {"_id": 0, "salary_structure": 1, "salary": 1})
-            m_salary = 0
-            if hr_emp:
-                ss = hr_emp.get("salary_structure") or {}
-                m_salary = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+            m_salary = _get_employee_salary_aed(hr_emp)
 
             total_salary += m_salary
             if m_slab:
@@ -8645,6 +8640,28 @@ def _get_bonus_tier(total_effort_usd: float):
         if total_effort_usd >= t["min_usd"]:
             return t
     return None
+
+
+def _get_employee_salary_aed(hr_emp: dict) -> float:
+    """Consistent salary lookup from hr_employees record.
+    Priority: top-level 'salary' (HR-entered truth) > computed from structure components > structure gross/net.
+    """
+    if not hr_emp:
+        return 0
+    # 1. Top-level salary field — most reliable, manually set by HR
+    top_salary = hr_emp.get("salary")
+    if top_salary and float(top_salary) > 0:
+        return float(top_salary)
+    # 2. Compute from salary_structure components
+    ss = hr_emp.get("salary_structure") or {}
+    computed = sum(float(ss.get(k, 0) or 0) for k in [
+        "basic_salary", "housing_allowance", "transport_allowance",
+        "food_allowance", "phone_allowance", "other_allowances", "fixed_incentive"
+    ])
+    if computed > 0:
+        return computed
+    # 3. Fallback to stored gross/net in structure
+    return float(ss.get("gross_salary") or ss.get("net_salary") or 0)
 
 @api_router.get("/mentor/cross-deposits")
 async def get_cross_mentor_deposits(
@@ -8826,8 +8843,8 @@ async def get_mentor_effort_summary(
     bonus_tier = _get_bonus_tier(total_effort_usd)
 
     # Get salary for bonus calc
-    emp = await db.hr_employees.find_one({"user_id": mentor_id}, {"_id": 0, "gross_salary": 1})
-    salary = emp.get("gross_salary", 0) if emp else 0
+    hr_emp = await db.hr_employees.find_one({"user_id": mentor_id}, {"_id": 0, "salary_structure": 1, "salary": 1})
+    salary = _get_employee_salary_aed(hr_emp)
 
     # Next tier
     next_tier = None
@@ -9817,10 +9834,7 @@ async def get_sales_commission_info(user=Depends(get_current_user)):
 
     # Get current net salary from HR
     hr_emp = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "salary_structure": 1, "salary": 1})
-    current_net_salary = 0
-    if hr_emp:
-        ss = hr_emp.get("salary_structure") or {}
-        current_net_salary = ss.get("net_salary") or ss.get("gross_salary") or hr_emp.get("salary") or 0
+    current_net_salary = _get_employee_salary_aed(hr_emp)
 
     if role == "sales_executive":
         # This month's enrolled revenue for this agent
@@ -17330,9 +17344,10 @@ async def get_mentor_leaderboard(
     period: str = "monthly",  # monthly, quarterly, yearly, all_time
     user = Depends(get_current_user)
 ):
-    """Get mentor leaderboard with rankings"""
+    """Get mentor leaderboard ranked by total redeposit effort (own + cross-mentor deposits)."""
     now = datetime.now(timezone.utc)
-    
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+
     # Define date range
     if period == "monthly":
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -17343,79 +17358,76 @@ async def get_mentor_leaderboard(
         start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     else:  # all_time
         start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    
-    # Get all mentors
+
+    date_str = start_date.isoformat()[:10]
+
+    # Get all active mentors
     mentors = await db.users.find(
         {"role": {"$in": ["mentor", "academic_master", "master_of_academics", "master_of_academics_"]}, "is_active": True},
-        {"_id": 0, "password": 0}
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "department": 1}
     ).to_list(100)
-    
+
+    mentor_ids = [m["id"] for m in mentors]
+    mentor_map = {m["id"]: m for m in mentors}
+
+    # Aggregate effort per mentor: own deposits (mentor_id match, no effort_by or self) + cross deposits (effort_by match)
+    # We need to compute "effort_by" for each deposit and group by the person who made the effort
+    effort_pipeline = [
+        {"$match": {"date": {"$gte": date_str}}},
+        {"$addFields": {
+            "effective_effort_by": {
+                "$cond": {
+                    "if": {"$and": [{"$ne": ["$effort_by_id", None]}, {"$gt": [{"$type": "$effort_by_id"}, "null"]}]},
+                    "then": "$effort_by_id",
+                    "else": "$mentor_id"
+                }
+            }
+        }},
+        {"$group": {
+            "_id": "$effective_effort_by",
+            "total_effort_usd": {"$sum": "$amount"},
+            "deposit_count": {"$sum": 1},
+        }},
+        {"$sort": {"total_effort_usd": -1}},
+    ]
+    effort_data = {d["_id"]: d for d in await db.mentor_redeposits.aggregate(effort_pipeline).to_list(200)}
+
+    # Also get student counts per mentor
+    student_pipeline = [
+        {"$match": {"mentor_id": {"$in": mentor_ids}}},
+        {"$group": {"_id": "$mentor_id", "count": {"$sum": 1}}},
+    ]
+    student_counts = {d["_id"]: d["count"] for d in await db.students.aggregate(student_pipeline).to_list(200)}
+
     leaderboard = []
-    
-    for mentor in mentors:
-        mentor_id = mentor["id"]
-        
-        # Count students
-        total_students = await db.students.count_documents({"mentor_id": mentor_id})
-        
-        # Active students (with activity after start_date)
-        active_students = await db.students.count_documents({
-            "mentor_id": mentor_id,
-            "updated_at": {"$gte": start_date.isoformat()}
-        })
-        
-        # Upgrades
-        upgrades = await db.students.count_documents({
-            "mentor_id": mentor_id,
-            "upgrade_closed": True,
-            "updated_at": {"$gte": start_date.isoformat()}
-        })
-        
-        # Commissions
-        commissions_pipeline = [
-            {"$match": {
-                "user_id": mentor_id,
-                "created_at": {"$gte": start_date.isoformat()}
-            }},
-            {"$group": {
-                "_id": None,
-                "total": {"$sum": "$commission_amount"},
-                "count": {"$sum": 1}
-            }}
-        ]
-        commission_result = await db.commissions.aggregate(commissions_pipeline).to_list(1)
-        total_commission = commission_result[0]["total"] if commission_result else 0
-        
-        # Student satisfaction (avg score)
-        satisfaction_pipeline = [
-            {"$match": {"mentor_id": mentor_id, "satisfaction_score": {"$exists": True, "$ne": None}}},
-            {"$group": {"_id": None, "avg": {"$avg": "$satisfaction_score"}, "count": {"$sum": 1}}}
-        ]
-        satisfaction_result = await db.students.aggregate(satisfaction_pipeline).to_list(1)
-        avg_satisfaction = satisfaction_result[0]["avg"] if satisfaction_result else 0
-        reviews_count = satisfaction_result[0]["count"] if satisfaction_result else 0
-        
+    for m in mentors:
+        mid = m["id"]
+        eff = effort_data.get(mid, {})
+        total_effort_usd = eff.get("total_effort_usd", 0)
+        total_effort_aed = round(total_effort_usd * USD_TO_AED, 2)
+        deposit_count = eff.get("deposit_count", 0)
+        bonus_tier = _get_bonus_tier(total_effort_usd)
+
         leaderboard.append({
-            "mentor_id": mentor_id,
-            "mentor_name": mentor.get("full_name"),
-            "email": mentor.get("email"),
-            "department": mentor.get("department"),
-            "total_students": total_students,
-            "active_students": active_students,
-            "upgrades": upgrades,
-            "total_commission": total_commission,
-            "avg_satisfaction": round(avg_satisfaction, 1) if avg_satisfaction else 0,
-            "reviews_count": reviews_count,
-            "score": (upgrades * 100) + (total_commission / 100) + (avg_satisfaction * 20)  # Composite score
+            "mentor_id": mid,
+            "mentor_name": m.get("full_name"),
+            "email": m.get("email"),
+            "department": m.get("department"),
+            "total_students": student_counts.get(mid, 0),
+            "total_effort_usd": total_effort_usd,
+            "total_effort_aed": total_effort_aed,
+            "deposit_count": deposit_count,
+            "bonus_tier": bonus_tier.get("pct") if bonus_tier else None,
+            "bonus_tier_label": f'{bonus_tier["pct"]}%' if bonus_tier else "-",
         })
-    
-    # Sort by score
-    leaderboard.sort(key=lambda x: x["score"], reverse=True)
-    
+
+    # Sort by total effort (highest first)
+    leaderboard.sort(key=lambda x: x["total_effort_usd"], reverse=True)
+
     # Add ranks
     for i, entry in enumerate(leaderboard):
         entry["rank"] = i + 1
-    
+
     return {
         "period": period,
         "start_date": start_date.isoformat(),

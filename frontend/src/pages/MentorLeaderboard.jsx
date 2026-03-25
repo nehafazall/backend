@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-    Trophy, Medal, Star, Users, TrendingUp, Award, 
-    RefreshCw, Crown, Calendar 
+    Trophy, Medal, Users, Award, 
+    RefreshCw, Crown, Calendar, DollarSign 
 } from 'lucide-react';
-import { formatCurrency } from '@/components/finance/utils';
+
+const fmtUSD = (v) => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+const fmtAED = (v) => `AED ${(v || 0).toLocaleString('en-AE', { minimumFractionDigits: 0 })}`;
 
 const MentorLeaderboard = () => {
     const [leaderboard, setLeaderboard] = useState([]);
@@ -52,9 +54,52 @@ const MentorLeaderboard = () => {
         return labels[p] || p;
     };
 
-    // Top 3 mentors for podium display
     const topThree = leaderboard.slice(0, 3);
-    const restOfList = leaderboard.slice(3);
+
+    const PodiumCard = ({ mentor, place, borderClass, iconClass, iconSize, mt, ringClass }) => {
+        if (!mentor) return <div />;
+        return (
+            <Card className={`${borderClass} ${mt || ''}`} data-testid={`podium-${place}`}>
+                <CardContent className="pt-6 text-center">
+                    <div className={`mx-auto ${iconSize} rounded-full flex items-center justify-center mb-3 ${iconClass} ${ringClass || ''}`}>
+                        {place === 1 ? <Crown className="h-10 w-10 text-amber-500" /> : <Medal className={`${place === 2 ? 'h-8 w-8 text-slate-400' : 'h-7 w-7 text-amber-700'}`} />}
+                    </div>
+                    <p className={`text-lg font-bold ${place === 1 ? 'text-amber-500' : place === 2 ? 'text-slate-400' : 'text-amber-700'}`}>
+                        {place === 1 ? '1st' : place === 2 ? '2nd' : '3rd'} Place
+                    </p>
+                    <p className={`${place === 1 ? 'text-2xl' : 'text-xl'} font-semibold mt-2`}>{mentor.mentor_name}</p>
+                    {place === 1 && <Badge className="mt-2 bg-amber-500">Champion</Badge>}
+                    <div className="mt-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Effort (USD)</span>
+                            <span className="font-bold font-mono text-emerald-500">{fmtUSD(mentor.total_effort_usd)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Effort (AED)</span>
+                            <span className="font-mono">{fmtAED(mentor.total_effort_aed)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Deposits</span>
+                            <span className="font-medium">{mentor.deposit_count}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Students</span>
+                            <span className="font-medium">{mentor.total_students}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Bonus Tier</span>
+                            <span className="font-medium">{mentor.bonus_tier_label}</span>
+                        </div>
+                    </div>
+                    {place === 1 && (
+                        <p className="mt-4 text-2xl font-bold text-emerald-500 font-mono">
+                            {fmtUSD(mentor.total_effort_usd)}
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
 
     return (
         <div className="space-y-6" data-testid="mentor-leaderboard">
@@ -64,11 +109,11 @@ const MentorLeaderboard = () => {
                         <Trophy className="h-8 w-8 text-amber-500" />
                         Mentor Leaderboard
                     </h1>
-                    <p className="text-muted-foreground">Top performing mentors based on upgrades, revenue, and satisfaction</p>
+                    <p className="text-muted-foreground">Top performing mentors ranked by total redeposit effort</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Select value={period} onValueChange={setPeriod}>
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className="w-40" data-testid="leaderboard-period-filter">
                             <Calendar className="h-4 w-4 mr-2" />
                             <SelectValue />
                         </SelectTrigger>
@@ -79,7 +124,7 @@ const MentorLeaderboard = () => {
                             <SelectItem value="all_time">All Time</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" onClick={fetchLeaderboard}>
+                    <Button variant="outline" size="sm" onClick={fetchLeaderboard} data-testid="leaderboard-refresh-btn">
                         <RefreshCw className="h-4 w-4 mr-2" />Refresh
                     </Button>
                 </div>
@@ -88,119 +133,29 @@ const MentorLeaderboard = () => {
             {/* Top 3 Podium */}
             {topThree.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* 2nd Place */}
-                    {topThree[1] ? (
-                        <Card className="border-2 border-slate-300 dark:border-slate-600 md:mt-8">
-                            <CardContent className="pt-6 text-center">
-                                <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                                    <Medal className="h-8 w-8 text-slate-400" />
-                                </div>
-                                <p className="text-lg font-bold text-slate-400">2nd Place</p>
-                                <p className="text-xl font-semibold mt-2">{topThree[1].mentor_name}</p>
-                                <div className="mt-4 space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Students</span>
-                                        <span className="font-medium">{topThree[1].total_students}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Upgrades</span>
-                                        <span className="font-medium text-green-600">{topThree[1].upgrades}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Commission</span>
-                                        <span className="font-medium">{formatCurrency(topThree[1].total_commission)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Rating</span>
-                                        <span className="font-medium flex items-center gap-1">
-                                            <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
-                                            {topThree[1].avg_satisfaction || '-'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ) : <div />}
-
-                    {/* 1st Place */}
-                    {topThree[0] && (
-                        <Card className="border-2 border-amber-400 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-900/20">
-                            <CardContent className="pt-6 text-center">
-                                <div className="mx-auto w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3 ring-4 ring-amber-400">
-                                    <Crown className="h-10 w-10 text-amber-500" />
-                                </div>
-                                <p className="text-lg font-bold text-amber-500">1st Place</p>
-                                <p className="text-2xl font-semibold mt-2">{topThree[0].mentor_name}</p>
-                                <Badge className="mt-2 bg-amber-500">Champion</Badge>
-                                <div className="mt-4 space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Students</span>
-                                        <span className="font-medium">{topThree[0].total_students}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Upgrades</span>
-                                        <span className="font-medium text-green-600">{topThree[0].upgrades}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Commission</span>
-                                        <span className="font-medium">{formatCurrency(topThree[0].total_commission)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Rating</span>
-                                        <span className="font-medium flex items-center gap-1">
-                                            <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
-                                            {topThree[0].avg_satisfaction || '-'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <p className="mt-4 text-2xl font-bold text-amber-600">
-                                    Score: {Math.round(topThree[0].score)}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* 3rd Place */}
-                    {topThree[2] ? (
-                        <Card className="border-2 border-amber-700/50 dark:border-amber-800 md:mt-12">
-                            <CardContent className="pt-6 text-center">
-                                <div className="mx-auto w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center mb-3">
-                                    <Medal className="h-7 w-7 text-amber-700" />
-                                </div>
-                                <p className="text-lg font-bold text-amber-700">3rd Place</p>
-                                <p className="text-xl font-semibold mt-2">{topThree[2].mentor_name}</p>
-                                <div className="mt-4 space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Students</span>
-                                        <span className="font-medium">{topThree[2].total_students}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Upgrades</span>
-                                        <span className="font-medium text-green-600">{topThree[2].upgrades}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Commission</span>
-                                        <span className="font-medium">{formatCurrency(topThree[2].total_commission)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Rating</span>
-                                        <span className="font-medium flex items-center gap-1">
-                                            <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
-                                            {topThree[2].avg_satisfaction || '-'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ) : <div />}
+                    <PodiumCard mentor={topThree[1]} place={2}
+                        borderClass="border-2 border-slate-300 dark:border-slate-600"
+                        iconClass="bg-slate-100 dark:bg-slate-800"
+                        iconSize="w-16 h-16" mt="md:mt-8" />
+                    <PodiumCard mentor={topThree[0]} place={1}
+                        borderClass="border-2 border-amber-400 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-900/20"
+                        iconClass="bg-amber-100 dark:bg-amber-900/30"
+                        iconSize="w-20 h-20" ringClass="ring-4 ring-amber-400" />
+                    <PodiumCard mentor={topThree[2]} place={3}
+                        borderClass="border-2 border-amber-700/50 dark:border-amber-800"
+                        iconClass="bg-amber-100 dark:bg-amber-900/20"
+                        iconSize="w-14 h-14" mt="md:mt-12" />
                 </div>
             )}
 
             {/* Full Leaderboard Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Full Rankings - {getPeriodLabel(period)}</CardTitle>
-                    <CardDescription>{totalMentors} mentors ranked by performance score</CardDescription>
+                    <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="h-5 w-5 text-emerald-500" />
+                        Full Rankings — {getPeriodLabel(period)}
+                    </CardTitle>
+                    <CardDescription>{totalMentors} mentors ranked by total redeposit effort</CardDescription>
                 </CardHeader>
                 <Table>
                     <TableHeader>
@@ -208,16 +163,15 @@ const MentorLeaderboard = () => {
                             <TableHead className="w-16">Rank</TableHead>
                             <TableHead>Mentor</TableHead>
                             <TableHead className="text-center">Students</TableHead>
-                            <TableHead className="text-center">Active</TableHead>
-                            <TableHead className="text-center">Upgrades</TableHead>
-                            <TableHead className="text-right">Commission</TableHead>
-                            <TableHead className="text-center">Rating</TableHead>
-                            <TableHead className="text-right">Score</TableHead>
+                            <TableHead className="text-center">Deposits</TableHead>
+                            <TableHead className="text-right">Effort (USD)</TableHead>
+                            <TableHead className="text-right">Effort (AED)</TableHead>
+                            <TableHead className="text-center">Bonus Tier</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {leaderboard.map((mentor) => (
-                            <TableRow key={mentor.mentor_id} className={mentor.rank <= 3 ? 'bg-amber-50/30 dark:bg-amber-900/10' : ''}>
+                            <TableRow key={mentor.mentor_id} className={mentor.rank <= 3 ? 'bg-amber-50/30 dark:bg-amber-900/10' : ''} data-testid={`leaderboard-row-${mentor.rank}`}>
                                 <TableCell>{getRankBadge(mentor.rank)}</TableCell>
                                 <TableCell>
                                     <div>
@@ -231,32 +185,27 @@ const MentorLeaderboard = () => {
                                         {mentor.total_students}
                                     </div>
                                 </TableCell>
-                                <TableCell className="text-center">{mentor.active_students}</TableCell>
-                                <TableCell className="text-center">
-                                    <Badge variant={mentor.upgrades > 0 ? 'default' : 'secondary'}>
-                                        {mentor.upgrades}
-                                    </Badge>
+                                <TableCell className="text-center font-medium">{mentor.deposit_count}</TableCell>
+                                <TableCell className="text-right font-mono font-bold text-emerald-500">
+                                    {fmtUSD(mentor.total_effort_usd)}
                                 </TableCell>
                                 <TableCell className="text-right font-mono">
-                                    {formatCurrency(mentor.total_commission)}
+                                    {fmtAED(mentor.total_effort_aed)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    {mentor.avg_satisfaction > 0 ? (
-                                        <div className="flex items-center justify-center gap-1">
-                                            <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                                            <span>{mentor.avg_satisfaction}</span>
-                                            <span className="text-xs text-muted-foreground">({mentor.reviews_count})</span>
-                                        </div>
+                                    {mentor.bonus_tier ? (
+                                        <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/30">
+                                            <Award className="h-3 w-3 mr-1" />{mentor.bonus_tier}%
+                                        </Badge>
                                     ) : (
-                                        <span className="text-muted-foreground">-</span>
+                                        <span className="text-muted-foreground text-xs">—</span>
                                     )}
                                 </TableCell>
-                                <TableCell className="text-right font-bold">{Math.round(mentor.score)}</TableCell>
                             </TableRow>
                         ))}
                         {leaderboard.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                     <Trophy className="h-12 w-12 mx-auto mb-3 opacity-30" />
                                     <p>No mentor data available for this period</p>
                                 </TableCell>

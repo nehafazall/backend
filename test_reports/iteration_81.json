@@ -1,0 +1,100 @@
+{
+  "summary": "Tested Salary Consistency and Mentor Leaderboard fixes. All 13 backend tests passed (100%). Frontend UI verified: Mentor Dashboard shows correct salary (AED 5,000) in Bonus Progress card, Mentor Leaderboard shows effort-based ranking with correct columns (Rank, Mentor, Students, Deposits, Effort USD/AED, Bonus Tier). Period filter works (monthly/quarterly/yearly/all_time).",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "GET /api/mentor/dashboard?period=this_month&view_mode=individual returns salary_aed=5000",
+    "GET /api/mentor/effort-summary returns salary=5000",
+    "Both endpoints return identical salary values (5000 AED)",
+    "GET /api/mentor/leaderboard?period=monthly returns 200",
+    "Leaderboard has required fields: mentor_id, mentor_name, total_effort_usd, total_effort_aed, deposit_count, bonus_tier, rank, total_students",
+    "Leaderboard sorted by total_effort_usd descending",
+    "Rank 1 has highest total_effort_usd",
+    "Leaderboard does NOT have old fields: upgrades, commission, satisfaction_score, score",
+    "Leaderboard period filter works for monthly",
+    "Leaderboard period filter works for quarterly",
+    "Leaderboard period filter works for yearly",
+    "Leaderboard period filter works for all_time",
+    "Edwin's salary correctly computed from salary_structure components (2000+1750+1250=5000)",
+    "Frontend Mentor Dashboard shows Base Salary: AED 5,000",
+    "Frontend Mentor Dashboard shows Current Bonus: AED 500 (10% of salary)",
+    "Frontend Leaderboard shows podium with Effort USD, AED, Deposits, Students, Bonus Tier",
+    "Frontend Leaderboard table has columns: Rank, Mentor, Students, Deposits, Effort (USD), Effort (AED), Bonus Tier",
+    "Frontend Leaderboard period filter dropdown works"
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_salary_leaderboard_fixes.py",
+    "/app/test_reports/pytest/pytest_salary_leaderboard.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [
+    "server.py lines 8645-8664: _get_employee_salary_aed helper correctly prioritizes: 1) top-level salary, 2) computed from salary_structure components, 3) fallback to gross/net",
+    "server.py lines 8470-8478: Mentor dashboard correctly uses _get_employee_salary_aed for individual view",
+    "server.py lines 8845-8847: Effort-summary correctly uses _get_employee_salary_aed for salary field",
+    "server.py lines 17342-17436: Mentor leaderboard correctly ranks by total_effort_usd (own deposits + cross-mentor deposits)",
+    "server.py lines 17375-17392: Aggregation pipeline uses $addFields to compute effective_effort_by (effort_by_id if set, else mentor_id)",
+    "MentorLeaderboard.jsx: Correctly displays effort-based ranking with new columns (no upgrades/commission/satisfaction)",
+    "MentorDashboardPage.jsx lines 232-236: Bonus Progress card correctly shows salary_aed from bonus object"
+  ],
+  
+  "updated_files": [
+    "/app/backend/tests/test_salary_leaderboard_fixes.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (all UI features verified)"
+  },
+  
+  "test_credentials": {
+    "master_of_academics": {"email": "edwin@clt-academy.com", "password": "Edwin@123", "role": "master_of_academics_"},
+    "ceo_admin": {"email": "aqib@clt-academy.com", "password": "@Aqib1234", "role": "super_admin"}
+  },
+  
+  "seed_data_creation": "No new seed data created. Used existing data.",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Salary consistency and Mentor Leaderboard fixes verified. Key points: (1) _get_employee_salary_aed helper prioritizes top-level salary > computed from structure > gross/net fallback, (2) Edwin's salary is 5000 AED (computed from salary_structure: 2000+1750+1250), (3) Leaderboard ranks by total_effort_usd (own + cross-mentor deposits), (4) Old leaderboard columns (upgrades/commission/satisfaction) removed, replaced with effort-based columns.",
+  
+  "feature_verification_details": {
+    "salary_consistency": {
+      "status": "WORKING",
+      "dashboard_salary_aed": 5000,
+      "effort_summary_salary": 5000,
+      "source": "Computed from salary_structure components (basic_salary=2000 + housing_allowance=1750 + transport_allowance=1250)",
+      "helper_function": "_get_employee_salary_aed at line 8645"
+    },
+    "mentor_leaderboard": {
+      "status": "WORKING",
+      "ranking_criteria": "total_effort_usd (own deposits + cross-mentor deposits)",
+      "columns": ["Rank", "Mentor", "Students", "Deposits", "Effort (USD)", "Effort (AED)", "Bonus Tier"],
+      "removed_columns": ["Upgrades", "Commission", "Satisfaction Score", "Score"],
+      "period_filters": ["monthly", "quarterly", "yearly", "all_time"],
+      "top_3_all_time": [
+        {"rank": 1, "name": "Edwin Joy", "effort_usd": 74791.64, "bonus_tier": "25%"},
+        {"rank": 2, "name": "Ashwin Sudarsh", "effort_usd": 41794.55, "bonus_tier": "20%"},
+        {"rank": 3, "name": "Sriram Srikumar", "effort_usd": 31815.59, "bonus_tier": "17.5%"}
+      ]
+    },
+    "api_endpoints": {
+      "GET /api/mentor/dashboard": "Returns bonus.salary_aed correctly",
+      "GET /api/mentor/effort-summary": "Returns salary correctly",
+      "GET /api/mentor/leaderboard": "Returns effort-based ranking"
+    }
+  }
+}
