@@ -181,6 +181,7 @@ const SECTIONS = {
             { title: 'Customer Master', icon: UserCheck, path: '/customers', roles: ['super_admin', 'admin', 'sales_manager', 'cs_head', 'finance'] },
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
+            { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin', 'operations'] },
         ],
     },
     security: {
@@ -212,7 +213,6 @@ const SECTIONS = {
             { title: 'Commission Dashboard', icon: DollarSign, path: '/commission-dashboard', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Revenue Forecast', icon: TrendingUp, path: '/forecasting', roles: ['super_admin', 'admin', 'finance'] },
             { title: 'Report Builder', icon: BarChart3, path: '/reports', roles: ['super_admin', 'admin', 'finance'] },
-            { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin'] },
         ],
     },
     marketing: {

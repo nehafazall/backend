@@ -48,7 +48,9 @@ const MODULE_HIERARCHY = [
         icon: LayoutDashboard,
         subPages: [
             { id: 'main_dashboard', label: 'Main Dashboard', path: '/dashboard' },
-            { id: 'qc_dashboard', label: 'QC Dashboard', path: '/qc-dashboard' },
+            { id: 'detailed_dashboard', label: 'Detailed Dashboard', path: '/dashboard/detailed' },
+            { id: 'reports', label: 'Reports', path: '/reports' },
+            { id: 'forecasting', label: 'Forecasting', path: '/forecasting' },
         ]
     },
     {
@@ -61,6 +63,9 @@ const MODULE_HIERARCHY = [
             { id: 'today_followups', label: "Today's Follow-ups", path: '/followups' },
             { id: 'leads_pool', label: 'Leads Pool', path: '/leads/pool' },
             { id: 'approvals', label: 'Approvals', path: '/approvals' },
+            { id: 'round_robin', label: 'Round Robin', path: '/round-robin' },
+            { id: 'sla_management', label: 'SLA Management', path: '/sla-management' },
+            { id: 'transfer_requests', label: 'Transfer Requests', path: '/transfer-requests' },
         ]
     },
     {
@@ -71,6 +76,17 @@ const MODULE_HIERARCHY = [
             { id: 'cs_kanban', label: 'CS Kanban', path: '/cs' },
             { id: 'cs_dashboard', label: 'CS Dashboard', path: '/cs/dashboard' },
             { id: 'customer_master', label: 'Customer Master', path: '/customers' },
+            { id: 'student_portal', label: 'Student Portal', path: '/cs/student-portal' },
+            { id: 'cs_merge_approvals', label: 'Merge Approvals', path: '/cs/merge-approvals' },
+        ]
+    },
+    {
+        id: 'bd',
+        label: 'Business Development',
+        icon: Briefcase,
+        subPages: [
+            { id: 'bd_crm', label: 'BD CRM', path: '/bd' },
+            { id: 'bd_dashboard', label: 'BD Dashboard', path: '/bd/dashboard' },
         ]
     },
     {
@@ -99,6 +115,8 @@ const MODULE_HIERARCHY = [
             { id: 'hr_analytics', label: 'HR Analytics', path: '/hr/analytics' },
             { id: 'hr_documents', label: 'Company Documents', path: '/hr/documents' },
             { id: 'hr_approvals', label: 'Approval Queue', path: '/hr/approvals' },
+            { id: 'sshr', label: 'Self-Service HR', path: '/sshr' },
+            { id: 'sshr_payslips', label: 'Payslips', path: '/sshr/payslips' },
         ]
     },
     {
@@ -108,6 +126,7 @@ const MODULE_HIERARCHY = [
         subPages: [
             { id: 'finance_selector', label: 'Entity Selector', path: '/finance' },
             { id: 'commission_engine', label: 'Commission Engine', path: '/commissions' },
+            { id: 'commission_dashboard', label: 'Commission Dashboard', path: '/commission-dashboard' },
             // CLT Finance
             { id: 'clt_dashboard', label: 'CLT Dashboard', path: '/finance/clt/dashboard' },
             { id: 'clt_payables', label: 'CLT Payables', path: '/finance/clt/payables' },
@@ -129,6 +148,7 @@ const MODULE_HIERARCHY = [
             { id: 'payment_methods', label: 'Payment Methods', path: '/finance/settings/payment-methods' },
             { id: 'payment_gateways', label: 'Payment Gateways', path: '/finance/settings/payment-gateways' },
             { id: 'psp_mapping', label: 'PSP Bank Mapping', path: '/finance/settings/psp-mapping' },
+            { id: 'mentor_withdrawals', label: 'Mentor Withdrawals', path: '/finance/mentor-withdrawals' },
         ]
     },
     {
@@ -144,9 +164,10 @@ const MODULE_HIERARCHY = [
     {
         id: 'operations',
         label: 'Operations',
-        icon: Briefcase,
+        icon: Building2,
         subPages: [
             { id: 'qc_dashboard', label: 'QC Dashboard', path: '/qc-dashboard' },
+            { id: 'certificates', label: 'Certificate Creation', path: '/certificates' },
         ]
     },
     {

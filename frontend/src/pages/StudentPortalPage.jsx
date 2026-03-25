@@ -21,7 +21,7 @@ export default function StudentPortalPage() {
                     src="https://main.clt-academy.com/admin/students"
                     className="w-full h-full"
                     title="CLT Academy Student Portal"
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                    allow="storage-access"
                     data-testid="student-portal-iframe"
                 />
             </div>

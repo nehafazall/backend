@@ -243,9 +243,9 @@ const DepartmentsPage = () => {
                                     <SelectValue placeholder="Select head" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {users.filter(u => ['sales_manager', 'cs_head', 'admin'].includes(u.role)).map((u) => (
+                                    {users.filter(u => u.is_active !== false).map((u) => (
                                         <SelectItem key={u.id} value={u.id}>
-                                            {u.full_name} ({u.role})
+                                            {u.full_name} ({u.role?.replace(/_/g, ' ')})
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -299,9 +299,9 @@ const DepartmentsPage = () => {
                                     <SelectValue placeholder="Select head" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {users.filter(u => ['sales_manager', 'cs_head', 'admin'].includes(u.role)).map((u) => (
+                                    {users.filter(u => u.is_active !== false).map((u) => (
                                         <SelectItem key={u.id} value={u.id}>
-                                            {u.full_name} ({u.role})
+                                            {u.full_name} ({u.role?.replace(/_/g, ' ')})
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

@@ -24,7 +24,7 @@ import { ClickToCall, CallHistory } from '@/components/ClickToCall';
 import ReminderModal from '@/components/ReminderModal';
 import { Pagination } from '@/components/Pagination';
 import {
-    DndContext, DragOverlay, closestCenter, KeyboardSensor, PointerSensor,
+    DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor,
     useSensor, useSensors, useDroppable,
 } from '@dnd-kit/core';
 import {
@@ -247,10 +247,21 @@ export default function BDCRMPage() {
         const { active, over } = e;
         if (!over || !active) return;
         const studentId = active.id;
-        const newStage = over.id;
+        let newStage = over.id;
         const student = students.find(s => s.id === studentId);
-        if (!student || student.bd_stage === newStage) return;
-        if (!BD_STAGES.find(s => s.id === newStage)) return;
+        if (!student) return;
+
+        // If dropped on a student card, find which stage that student belongs to
+        if (!BD_STAGES.find(s => s.id === newStage)) {
+            const targetStudent = students.find(s => s.id === newStage);
+            if (targetStudent) {
+                newStage = targetStudent.bd_stage;
+            } else {
+                return;
+            }
+        }
+
+        if (student.bd_stage === newStage) return;
 
         // Optimistic update
         setStudents(prev => prev.map(s => s.id === studentId ? { ...s, bd_stage: newStage } : s));
@@ -392,7 +403,7 @@ export default function BDCRMPage() {
                     <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
                 </div>
             ) : (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                     <div className="kanban-board" data-testid="bd-kanban-board">
                         {BD_STAGES.map(stage => (
                             <BDKanbanColumn key={stage.id} stage={stage} students={filteredStudents}
@@ -452,9 +463,28 @@ export default function BDCRMPage() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Badge className={`${BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.color || 'bg-gray-500'} text-white`}>
-                                        {BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.label || selectedStudent.bd_stage}
-                                    </Badge>
+                                    <Select value={selectedStudent.bd_stage} onValueChange={async (val) => {
+                                        try {
+                                            await apiClient.put(`/bd/students/${selectedStudent.id}/stage`, { bd_stage: val });
+                                            setSelectedStudent(prev => ({ ...prev, bd_stage: val }));
+                                            setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, bd_stage: val } : s));
+                                            toast.success(`Stage updated to ${BD_STAGES.find(s => s.id === val)?.label}`);
+                                        } catch { toast.error('Failed to update stage'); }
+                                    }}>
+                                        <SelectTrigger className="w-[180px] h-8" data-testid="bd-stage-change-dropdown">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {BD_STAGES.map(st => (
+                                                <SelectItem key={st.id} value={st.id}>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className={`w-2 h-2 rounded-full ${st.color}`} />
+                                                        {st.label}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     <Button variant="outline" size="sm" onClick={() => setShowReminderModal(true)} data-testid="bd-set-reminder-btn">
                                         <Bell className="h-3.5 w-3.5 mr-1.5" /> Reminder
                                     </Button>

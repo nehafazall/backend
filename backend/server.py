@@ -142,7 +142,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET')
 if not JWT_SECRET:
     raise ValueError("JWT_SECRET environment variable is required")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = 168  # 7 days for persistent sessions
 
 # Security
 security = HTTPBearer()
@@ -3119,10 +3119,13 @@ async def update_team(
         if not new_leader:
             raise HTTPException(status_code=400, detail="Leader user not found")
         
-        # Update the leader's team_id and role if needed
+        # Update the leader's role if needed (don't overwrite team_id for multi-team leaders)
+        leader_update = {"role": "team_leader", "updated_at": datetime.now(timezone.utc).isoformat()}
+        if not new_leader.get("team_id"):
+            leader_update["team_id"] = team_id
         await db.users.update_one(
             {"id": update_data["leader_id"]},
-            {"$set": {"team_id": team_id, "role": "team_leader", "updated_at": datetime.now(timezone.utc).isoformat()}}
+            {"$set": leader_update}
         )
     
     await db.teams.update_one({"id": team_id}, {"$set": update_data})
@@ -8784,24 +8787,25 @@ async def get_cs_dashboard_stats(
     achieved_revenue = upgrade_rev[0]["total"] if upgrade_rev else 0
     achieved_count = upgrade_rev[0]["count"] if upgrade_rev else 0
     
-    # Commission query (keep for reference but don't rely on it)
-    comm_query = {}
-    if period != "overall":
-        comm_query = {**_build_date_filter("created_at", period)}
-    if view_mode == "individual":
-        comm_query["agent_id"] = user["id"]
+    # Calculate commissions in real-time from cs_upgrades + course_catalog (same as _calc_cs_commissions)
+    all_upgrades_for_comm = await db.cs_upgrades.find(upgrade_query, {"_id": 0}).to_list(500)
+    total_agent_commission = 0
+    total_head_commission = 0
+    for ug in all_upgrades_for_comm:
+        amt = ug.get("amount") or ug.get("course_amount") or 0
+        course = await _match_course_commission(amt, "upgrade")
+        total_agent_commission += course.get("commission_cs_agent", 0)
+        total_head_commission += course.get("commission_cs_head", 0)
     
-    agent_comms = await db.cs_commissions.aggregate([
-        {"$match": {**comm_query, "type": "cs_upgrade_agent"}},
-        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
-    ]).to_list(1)
-    total_agent_commission = agent_comms[0]["total"] if agent_comms else 0
-    
-    head_comms = await db.cs_commissions.aggregate([
-        {"$match": {**comm_query, "type": "cs_upgrade_head"}},
-        {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}}
-    ]).to_list(1)
-    total_head_commission = head_comms[0]["total"] if head_comms else 0
+    # For cs_head in individual view, head commission should still be from ALL team upgrades
+    role = user.get("role", "")
+    if role in ("cs_head", "super_admin", "admin") and view_mode == "individual":
+        all_team_upgrades = await db.cs_upgrades.find({**date_filter}, {"_id": 0}).to_list(500)
+        total_head_commission = 0
+        for ug in all_team_upgrades:
+            amt = ug.get("amount") or ug.get("course_amount") or 0
+            course = await _match_course_commission(amt, "upgrade")
+            total_head_commission += course.get("commission_cs_head", 0)
     
     # Pipeline revenue (from students in pitched_for_upgrade)
     pitch_query = {"stage": "pitched_for_upgrade", "pitched_upgrade_price": {"$exists": True, "$gt": 0}}
