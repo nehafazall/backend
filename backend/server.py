@@ -51,6 +51,10 @@ from services.google_sheets_service import GoogleSheetsService, extract_sheet_id
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+
+# Roles that have BD (Business Development) access
+BD_ROLES = {"business_development", "business_development_manager_"}
+
 # ==================== DATABASE CONFIGURATION ====================
 # Environment-based database selection
 # APP_ENV can be: development, testing, production
@@ -5747,7 +5751,7 @@ async def add_student_note(student_id: str, request: Request, user=Depends(get_c
 @api_router.get("/students/{student_id}/transaction-history")
 async def get_student_transaction_history(student_id: str, user=Depends(get_current_user)):
     """Get unified financial transaction history for a student across all modules."""
-    allowed = ["super_admin", "admin", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "master_of_academics_", "business_development", "finance"]
+    allowed = ["super_admin", "admin", "cs_head", "cs_agent", "mentor", "academic_master", "master_of_academics", "master_of_academics_", "finance"] + list(BD_ROLES)
     if user["role"] not in allowed:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -5857,12 +5861,12 @@ async def get_bd_students(
     user = Depends(get_current_user)
 ):
     """Get students assigned to BD agents. BD sees own, super_admin sees all."""
-    if user["role"] not in ["super_admin", "admin", "business_development"]:
+    if user["role"] not in ["super_admin", "admin"] and user["role"] not in BD_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     
     query = {"bd_agent_id": {"$exists": True, "$ne": None}}
     
-    if user["role"] == "business_development":
+    if user["role"] in BD_ROLES:
         query["bd_agent_id"] = user["id"]
     elif bd_agent_id:
         query["bd_agent_id"] = bd_agent_id
@@ -5917,7 +5921,7 @@ async def update_bd_student_stage(
     user = Depends(get_current_user)
 ):
     """Update BD stage for a student."""
-    if user["role"] not in ["super_admin", "admin", "business_development"]:
+    if user["role"] not in ["super_admin", "admin"] and user["role"] not in BD_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     
     new_stage = data.get("bd_stage")
@@ -5929,7 +5933,7 @@ async def update_bd_student_stage(
         raise HTTPException(status_code=404, detail="Student not found")
     
     # BD agents can only update their own students
-    if user["role"] == "business_development" and student.get("bd_agent_id") != user["id"]:
+    if user["role"] in BD_ROLES and student.get("bd_agent_id") != user["id"]:
         raise HTTPException(status_code=403, detail="Cannot update another agent's student")
     
     update = {
@@ -5949,7 +5953,7 @@ async def bd_record_redeposit(
     user = Depends(get_current_user)
 ):
     """BD agent records a redeposit for a student."""
-    if user["role"] not in ["super_admin", "admin", "business_development", "finance"]:
+    if user["role"] not in ["super_admin", "admin", "finance"] and user["role"] not in BD_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     
     student_id = data.get("student_id")
@@ -5974,8 +5978,8 @@ async def bd_record_redeposit(
         "student_email": student.get("email", ""),
         "mentor_id": mentor_id,
         "mentor_name": mentor_name,
-        "bd_agent_id": user["id"] if user["role"] == "business_development" else data.get("bd_agent_id", student.get("bd_agent_id")),
-        "bd_agent_name": user["full_name"] if user["role"] == "business_development" else data.get("bd_agent_name", student.get("bd_agent_name")),
+        "bd_agent_id": user["id"] if user["role"] in BD_ROLES else data.get("bd_agent_id", student.get("bd_agent_id")),
+        "bd_agent_name": user["full_name"] if user["role"] in BD_ROLES else data.get("bd_agent_name", student.get("bd_agent_name")),
         "amount": amount,
         "amount_aed": amount_aed,
         "date": date,
@@ -6012,13 +6016,13 @@ async def get_bd_dashboard(
     user = Depends(get_current_user)
 ):
     """BD Dashboard metrics. BD sees own, super_admin sees all or filtered."""
-    if user["role"] not in ["super_admin", "admin", "business_development"]:
+    if user["role"] not in ["super_admin", "admin"] and user["role"] not in BD_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
     
     agent_filter = {}
     student_filter = {"bd_agent_id": {"$exists": True, "$ne": None}}
     
-    if user["role"] == "business_development":
+    if user["role"] in BD_ROLES:
         agent_filter["bd_agent_id"] = user["id"]
         student_filter["bd_agent_id"] = user["id"]
     elif bd_agent_id:
@@ -6089,9 +6093,9 @@ async def get_bd_dashboard(
 @api_router.get("/bd/agents")
 async def get_bd_agents(user = Depends(get_current_user)):
     """Get list of BD agents."""
-    if user["role"] not in ["super_admin", "admin", "business_development"]:
+    if user["role"] not in ["super_admin", "admin"] and user["role"] not in BD_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
-    agents = await db.users.find({"role": "business_development", "is_active": True}, {"_id": 0, "id": 1, "full_name": 1, "email": 1}).to_list(20)
+    agents = await db.users.find({"role": {"$in": list(BD_ROLES)}, "is_active": True}, {"_id": 0, "id": 1, "full_name": 1, "email": 1}).to_list(20)
     return agents
 
 
@@ -6106,7 +6110,7 @@ async def reassign_bd_student(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     
-    new_agent = await db.users.find_one({"id": new_bd_agent_id, "role": "business_development"})
+    new_agent = await db.users.find_one({"id": new_bd_agent_id, "role": {"$in": list(BD_ROLES)}})
     if not new_agent:
         raise HTTPException(status_code=404, detail="BD agent not found")
     
