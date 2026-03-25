@@ -12,6 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
+from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
@@ -26107,6 +26108,17 @@ async def reject_merge_request(request_id: str, request: Request, user=Depends(g
 
 SALES_BENCHMARK_AED = 18000  # Sales agents earn 0 until they hit this monthly revenue
 
+_course_catalog_cache = {"data": None, "ts": 0}
+
+async def _get_course_catalog():
+    """Cached course catalog loader - refreshes every 60s."""
+    now = _time.time()
+    if _course_catalog_cache["data"] is None or now - _course_catalog_cache["ts"] > 60:
+        _course_catalog_cache["data"] = await db.course_catalog.find({"is_active": True}, {"_id": 0}).to_list(100)
+        _course_catalog_cache["ts"] = now
+    return _course_catalog_cache["data"]
+
+
 async def _match_course_commission(amount: float, course_type: str = "course"):
     """Match enrollment amount to course(s) in course_catalog.
     
@@ -26115,10 +26127,8 @@ async def _match_course_commission(amount: float, course_type: str = "course"):
     2. Try decomposing as Course + Addon (sum of commissions)
     3. Fallback to closest single course within 15%
     """
-    catalog = await db.course_catalog.find(
-        {"is_active": True, "type": {"$in": [course_type, "addon"] if course_type == "course" else [course_type]}},
-        {"_id": 0}
-    ).to_list(100)
+    full_catalog = await _get_course_catalog()
+    catalog = [c for c in full_catalog if c.get("type") in ([course_type, "addon"] if course_type == "course" else [course_type])]
     if not catalog:
         return {}
 
@@ -26439,8 +26449,9 @@ async def get_commission_dashboard(month: str = None, user=Depends(get_current_u
         result["sales_commissions"] = sales_data
         result["total_sales_earned"] = sum(s["earned_commission"] for s in sales_data)
         result["total_sales_pending"] = sum(s["pending_commission"] for s in sales_data)
-        result["total_tl_earned"] = sum(s["earned_tl"] for s in sales_data)
-        result["total_tl_pending"] = sum(s["pending_tl"] for s in sales_data)
+        # Only sum TL rows for total TL earned (SE rows are informational — already included in TL rows)
+        result["total_tl_earned"] = sum(s["earned_tl"] for s in sales_data if s.get("is_tl_or_sm"))
+        result["total_tl_pending"] = sum(s["pending_tl"] for s in sales_data if s.get("is_tl_or_sm"))
         result["sm_bonus_pool"] = sum(s["sm_pool"] for s in sales_data)
 
         cs_data = []
@@ -26572,6 +26583,135 @@ async def approve_commissions(data: dict = Body(...), user=Depends(get_current_u
         return {"message": f"{department.upper()} commission approval revoked for {month}"}
     else:
         raise HTTPException(400, "action must be 'approve' or 'revoke'")
+
+
+@api_router.get("/commissions/transactions")
+async def get_commission_transactions(
+    month: str = None, department: str = None, agent_id: str = None,
+    status: str = None, user=Depends(get_current_user)
+):
+    """List commission transactions for CEO approval or agent view."""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    query = {"month": month}
+    if department:
+        query["department"] = department
+    if agent_id:
+        query["agent_id"] = agent_id
+    if status:
+        query["status"] = status
+    # Non-CEO can only see their own
+    if user["role"] not in ("super_admin", "admin"):
+        query["agent_id"] = user["id"]
+    txns = await db.commission_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Summary stats
+    total_pending = sum(t.get("final_commission", t.get("calculated_commission", 0)) for t in txns if t["status"] == "pending")
+    total_approved = sum(t.get("final_commission", t.get("calculated_commission", 0)) for t in txns if t["status"] == "approved")
+    return {
+        "transactions": txns,
+        "summary": {
+            "total": len(txns),
+            "pending_count": sum(1 for t in txns if t["status"] == "pending"),
+            "approved_count": sum(1 for t in txns if t["status"] == "approved"),
+            "total_pending_amount": total_pending,
+            "total_approved_amount": total_approved,
+        }
+    }
+
+
+@api_router.post("/commissions/transactions/{txn_id}/approve")
+async def approve_commission_transaction(txn_id: str, user=Depends(get_current_user)):
+    """CEO approves a single commission transaction."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "Only CEO can approve commissions")
+    txn = await db.commission_transactions.find_one({"id": txn_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.commission_transactions.update_one(
+        {"id": txn_id},
+        {"$set": {"status": "approved", "approved_by": user["id"], "approved_at": now}}
+    )
+    return {"message": "Transaction approved", "id": txn_id}
+
+
+@api_router.post("/commissions/transactions/bulk-approve")
+async def bulk_approve_commission_transactions(data: dict = Body(...), user=Depends(get_current_user)):
+    """CEO bulk-approves multiple transactions at once."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "Only CEO can approve commissions")
+    txn_ids = data.get("transaction_ids", [])
+    if not txn_ids:
+        # Approve all pending for given month/department
+        month = data.get("month", datetime.now(timezone.utc).strftime("%Y-%m"))
+        department = data.get("department")
+        query = {"month": month, "status": "pending"}
+        if department:
+            query["department"] = department
+        now = datetime.now(timezone.utc).isoformat()
+        result = await db.commission_transactions.update_many(
+            query,
+            {"$set": {"status": "approved", "approved_by": user["id"], "approved_at": now}}
+        )
+        return {"message": f"Approved {result.modified_count} transactions"}
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.commission_transactions.update_many(
+        {"id": {"$in": txn_ids}, "status": "pending"},
+        {"$set": {"status": "approved", "approved_by": user["id"], "approved_at": now}}
+    )
+    return {"message": f"Approved {result.modified_count} transactions"}
+
+
+@api_router.put("/commissions/transactions/{txn_id}")
+async def edit_commission_transaction(txn_id: str, data: dict = Body(...), user=Depends(get_current_user)):
+    """CEO edits commission amount for a transaction."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "Only CEO can edit commissions")
+    txn = await db.commission_transactions.find_one({"id": txn_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    new_commission = data.get("final_commission")
+    ceo_notes = data.get("ceo_notes", "")
+    now = datetime.now(timezone.utc).isoformat()
+    update = {
+        "final_commission": new_commission,
+        "ceo_notes": ceo_notes,
+        "modified_by": user["id"],
+        "modified_at": now,
+        "original_commission": txn.get("original_commission", txn.get("calculated_commission")),
+    }
+    if data.get("approve", False):
+        update["status"] = "approved"
+        update["approved_by"] = user["id"]
+        update["approved_at"] = now
+    await db.commission_transactions.update_one({"id": txn_id}, {"$set": update})
+    return {"message": "Transaction updated", "id": txn_id}
+
+
+@api_router.post("/commissions/generate-transactions")
+async def generate_commission_transactions(data: dict = Body(...), user=Depends(get_current_user)):
+    """Generate commission transactions for a given month."""
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "CEO only")
+    month = data.get("month", datetime.now(timezone.utc).strftime("%Y-%m"))
+    try:
+        from commission_generator import generate_transactions_for_month
+        created = await generate_transactions_for_month(db, month)
+        return {"message": f"Generated {created} commission transactions for {month}", "created": created}
+    except Exception as e:
+        logger.error(f"Commission generation failed: {e}")
+        raise HTTPException(500, f"Generation failed: {str(e)}")
+
+
+@api_router.get("/commissions/generation-status")
+async def get_commission_generation_status(month: str = None, user=Depends(get_current_user)):
+    """Check status of commission generation for a month."""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    status = await db.commission_generation_status.find_one({"month": month}, {"_id": 0})
+    if not status:
+        return {"month": month, "status": "not_started"}
+    return status
 
 
 @api_router.get("/commissions/ceo/drill")

@@ -3,11 +3,12 @@ import { useAuth, apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Users, ArrowUpRight, Target, Award, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Users, ArrowUpRight, Target, Award, ShieldCheck, ShieldAlert, Pencil, Check, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmtCur = (n) => `AED ${(n || 0).toLocaleString()}`;
@@ -96,6 +97,13 @@ export default function CommissionDashboard() {
     const [drillData, setDrillData] = useState(null);
     const [drillLoading, setDrillLoading] = useState(false);
     const [approving, setApproving] = useState(false);
+    const [transactions, setTransactions] = useState([]);
+    const [txnFilter, setTxnFilter] = useState('all');
+    const [txnLoading, setTxnLoading] = useState(false);
+    const [editingTxn, setEditingTxn] = useState(null);
+    const [editCommission, setEditCommission] = useState('');
+    const [editNotes, setEditNotes] = useState('');
+    const [generating, setGenerating] = useState(false);
     const monthOpts = months();
 
     const isCEO = user?.role === 'super_admin';
@@ -141,6 +149,59 @@ export default function CommissionDashboard() {
 
     const getApprovalStatus = (dept) => data?.approvals?.[dept]?.status === 'approved';
     const userApprovalStatus = data?.approval_status;
+
+    const fetchTransactions = async (dept) => {
+        setTxnLoading(true);
+        try {
+            const params = new URLSearchParams({ month });
+            if (dept && dept !== 'all') params.set('department', dept);
+            const res = await apiClient.get(`/commissions/transactions?${params}`);
+            setTransactions(res.data.transactions || []);
+        } catch { toast.error('Failed to load transactions'); }
+        finally { setTxnLoading(false); }
+    };
+
+    const approveTxn = async (txnId) => {
+        try {
+            await apiClient.post(`/commissions/transactions/${txnId}/approve`);
+            setTransactions(prev => prev.map(t => t.id === txnId ? { ...t, status: 'approved' } : t));
+            toast.success('Transaction approved');
+        } catch { toast.error('Failed to approve'); }
+    };
+
+    const bulkApprove = async (dept) => {
+        try {
+            const body = { month };
+            if (dept && dept !== 'all') body.department = dept;
+            const res = await apiClient.post('/commissions/transactions/bulk-approve', body);
+            toast.success(res.data.message);
+            fetchTransactions(txnFilter);
+        } catch { toast.error('Failed to bulk approve'); }
+    };
+
+    const saveEditTxn = async () => {
+        if (!editingTxn) return;
+        try {
+            await apiClient.put(`/commissions/transactions/${editingTxn.id}`, {
+                final_commission: parseFloat(editCommission),
+                ceo_notes: editNotes,
+                approve: true,
+            });
+            setTransactions(prev => prev.map(t => t.id === editingTxn.id ? { ...t, final_commission: parseFloat(editCommission), ceo_notes: editNotes, status: 'approved' } : t));
+            setEditingTxn(null);
+            toast.success('Commission updated & approved');
+        } catch { toast.error('Failed to update'); }
+    };
+
+    const generateTransactions = async () => {
+        setGenerating(true);
+        try {
+            const res = await apiClient.post('/commissions/generate-transactions', { month });
+            toast.success(res.data.message);
+            fetchTransactions(txnFilter);
+        } catch { toast.error('Failed to generate transactions'); }
+        finally { setGenerating(false); }
+    };
 
     if (loading) return <div className="text-center py-12 text-muted-foreground">Loading commission data...</div>;
     if (!data) return null;
@@ -266,6 +327,7 @@ export default function CommissionDashboard() {
                     <TabsList>
                         <TabsTrigger value="sales">Sales Commissions</TabsTrigger>
                         <TabsTrigger value="cs">CS Commissions</TabsTrigger>
+                        <TabsTrigger value="transactions" onClick={() => fetchTransactions(txnFilter)}>Approve Transactions</TabsTrigger>
                         <TabsTrigger value="pools">CEO Pools</TabsTrigger>
                     </TabsList>
 
@@ -329,6 +391,102 @@ export default function CommissionDashboard() {
                         <Button variant="outline" size="sm" onClick={() => openDrill('cs')} data-testid="drill-cs-commission">
                             <ArrowUpRight className="h-3.5 w-3.5 mr-1" /> View Full CS Commission Table
                         </Button>
+                    </TabsContent>
+
+
+                    {/* === TRANSACTIONS APPROVAL TAB === */}
+                    <TabsContent value="transactions" className="space-y-4 mt-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                                <Select value={txnFilter} onValueChange={(v) => { setTxnFilter(v); fetchTransactions(v); }}>
+                                    <SelectTrigger className="w-[160px] h-8" data-testid="txn-dept-filter"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Departments</SelectItem>
+                                        <SelectItem value="sales">Sales</SelectItem>
+                                        <SelectItem value="cs">Customer Service</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Badge variant="outline" className="text-xs">{transactions.filter(t => t.status === 'pending').length} pending</Badge>
+                                <Badge variant="outline" className="text-xs text-emerald-600">{transactions.filter(t => t.status === 'approved').length} approved</Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button variant="outline" size="sm" onClick={generateTransactions} disabled={generating} data-testid="generate-txns-btn">
+                                    {generating ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Generate Transactions
+                                </Button>
+                                <Button size="sm" onClick={() => bulkApprove(txnFilter)} disabled={!transactions.some(t => t.status === 'pending')} data-testid="bulk-approve-btn" className="bg-emerald-500 hover:bg-emerald-600 text-white">
+                                    <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Approve All Pending
+                                </Button>
+                            </div>
+                        </div>
+
+                        {txnLoading ? (
+                            <div className="text-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" />Loading transactions...</div>
+                        ) : transactions.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">No transactions found. Click "Generate Transactions" to scan enrolled leads and CS upgrades.</div>
+                        ) : (
+                            <Card>
+                                <CardContent className="p-0">
+                                    <div className="max-h-[500px] overflow-auto">
+                                        <Table>
+                                            <TableHeader className="sticky top-0 bg-card z-10">
+                                                <TableRow>
+                                                    <TableHead className="w-[140px]">Agent</TableHead>
+                                                    <TableHead className="w-[90px]">Type</TableHead>
+                                                    <TableHead>Student</TableHead>
+                                                    <TableHead className="text-right w-[90px]">Amount</TableHead>
+                                                    <TableHead>Course</TableHead>
+                                                    <TableHead className="text-right w-[100px]">Commission</TableHead>
+                                                    <TableHead className="w-[80px]">Status</TableHead>
+                                                    <TableHead className="text-right w-[130px]">Actions</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {transactions.map(txn => (
+                                                    <TableRow key={txn.id} className={txn.status === 'approved' ? 'bg-emerald-500/5' : ''}>
+                                                        <TableCell className="font-medium text-sm">{txn.agent_name}</TableCell>
+                                                        <TableCell>
+                                                            <Badge variant="outline" className="text-xs capitalize">
+                                                                {txn.commission_type === 'team_leader' ? 'TL' : txn.commission_type === 'cs_agent' ? 'CS' : 'SE'}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-sm">{txn.student_name}{txn.from_agent ? <span className="text-xs text-muted-foreground ml-1">(via {txn.from_agent})</span> : null}</TableCell>
+                                                        <TableCell className="text-right text-sm">{fmtCur(txn.amount)}</TableCell>
+                                                        <TableCell className="text-xs text-muted-foreground">{txn.course_matched}</TableCell>
+                                                        <TableCell className="text-right font-semibold text-sm">
+                                                            {txn.final_commission !== txn.original_commission ? (
+                                                                <span><span className="line-through text-muted-foreground mr-1">{fmtCur(txn.original_commission)}</span>{fmtCur(txn.final_commission)}</span>
+                                                            ) : fmtCur(txn.final_commission)}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {txn.status === 'approved' ? (
+                                                                <Badge className="bg-emerald-500/10 text-emerald-600 text-xs">Approved</Badge>
+                                                            ) : (
+                                                                <Badge className="bg-amber-500/10 text-amber-600 text-xs">Pending</Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                {txn.status === 'pending' && (
+                                                                    <>
+                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:bg-emerald-500/10" onClick={() => approveTxn(txn.id)} data-testid={`approve-txn-${txn.id}`} title="Approve">
+                                                                            <Check className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-500/10" onClick={() => { setEditingTxn(txn); setEditCommission(String(txn.final_commission)); setEditNotes(txn.ceo_notes || ''); }} data-testid={`edit-txn-${txn.id}`} title="Edit & Approve">
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                                {txn.ceo_notes && <span className="text-xs text-muted-foreground" title={txn.ceo_notes}>*</span>}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="pools" className="space-y-4 mt-4">
@@ -403,6 +561,37 @@ export default function CommissionDashboard() {
                                 ))}
                             </TableBody>
                         </Table>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Commission Dialog */}
+            <Dialog open={!!editingTxn} onOpenChange={() => setEditingTxn(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle>Edit Commission</DialogTitle></DialogHeader>
+                    {editingTxn && (
+                        <div className="space-y-4">
+                            <div className="text-sm space-y-1">
+                                <p><strong>Agent:</strong> {editingTxn.agent_name}</p>
+                                <p><strong>Student:</strong> {editingTxn.student_name}</p>
+                                <p><strong>Amount:</strong> {fmtCur(editingTxn.amount)}</p>
+                                <p><strong>Original Commission:</strong> {fmtCur(editingTxn.original_commission)}</p>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">New Commission Amount (AED)</label>
+                                <Input type="number" value={editCommission} onChange={e => setEditCommission(e.target.value)} data-testid="edit-commission-input" className="mt-1" />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">CEO Notes</label>
+                                <Input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Reason for adjustment..." data-testid="edit-notes-input" className="mt-1" />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button variant="outline" size="sm" onClick={() => setEditingTxn(null)}>Cancel</Button>
+                                <Button size="sm" onClick={saveEditTxn} className="bg-emerald-500 hover:bg-emerald-600 text-white" data-testid="save-edit-txn">
+                                    <Check className="h-3.5 w-3.5 mr-1" /> Save & Approve
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
