@@ -44,6 +44,7 @@ const CSDashboard = () => {
     const [leaderboard, setLeaderboard] = useState([]);
     const [agentBifurcation, setAgentBifurcation] = useState([]);
     const [myCommission, setMyCommission] = useState(null);
+    const [netPayData, setNetPayData] = useState(null);
     const [period, setPeriod] = useState('overall');
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const [viewMode, setViewMode] = useState(isHeadOrAdmin ? 'team' : 'individual');
@@ -65,6 +66,7 @@ const CSDashboard = () => {
                 apiClient.get(`/cs/dashboard/leaderboard?period=${period}`),
                 isHeadOrAdmin ? apiClient.get(`/dashboard/cs-agent-bifurcation?period=${period}`) : Promise.resolve({ data: [] }),
                 apiClient.get('/commissions/dashboard'),
+                apiClient.get('/commissions/scatter-data'),
             ]);
             const val = (i, fallback = {}) => results[i].status === 'fulfilled' ? results[i].value.data : fallback;
             setStats(val(0, {}));
@@ -75,6 +77,7 @@ const CSDashboard = () => {
             setLeaderboard(val(5, []) || []);
             setAgentBifurcation(val(6, []) || []);
             setMyCommission(val(7, null));
+            setNetPayData(val(8, null));
         } catch (error) { console.error('Failed to fetch CS dashboard:', error); }
         finally { setLoading(false); }
     };
@@ -265,33 +268,55 @@ const CSDashboard = () => {
                 )}
             </div>
 
-            {/* My Commission Details */}
+            {/* My Commission & Net Pay Summary */}
             {myCommission && myCommission.my_commission && (() => {
                 const mc = myCommission.my_commission;
+                const headEarned = myCommission.total_cs_head_earned || 0;
+                const headPending = myCommission.total_cs_head_pending || 0;
+                const totalEarned = (mc.earned_commission || 0) + (isHeadOrAdmin ? headEarned : 0);
+                const totalPending = (mc.pending_commission || 0) + (isHeadOrAdmin ? headPending : 0);
+                const salary = netPayData?.base_salary || 0;
+                const netPay = salary + totalEarned;
                 return (
                     <Card data-testid="cs-my-commission">
                         <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-500" />My Commission — {myCommission.month}</CardTitle>
-                                    <CardDescription>{mc.upgrades_closed || 0} upgrades closed this month</CardDescription>
+                            <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-500" />My Commission — {myCommission.month}</CardTitle>
+                            <CardDescription>{mc.upgrades_closed || 0} personal upgrades closed this month</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {/* Net Pay + Commission Summary */}
+                            <div className={`grid ${isHeadOrAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-3'} gap-3`}>
+                                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                    <p className="text-xs text-muted-foreground">Agent Commission</p>
+                                    <p className="text-xl font-bold font-mono text-emerald-500" data-testid="cs-my-agent-commission">{fmtCur(mc.earned_commission)}</p>
+                                    <p className="text-xs text-muted-foreground">{mc.upgrades_closed || 0} upgrades</p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="text-right">
-                                        <p className="text-xs text-muted-foreground">Earned</p>
-                                        <p className="text-lg font-bold font-mono text-emerald-500">{fmtCur(mc.earned_commission)}</p>
+                                {isHeadOrAdmin && (
+                                    <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                                        <p className="text-xs text-muted-foreground">Head Commission</p>
+                                        <p className="text-xl font-bold font-mono text-purple-500" data-testid="cs-my-head-commission">{fmtCur(headEarned)}</p>
+                                        <p className="text-xs text-muted-foreground">From team upgrades</p>
                                     </div>
-                                    {mc.pending_commission > 0 && (
-                                        <div className="text-right">
-                                            <p className="text-xs text-muted-foreground">Pending</p>
-                                            <p className="text-lg font-bold font-mono text-amber-500">{fmtCur(mc.pending_commission)}</p>
-                                        </div>
-                                    )}
+                                )}
+                                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                    <p className="text-xs text-muted-foreground">Total Commission</p>
+                                    <p className="text-xl font-bold font-mono text-blue-500" data-testid="cs-my-total-commission">{fmtCur(totalEarned)}</p>
+                                    {totalPending > 0 && <p className="text-xs text-amber-500">+{fmtCur(totalPending)} pending</p>}
+                                </div>
+                                <div className="p-3 rounded-lg bg-muted/50 border">
+                                    <p className="text-xs text-muted-foreground">Base Salary</p>
+                                    <p className="text-xl font-bold font-mono" data-testid="cs-my-salary">{fmtCur(salary)}</p>
+                                    <p className="text-xs text-muted-foreground">Monthly</p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+                                    <p className="text-xs text-muted-foreground">Net Pay</p>
+                                    <p className="text-xl font-bold font-mono text-primary" data-testid="cs-my-net-pay">{fmtCur(netPay)}</p>
+                                    <p className="text-xs text-muted-foreground">Salary + Commission</p>
                                 </div>
                             </div>
-                        </CardHeader>
-                        {(mc.earned_details?.length > 0 || mc.pending_details?.length > 0) && (
-                            <CardContent>
+
+                            {/* Transaction Details */}
+                            {(mc.earned_details?.length > 0 || mc.pending_details?.length > 0) && (
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -315,15 +340,15 @@ const CSDashboard = () => {
                                                 <TableCell className="text-right font-mono text-sm">{fmtCur(d.amount || d.upgrade_amount)}</TableCell>
                                                 <TableCell className="text-right font-mono font-semibold text-sm">
                                                     <span className={d.status === 'earned' || d.stage === 'closed' ? 'text-emerald-500' : 'text-amber-500'}>
-                                                        {fmtCur(d.agent_commission || d.se_commission || 0)}
+                                                        {fmtCur(d.cs_commission || d.agent_commission || d.se_commission || 0)}
                                                     </span>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
-                            </CardContent>
-                        )}
+                            )}
+                        </CardContent>
                     </Card>
                 );
             })()}

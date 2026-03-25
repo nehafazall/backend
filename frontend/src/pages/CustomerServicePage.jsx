@@ -428,7 +428,7 @@ const CustomerServicePage = () => {
             // For Kanban: fetch per-stage in parallel so every column shows its students
             if (!searchTerm && !csPeriodFilter) {
                 const stageIds = CS_STAGES.map(s => s.id);
-                const perStageLimit = 25;
+                const perStageLimit = pageSize;
                 const promises = stageIds.map(stage =>
                     studentApi.getAll({ ...baseParams, stage, page: 1, page_size: perStageLimit })
                 );
