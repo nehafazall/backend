@@ -325,7 +325,7 @@ const MentorCRMPage = () => {
         fetchRevenueSummary();
     }, [viewMode, filterMentorAgent, mentorPeriodFilter, currentPage, pageSize]);
 
-    const isHeadOrAdmin = ['academic_master', 'super_admin', 'admin'].includes(user?.role);
+    const isHeadOrAdmin = ['academic_master', 'master_of_academics', 'master_of_academics_', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
 
     // Fetch mentor agents for super admin / academic master filtering
@@ -335,11 +335,13 @@ const MentorCRMPage = () => {
             Promise.all([
                 apiClient.get('/users?role=mentor'),
                 apiClient.get('/users?role=master_of_academics'),
+                apiClient.get('/users?role=master_of_academics_'),
                 apiClient.get('/users?role=academic_master')
-            ]).then(([mentorRes, moaRes, amRes]) => {
+            ]).then(([mentorRes, moaRes, moa2Res, amRes]) => {
                 const allMentors = [
                     ...(mentorRes.data || []),
                     ...(moaRes.data || []),
+                    ...(moa2Res.data || []),
                     ...(amRes.data || [])
                 ].filter(u => u.is_active !== false);
                 // Remove duplicates by id
@@ -351,9 +353,9 @@ const MentorCRMPage = () => {
 
     const fetchRevenueSummary = async () => {
         try {
-            // Non-super-admin: show only own data. Super admin: show team or filtered mentor
+            // Non-super-admin non-head: show only own data
             let params = '';
-            if (!isSuperAdmin) {
+            if (!isSuperAdmin && !isHeadOrAdmin) {
                 params = `?mentor_id=${user?.id}`;
             } else if (filterMentorAgent && filterMentorAgent !== 'all') {
                 params = `?mentor_id=${filterMentorAgent}`;

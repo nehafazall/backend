@@ -8614,6 +8614,227 @@ async def get_mentor_leaderboard_v2(period: str = "overall", user=Depends(get_cu
     return board
 
 
+# ─── Cross-Mentor Deposits ───────────────────────────────────────────────
+BONUS_TIERS = [
+    {"min_usd": 50000, "pct": 25},
+    {"min_usd": 40000, "pct": 20},
+    {"min_usd": 30000, "pct": 17.5},
+    {"min_usd": 20000, "pct": 15},
+    {"min_usd": 10000, "pct": 10},
+]
+
+def _get_bonus_tier(total_effort_usd: float):
+    for t in BONUS_TIERS:
+        if total_effort_usd >= t["min_usd"]:
+            return t
+    return None
+
+@api_router.get("/mentor/cross-deposits")
+async def get_cross_mentor_deposits(
+    period: str = "this_month",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    """List cross-mentor deposits — deposits recorded by mentors for OTHER mentors' students."""
+    role = user["role"]
+    if role not in ["mentor", "master_of_academics", "master_of_academics_", "super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    date_start, date_end = _get_date_range(period, custom_start, custom_end)
+
+    query = {"effort_by_id": {"$exists": True, "$ne": None}}
+    if date_start:
+        query["date"] = {"$gte": date_start}
+        if date_end:
+            query["date"]["$lt"] = date_end
+    if role in ["mentor", "master_of_academics", "master_of_academics_"] and role not in ["super_admin", "admin"]:
+        query["effort_by_id"] = user["id"]
+
+    deposits = await db.mentor_redeposits.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+
+    # Calculate effort summary by mentor
+    effort_pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$effort_by_id", "name": {"$first": "$effort_by_name"}, "total_usd": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total_usd": -1}},
+    ]
+    effort_summary = await db.mentor_redeposits.aggregate(effort_pipeline).to_list(50)
+
+    return {
+        "deposits": [{**d, "amount_aed": round(d.get("amount", 0) * USD_TO_AED, 2)} for d in deposits],
+        "effort_summary": [
+            {
+                "mentor_id": e["_id"],
+                "mentor_name": e.get("name", "Unknown"),
+                "total_effort_usd": e["total_usd"],
+                "total_effort_aed": round(e["total_usd"] * USD_TO_AED, 2),
+                "deposit_count": e["count"],
+                "bonus_tier": _get_bonus_tier(e["total_usd"]),
+            }
+            for e in effort_summary
+        ],
+    }
+
+
+@api_router.get("/mentor/cross-deposits/search-student")
+async def search_student_for_cross_deposit(q: str, user=Depends(get_current_user)):
+    """Search students by name/email/phone for cross-deposit recording."""
+    if not q or len(q) < 2:
+        return []
+    regex = {"$regex": q, "$options": "i"}
+    students = await db.students.find(
+        {"$or": [{"full_name": regex}, {"email": regex}, {"phone": regex}]},
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "mt5_id": 1,
+         "mentor_id": 1, "mentor_name": 1, "bd_agent_id": 1, "bd_agent_name": 1,
+         "cs_agent_id": 1, "cs_agent_name": 1}
+    ).limit(10).to_list(10)
+    return students
+
+
+@api_router.post("/mentor/cross-deposits")
+async def record_cross_mentor_deposit(data: dict = Body(...), user=Depends(get_current_user)):
+    """Record a deposit brought by a mentor for another mentor's student.
+    The effort_by is the mentor who convinced the student. The mentor_id is the assigned mentor.
+    """
+    role = user["role"]
+    if role not in ["mentor", "master_of_academics", "master_of_academics_", "super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    student_id = data.get("student_id")
+    amount = float(data.get("amount", 0))
+    if not student_id or amount <= 0:
+        raise HTTPException(status_code=400, detail="student_id and positive amount required")
+
+    student = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    now = datetime.now(timezone.utc)
+    month = now.strftime("%Y-%m")
+
+    deposit_record = {
+        "id": str(uuid.uuid4()),
+        "month": data.get("month", month),
+        "date": data.get("date", now.strftime("%Y-%m-%d")),
+        "mentor_id": student.get("mentor_id"),
+        "mentor_name": student.get("mentor_name"),
+        "student_id": student_id,
+        "student_name": student.get("full_name"),
+        "student_email": student.get("email"),
+        "amount": amount,
+        "amount_aed": round(amount * USD_TO_AED, 2),
+        "status": "closed",
+        "effort_by_id": user["id"],
+        "effort_by_name": user.get("full_name"),
+        "notes": data.get("notes", ""),
+        "screenshot_url": data.get("screenshot_url"),
+        "created_at": now.isoformat(),
+        "created_by": user["id"],
+    }
+
+    await db.mentor_redeposits.insert_one(deposit_record)
+
+    # Also update customer master
+    customer = await db.customers.find_one({"phone": student.get("phone")})
+    if customer:
+        txn = {
+            "payment_id": deposit_record["id"],
+            "amount": round(amount * USD_TO_AED, 2),
+            "currency": "AED",
+            "payment_method": "mentor_redeposit",
+            "payment_type": "cross_mentor_deposit",
+            "course_name": f"Cross-deposit (effort: {user.get('full_name')})",
+            "date": deposit_record["date"],
+        }
+        await db.customers.update_one(
+            {"id": customer["id"]},
+            {"$push": {"transactions": txn}, "$inc": {"total_spent": txn["amount"], "transaction_count": 1},
+             "$set": {"updated_at": now.isoformat()}}
+        )
+
+    # Send notification to the assigned mentor
+    if student.get("mentor_id") and student["mentor_id"] != user["id"]:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": student["mentor_id"],
+            "type": "cross_deposit",
+            "title": "Cross-Mentor Deposit Recorded",
+            "message": f"{user.get('full_name')} recorded a ${amount} deposit for your student {student.get('full_name')}",
+            "read": False,
+            "created_at": now.isoformat(),
+        })
+
+    deposit_record.pop("_id", None)
+    return deposit_record
+
+
+@api_router.get("/mentor/effort-summary")
+async def get_mentor_effort_summary(
+    period: str = "this_month",
+    custom_start: Optional[str] = None,
+    custom_end: Optional[str] = None,
+    user=Depends(get_current_user),
+):
+    """Get a mentor's total effort (own deposits + cross-deposits they brought) for bonus calc."""
+    role = user["role"]
+    if role not in ["mentor", "master_of_academics", "master_of_academics_", "super_admin", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    date_start, date_end = _get_date_range(period, custom_start, custom_end)
+    date_q = {}
+    if date_start:
+        date_q["date"] = {"$gte": date_start}
+        if date_end:
+            date_q["date"]["$lt"] = date_end
+
+    mentor_id = user["id"]
+
+    # Own deposits (where mentor_id = user and no effort_by, or effort_by = self)
+    own_q = {**date_q, "mentor_id": mentor_id, "$or": [{"effort_by_id": {"$exists": False}}, {"effort_by_id": None}, {"effort_by_id": mentor_id}]}
+    own_agg = await db.mentor_redeposits.aggregate([{"$match": own_q}, {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}]).to_list(1)
+    own_usd = own_agg[0]["total"] if own_agg else 0
+    own_count = own_agg[0]["count"] if own_agg else 0
+
+    # Cross deposits (where effort_by = user but mentor_id != user)
+    cross_q = {**date_q, "effort_by_id": mentor_id, "mentor_id": {"$ne": mentor_id}}
+    cross_agg = await db.mentor_redeposits.aggregate([{"$match": cross_q}, {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}]).to_list(1)
+    cross_usd = cross_agg[0]["total"] if cross_agg else 0
+    cross_count = cross_agg[0]["count"] if cross_agg else 0
+
+    total_effort_usd = own_usd + cross_usd
+    bonus_tier = _get_bonus_tier(total_effort_usd)
+
+    # Get salary for bonus calc
+    emp = await db.hr_employees.find_one({"user_id": mentor_id}, {"_id": 0, "gross_salary": 1})
+    salary = emp.get("gross_salary", 0) if emp else 0
+
+    # Next tier
+    next_tier = None
+    for t in reversed(BONUS_TIERS):
+        if total_effort_usd < t["min_usd"]:
+            next_tier = t
+    remaining_for_next = (next_tier["min_usd"] - total_effort_usd) if next_tier else 0
+
+    return {
+        "own_deposits_usd": own_usd, "own_deposits_aed": round(own_usd * USD_TO_AED, 2), "own_count": own_count,
+        "cross_deposits_usd": cross_usd, "cross_deposits_aed": round(cross_usd * USD_TO_AED, 2), "cross_count": cross_count,
+        "total_effort_usd": total_effort_usd, "total_effort_aed": round(total_effort_usd * USD_TO_AED, 2),
+        "total_count": own_count + cross_count,
+        "bonus_tier": bonus_tier,
+        "bonus_amount": round(salary * (bonus_tier["pct"] / 100), 2) if bonus_tier else 0,
+        "salary": salary,
+        "next_tier": next_tier,
+        "remaining_for_next_usd": remaining_for_next,
+        "tiers": BONUS_TIERS,
+    }
+
+
+
+
 @api_router.get("/mentor/dashboard/revenue-chart")
 async def get_mentor_revenue_chart(period: str = "overall", user=Depends(get_current_user)):
     """Revenue bar chart data by mentor."""

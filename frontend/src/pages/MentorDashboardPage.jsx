@@ -74,7 +74,7 @@ function MentorDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [showSensitive, setShowSensitive] = useState(false);
 
-    const isMaster = user?.role === 'master_of_academics';
+    const isMaster = ['master_of_academics', 'master_of_academics_'].includes(user?.role);
     const isAdmin = ['super_admin', 'admin'].includes(user?.role);
     const canDrillDown = isMaster || isAdmin;
 
