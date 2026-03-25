@@ -26163,9 +26163,18 @@ async def _match_course_commission(amount: float, course_type: str = "course"):
 
 
 async def _calc_sales_commissions(agent_id: str, month: str):
-    """Calculate sales commissions for an agent for a given month (YYYY-MM)."""
+    """Calculate sales commissions for an agent for a given month (YYYY-MM).
+    
+    TL/SM: No 18K benchmark — commissions always earned.
+    SE: Must cross 18K AED revenue to unlock commissions.
+    """
     month_start = f"{month}-01"
     month_end = f"{month}-31"
+
+    # Get agent role to determine benchmark rule
+    agent_user = await db.users.find_one({"id": agent_id}, {"_id": 0, "role": 1})
+    agent_role = agent_user.get("role", "sales_executive") if agent_user else "sales_executive"
+    is_tl_or_sm = agent_role in ("team_leader", "sales_manager")
 
     # Get all enrolled leads for this agent this month
     enrolled = await db.leads.find({
@@ -26198,6 +26207,35 @@ async def _calc_sales_commissions(agent_id: str, month: str):
     total_tl = sum(d["tl_commission"] for d in earned_details)
     total_sm = sum(d["sm_commission"] for d in earned_details)
 
+    # For TL/SM: also calculate TL commission from team members' deals
+    team_tl_earned = 0
+    team_tl_details = []
+    if is_tl_or_sm:
+        team_members = await db.users.find(
+            {"team_leader_id": agent_id, "role": "sales_executive", "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(50)
+        for member in team_members:
+            member_enrolled = await db.leads.find({
+                "assigned_to": member["id"],
+                "stage": "enrolled",
+                "enrolled_at": {"$gte": month_start, "$lte": month_end},
+            }, {"_id": 0, "full_name": 1, "enrollment_amount": 1, "sale_amount": 1, "enrolled_at": 1}).to_list(200)
+            for lead in member_enrolled:
+                amt = lead.get("enrollment_amount") or lead.get("sale_amount") or 0
+                course = await _match_course_commission(amt, "course")
+                tl_comm = course.get("commission_team_leader", 0)
+                if tl_comm > 0:
+                    team_tl_earned += tl_comm
+                    team_tl_details.append({
+                        "lead_name": lead.get("full_name"),
+                        "agent_name": member["full_name"],
+                        "amount": amt,
+                        "course_matched": course.get("name", "Unknown"),
+                        "tl_commission": tl_comm,
+                        "date": str(lead.get("enrolled_at", ""))[:10],
+                    })
+
     # Pipeline (pending) — leads in hot_lead, in_progress, warm_lead stages
     pipeline_leads = await db.leads.find({
         "assigned_to": agent_id,
@@ -26222,18 +26260,25 @@ async def _calc_sales_commissions(agent_id: str, month: str):
     pending_se = sum(d["se_commission"] for d in pipeline_details)
     pending_tl = sum(d["tl_commission"] for d in pipeline_details)
 
+    # For TL/SM: no benchmark needed — commissions always earned
+    # For SE: must cross 18K to earn, otherwise pending
+    se_earned = total_se if (is_tl_or_sm or benchmark_crossed) else 0
+    se_pending = (pending_se + (total_se if not (is_tl_or_sm or benchmark_crossed) else 0))
+
     return {
         "agent_id": agent_id,
         "month": month,
         "total_revenue": total_revenue,
         "benchmark": SALES_BENCHMARK_AED,
         "benchmark_crossed": benchmark_crossed,
-        "earned_commission": total_se if benchmark_crossed else 0,
-        "pending_commission": (pending_se + (total_se if not benchmark_crossed else 0)),
-        "earned_tl": total_tl if benchmark_crossed else 0,
-        "pending_tl": (pending_tl + (total_tl if not benchmark_crossed else 0)),
+        "is_tl_or_sm": is_tl_or_sm,
+        "earned_commission": se_earned,
+        "pending_commission": se_pending,
+        "earned_tl": total_tl + team_tl_earned,  # Own deals TL + team members TL
+        "pending_tl": pending_tl,
         "sm_pool": total_sm,
         "earned_details": earned_details,
+        "team_tl_details": team_tl_details,
         "pipeline_details": pipeline_details,
         "deals_closed": len(enrolled),
         "pipeline_count": len(pipeline_details),

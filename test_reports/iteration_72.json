@@ -1,0 +1,109 @@
+{
+  "summary": "Tested 4 commission-related fixes: 1) TL commission no 18K rule - PASS, 2) TL earns from team members' deals - PASS, 3) CS Dashboard shows My Commission section - PASS, 4) Sales Dashboard shows Deal-wise Commission table and Net Pay Trend chart - PASS. All 12 backend API tests passed. Frontend UI verified for CS Dashboard and Sales Dashboard.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "CEO can access commission dashboard API",
+    "Sanjeed (team_leader) has is_tl_or_sm=true",
+    "Sanjeed earned_tl > 0 from team members' deals (earned_tl=5260)",
+    "Sanjeed team_tl_details populated with 21 team member deals",
+    "Aleesha (sales_executive) has benchmark_crossed=true",
+    "Aleesha earned_commission=2665",
+    "Aleesha can access own commission via API",
+    "Aleesha has earned_details with deal information",
+    "CS agent can access commission dashboard API",
+    "CS agent has commission details (earned, pending, upgrades)",
+    "Scatter data returns correct structure (base_salary, commission, net_pay)",
+    "TL earns commission regardless of 18K benchmark",
+    "CS Dashboard shows My Commission section with earned AED 1,475 and 11 upgrades",
+    "Sales Dashboard shows Deal-wise Commission table with 5 deals totaling AED 2,665",
+    "Sales Dashboard shows Net Pay Trend chart with 3 lines (Base Salary, Commission, Net Pay)",
+    "Sales Dashboard shows 18K Benchmark cleared indicator",
+    "Sales Dashboard shows Category Progress (Silver category)",
+    "Sales executive home page shows only My Self-Service and Sales sections",
+    "No environment badge visible for sales_executive (correct)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_commission_tl_logic.py",
+    "/app/test_reports/pytest/pytest_commission_tl_logic.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "_calc_sales_commissions function correctly implements TL/SM no-18K-benchmark logic (line 26177: is_tl_or_sm = agent_role in ('team_leader', 'sales_manager'))",
+    "TL commission from team members correctly queries via team_leader_id field (line 26214-26215)",
+    "CS Dashboard correctly fetches /api/commissions/dashboard and renders myCommission section",
+    "Sales Dashboard correctly shows Deal-wise Commission table and Net Pay Trend chart with 3 lines"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_commission_tl_logic.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+
+  "test_credentials": {
+    "ceo": {"email": "aqib@clt-academy.com", "password": "@Aqib1234", "role": "super_admin"},
+    "sales_executive": {"email": "aleesha@clt-academy.com", "password": "Aleesha@123", "role": "sales_executive"},
+    "cs_agent": {"email": "nasida@clt-academy.com", "password": "Nasida@123", "role": "cs_agent"}
+  },
+
+  "seed_data_creation": "",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "All 4 commission fixes verified: 1) TL has no 18K benchmark rule - is_tl_or_sm flag correctly set, 2) TL earns from team members via team_leader_id field - Sanjeed has 21 team deals earning 5260 TL commission, 3) CS Dashboard shows My Commission section with earned/pending amounts and deal details, 4) Sales Dashboard shows Deal-wise Commission table and Net Pay Trend chart with 3 lines (Base Salary, Commission, Net Pay). Sidebar correctly shows only Sales/SSHR/Settings for sales_executive. No environment badge visible for non-super_admin users.",
+
+  "feature_verification_details": {
+    "tl_no_18k_rule": {
+      "description": "TL/SM have no 18K benchmark - commissions always earned",
+      "implementation": "server.py line 26177: is_tl_or_sm = agent_role in ('team_leader', 'sales_manager')",
+      "verification": "Sanjeed (team_leader) has is_tl_or_sm=True, earns commission regardless of benchmark",
+      "status": "WORKING"
+    },
+    "tl_earns_from_team_members": {
+      "description": "TL earns TL commission from team members' deals via team_leader_id field",
+      "implementation": "server.py lines 26213-26237: queries team members by team_leader_id and sums TL commissions",
+      "verification": "Sanjeed has earned_tl=5260 from 21 team member deals in team_tl_details",
+      "status": "WORKING"
+    },
+    "cs_dashboard_my_commission": {
+      "description": "CS agents see commission details on CS Dashboard",
+      "implementation": "CSDashboard.jsx fetches /api/commissions/dashboard and renders myCommission section",
+      "verification": "Nasida (cs_agent) sees My Commission section with AED 1,475 earned, 11 upgrades",
+      "status": "WORKING"
+    },
+    "sales_dashboard_commission_ui": {
+      "description": "Sales Dashboard shows Deal-wise Commission table and Net Pay Trend chart",
+      "implementation": "SalesDashboard.jsx renders commissionInfo with deal_details table and scatterData chart",
+      "verification": "Aleesha sees Deal-wise Commission (5 deals, AED 2,665 total) and Net Pay Trend with 3 lines",
+      "status": "WORKING"
+    },
+    "sidebar_role_filtering": {
+      "description": "Sales executive sees only Sales, SSHR, Settings sections",
+      "verification": "Aleesha home page shows only My Self-Service and Sales sections",
+      "status": "WORKING"
+    },
+    "environment_badge_visibility": {
+      "description": "No testing badge visible for non-super_admin users",
+      "verification": "No environment badge visible for Aleesha (sales_executive)",
+      "status": "WORKING"
+    }
+  }
+}

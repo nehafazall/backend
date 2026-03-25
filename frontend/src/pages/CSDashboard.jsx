@@ -43,6 +43,7 @@ const CSDashboard = () => {
     const [pipeline, setPipeline] = useState([]);
     const [leaderboard, setLeaderboard] = useState([]);
     const [agentBifurcation, setAgentBifurcation] = useState([]);
+    const [myCommission, setMyCommission] = useState(null);
     const [period, setPeriod] = useState('overall');
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const [viewMode, setViewMode] = useState(isHeadOrAdmin ? 'team' : 'individual');
@@ -63,6 +64,7 @@ const CSDashboard = () => {
                 apiClient.get(`/cs/dashboard/pipeline?view_mode=${myViewMode}`),
                 apiClient.get(`/cs/dashboard/leaderboard?period=${period}`),
                 isHeadOrAdmin ? apiClient.get(`/dashboard/cs-agent-bifurcation?period=${period}`) : Promise.resolve({ data: [] }),
+                apiClient.get('/commissions/dashboard'),
             ]);
             const val = (i, fallback = {}) => results[i].status === 'fulfilled' ? results[i].value.data : fallback;
             setStats(val(0, {}));
@@ -72,6 +74,7 @@ const CSDashboard = () => {
             setPipeline(val(4, []) || []);
             setLeaderboard(val(5, []) || []);
             setAgentBifurcation(val(6, []) || []);
+            setMyCommission(val(7, null));
         } catch (error) { console.error('Failed to fetch CS dashboard:', error); }
         finally { setLoading(false); }
     };
@@ -261,6 +264,69 @@ const CSDashboard = () => {
                     </Card>
                 )}
             </div>
+
+            {/* My Commission Details */}
+            {myCommission && myCommission.my_commission && (() => {
+                const mc = myCommission.my_commission;
+                return (
+                    <Card data-testid="cs-my-commission">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-500" />My Commission — {myCommission.month}</CardTitle>
+                                    <CardDescription>{mc.upgrades_closed || 0} upgrades closed this month</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                        <p className="text-xs text-muted-foreground">Earned</p>
+                                        <p className="text-lg font-bold font-mono text-emerald-500">{fmtCur(mc.earned_commission)}</p>
+                                    </div>
+                                    {mc.pending_commission > 0 && (
+                                        <div className="text-right">
+                                            <p className="text-xs text-muted-foreground">Pending</p>
+                                            <p className="text-lg font-bold font-mono text-amber-500">{fmtCur(mc.pending_commission)}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+                        {(mc.earned_details?.length > 0 || mc.pending_details?.length > 0) && (
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Student</TableHead>
+                                            <TableHead>Upgrade</TableHead>
+                                            <TableHead>Stage</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead className="text-right">Commission</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {[...(mc.earned_details || []), ...(mc.pending_details || [])].map((d, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell className="font-medium text-sm">{d.student_name}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{d.upgrade_name || d.course_matched || '-'}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className={`text-xs ${d.status === 'earned' || d.stage === 'closed' ? 'text-emerald-500 border-emerald-500/30' : 'text-amber-500 border-amber-500/30'}`}>
+                                                        {d.status || d.stage || 'pending'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-sm">{fmtCur(d.amount || d.upgrade_amount)}</TableCell>
+                                                <TableCell className="text-right font-mono font-semibold text-sm">
+                                                    <span className={d.status === 'earned' || d.stage === 'closed' ? 'text-emerald-500' : 'text-amber-500'}>
+                                                        {fmtCur(d.agent_commission || d.se_commission || 0)}
+                                                    </span>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        )}
+                    </Card>
+                );
+            })()}
 
             {/* Agent Revenue + Leaderboard */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
