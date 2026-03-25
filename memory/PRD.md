@@ -1,151 +1,65 @@
-# CLT Synapse ERP - Product Requirements Document
+# CLT Synapse ERP — Product Requirements Document
 
 ## Original Problem Statement
-Build a comprehensive CRM/ERP system for CLT Academy covering Sales, Customer Service, Mentors, HR, Finance, Business Development, Reporting, and Analytics.
+Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy. The system manages sales CRM, customer service, HR, finance, commissions, and operational workflows.
 
 ## Architecture
-- **Backend:** FastAPI + MongoDB Atlas (server.py ~26K lines)
-- **Frontend:** React + Shadcn UI + Recharts + react-window + reportlab (PDF)
-- **Auth:** JWT-based with role-based access control
-- **Integrations:** Google Sheets, Meta Ads, SMTP, ZK BioCloud, APScheduler, 3CX
-- **Performance:** GZip compression, MongoDB indexes, server-side pagination
+- **Frontend**: React (CRA + Craco) with Shadcn/UI, Tailwind CSS
+- **Backend**: FastAPI monolith (`server.py` ~27K lines)
+- **Database**: MongoDB Atlas (`clt_academy_erp`)
+- **Integrations**: Google Sheets, Meta Ads, SMTP, 3CX, BioCloud
 
 ## What's Been Implemented
 
-### Session - March 23, 2026
+### Commission Engine (Complete)
+- Course + Addon decomposition logic in `_match_course_commission`
+- Sales Executive commission with 18K AED benchmark
+- Team Leader commission (no benchmark, earns from team deals)
+- CS Agent and CS Head commissions from upgrades
+- Mentor commission pool
+- SM/CEO bonus pool
+- Commission Engine page with Course Commissions tab
+- Scatter chart (Net Pay = Salary + Commission)
+- AsyncIO parallelization for CEO dashboard (~7.5s load)
 
-**Batch 7 - Five New Features (Iteration 67: 100% pass)**
-- **Notification Center**: Bell icon in header with popover panel, unread badge, mark read/all, 30s polling, notification types (info/success/warning/error/transfer/finance/certificate)
-- **Certificate Generation**: PDF via reportlab — CLT Academy branding (red/black corner accents, dual signatures COO+CEO, award emblem), types (Course Completion, Star Performer, Excellence, Best Trader, Achievement), download + history
-- **Report Builder**: 6 data sources (leads, students, cs_upgrades, mentor_redeposits, users, certificates), checkbox field selection, text/date filters, sort, limit, CSV export
-- **Revenue Forecasting**: 6-month historical (enrollments + upgrades + redeposits), 3-month projections, pipeline analysis, KPIs (avg monthly, growth rate, conversion rate), trend + stacked bar charts
-- **Student Portal Embed**: iframe of main.clt-academy.com/admin/students in CS section with "Open in New Tab" option
+### CEO Commission Approval Workflow (Complete — Mar 25, 2026)
+- `commission_approvals` MongoDB collection
+- `POST /api/commissions/approve` — CEO approves/revokes by department & month
+- `GET /api/commissions/approval-status` — returns approval status
+- CEO dashboard shows Approve/Revoke buttons per department
+- Non-CEO users see "Pending CEO Approval" / "Approved" banners
+- Role-gated: only `super_admin` can approve
 
-**Batch 6 - Performance + CS Bug (Iteration 66: 100% pass)**
-- Pagination (25/50/100) across all 4 Kanbans — 98% payload reduction
-- GZip compression, MongoDB indexes
-- CS transfer bug fix (StudentUpdate missing cs_agent_name)
+### UI/UX & Access Control (Complete)
+- Strict role-based sidebar filtering in `Layout.jsx`
+- Environment badge hidden for non-admins
+- Master of Academics = Team Leader permissions
+- Color-coded closed leads: enrolled (emerald bg), rejected (rose bg)
 
-**Batch 5 - BD Call Center (Iteration 65: 100% pass)**
-- 3CX ClickToCall in BD CRM, follow-up notes system, reminders, call recordings
+### RangeError Fix (Complete)
+- `babel-metadata-plugin.js` disabled via `enableVisualEdits: false` in `craco.config.js`
 
-**Batch 4 - Transaction History (Iteration 64: pass)**
-- Unified transaction history across CS/Mentor/BD modals
-- BD Dashboard visibility controls (revenue hidden from BD agents)
+### Sheet Sync Error Logging (Improved — Mar 25, 2026)
+- Enhanced logging in `google_sheets_service.py` for missing phone rows
+- Better error context in exception handlers
 
-**Batch 3 - BD Module (Iteration 63: 100% pass)**
-- Full BD CRM Kanban + Dashboard, round-robin assignment, redeposits
-
-### Previous Sessions
-- Universal Period Filter, Mentor Scoping & Reassignment
-- Dashboard KPIs, Monthly Closings, Customer Master Net LTV
-- Sales Search Fallback, Currency AED fix, CS Upgrade Dates
-
-### Session - March 24, 2026 (continued)
-
-**Feature - Commission Dashboard (Complete)**
-- Built full Commission Dashboard frontend (`/commission-dashboard`) with role-based views:
-  - CEO: 3 tabs (Sales Commissions, CS Commissions, CEO Pools) with aggregate stats, drill-down tables
-  - Sales Executive: Earned/Pending cards, 18K AED benchmark alert, deal stats
-  - Team Leader: Personal + team commission table
-  - CS Agent/Head: Earned/pending upgrade commissions, team breakdown
-- Monthly XY scatter chart showing Net Pay (Salary + Commission) trend over 6 months
-- CEO drill-down dialogs for Sales and CS showing per-agent breakdown
-- Sidebar nav: "My Commissions" in Sales/CS sections, "Commission Dashboard" in Finance section
-- Backend performance: Parallelized commission calculations with asyncio.gather (32s → 7.5s for CEO view)
-- Fixed NoneType bug in salary_structure lookup for scatter-data endpoint
-- Tested: Backend 21/26 passed (5 skipped: CS Head credential issue), Frontend 100% (iteration_69)
-
-**UI/UX Fixes (Complete)**
-- Removed "testing" environment badge from header for all non-super_admin users
-- Strict sidebar role filtering: sections/items only appear if user's role is explicitly allowed (sales execs no longer see Operations/CS/Finance)
-- Added `master_of_academics_` (Edwin's role) to CS, Academics, Operations sidebar + ProtectedRoutes + backend dashboard API
-- Added "Course Commissions" tab to Commission Engine page — inline-editable commission rates per course/addon/upgrade
-- Tested: Frontend 10/12 passed (iteration_71), remaining 2 fixed (dashboard API + CS route for master_of_academics_)
-- Fixed commission calculation: enrollment amounts now decompose as Course + Addon
-  - e.g., AED 2,204 = Offer Course (1,599) + Full Pack (605) → Commission 75 + 300 = 375
-  - e.g., AED 4,104 = Intermediate (3,499) + Full Pack (605) → Commission 130 + 300 = 430
-- Algorithm: 1) Exact match → 2) Course+Addon decomposition (AED 20 tolerance) → 3) Closest 15% fallback
-- Integrated per-deal commission table + Net Pay Trend chart into Sales Dashboard (not a separate tab)
-- Updated sales-commission-info endpoint to include deal_earned, deal_pending, deal_details, benchmark_crossed
-- TL/Manager view updated with Deal Commission + Total On Hand cards + deal breakdown table
-- Tested: Backend 18/18 passed, Frontend 100% (iteration_70)
-
-**Bug Fix - LAMIZ Data Discrepancy (P0)**
-- Fixed student "LAMIZ" (ID: 2f8ebfcb) enrollment amount showing 4104 instead of 2204
-- Root cause: `leads.enrollment_amount`, `ltv_transactions.amount` had incorrect value (4104) while `payment_amount` was correct (2204)
-- Fixed all 3 collections: `leads`, `ltv_transactions`, `students` — all now show 2204.0 AED
-- Verified via API: dashboard/overall, student transaction-history, and direct DB queries
-
-**Bug Fix - Nasida VN Dashboard Transactions Missing (P0)**
-- 2 new CS upgrade transactions (Thasleem: 1600, Kassim Kunju: 3899) not reflected on dashboard
-- Root cause: `confirm_upgrade` endpoint created `ltv_transactions` but never inserted into `cs_upgrades` — which is the collection the dashboard aggregates from
-- Code fix: Added `cs_upgrades` insert to `/api/cs/confirm-upgrade/{student_id}` endpoint
-- Data fix: Backfilled 2 missing `cs_upgrades` records
-- Nasida VN now shows 33,495 AED (11 upgrades), CS Revenue updated to 71,402 AED (27 upgrades)
-
-**Bug Fix - CS Kanban Pitched Upgrade Students Disappearing on Refresh (P0)**
-- Students added to "Pitched Upgrade" stage disappeared on page refresh
-- Root cause (2 issues):
-  1. Default view was `my_work` for CS Head/Admin, filtering by their own agent ID — hiding other agents' students
-  2. Global pagination (50 per page) loaded only newest 50 students, burying older stage entries
-- Fix: Changed default view to `team` for CS Head and Super Admin roles
-- Fix: Implemented per-stage Kanban fetching (25 students per column, parallel API calls) — ensures all pipeline stages always show their students
-- Verified: "Pitched Upgrade" column now shows 2 students (Akhil Madhu, Hussain PS) correctly
-
-**Bug Fix - Transaction History Duplication / Dashboard Mismatch (P0)**
-- Student card showed duplicate upgrade entries (same upgrade from both cs_upgrades AND ltv_transactions)
-- Users saw 2 entries on card but leaderboard counted 1, causing confusion about "missing" dashboard data
-- Fix: Skipped `type="upgrade"` from ltv_transactions in `/students/{id}/transaction-history` endpoint (canonical source is cs_upgrades)
-- Vighanesh total_deposits corrected: 11,632 (inflated) → 7,733 (accurate)
-
-**Enhancement - Leaderboard Period-Filtered Drill-Down (P0)**
-- Leaderboard drill-down now respects the selected period (This Month, This Quarter, etc.)
-- When clicking an agent in the leaderboard, only students with upgrades in that period are shown
-- Drill-down shows per-student upgrade count, revenue, and period badge for clarity
-- All CS Dashboard endpoints (stats, leaderboard, agent-revenue, drill) now consistently use the `date` field for period filtering
-
-**Fix - CS Kanban "Upgraded" Column Sort Order**
-- Changed "Upgraded" stage sort to `updated_at DESC` so freshest closings appear on top
-
-**Feature - Student Duplicate Merge System (Complete)**
-- Merge button on student detail modal detects duplicates by phone/email/name with confidence scoring
-- 3-step wizard: Select Duplicate → Review Merged Preview → Submit for Approval
-- Merge preview: primary data overwrites, secondary fills gaps (secondary_name, secondary_phone, additional_email)
-- All transactions (ltv_transactions, cs_upgrades, notes, reminders, commissions) merged
-- 2-stage approval: CS Head → CEO → merge executed
-- Secondary student soft-deleted (stage=merged, merged_into=primary_id)
-- Dedicated Merge Approvals page (/cs/merge-approvals) for CS Head and CEO
-- Notifications sent at each approval stage
-- Tested: 20/20 backend, 100% frontend (iteration_68)
+## Key Credentials
+- CEO: aqib@clt-academy.com / @Aqib1234
+- CS Head: falja@clt-academy.com / Falja@123
+- Sales Exec: aleesha@clt-academy.com / Aleesha@123
+- Master of Academics: edwin@clt-academy.com / Edwin@123
 
 ## Prioritized Backlog
 
-### P0
-- ~~Commission Dashboard~~ (DONE)
-
 ### P1
-- Invoice Generation — Auto-generate professional PDF invoices for enrollments/upgrades
+- Invoice Generation — Auto-generate PDF invoices for enrollments/upgrades
 - WhatsApp Integration — Send templated messages via WhatsApp Business API
-- Build UI for admins to dynamically configure commission structures
 
 ### P2
-- Executive Dashboard (CEO View) — Single page high-level overview
+- Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine (Trigger-based actions)
-- Scheduled Email Reports — Auto-send daily/weekly revenue summaries to managers
-- Refactor `server.py` into domain-driven route files
-- Fix recurring `RangeError: Maximum call stack size exceeded` (babel plugin)
+- Scheduled Email Reports — Auto-send daily/weekly revenue summaries
 
 ### P3
-- Payslip generation feature
-- Google Ads API integration
-- Email campaign system
-- Student self-service portal
-- Auto lead scoring
-- Document management
-
-## Credentials
-- **Super Admin:** aqib@clt-academy.com / @Aqib1234
-- **CS Head:** falja@clt-academy.com / Falja@123
-- **BD Agent (Rashida):** rashidha@clt-academy.com / Rashida@123
-- **BD Agent (Farsana):** farsana@clt-academy.com / Farsana@123
+- Refactor monolithic `server.py` into domain-driven routes
+- Investigate remaining sheet sync errors (185 errors on one sheet — likely bad column mapping)
