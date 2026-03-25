@@ -3653,7 +3653,19 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
             await db.ltv_transactions.insert_one(ltv_record)
             
             # Create/update customer master record
-            await create_or_update_customer(existing, student_data)
+            course_name_for_customer = update_data.get("course_name") or update_data.get("interested_course_name") or existing.get("interested_course_name") or "N/A"
+            enrollment_payment = {
+                "id": str(uuid.uuid4()),
+                "amount": sale_amount,
+                "currency": "AED",
+                "payment_method": update_data.get("payment_method", "unknown"),
+                "payment_type": "enrollment",
+                "course_name": course_name_for_customer,
+                "transaction_id": update_data.get("transaction_id"),
+            }
+            customer_record = await create_or_update_customer(existing, student_data, payment=enrollment_payment)
+            if customer_record:
+                await db.leads.update_one({"id": lead_id}, {"$set": {"customer_master_id": customer_record.get("id")}})
             
             # Create Finance Verification record for payment confirmation
             verification_record = {
@@ -6539,6 +6551,34 @@ async def confirm_upgrade(
         "created_by": user["id"],
     }
     await db.cs_upgrades.insert_one(cs_upgrade_record)
+
+    # Update customer master with upgrade revenue
+    try:
+        customer = await db.customers.find_one({"phone": student.get("phone")})
+        if not customer and student.get("lead_id"):
+            lead_for_customer = await db.leads.find_one({"id": student["lead_id"]})
+            if lead_for_customer:
+                customer = await db.customers.find_one({"lead_id": lead_for_customer["id"]})
+        if customer:
+            upgrade_txn = {
+                "payment_id": cs_upgrade_record["id"],
+                "amount": final_price,
+                "currency": "AED",
+                "payment_method": "upgrade",
+                "payment_type": "cs_upgrade",
+                "course_name": package["label"],
+                "date": now_iso,
+            }
+            await db.customers.update_one(
+                {"id": customer["id"]},
+                {
+                    "$push": {"transactions": upgrade_txn},
+                    "$inc": {"total_spent": final_price, "transaction_count": 1},
+                    "$set": {"last_transaction_at": now_iso, "updated_at": now_iso},
+                }
+            )
+    except Exception as e:
+        logger.error(f"Customer master update failed for CS upgrade: {e}")
 
     # Auto-create commission transaction for approval
     try:

@@ -11,46 +11,41 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## What's Been Implemented
 
+### Customer Master Auto-Population (Complete — Mar 25, 2026)
+- Fixed enrollment flow to pass sale_amount as payment data to create_or_update_customer
+- Fixed CS upgrade flow to update customer master with upgrade revenue
+- Backfilled 976 enrolled leads → customer records with proper revenue, course names, LTV
+- Backfilled CS upgrade revenue into customer transaction histories
+- All 976 enrolled leads linked to customer_master_id
+- Only 7 zero-revenue records remain (all test data)
+
 ### Sidebar Navigation Fix (Complete — Mar 25, 2026)
-- Fixed critical bug: clicking links shared across sections (e.g. "My Commissions" in CS) no longer jumps to a different section (e.g. Sales)
-- Navigation now prioritizes the currently active section when matching paths
-- Applies to all shared paths: `/commission-dashboard`, `/dashboard`, etc.
+- Fixed section switching bug: shared paths (e.g. /commission-dashboard) no longer jump between sections
+- Prioritizes currently active section when matching paths
 
 ### CS Dashboard: Commission & Net Pay (Complete — Mar 25, 2026)
-- 5-box commission summary for CS Head: Agent Commission, Head Commission, Total Commission, Base Salary, Net Pay
-- Fixed commission table showing 0 (was using `agent_commission` field instead of `cs_commission`)
-- Fetches salary from `/commissions/scatter-data` endpoint for Net Pay calculation
-- CS agents see: Agent Commission, Base Salary, Net Pay (3 boxes)
-
-### CS CRM Pagination Fix (Complete — Mar 25, 2026)
-- Fixed Kanban `perStageLimit` from hardcoded 25 to respect `pageSize` state (default 50)
-
-### Anzil Transfer (Complete — Mar 25, 2026)
-- Role changed from `cs_agent` to `quality_control`
-- 6 students reassigned: 3 to Della, 3 to Falja
+- 5-box summary: Agent Commission, Head Commission, Total Commission, Base Salary, Net Pay
+- Fixed commission table showing 0 (wrong field reference)
 
 ### CRM Kanban Enhancements (Complete — Mar 25, 2026)
-- "My Leads" / "Team Overview" toggle on Sales CRM for team leaders/heads
+- "My Leads" / "Team Overview" toggle for team leaders/heads
 - Default "This Month" filter on all CRM Kanban boards
-- Unified date filter: `date_field=any` shows leads created OR enrolled in period
+- Unified date filter (date_field=any) shows created + enrolled leads together
+- CS CRM pagination fixed (25 → 50 per stage)
 
 ### Lead Closure Time Tracking (Complete — Mar 25, 2026)
-- Tracks `closure_days` from assignment to enrollment
-- Backfilled 976 existing leads
-- `GET /api/dashboard/closure-time` endpoint with role-based visibility
+- closure_days tracked on enrollment, backfilled 976 leads
+- GET /api/dashboard/closure-time endpoint with role-based visibility
 - Closure Time Analytics table on Sales Dashboard
 
 ### Commission Engine (Complete)
-- Per-transaction CEO approval workflow
-- Auto-trigger on enrollment/CS upgrade
-- CS commission transactions generated (77 records)
-- Course + Addon decomposition logic
+- Per-transaction CEO approval, auto-trigger, CS commission transactions
+- Course + Addon decomposition, rate corrections
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
 - CS Head: falja@clt-academy.com / Falja@123
 - Team Leader (Ajmal): ajmal@clt-academy.com / Ajmal@123
-- Sales Exec: aleesha@clt-academy.com / Aleesha@123
 
 ## Prioritized Backlog
 
@@ -61,9 +56,7 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 ### P2
 - Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine
-- Scheduled Email Reports
-- Commission Audit Log
+- Scheduled Email Reports, Commission Audit Log
 
 ### P3
 - Refactor monolithic `server.py` into domain-driven routes
-- Background sheet sync error investigation
