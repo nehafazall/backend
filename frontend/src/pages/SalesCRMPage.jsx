@@ -415,6 +415,9 @@ const SalesCRMPage = () => {
     const [totalPages, setTotalPages] = useState(0);
 
     const isSuperAdmin = user?.role === 'super_admin';
+    const isTeamLeader = ['team_leader', 'sales_manager', 'master_of_academics'].includes(user?.role);
+    const isHeadOrAdmin = isSuperAdmin || isTeamLeader || user?.role === 'admin';
+    const [viewMode, setViewMode] = useState(isHeadOrAdmin ? 'team' : 'my_leads');
 
     // Pipeline stages that require course selection
     const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
@@ -431,11 +434,11 @@ const SalesCRMPage = () => {
 
     useEffect(() => {
         fetchLeads();
-    }, [filterAgent, filterTeam, periodFilter, currentPage, pageSize]);
+    }, [filterAgent, filterTeam, periodFilter, currentPage, pageSize, viewMode]);
 
-    // Fetch agents and teams for super admin
+    // Fetch agents and teams for admin/team leaders
     useEffect(() => {
-        if (isSuperAdmin) {
+        if (isHeadOrAdmin) {
             const fetchAgentsAndTeams = async () => {
                 try {
                     const [agentsRes, teamsRes] = await Promise.all([
@@ -450,7 +453,7 @@ const SalesCRMPage = () => {
             };
             fetchAgentsAndTeams();
         }
-    }, [isSuperAdmin]);
+    }, [isHeadOrAdmin]);
 
     // Fetch course catalog for course/addon selection
     useEffect(() => {
@@ -492,6 +495,10 @@ const SalesCRMPage = () => {
         try {
             setLoading(true);
             const params = { search: searchTerm || undefined, page: currentPage, page_size: pageSize };
+            // For team leaders: filter by their own ID when in "My Leads" mode
+            if (viewMode === 'my_leads' && isTeamLeader) {
+                params.assigned_to = user.id;
+            }
             if (filterAgent !== 'all') params.assigned_to = filterAgent;
             if (filterTeam !== 'all') params.team_id = filterTeam;
             if (periodFilter) {
@@ -875,7 +882,7 @@ const SalesCRMPage = () => {
                             </SelectContent>
                         </Select>
                     )}
-                    {isSuperAdmin && availableAgents.length > 0 && (
+                    {isHeadOrAdmin && viewMode === 'team' && availableAgents.length > 0 && (
                         <Select value={filterAgent} onValueChange={setFilterAgent} data-testid="filter-agent">
                             <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-agent-trigger">
                                 <SelectValue placeholder="All Agents" />
@@ -892,6 +899,7 @@ const SalesCRMPage = () => {
                             { value: 'enrolled_at', label: 'Enrolled' },
                         ]}
                         onChange={setPeriodFilter}
+                        defaultPeriod="this_month"
                     />
                     {['super_admin', 'admin', 'sales_manager', 'team_leader'].includes(user?.role) && (
                         <>
@@ -904,6 +912,28 @@ const SalesCRMPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* View Mode Toggle for Team Leaders / Heads */}
+            {isHeadOrAdmin && (
+                <div className="flex items-center gap-3" data-testid="sales-view-toggle">
+                    <div className="inline-flex rounded-lg border p-1 bg-muted/30">
+                        <button
+                            onClick={() => setViewMode('my_leads')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'my_leads' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="sales-view-my-leads"
+                        >
+                            My Leads
+                        </button>
+                        <button
+                            onClick={() => setViewMode('team')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'team' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                            data-testid="sales-view-team"
+                        >
+                            Team Overview
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Kanban Board */}
             {loading ? (

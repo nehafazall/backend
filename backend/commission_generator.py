@@ -22,7 +22,7 @@ async def generate_transactions_for_month(db, month: str):
         }, {"_id": 0, "id": 1, "full_name": 1, "enrollment_amount": 1, "sale_amount": 1,
             "course_name": 1, "enrolled_at": 1, "assigned_to": 1, "team_leader_id": 1}).to_list(1000),
         db.cs_upgrades.find({
-            "upgrade_date": {"$gte": month_start, "$lte": month_end},
+            "date": {"$gte": month_start, "$lte": month_end},
         }, {"_id": 0}).to_list(500),
         db.course_catalog.find({"is_active": True}, {"_id": 0}).to_list(100),
     )
@@ -149,7 +149,7 @@ async def generate_transactions_for_month(db, month: str):
             "final_commission": course.get("commission_cs_agent", 0),
             "original_commission": course.get("commission_cs_agent", 0),
             "cs_head_commission": course.get("commission_cs_head", 0),
-            "month": month, "date": str(ug.get("upgrade_date", ""))[:10],
+            "month": month, "date": str(ug.get("date", ug.get("upgrade_date", "")))[:10],
             "status": "pending", "ceo_notes": "", "created_at": now,
         })
         existing_keys.add(key)

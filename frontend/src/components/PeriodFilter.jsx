@@ -51,12 +51,27 @@ function getDateRange(period) {
     }
 }
 
-export const PeriodFilter = ({ onChange, dateFields, className = '' }) => {
-    const [selectedPeriod, setSelectedPeriod] = useState(null);
+export const PeriodFilter = ({ onChange, dateFields, className = '', defaultPeriod = null }) => {
+    const [selectedPeriod, setSelectedPeriod] = useState(defaultPeriod);
     const [selectedField, setSelectedField] = useState(dateFields?.[0]?.value || null);
     const [customRange, setCustomRange] = useState({ from: null, to: null });
     const [open, setOpen] = useState(false);
     const [showCustom, setShowCustom] = useState(false);
+
+    // Fire initial filter when defaultPeriod is set
+    React.useEffect(() => {
+        if (defaultPeriod && defaultPeriod !== 'custom') {
+            const range = getDateRange(defaultPeriod);
+            if (range && onChange) {
+                onChange({
+                    period: defaultPeriod,
+                    date_from: format(range.from, 'yyyy-MM-dd'),
+                    date_to: format(range.to, 'yyyy-MM-dd'),
+                    date_field: dateFields?.[0]?.value || null,
+                });
+            }
+        }
+    }, []); // Only on mount
 
     const handlePeriodSelect = (period) => {
         if (period === 'custom') {

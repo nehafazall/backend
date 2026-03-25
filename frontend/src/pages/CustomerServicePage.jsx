@@ -713,6 +713,7 @@ const CustomerServicePage = () => {
                     <PeriodFilter
                         dateFields={[{ value: 'upgrade_date', label: 'Upgrade Date' }]}
                         onChange={setCsPeriodFilter}
+                        defaultPeriod="this_month"
                     />
                     {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
                         <>
