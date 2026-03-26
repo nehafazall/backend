@@ -100,6 +100,7 @@ const SECTIONS = {
         items: [
             { title: 'SSHR Dashboard', icon: UserCog, path: '/sshr' },
             { title: 'My Payslips', icon: Receipt, path: '/sshr/payslips' },
+            { title: 'Announcements', icon: Megaphone, path: '/sshr/announcements' },
         ],
     },
     sales: {

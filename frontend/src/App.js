@@ -99,6 +99,7 @@ import HRApprovalQueuePage from "@/pages/hr/HRApprovalQueuePage";
 // SSHR (Self-Service HR) Module
 import SSHRPage from "@/pages/SSHRPage";
 import PayslipsPage from "@/pages/PayslipsPage";
+import AnnouncementsPage from "@/pages/AnnouncementsPage";
 
 // Marketing Module
 import MarketingDashboardPage from "@/pages/marketing/MarketingDashboardPage";
@@ -193,6 +194,7 @@ function AppRoutes() {
                 {/* SSHR (Self-Service HR) - Available to all logged in users */}
                 <Route path="sshr" element={<SSHRPage />} />
                 <Route path="sshr/payslips" element={<PayslipsPage />} />
+                <Route path="sshr/announcements" element={<AnnouncementsPage />} />
                 
                 {/* Today's Follow-ups */}
                 <Route path="followups" element={

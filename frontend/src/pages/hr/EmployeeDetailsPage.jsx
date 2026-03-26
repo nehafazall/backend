@@ -20,7 +20,7 @@ import {
 import {
     User, FileText, DollarSign, Mail, Download, ArrowLeft, Save, 
     Calendar, Building2, Phone, CreditCard, AlertTriangle, Clock,
-    IdCard, Car, GraduationCap, Heart, Briefcase, Plus, BookOpen
+    IdCard, Car, GraduationCap, Heart, Briefcase, Plus, BookOpen, XCircle
 } from 'lucide-react';
 
 const DOCUMENT_TYPES = [
@@ -54,7 +54,8 @@ const EmployeeDetailsPage = () => {
         transport_allowance: 0,
         telephone_allowance: 0,
         other_allowances: 0,
-        salary_payout_method: 'bank_transfer'
+        salary_payout_method: 'bank_transfer',
+        currency: 'AED'
     });
     
     // Bank Details
@@ -95,7 +96,8 @@ const EmployeeDetailsPage = () => {
                     transport_allowance: res.data.salary_structure.transport_allowance || 0,
                     telephone_allowance: res.data.salary_structure.telephone_allowance || 0,
                     other_allowances: res.data.salary_structure.other_allowances || 0,
-                    salary_payout_method: res.data.salary_structure.salary_payout_method || 'bank_transfer'
+                    salary_payout_method: res.data.salary_structure.salary_payout_method || 'bank_transfer',
+                    currency: res.data.salary_structure.currency || 'AED'
                 });
             }
             
@@ -112,6 +114,20 @@ const EmployeeDetailsPage = () => {
             navigate('/hr/employees');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const [editingDOB, setEditingDOB] = useState(false);
+    const [dobValue, setDobValue] = useState('');
+
+    const handleSaveDOB = async () => {
+        try {
+            await api.put(`/hr/employees/${employee.id}/personal`, { date_of_birth: dobValue });
+            toast.success('Date of birth updated');
+            setEditingDOB(false);
+            fetchEmployee();
+        } catch (error) {
+            toast.error('Failed to update date of birth');
         }
     };
 
@@ -300,7 +316,29 @@ const EmployeeDetailsPage = () => {
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Date of Birth</span>
-                                        <p className="font-medium">{employee.date_of_birth || '-'}</p>
+                                        {editingDOB ? (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Input
+                                                    type="date"
+                                                    value={dobValue}
+                                                    onChange={(e) => setDobValue(e.target.value)}
+                                                    className="h-8 text-sm w-40"
+                                                    data-testid="dob-input"
+                                                />
+                                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={handleSaveDOB}>
+                                                    <Save className="h-3 w-3" />
+                                                </Button>
+                                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingDOB(false)}>
+                                                    <XCircle className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <p className="font-medium cursor-pointer hover:text-primary" 
+                                               onClick={() => { setDobValue(employee.date_of_birth || ''); setEditingDOB(true); }}
+                                               data-testid="dob-display">
+                                                {employee.date_of_birth || 'Click to add'}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -384,11 +422,11 @@ const EmployeeDetailsPage = () => {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <span className="text-muted-foreground">Basic Salary</span>
-                                        <p className="font-medium">AED {(employee.salary_structure?.basic_salary || 0).toLocaleString()}</p>
+                                        <p className="font-medium">{employee.salary_structure?.currency || 'AED'} {(employee.salary_structure?.basic_salary || 0).toLocaleString()}</p>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Total Allowances</span>
-                                        <p className="font-medium">AED {(
+                                        <p className="font-medium">{employee.salary_structure?.currency || 'AED'} {(
                                             (employee.salary_structure?.housing_allowance || 0) +
                                             (employee.salary_structure?.transport_allowance || 0) +
                                             (employee.salary_structure?.telephone_allowance || 0) +
@@ -397,11 +435,11 @@ const EmployeeDetailsPage = () => {
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Gross Salary</span>
-                                        <p className="font-medium text-green-500">AED {(employee.salary_structure?.gross_salary || 0).toLocaleString()}</p>
+                                        <p className="font-medium text-green-500">{employee.salary_structure?.currency || 'AED'} {(employee.salary_structure?.gross_salary || 0).toLocaleString()}</p>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Net Salary</span>
-                                        <p className="font-medium text-emerald-500 text-lg">AED {(employee.salary_structure?.net_salary || 0).toLocaleString()}</p>
+                                        <p className="font-medium text-emerald-500 text-lg">{employee.salary_structure?.currency || 'AED'} {(employee.salary_structure?.net_salary || 0).toLocaleString()}</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -609,7 +647,19 @@ const EmployeeDetailsPage = () => {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>
-                                    <Label>Basic Salary (AED)</Label>
+                                    <Label>Currency</Label>
+                                    <Select value={salary.currency || 'AED'} onValueChange={v => setSalary({ ...salary, currency: v })}>
+                                        <SelectTrigger data-testid="salary-currency">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="AED">AED - UAE Dirham</SelectItem>
+                                            <SelectItem value="INR">INR - Indian Rupee</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Basic Salary ({salary.currency || 'AED'})</Label>
                                     <Input
                                         type="number"
                                         value={salary.basic_salary || ''}
@@ -617,7 +667,7 @@ const EmployeeDetailsPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Housing Allowance (AED)</Label>
+                                    <Label>Housing Allowance ({salary.currency || 'AED'})</Label>
                                     <Input
                                         type="number"
                                         value={salary.housing_allowance || ''}
@@ -625,7 +675,7 @@ const EmployeeDetailsPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Transport Allowance (AED)</Label>
+                                    <Label>Transport Allowance ({salary.currency || 'AED'})</Label>
                                     <Input
                                         type="number"
                                         value={salary.transport_allowance || ''}
@@ -633,7 +683,7 @@ const EmployeeDetailsPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Telephone Allowance (AED)</Label>
+                                    <Label>Telephone Allowance ({salary.currency || 'AED'})</Label>
                                     <Input
                                         type="number"
                                         value={salary.telephone_allowance || ''}
@@ -641,7 +691,7 @@ const EmployeeDetailsPage = () => {
                                     />
                                 </div>
                                 <div>
-                                    <Label>Other Allowances (AED)</Label>
+                                    <Label>Other Allowances ({salary.currency || 'AED'})</Label>
                                     <Input
                                         type="number"
                                         value={salary.other_allowances || ''}
@@ -673,11 +723,11 @@ const EmployeeDetailsPage = () => {
                                 <CardContent className="space-y-3">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Basic Salary</span>
-                                        <span className="font-medium">AED {parseFloat(salary.basic_salary || 0).toLocaleString()}</span>
+                                        <span className="font-medium">{salary.currency || 'AED'} {parseFloat(salary.basic_salary || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Total Allowances</span>
-                                        <span className="font-medium">AED {(
+                                        <span className="font-medium">{salary.currency || 'AED'} {(
                                             parseFloat(salary.housing_allowance || 0) +
                                             parseFloat(salary.transport_allowance || 0) +
                                             parseFloat(salary.telephone_allowance || 0) +
@@ -687,7 +737,7 @@ const EmployeeDetailsPage = () => {
                                     <Separator />
                                     <div className="flex justify-between">
                                         <span className="font-semibold">Total Monthly Salary</span>
-                                        <span className="font-bold text-2xl text-emerald-500">AED {calculateGross().toLocaleString()}</span>
+                                        <span className="font-bold text-2xl text-emerald-500">{salary.currency || 'AED'} {calculateGross().toLocaleString()}</span>
                                     </div>
                                 </CardContent>
                             </Card>

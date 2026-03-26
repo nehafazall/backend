@@ -19789,7 +19789,7 @@ async def download_attendance_template(
     # Data rows (starting row 6)
     for idx, emp in enumerate(employees):
         row = idx + 6
-        salary = emp.get("salary_structure", {})
+        salary = emp.get("salary_structure") or {}
 
         # Pre-filled columns (A-K) - locked info
         data = [
@@ -21197,9 +21197,7 @@ async def run_payroll(
     payroll_records = []
     
     for emp in employees:
-        salary = emp.get("salary_structure", {})
-        if not salary:
-            continue
+        salary = emp.get("salary_structure") or {}
         
         # Get attendance data for the month
         start_date = f"{data.year}-{str(data.month).zfill(2)}-01"
@@ -21215,17 +21213,20 @@ async def run_payroll(
         absent_days = total_days - present_days - len([a for a in attendance if a.get("status") in ["leave", "holiday", "wfh"]])
         total_late_minutes = sum(a.get("late_minutes", 0) for a in attendance)
         
+        # Get currency from salary structure
+        currency = salary.get("currency", "AED")
+        
         # Calculate base salary
-        basic = salary.get("basic_salary", 0)
-        housing = salary.get("housing_allowance", 0)
-        transport = salary.get("transport_allowance", 0)
-        food = salary.get("food_allowance", 0)
-        phone = salary.get("phone_allowance", 0)
-        other = salary.get("other_allowances", 0)
-        fixed_incentive = salary.get("fixed_incentive", 0)
+        basic = salary.get("basic_salary", 0) or 0
+        housing = salary.get("housing_allowance", 0) or 0
+        transport = salary.get("transport_allowance", 0) or 0
+        food = salary.get("food_allowance", 0) or 0
+        phone = salary.get("phone_allowance", salary.get("telephone_allowance", 0)) or 0
+        other = salary.get("other_allowances", 0) or 0
+        fixed_incentive = salary.get("fixed_incentive", 0) or 0
         
         gross_salary = basic + housing + transport + food + phone + other + fixed_incentive
-        daily_rate = gross_salary / 30  # Fixed 30-day calculation as per requirement
+        daily_rate = gross_salary / 30 if gross_salary > 0 else 0  # Fixed 30-day calculation as per requirement
         
         # Calculate deductions based on attendance
         deductions = []
@@ -21276,6 +21277,7 @@ async def run_payroll(
             "employee_code": emp["employee_id"],
             "employee_name": emp["full_name"],
             "department": emp.get("department"),
+            "currency": currency,
             "month": month_str,
             "year": data.year,
             "month_num": data.month,
@@ -23317,6 +23319,182 @@ async def get_payslip_detail(payslip_id: str, user = Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="Not authorized to view this payslip")
     
     return payslip
+
+# ==================== ANNOUNCEMENTS & BIRTHDAYS ====================
+
+class AnnouncementCreate(BaseModel):
+    title: str
+    content: str
+    priority: str = "normal"  # normal, important, urgent
+    category: str = "general"  # general, hr, event, birthday
+    expires_at: Optional[str] = None  # YYYY-MM-DD
+
+@api_router.get("/announcements")
+async def get_announcements(user = Depends(get_current_user)):
+    """Get all active announcements for the current user"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    query = {
+        "$or": [
+            {"expires_at": {"$exists": False}},
+            {"expires_at": None},
+            {"expires_at": {"$gte": today}}
+        ]
+    }
+    announcements = await db.announcements.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return announcements
+
+@api_router.post("/announcements")
+async def create_announcement(
+    data: AnnouncementCreate,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Create a new company announcement"""
+    now = datetime.now(timezone.utc).isoformat()
+    announcement = {
+        "id": str(uuid.uuid4()),
+        "title": data.title,
+        "content": data.content,
+        "priority": data.priority,
+        "category": data.category,
+        "expires_at": data.expires_at,
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.announcements.insert_one(announcement)
+    announcement.pop("_id", None)
+    return announcement
+
+@api_router.delete("/announcements/{announcement_id}")
+async def delete_announcement(
+    announcement_id: str,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Delete an announcement"""
+    result = await db.announcements.delete_one({"id": announcement_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return {"message": "Announcement deleted"}
+
+@api_router.get("/hr/birthdays")
+async def get_birthdays(
+    user = Depends(get_current_user)
+):
+    """Get today's birthdays and upcoming birthdays within next 30 days"""
+    today = datetime.now(timezone.utc)
+    today_mmdd = today.strftime("%m-%d")
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}, "date_of_birth": {"$exists": True, "$nin": [None, ""]}},
+        {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "department": 1, "date_of_birth": 1, "designation": 1}
+    ).to_list(500)
+    
+    todays_birthdays = []
+    upcoming_birthdays = []
+    
+    for emp in employees:
+        dob = emp.get("date_of_birth", "")
+        if not dob or len(dob) < 10:
+            continue
+        try:
+            dob_mmdd = dob[5:10]  # Extract MM-DD from YYYY-MM-DD
+            if dob_mmdd == today_mmdd:
+                todays_birthdays.append(emp)
+            else:
+                # Check if within next 30 days
+                dob_this_year = datetime(today.year, int(dob[5:7]), int(dob[8:10]), tzinfo=timezone.utc)
+                if dob_this_year < today:
+                    dob_this_year = datetime(today.year + 1, int(dob[5:7]), int(dob[8:10]), tzinfo=timezone.utc)
+                days_until = (dob_this_year - today).days
+                if 0 < days_until <= 30:
+                    emp["days_until_birthday"] = days_until
+                    upcoming_birthdays.append(emp)
+        except (ValueError, IndexError):
+            continue
+    
+    upcoming_birthdays.sort(key=lambda x: x.get("days_until_birthday", 999))
+    
+    return {
+        "today": todays_birthdays,
+        "upcoming": upcoming_birthdays
+    }
+
+@api_router.post("/hr/birthdays/auto-announce")
+async def auto_generate_birthday_announcements(
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Auto-generate birthday announcement for today's birthdays"""
+    today = datetime.now(timezone.utc)
+    today_mmdd = today.strftime("%m-%d")
+    today_str = today.strftime("%Y-%m-%d")
+    now = today.isoformat()
+    
+    employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}, "date_of_birth": {"$exists": True, "$ne": None}},
+        {"_id": 0, "full_name": 1, "department": 1, "date_of_birth": 1}
+    ).to_list(500)
+    
+    birthday_people = [e for e in employees if e.get("date_of_birth", "")[5:10] == today_mmdd]
+    
+    if not birthday_people:
+        return {"message": "No birthdays today", "count": 0}
+    
+    # Check if already announced today
+    existing = await db.announcements.find_one({"category": "birthday", "created_at": {"$regex": f"^{today_str}"}})
+    if existing:
+        return {"message": "Birthday announcements already posted today", "count": 0}
+    
+    names = [p["full_name"] for p in birthday_people]
+    if len(names) == 1:
+        title = f"Happy Birthday, {names[0]}!"
+        content = f"Please join us in wishing {names[0]} ({birthday_people[0].get('department', '')}) a very Happy Birthday! We hope you have a wonderful day!"
+    else:
+        title = f"Happy Birthday to {len(names)} team members!"
+        lines = [f"- {p['full_name']} ({p.get('department', '')})" for p in birthday_people]
+        content = "Please join us in wishing a very Happy Birthday to:\n" + "\n".join(lines) + "\n\nWe hope you all have a wonderful day!"
+    
+    announcement = {
+        "id": str(uuid.uuid4()),
+        "title": title,
+        "content": content,
+        "priority": "normal",
+        "category": "birthday",
+        "expires_at": today_str,
+        "created_by": "system",
+        "created_by_name": "CLT Synapse",
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.announcements.insert_one(announcement)
+    announcement.pop("_id", None)
+    
+    return {"message": f"Birthday announcement created for {len(names)} employees", "count": len(names), "announcement": announcement}
+
+@api_router.put("/hr/employees/{employee_id}/personal")
+async def update_employee_personal(
+    employee_id: str,
+    data: Dict,
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """Update employee personal info including date_of_birth"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"id": employee_id}, {"employee_id": employee_id}]}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    allowed_fields = ["date_of_birth", "nationality", "gender", "marital_status", "personal_email", "mobile_number"]
+    update_data = {k: v for k, v in data.items() if k in allowed_fields and v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    update_data["updated_at"] = now
+    await db.hr_employees.update_one({"id": employee["id"]}, {"$set": update_data})
+    
+    return {"message": "Personal info updated successfully"}
 
 # ==================== COMPANY DOCUMENTS ====================
 
