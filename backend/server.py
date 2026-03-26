@@ -5467,11 +5467,22 @@ async def get_students(
         query["stage"] = {"$ne": "new_student"}
     
     if search:
-        query["$or"] = [
-            {"full_name": {"$regex": search, "$options": "i"}},
-            {"phone": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}}
-        ]
+        # Split search into words for better partial matching
+        words = search.strip().split()
+        if len(words) > 1:
+            # Multi-word: match each word in full_name (AND logic)
+            name_conditions = [{"full_name": {"$regex": w, "$options": "i"}} for w in words]
+            query["$or"] = [
+                {"$and": name_conditions},
+                {"phone": {"$regex": search.replace(" ", ""), "$options": "i"}},
+                {"email": {"$regex": words[0], "$options": "i"}},
+            ]
+        else:
+            query["$or"] = [
+                {"full_name": {"$regex": search, "$options": "i"}},
+                {"phone": {"$regex": search, "$options": "i"}},
+                {"email": {"$regex": search, "$options": "i"}}
+            ]
     
     # Date range filtering
     if date_from or date_to:
@@ -5538,9 +5549,15 @@ async def get_students(
         ]
         students = await db.students.aggregate(pipeline).to_list(page_size)
     else:
-        # Sort upgraded students by most recent upgrade; others by created_at
-        sort_field = "updated_at" if stage == "upgraded" else "created_at"
-        students = await db.students.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(page_size).to_list(page_size)
+        # Support sort_by param for directory views
+        allowed_sorts = {"created_at", "full_name", "enrollment_amount", "updated_at"}
+        if sort_by in allowed_sorts:
+            sort_field = sort_by
+            direction = -1 if sort_order == "desc" else 1
+        else:
+            sort_field = "updated_at" if stage == "upgraded" else "created_at"
+            direction = -1
+        students = await db.students.find(query, {"_id": 0}).sort(sort_field, direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with last_upgrade_date from cs_upgrades
     student_ids = [s["id"] for s in students]

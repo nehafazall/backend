@@ -63,6 +63,7 @@ import {
     Upload,
     GitMerge,
     Server,
+    Database,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -126,6 +127,7 @@ const SECTIONS = {
             { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard', roles: ['super_admin', 'admin', 'cs_head', 'cs_agent'] },
             { title: 'Merge Approvals', icon: GitMerge, path: '/cs/merge-approvals', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'Customer Service', icon: Users, path: '/cs' },
+            { title: 'Student Directory', icon: Database, path: '/cs/directory', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'Student Portal', icon: GraduationCap, path: '/cs/student-portal', roles: ['super_admin', 'admin', 'cs_head'] },
             { title: 'CS Historical Import', icon: Upload, path: '/cs/historical-import', roles: ['super_admin'] },
         ],
