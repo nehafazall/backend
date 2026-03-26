@@ -5470,12 +5470,12 @@ async def get_students(
         # Split search into words for better partial matching
         words = search.strip().split()
         if len(words) > 1:
-            # Multi-word: match each word in full_name (AND logic)
-            name_conditions = [{"full_name": {"$regex": w, "$options": "i"}} for w in words]
+            # Try full phrase match first, then each word as AND in full_name
+            full_phrase = ".*".join(words)  # "mohammed.*mon" matches "Mohammed mon"
             query["$or"] = [
-                {"$and": name_conditions},
+                {"full_name": {"$regex": full_phrase, "$options": "i"}},
                 {"phone": {"$regex": search.replace(" ", ""), "$options": "i"}},
-                {"email": {"$regex": words[0], "$options": "i"}},
+                {"email": {"$regex": search.replace(" ", ""), "$options": "i"}},
             ]
         else:
             query["$or"] = [

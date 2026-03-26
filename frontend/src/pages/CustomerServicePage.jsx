@@ -506,7 +506,7 @@ const CustomerServicePage = () => {
             if (filterCSAgent !== 'all') {
                 baseParams.cs_agent_id = filterCSAgent;
             }
-            if (csPeriodFilter) {
+            if (csPeriodFilter && !searchTerm) {
                 baseParams.date_from = csPeriodFilter.date_from;
                 baseParams.date_to = csPeriodFilter.date_to;
                 baseParams.date_field = 'upgrade_date';
@@ -616,8 +616,16 @@ const CustomerServicePage = () => {
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
-        setTimeout(() => fetchStudents(), 500);
     };
+
+    // Trigger fetch when searchTerm changes (debounced)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setCurrentPage(1);
+            fetchStudents();
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     const handleViewStudent = (student) => {
         setSelectedStudent(student);
