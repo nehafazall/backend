@@ -11,65 +11,41 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 
 ## What's Been Implemented
 
+### HR Module Fixes & Enhancements (Complete — Mar 26, 2026)
+- **Attendance Template Download**: Fixed 500 error (`NoneType` on `salary_structure`). Now uses `emp.get("salary_structure") or {}`.
+- **Payroll Extraction**: Fixed payroll skipping employees without salary data. Now processes all active employees (zeros for missing salary).
+- **Multi-Currency (AED/INR)**: Added currency selector to Employee Details salary tab. Currency stored in `salary_structure.currency`, propagated to payroll records.
+- **Birthday Field**: Made `date_of_birth` editable inline in Employee Details Overview. New endpoint: `PUT /api/hr/employees/{id}/personal`.
+- **SSHR Announcements Page**: New page at `/sshr/announcements` with announcement feed (CRUD for HR), birthday sidebar (today + upcoming 30 days), auto-birthday announcement generation. New endpoints: `GET/POST/DELETE /api/announcements`, `GET /api/hr/birthdays`, `POST /api/hr/birthdays/auto-announce`.
+- **Testing**: 100% pass (iteration 84 — 16/16 backend, all frontend verified)
+
 ### Student Portal Login Fix (Complete — Mar 26, 2026)
-- **Root Cause**: CLTAnimation had `onComplete` in useEffect dependency array. Parent re-renders (from /auth/me verification) created new function references, restarting the 13s animation infinitely.
-- **Fix**: Stored `onComplete` in a ref (`onCompleteRef`), removed from deps. Added `useCallback` in WelcomePage.
-- **Testing**: 100% pass (iteration 83)
+- Fixed CLTAnimation infinite render loop via `useRef` for onComplete callback.
 
 ### CS Kanban UI Overhaul (Complete — Mar 26, 2026)
-- **Summary Status Bar**: Shows per-stage student counts + Total + Period Revenue (AED). API: GET /api/students/stage-summary
-- **Shadow Cards**: Upgraded column displays records from `cs_upgrades` collection as shadow cards. Each shows green banner with amount. API: GET /api/students/upgrade-shadows. Shadow cards persist indefinitely and are filtered by page date filter.
-- **Custom Color Tags**: 5 tags (Handle With Care, Do Not Disturb, VIP, Priority, Follow Up). API: PATCH /api/students/{id}/color-tag. Tags sync across CS, BDM, and Mentor CRM pages.
-- **LTV Sort**: Toggle in summary bar switches Kanban to a flat table sorted by Lifetime Value (enrollment + upgrades). Click toggles desc→asc→off. Backend uses MongoDB `$lookup` aggregation with cs_upgrades.
-- **Customer Master**: Default sort is newest-first (created_at desc) — confirmed working.
-- **Testing**: 100% pass rate (iteration 83)
+- Summary Status Bar, Shadow Cards for upgrades, Custom Color Tags, LTV Sort toggle.
 
 ### Student Directory Page (Complete — Mar 26, 2026)
-- **New page** at `/cs/directory` accessible to CS Head, Admin, Super Admin
-- Full searchable database of all 1,048 students: Name, Phone, Email, Stage, CS Agent, Course, Amount, Enrolled Date
-- Multi-word search optimization: "mohammed mon" correctly finds partial name matches
-- Filters: Stage dropdown, CS Agent dropdown, sortable columns
-- Pagination, detail modal on click
-- Added to CS sidebar navigation
-- **Summary Status Bar**: Compact pill-style bar matching CS page — Customers, Transactions, Enrollment, Redeposits, Withdrawals, Net LTV, Avg LTV
-- **LTV Sort Toggle**: Cycles Off → High→Low → Low→High. Net LTV = Enrollment + Redeposits - Withdrawals. Uses backend `net_ltv` sort.
-- **Full LTV Columns**: Table now shows separate Redeposits (green) and Withdrawals (red) columns
-- Default sort: newest customers first (created_at desc) on page load
+- Global searchable student database at `/cs/directory` with inline CS agent reassignment.
 
 ### Customer Master LTV Overhaul (Complete — Mar 26, 2026)
-
-### MT5 Integration (Complete — Mar 26, 2026)
-- MT5 Sync Module, API Endpoints, Student MT5 Linking, Scheduled Auto-Sync
-- **Pending**: MT5 Web API auth (403) — awaiting broker (Miles Capitals)
-- Testing: 100% pass (iteration 82)
-
-### Salary Consistency Fix (Complete — Mar 25, 2026)
-- Created `_get_employee_salary_aed()` helper
-
-### Mentor Leaderboard Rewrite (Complete — Mar 25, 2026)
-- Ranks by total redeposit effort (own + cross-mentor)
-
-### Cross-Mentor Deposits & Effort-Based Bonus (Complete — Mar 25, 2026)
-### Mentor Dashboard Commission Breakdown (Complete)
-### Customer Master Auto-Population (Complete)
-### CS Dashboard: Commission & Net Pay (Complete)
-### CRM Kanban Enhancements (Complete)
-### Lead Closure Time Tracking (Complete)
-### Commission Engine (Complete)
+### MT5 Integration (Complete — Mar 26, 2026, BLOCKED on broker auth)
+### Salary Consistency, Mentor Leaderboard, Commission Engine (Complete)
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
 - CS Head: falja@clt-academy.com / Falja@123
 - Master of Academics: edwin@clt-academy.com / Edwin@123
 - BD Manager: rashidha@clt-academy.com / Rasha@123
-- MT5 Manager: login 1143, server 217.138.195.226:443
 
 ## Prioritized Backlog
 
 ### P0 (Pending User Action)
 - MT5 Web API Auth: Broker needs to enable Web API access for manager 1143
+- Biocloud attendance sync: IDs mapped but Playwright scraping may need live debugging with the biometric device
 
 ### P1
+- Internal Company Chat — Cross-department real-time messaging tool
 - Invoice Generation — Auto-generate PDF invoices
 - WhatsApp Integration — Send templated messages
 - CEO Commission Approval Workflow
@@ -78,7 +54,7 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 - Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine
 - Scheduled Email Reports
-- Commission Audit Log
+- HR Dashboard Revamp (currently kept as-is per user)
 
 ### P3
 - Refactor monolithic `server.py` into domain-driven routes
