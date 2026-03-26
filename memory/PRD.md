@@ -24,6 +24,12 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 - **Customer Master**: Default sort is newest-first (created_at desc) — confirmed working.
 - **Testing**: 100% pass rate (iteration 83)
 
+### Customer Master LTV Overhaul (Complete — Mar 26, 2026)
+- **Summary Status Bar**: Compact pill-style bar matching CS page — Customers, Transactions, Enrollment, Redeposits, Withdrawals, Net LTV, Avg LTV
+- **LTV Sort Toggle**: Cycles Off → High→Low → Low→High. Net LTV = Enrollment + Redeposits - Withdrawals. Uses backend `net_ltv` sort.
+- **Full LTV Columns**: Table now shows separate Redeposits (green) and Withdrawals (red) columns
+- Default sort: newest customers first (created_at desc) on page load
+
 ### MT5 Integration (Complete — Mar 26, 2026)
 - MT5 Sync Module, API Endpoints, Student MT5 Linking, Scheduled Auto-Sync
 - **Pending**: MT5 Web API auth (403) — awaiting broker (Miles Capitals)
