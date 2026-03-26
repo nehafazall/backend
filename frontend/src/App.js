@@ -298,12 +298,12 @@ function AppRoutes() {
                 
                 {/* Business Development */}
                 <Route path="bd" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development', 'business_development_manager_']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development', 'business_development_manager_', 'business_development_manager']}>
                         <BDCRMPage />
                     </ProtectedRoute>
                 } />
                 <Route path="bd/dashboard" element={
-                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development', 'business_development_manager_']}>
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'business_development', 'business_development_manager_', 'business_development_manager']}>
                         <BDDashboardPage />
                     </ProtectedRoute>
                 } />

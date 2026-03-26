@@ -53,7 +53,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 
 # Roles that have BD (Business Development) access
-BD_ROLES = {"business_development", "business_development_manager_"}
+BD_ROLES = {"business_development", "business_development_manager_", "business_development_manager"}
 
 # ==================== DATABASE CONFIGURATION ====================
 # Environment-based database selection

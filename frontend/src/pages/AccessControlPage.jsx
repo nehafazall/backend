@@ -33,6 +33,7 @@ const STATIC_ROLES = [
     { id: 'cs_agent', label: 'CS Agent' },
     { id: 'mentor', label: 'Mentor' },
     { id: 'academic_master', label: 'Academic Master' },
+    { id: 'business_development_manager', label: 'Business Development Manager' },
     { id: 'finance', label: 'Finance' },
     { id: 'hr', label: 'HR' },
     { id: 'marketing', label: 'Marketing' },

@@ -95,7 +95,7 @@ const SECTIONS = {
         title: 'My Self-Service',
         icon: UserCog,
         color: 'bg-teal-500',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'business_development_manager_', 'staff'],
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'business_development_manager_', 'business_development_manager', 'staff'],
         items: [
             { title: 'SSHR Dashboard', icon: UserCog, path: '/sshr' },
             { title: 'My Payslips', icon: Receipt, path: '/sshr/payslips' },
@@ -135,14 +135,14 @@ const SECTIONS = {
         title: 'Academics',
         icon: GraduationCap,
         color: 'bg-orange-500',
-        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'business_development', 'business_development_manager_'],
+        roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'business_development', 'business_development_manager_', 'business_development_manager'],
         items: [
             { title: 'Mentor CRM', icon: GraduationCap, path: '/mentor', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'Mentor Dashboard', icon: TrendingUp, path: '/mentor/dashboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'Leaderboard', icon: Users, path: '/mentor/leaderboard', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
             { title: 'Cross-Mentor Deposits', icon: ArrowRightLeft, path: '/mentor/cross-deposits', roles: ['super_admin', 'admin', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_'] },
-            { title: 'BD CRM', icon: Briefcase, path: '/bd', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_'] },
-            { title: 'BD Dashboard', icon: TrendingUp, path: '/bd/dashboard', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_'] },
+            { title: 'BD CRM', icon: Briefcase, path: '/bd', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_', 'business_development_manager'] },
+            { title: 'BD Dashboard', icon: TrendingUp, path: '/bd/dashboard', roles: ['super_admin', 'admin', 'business_development', 'business_development_manager_', 'business_development_manager'] },
             { title: 'Historical Import', icon: Upload, path: '/mentor/historical-import', roles: ['super_admin'] },
         ],
     },
@@ -437,7 +437,7 @@ function Layout() {
     }
 
     function getRoleBadgeColor(r) {
-        const map = { super_admin: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500', business_development: 'bg-sky-500' };
+        const map = { super_admin: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500', business_development: 'bg-sky-500', business_development_manager: 'bg-sky-500', business_development_manager_: 'bg-sky-500' };
         return map[r] || 'bg-slate-500';
     }
 
