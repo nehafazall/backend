@@ -399,12 +399,12 @@ function Layout() {
         setActiveSection(sectionId);
         const section = SECTIONS[sectionId];
         if (section && section.items.length > 0) {
-            // Find the first accessible item using permissions
+            // Find the first item accessible by ROLE (not permissions — permissions may not be loaded yet)
             const firstItem = section.items.find(item => {
-                // Super admin or no specific roles = check via canAccess
                 if (userRole === 'super_admin') return true;
-                // Use canAccess for permission-based check
-                return canAccess(item.path);
+                // Use role-based check: if item has roles restriction, user must be in the list
+                if (item.roles && !item.roles.includes(userRole)) return false;
+                return true;
             });
             if (firstItem) {
                 navigate(firstItem.path);
