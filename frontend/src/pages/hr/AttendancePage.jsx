@@ -380,7 +380,7 @@ const AttendancePage = () => {
 
                 {/* Manual Import Tab */}
                 <TabsContent value="import" className="mt-4">
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {/* Step 1: Download Template */}
                         <Card>
                             <CardHeader>
@@ -389,7 +389,7 @@ const AttendancePage = () => {
                                     Step 1: Download Template
                                 </CardTitle>
                                 <CardDescription>
-                                    Select a month and download the pre-filled attendance template with all active employees and their salary breakdowns.
+                                    Download the pre-filled template with daily punch-in/out columns.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -418,9 +418,9 @@ const AttendancePage = () => {
                                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-3">
                                     <p className="font-medium">Template includes:</p>
                                     <ul className="list-disc list-inside space-y-0.5">
-                                        <li>Employee ID, Name, Department, Designation</li>
-                                        <li>Basic Salary & all allowances (pre-filled)</li>
-                                        <li>Yellow columns to fill: Full Days, Half Days, Approved Leaves</li>
+                                        <li>Employee ID, Name, Department, Salary</li>
+                                        <li>Daily In/Out columns (pre-filled from biometric)</li>
+                                        <li>Auto-calculated Full/Half/Absent days</li>
                                     </ul>
                                 </div>
                             </CardContent>
@@ -434,7 +434,7 @@ const AttendancePage = () => {
                                     Step 2: Upload Filled Sheet
                                 </CardTitle>
                                 <CardDescription>
-                                    Fill in the attendance columns (Full Days, Half Days, Approved Leaves) and upload the completed sheet.
+                                    Fill daily punch times and upload the completed sheet.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -474,9 +474,72 @@ const AttendancePage = () => {
                                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-3">
                                     <p className="font-medium">After import:</p>
                                     <ul className="list-disc list-inside space-y-0.5">
-                                        <li>Attendance records are created for each employee</li>
-                                        <li>Previous manual imports for the same month are replaced</li>
-                                        <li>Payroll can be run using this attendance data</li>
+                                        <li>Daily attendance records created per employee</li>
+                                        <li>Half/Full day auto-calculated from hours</li>
+                                        <li>Previous manual imports for same month replaced</li>
+                                    </ul>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Biocloud Upload */}
+                        <Card className="border-emerald-500/30">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <UserCheck className="h-5 w-5 text-emerald-600" />
+                                    BioCloud Upload
+                                </CardTitle>
+                                <CardDescription>
+                                    Upload the BioCloud attendance export directly to sync biometric punch data.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <input
+                                    type="file"
+                                    id="biocloud-file"
+                                    accept=".xlsx,.xls"
+                                    onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        try {
+                                            const formData = new FormData();
+                                            formData.append('file', file);
+                                            toast.info('Processing BioCloud export...');
+                                            const res = await api.post('/hr/biocloud/upload-attendance', formData, {
+                                                headers: { 'Content-Type': 'multipart/form-data' }
+                                            });
+                                            const d = res.data;
+                                            toast.success(d.message, { duration: 8000 });
+                                            if (d.unmatched_employees?.length > 0) {
+                                                toast.warning(`${d.unmatched_employees.length} badge numbers not mapped: ${d.unmatched_employees.map(u => u.badge + ' ' + u.name).join(', ')}`, { duration: 10000 });
+                                            }
+                                            fetchData();
+                                        } catch (err) {
+                                            toast.error(err.response?.data?.detail || 'Upload failed');
+                                        }
+                                        e.target.value = '';
+                                    }}
+                                    className="hidden"
+                                    data-testid="biocloud-file-input"
+                                />
+                                <Button
+                                    onClick={() => document.getElementById('biocloud-file')?.click()}
+                                    variant="outline"
+                                    className="w-full border-dashed border-2 h-20 border-emerald-500/40 hover:border-emerald-500"
+                                    data-testid="upload-biocloud-btn"
+                                >
+                                    <div className="flex flex-col items-center gap-1">
+                                        <UserCheck className="h-5 w-5 text-emerald-600" />
+                                        <span className="text-sm">Upload BioCloud XLSX Export</span>
+                                    </div>
+                                </Button>
+                                <div className="text-xs text-muted-foreground space-y-1 border-t pt-3">
+                                    <p className="font-medium">How it works:</p>
+                                    <ul className="list-disc list-inside space-y-0.5">
+                                        <li>Upload the raw export from BioCloud</li>
+                                        <li>First In & Last Out auto-extracted per day</li>
+                                        <li>Matched by Badge Number to mapped employees</li>
+                                        <li>Pre-fills the attendance template</li>
                                     </ul>
                                 </div>
                             </CardContent>

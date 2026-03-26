@@ -20858,6 +20858,227 @@ async def get_biocloud_sync_history(
         "total": len(history)
     }
 
+@api_router.post("/hr/biocloud/upload-attendance")
+async def upload_biocloud_attendance(
+    file: UploadFile = File(...),
+    user = Depends(require_roles(["super_admin", "admin", "hr"]))
+):
+    """
+    Upload BioCloud attendance export (xlsx) and process it.
+    Expected columns: BadgeNumber, Employee Name, Department Name, Date, Status, ...
+    Groups punches by employee+date, picks earliest Check-In as first_in and latest Check-Out as last_out.
+    Matches employees by biocloud_emp_code OR employee_id.
+    """
+    import openpyxl
+    import io
+    from collections import defaultdict
+    
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
+    
+    content = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    ws = wb.active
+    
+    # Build employee lookup: badge_number -> employee record
+    all_employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "department": 1, "biocloud_emp_code": 1}
+    ).to_list(500)
+    
+    emp_lookup = {}
+    for emp in all_employees:
+        # Map by biocloud_emp_code
+        if emp.get("biocloud_emp_code"):
+            emp_lookup[str(emp["biocloud_emp_code"])] = emp
+        # Also map by employee_id (badge number may match employee_id)
+        if emp.get("employee_id"):
+            emp_lookup[str(emp["employee_id"])] = emp
+    
+    logger.info(f"BioCloud upload: {len(emp_lookup)} lookup entries for {len(all_employees)} employees")
+    
+    # Parse all rows: group punches by (badge_number, date)
+    # Key: (badge_number, date_str) -> list of datetimes
+    punches = defaultdict(list)
+    check_ins = defaultdict(list)
+    check_outs = defaultdict(list)
+    emp_names = {}
+    emp_depts = {}
+    total_rows = 0
+    skipped_rows = 0
+    
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not row[0]:
+            continue
+        total_rows += 1
+        
+        badge = str(row[0]).strip()
+        emp_name = str(row[1] or "").strip()
+        dept_name = str(row[2] or "").strip()
+        date_val = row[3]  # Could be datetime or string
+        status = str(row[4] or "").strip()
+        
+        if not date_val:
+            skipped_rows += 1
+            continue
+        
+        # Parse datetime
+        if isinstance(date_val, str):
+            try:
+                dt = datetime.strptime(date_val[:19], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    dt = datetime.strptime(date_val[:10], "%Y-%m-%d")
+                except ValueError:
+                    skipped_rows += 1
+                    continue
+        elif hasattr(date_val, 'strftime'):
+            dt = date_val
+        else:
+            skipped_rows += 1
+            continue
+        
+        date_str = dt.strftime("%Y-%m-%d")
+        time_str = dt.strftime("%H:%M:%S")
+        
+        emp_names[badge] = emp_name
+        emp_depts[badge] = dept_name
+        
+        key = (badge, date_str)
+        punches[key].append(time_str)
+        
+        if "check-in" in status.lower() or "in" in status.lower():
+            check_ins[key].append(time_str)
+        elif "check-out" in status.lower() or "out" in status.lower():
+            check_outs[key].append(time_str)
+        else:
+            punches[key].append(time_str)
+    
+    logger.info(f"BioCloud upload: Parsed {total_rows} rows, {skipped_rows} skipped, {len(punches)} employee-day combos")
+    
+    # Process each employee-day combination
+    now_str = datetime.now(timezone.utc).isoformat()
+    synced = 0
+    updated = 0
+    unmatched = []
+    unmatched_set = set()
+    
+    for (badge, date_str), times in punches.items():
+        # Determine first_in and last_out
+        ins = sorted(check_ins.get((badge, date_str), []))
+        outs = sorted(check_outs.get((badge, date_str), []))
+        all_times = sorted(times)
+        
+        first_in = ins[0] if ins else all_times[0] if all_times else None
+        last_out = outs[-1] if outs else (all_times[-1] if len(all_times) > 1 else None)
+        
+        # Don't set last_out same as first_in (single punch)
+        if first_in and last_out and first_in == last_out:
+            last_out = None
+        
+        # Find employee
+        emp = emp_lookup.get(badge)
+        if not emp:
+            if badge not in unmatched_set:
+                unmatched.append({"badge": badge, "name": emp_names.get(badge, ""), "dept": emp_depts.get(badge, "")})
+                unmatched_set.add(badge)
+            continue
+        
+        # Calculate work hours and status
+        total_hours = 0
+        status = "present"
+        late_minutes = 0
+        
+        if first_in and last_out:
+            try:
+                t_in = datetime.strptime(first_in[:5], "%H:%M")
+                t_out = datetime.strptime(last_out[:5], "%H:%M")
+                total_hours = round((t_out - t_in).total_seconds() / 3600, 2)
+                
+                # Late check (after 9:30 AM)
+                if t_in.hour > 9 or (t_in.hour == 9 and t_in.minute > 30):
+                    late_minutes = max(0, (t_in.hour - 9) * 60 + (t_in.minute - 30))
+                
+                if total_hours < 3:
+                    status = "absent"
+                elif total_hours < 6:
+                    status = "half_day"
+            except Exception:
+                total_hours = 9  # default
+        elif first_in:
+            status = "half_day"
+            total_hours = 4
+        
+        record = {
+            "employee_id": emp["id"],
+            "employee_code": emp.get("employee_id"),
+            "employee_name": emp.get("full_name"),
+            "department": emp.get("department"),
+            "date": date_str,
+            "biometric_in": first_in,
+            "biometric_out": last_out,
+            "total_work_hours": total_hours,
+            "late_minutes": late_minutes,
+            "total_punches": len(all_times),
+            "status": status,
+            "source": "biocloud",
+            "updated_at": now_str
+        }
+        
+        # Upsert: update if exists, insert if new (check by employee_id + date only)
+        existing = await db.hr_attendance.find_one({
+            "employee_id": emp["id"],
+            "date": date_str
+        })
+        
+        if existing:
+            await db.hr_attendance.update_one({"_id": existing["_id"]}, {"$set": record})
+            updated += 1
+        else:
+            record["id"] = str(uuid.uuid4())
+            record["created_at"] = now_str
+            try:
+                await db.hr_attendance.insert_one(record)
+                synced += 1
+            except Exception as dup_err:
+                # Duplicate key - try update instead
+                await db.hr_attendance.update_one(
+                    {"employee_id": emp["id"], "date": date_str},
+                    {"$set": record}
+                )
+                updated += 1
+    
+    # Log the sync
+    await db.biocloud_sync_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "timestamp": now_str,
+        "method": "file_upload",
+        "filename": file.filename,
+        "total_rows": total_rows,
+        "employee_days": len(punches),
+        "synced_new": synced,
+        "synced_updated": updated,
+        "unmatched": len(unmatched),
+        "user_id": user.get("id"),
+        "success": True
+    })
+    
+    unique_dates = sorted(set(d for _, d in punches.keys()))
+    
+    return {
+        "success": True,
+        "total_rows_parsed": total_rows,
+        "skipped_rows": skipped_rows,
+        "employee_day_combinations": len(punches),
+        "new_records": synced,
+        "updated_records": updated,
+        "total_synced": synced + updated,
+        "unmatched_employees": unmatched,
+        "date_range": f"{unique_dates[0]} to {unique_dates[-1]}" if unique_dates else "N/A",
+        "unique_dates": len(unique_dates),
+        "message": f"Processed {total_rows} punches: {synced} new + {updated} updated attendance records across {len(unique_dates)} days. {len(unmatched)} unmatched badge numbers."
+    }
+
 async def _sync_single_date(sync_date: str, user: dict) -> dict:
     """Internal helper for syncing a single date (used by bulk sync)"""
     import os as os_module
