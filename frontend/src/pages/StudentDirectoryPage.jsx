@@ -67,10 +67,13 @@ const StudentDirectoryPage = () => {
 
     const loadAgents = async () => {
         try {
-            const res = await apiClient.get('/users?role=cs_agent');
-            const agents = res.data?.items || (Array.isArray(res.data) ? res.data : []);
-            // Include cs_agent AND cs_head roles
-            setCsAgents(agents.filter(a => ['cs_agent', 'cs_head'].includes(a.role)));
+            const [r1, r2] = await Promise.all([
+                apiClient.get('/users?role=cs_agent'),
+                apiClient.get('/users?role=cs_head'),
+            ]);
+            const a1 = Array.isArray(r1.data) ? r1.data : r1.data?.items || [];
+            const a2 = Array.isArray(r2.data) ? r2.data : r2.data?.items || [];
+            setCsAgents([...a2, ...a1]);
         } catch { /* ignore */ }
     };
 
