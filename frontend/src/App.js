@@ -43,6 +43,7 @@ import RevenueForecastPage from "@/pages/RevenueForecastPage";
 import StudentPortalPage from "@/pages/StudentPortalPage";
 import CommissionDashboard from "@/pages/CommissionDashboard";
 import CrossMentorDepositsPage from "@/pages/CrossMentorDepositsPage";
+import MT5SyncPage from "@/pages/MT5SyncPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -287,6 +288,11 @@ function AppRoutes() {
                 <Route path="mentor/historical-import" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <MentorHistoricalImportPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="mt5" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'cs_head', 'cs_head_', 'customer_service', 'customer_service_', 'cs_agent']}>
+                        <MT5SyncPage />
                     </ProtectedRoute>
                 } />
                 

@@ -62,6 +62,7 @@ import {
     ArrowDownRight,
     Upload,
     GitMerge,
+    Server,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -183,6 +184,7 @@ const SECTIONS = {
             { title: 'Departments', icon: Building2, path: '/departments', roles: ['super_admin', 'admin', 'hr'] },
             { title: 'Courses', icon: BookOpen, path: '/courses', roles: ['super_admin', 'admin'] },
             { title: 'Certificates', icon: FileText, path: '/certificates', roles: ['super_admin', 'admin', 'operations'] },
+            { title: 'MT5 Integration', icon: Server, path: '/mt5', roles: ['super_admin', 'admin', 'cs_head', 'cs_head_', 'customer_service', 'customer_service_', 'cs_agent'] },
         ],
     },
     security: {

@@ -27220,6 +27220,245 @@ async def get_ceo_commission_drill(dept: str = "sales", month: str = None, user=
     return {"rows": []}
 
 
+# ==================== MT5 INTEGRATION ====================
+
+from mt5_client import MT5Client, extract_withdrawals
+
+ADMIN_CS_ROLES = {"super_admin", "admin", "cs_head", "cs_head_", "customer_service", "customer_service_", "cs_agent"}
+
+@api_router.get("/mt5/status")
+async def get_mt5_status(user=Depends(get_current_user)):
+    """Check MT5 connection status."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    client = MT5Client()
+    status = client.check_connection()
+    client.close()
+    # Get last sync info
+    last_sync = await db.mt5_sync_logs.find_one({}, {"_id": 0}, sort=[("synced_at", -1)])
+    linked_count = await db.students.count_documents({"mt5_account_number": {"$ne": None, "$exists": True, "$nin": ["", None]}})
+    schedule = {"times": ["08:00", "16:00", "00:00"], "timezone": "UAE (UTC+4)"}
+    return {
+        "connection": status,
+        "last_sync": last_sync,
+        "linked_students": linked_count,
+        "schedule": schedule,
+        "credentials_configured": bool(os.environ.get("MT5_SERVER") and os.environ.get("MT5_LOGIN"))
+    }
+
+@api_router.get("/mt5/linked-students")
+async def get_mt5_linked_students(search: str = "", page: int = 1, limit: int = 50, user=Depends(get_current_user)):
+    """List students with their MT5 account linkage status."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    query = {}
+    if search:
+        query["$or"] = [
+            {"full_name": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"mt5_account_number": {"$regex": search, "$options": "i"}},
+        ]
+    total = await db.students.count_documents(query)
+    students = await db.students.find(
+        query,
+        {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1,
+         "mt5_account_number": 1, "mt5_account_history": 1,
+         "mentor_id": 1, "mentor_name": 1, "status": 1, "stage": 1}
+    ).sort("full_name", 1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"students": students, "total": total, "page": page, "limit": limit}
+
+@api_router.put("/mt5/link-student")
+async def link_student_mt5(data: dict = Body(...), user=Depends(get_current_user)):
+    """Link a student to an MT5 account number. Admin/CS only."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    student_id = data.get("student_id")
+    mt5_account = data.get("mt5_account_number", "").strip()
+    if not student_id or not mt5_account:
+        raise HTTPException(400, "student_id and mt5_account_number required")
+    # Debug: verify the student_id
+    logger.info(f"MT5 link attempt: student_id='{student_id}' type={type(student_id).__name__} mt5={mt5_account}")
+    results = await db.students.find({"id": student_id}, {"_id": 0, "id": 1, "mt5_account_number": 1, "mt5_account_history": 1}).to_list(1)
+    student = results[0] if results else None
+    if not student or not student.get("id"):
+        raise HTTPException(404, "Student not found")
+    # Check for duplicate MT5 account
+    existing = await db.students.find_one({"mt5_account_number": mt5_account, "id": {"$ne": student_id}}, {"_id": 0, "id": 1, "full_name": 1})
+    if existing:
+        raise HTTPException(400, f"MT5 account {mt5_account} already linked to {existing.get('full_name')}")
+    # Update MT5 account and history
+    now_iso = datetime.now(timezone.utc).isoformat()
+    history = student.get("mt5_account_history") or []
+    old_mt5 = student.get("mt5_account_number")
+    if old_mt5:
+        for h in history:
+            if h.get("account_number") == old_mt5:
+                h["status"] = "previous"
+    history.append({"account_number": mt5_account, "added_at": now_iso, "status": "active", "linked_by": user["full_name"]})
+    await db.students.update_one({"id": student_id}, {"$set": {
+        "mt5_account_number": mt5_account,
+        "mt5_account_history": history,
+        "updated_at": now_iso
+    }})
+    return {"success": True, "message": f"MT5 account {mt5_account} linked successfully"}
+
+@api_router.put("/mt5/unlink-student")
+async def unlink_student_mt5(data: dict = Body(...), user=Depends(get_current_user)):
+    """Unlink a student's MT5 account. Admin/CS only."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    student_id = data.get("student_id")
+    if not student_id:
+        raise HTTPException(400, "student_id required")
+    results = await db.students.find({"id": student_id}, {"_id": 0, "id": 1, "mt5_account_number": 1, "mt5_account_history": 1}).to_list(1)
+    student = results[0] if results else None
+    if not student or not student.get("id"):
+        raise HTTPException(404, "Student not found")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    history = student.get("mt5_account_history") or []
+    old_mt5 = student.get("mt5_account_number")
+    if old_mt5:
+        for h in history:
+            if h.get("account_number") == old_mt5:
+                h["status"] = "unlinked"
+                h["unlinked_at"] = now_iso
+    await db.students.update_one({"id": student_id}, {"$set": {
+        "mt5_account_number": None,
+        "mt5_account_history": history,
+        "updated_at": now_iso
+    }})
+    return {"success": True, "message": "MT5 account unlinked"}
+
+@api_router.post("/mt5/sync")
+async def trigger_mt5_sync(data: dict = Body(default={}), user=Depends(get_current_user)):
+    """Manually trigger MT5 withdrawal sync. Admin/CS only."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    result = await _run_mt5_withdrawal_sync(triggered_by=user["full_name"])
+    return result
+
+@api_router.get("/mt5/sync-logs")
+async def get_mt5_sync_logs(limit: int = 20, user=Depends(get_current_user)):
+    """Get MT5 sync history logs."""
+    if user["role"] not in ADMIN_CS_ROLES:
+        raise HTTPException(403, "Not authorized")
+    logs = await db.mt5_sync_logs.find({}, {"_id": 0}).sort("synced_at", -1).limit(limit).to_list(limit)
+    return {"logs": logs}
+
+async def _run_mt5_withdrawal_sync(triggered_by="auto"):
+    """Core sync logic: Pull withdrawals from MT5, match to students, create mentor_withdrawals."""
+    USD_TO_AED = float(os.environ.get("USD_TO_AED_RATE", "3.674"))
+    sync_log = {
+        "id": str(uuid.uuid4()),
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "triggered_by": triggered_by,
+        "status": "running",
+        "withdrawals_found": 0,
+        "withdrawals_synced": 0,
+        "withdrawals_skipped": 0,
+        "errors": [],
+        "details": []
+    }
+
+    try:
+        client = MT5Client()
+        ok, msg = client.connect()
+        if not ok:
+            sync_log["status"] = "auth_failed"
+            sync_log["errors"].append(msg)
+            await db.mt5_sync_logs.insert_one({**{k: v for k, v in sync_log.items()}, "_id": sync_log["id"]})
+            return {k: v for k, v in sync_log.items() if k != "_id"}
+
+        # Get all students with MT5 accounts
+        linked_students = await db.students.find(
+            {"mt5_account_number": {"$ne": None, "$exists": True, "$nin": ["", None]}},
+            {"_id": 0, "id": 1, "full_name": 1, "email": 1, "mt5_account_number": 1, "mentor_id": 1, "mentor_name": 1}
+        ).to_list(1000)
+
+        if not linked_students:
+            sync_log["status"] = "completed"
+            sync_log["errors"].append("No students linked to MT5 accounts")
+            await db.mt5_sync_logs.insert_one({k: v for k, v in sync_log.items() if k != "_id"})
+            client.close()
+            return sync_log
+
+        # Time range: last 30 days
+        now = datetime.now(timezone.utc)
+        from_ts = int((now - timedelta(days=30)).timestamp())
+        to_ts = int(now.timestamp())
+
+        total_found = 0
+        total_synced = 0
+        total_skipped = 0
+
+        for student in linked_students:
+            mt5_account = student["mt5_account_number"]
+            try:
+                # Extract numeric login from MT5 account (e.g., "MT5_12345" -> "12345" or just "12345")
+                mt5_login = mt5_account.replace("MT5_", "").replace("mt5_", "").strip()
+                if not mt5_login.isdigit():
+                    continue
+
+                deals, deal_msg = client.get_deals(mt5_login, from_ts, to_ts)
+                withdrawals = extract_withdrawals(deals)
+                total_found += len(withdrawals)
+
+                for w in withdrawals:
+                    # Check if already synced (by MT5 ticket)
+                    existing = await db.mentor_withdrawals.find_one({"mt5_ticket": w["ticket"]}, {"_id": 0, "id": 1})
+                    if existing:
+                        total_skipped += 1
+                        continue
+
+                    # Create withdrawal record
+                    w_date = datetime.fromtimestamp(w["timestamp"], tz=timezone.utc)
+                    withdrawal_doc = {
+                        "id": str(uuid.uuid4()),
+                        "date": w_date.strftime("%Y-%m-%d"),
+                        "month": w_date.strftime("%Y-%m"),
+                        "mentor_id": student.get("mentor_id", ""),
+                        "mentor_name": student.get("mentor_name", ""),
+                        "student_id": student["id"],
+                        "student_name": student["full_name"],
+                        "student_email": student.get("email", ""),
+                        "amount": w["amount_usd"],
+                        "amount_aed": round(w["amount_usd"] * USD_TO_AED, 2),
+                        "mt5_ticket": w["ticket"],
+                        "mt5_account": mt5_account,
+                        "mt5_comment": w.get("comment", ""),
+                        "notes": f"Auto-synced from MT5 (ticket: {w['ticket']})",
+                        "source": "mt5_sync",
+                        "created_at": now.isoformat(),
+                        "created_by": "mt5_sync"
+                    }
+                    await db.mentor_withdrawals.insert_one({k: v for k, v in withdrawal_doc.items() if k != "_id"})
+                    total_synced += 1
+                    sync_log["details"].append({
+                        "student": student["full_name"],
+                        "mt5_account": mt5_account,
+                        "amount_usd": w["amount_usd"],
+                        "date": w_date.strftime("%Y-%m-%d"),
+                        "ticket": w["ticket"]
+                    })
+
+            except Exception as e:
+                sync_log["errors"].append(f"Error processing {student['full_name']} ({mt5_account}): {str(e)}")
+
+        sync_log["status"] = "completed"
+        sync_log["withdrawals_found"] = total_found
+        sync_log["withdrawals_synced"] = total_synced
+        sync_log["withdrawals_skipped"] = total_skipped
+        client.close()
+
+    except Exception as e:
+        sync_log["status"] = "error"
+        sync_log["errors"].append(str(e))
+        logger.error(f"MT5 sync error: {e}")
+
+    await db.mt5_sync_logs.insert_one({**{k: v for k, v in sync_log.items()}, "_id": sync_log["id"]})
+    return {k: v for k, v in sync_log.items() if k != "_id"}
+
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -27367,6 +27606,9 @@ async def startup_event():
     
     # Start background scheduler for automatic user deactivation
     asyncio.create_task(user_deactivation_loop())
+    
+    # Start MT5 auto-sync scheduler (8 AM, 4 PM, 12 AM UAE time)
+    asyncio.create_task(mt5_auto_sync_loop())
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
 
@@ -27624,6 +27866,27 @@ async def user_deactivation_loop():
         except Exception as e:
             logger.error(f"User deactivation loop error: {e}")
         await asyncio.sleep(6 * 3600)  # Run every 6 hours
+
+async def mt5_auto_sync_loop():
+    """Background loop for MT5 withdrawal sync at 8 AM, 4 PM, 12 AM UAE time (UTC+4)."""
+    abu_dhabi_tz = timezone(timedelta(hours=4))
+    sync_hours = {8, 16, 0}  # 8 AM, 4 PM, 12 AM UAE
+    last_sync_hour = -1
+    while True:
+        try:
+            now_uae = datetime.now(abu_dhabi_tz)
+            current_hour = now_uae.hour
+            if current_hour in sync_hours and current_hour != last_sync_hour:
+                logger.info(f"MT5 auto-sync triggered at {now_uae.strftime('%H:%M')} UAE time")
+                result = await _run_mt5_withdrawal_sync(triggered_by="auto_schedule")
+                logger.info(f"MT5 sync result: {result.get('status')} - found={result.get('withdrawals_found')}, synced={result.get('withdrawals_synced')}")
+                last_sync_hour = current_hour
+            # Reset last_sync_hour when hour changes
+            if current_hour not in sync_hours:
+                last_sync_hour = -1
+        except Exception as e:
+            logger.error(f"MT5 auto-sync loop error: {e}")
+        await asyncio.sleep(300)  # Check every 5 minutes
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
