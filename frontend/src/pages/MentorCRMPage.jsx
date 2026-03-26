@@ -70,6 +70,10 @@ import {
     PhoneCall,
     GripVertical,
     RefreshCw,
+    AlertTriangle,
+    PhoneOff,
+    Star,
+    Shield,
 } from 'lucide-react';
 
 const MENTOR_STAGES = [
@@ -80,19 +84,34 @@ const MENTOR_STAGES = [
     { id: 'closed', label: 'Closed (Deposit)', color: 'bg-emerald-500', icon: DollarSign },
 ];
 
+const MENTOR_COLOR_TAG_STYLES = {
+    handle_with_care: { label: 'Handle With Care', color: 'bg-amber-100 border-amber-400 text-amber-800', dot: 'bg-amber-500', icon: AlertTriangle },
+    do_not_disturb: { label: 'Do Not Disturb', color: 'bg-red-100 border-red-400 text-red-800', dot: 'bg-red-500', icon: PhoneOff },
+    vip: { label: 'VIP Client', color: 'bg-yellow-100 border-yellow-500 text-yellow-800', dot: 'bg-yellow-500', icon: Star },
+    priority: { label: 'Priority', color: 'bg-purple-100 border-purple-400 text-purple-800', dot: 'bg-purple-500', icon: Shield },
+    follow_up: { label: 'Follow Up', color: 'bg-blue-100 border-blue-400 text-blue-800', dot: 'bg-blue-500', icon: Bell },
+};
+
 const StudentCard = ({ student, onView, onSetReminder, isDragging, isSuperAdmin, mentorAgents, onReassign }) => {
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const courseLevel = student.course_level || '';
     const courseName = courseLevel || student.current_course_name || student.package_bought;
     const courseColors = getCourseColor(courseName);
     const hasCourse = !!courseName;
+    const colorTag = student.color_tag ? MENTOR_COLOR_TAG_STYLES[student.color_tag] : null;
 
     return (
         <div
-            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${hasCourse ? `${courseColors.border} border-l-4` : ''}`}
+            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${colorTag ? `${colorTag.color.split(' ')[0]} border-2 ${colorTag.color.split(' ')[1]}` : hasCourse ? `${courseColors.border} border-l-4` : ''}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`mentor-card-${student.id}`}
         >
+            {colorTag && (
+                <div className={`-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md ${colorTag.color}`}>
+                    <colorTag.icon className="h-3 w-3" />
+                    {colorTag.label}
+                </div>
+            )}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">

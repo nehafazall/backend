@@ -75,7 +75,23 @@ import {
     Download,
     DollarSign,
     GitMerge,
+    Palette,
+    Shield,
+    Star,
+    AlertTriangle,
+    PhoneOff,
+    BarChart3,
 } from 'lucide-react';
+
+const COLOR_TAGS = [
+    { id: 'handle_with_care', label: 'Handle With Care', color: 'bg-amber-100 border-amber-400 text-amber-800', dot: 'bg-amber-500', icon: AlertTriangle },
+    { id: 'do_not_disturb', label: 'Do Not Disturb', color: 'bg-red-100 border-red-400 text-red-800', dot: 'bg-red-500', icon: PhoneOff },
+    { id: 'vip', label: 'VIP Client', color: 'bg-yellow-100 border-yellow-500 text-yellow-800', dot: 'bg-yellow-500', icon: Star },
+    { id: 'priority', label: 'Priority', color: 'bg-purple-100 border-purple-400 text-purple-800', dot: 'bg-purple-500', icon: Shield },
+    { id: 'follow_up', label: 'Follow Up', color: 'bg-blue-100 border-blue-400 text-blue-800', dot: 'bg-blue-500', icon: Bell },
+];
+
+const getColorTagStyle = (tag) => COLOR_TAGS.find(t => t.id === tag) || null;
 
 const CS_STAGES = [
     { id: 'new_student', label: 'New Student', color: 'bg-blue-500', icon: User },
@@ -88,23 +104,29 @@ const CS_STAGES = [
     { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
-const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging, isSuperAdmin, csAgents, onQuickReassign }) => {
+const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
     const [showReassign, setShowReassign] = React.useState(false);
     const hasReminder = student.reminder_date && !student.reminder_completed;
     const isUpgradedStudent = student.is_upgraded_student;
+    const isShadow = student.is_shadow;
     const isNewImport = student.is_new_from_import;
     const courseLevel = student.course_level || '';
     const courseName = courseLevel || student.current_course_name || student.package_bought;
     const courseColors = getCourseColor(courseName);
     const nextLevel = courseColors.next;
+    const colorTag = getColorTagStyle(student.color_tag);
 
-    // New imported students get a distinct cyan/teal highlight
-    const cardBorder = isNewImport
-        ? 'border-2 border-cyan-400 dark:border-cyan-600 ring-1 ring-cyan-400/30'
-        : isUpgradedStudent ? `${courseColors.border} border-2` : '';
-    const cardBg = isNewImport
-        ? 'bg-cyan-50/50 dark:bg-cyan-900/20'
-        : isUpgradedStudent ? courseColors.bg : '';
+    // Color tag takes priority for border/bg
+    const cardBorder = colorTag
+        ? `border-2 ${colorTag.color.split(' ')[1]}`
+        : isNewImport
+            ? 'border-2 border-cyan-400 dark:border-cyan-600 ring-1 ring-cyan-400/30'
+            : isUpgradedStudent ? `${courseColors.border} border-2` : '';
+    const cardBg = colorTag
+        ? colorTag.color.split(' ')[0]
+        : isNewImport
+            ? 'bg-cyan-50/50 dark:bg-cyan-900/20'
+            : isUpgradedStudent ? courseColors.bg : '';
 
     return (
         <div
@@ -112,6 +134,20 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
             onClick={() => !isDragging && onView(student)}
             data-testid={`student-card-${student.id}`}
         >
+            {/* Color tag indicator strip */}
+            {colorTag && (
+                <div className={`-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md ${colorTag.color}`} data-testid={`color-tag-${student.id}`}>
+                    <colorTag.icon className="h-3 w-3" />
+                    {colorTag.label}
+                </div>
+            )}
+            {/* Shadow card indicator */}
+            {isShadow && (
+                <div className="-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md bg-emerald-100 text-emerald-700 border-b border-emerald-300" data-testid={`shadow-indicator-${student.id}`}>
+                    <ArrowUp className="h-3 w-3" />
+                    Upgraded &middot; AED {(student.amount || 0).toLocaleString()}
+                </div>
+            )}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <div className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground">
@@ -181,6 +217,22 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                             <Bell className="h-4 w-4 mr-2" />
                             Set Reminder
                         </DropdownMenuItem>
+                        {!isShadow && onColorTag && (
+                            <>
+                                <DropdownMenuSeparator />
+                                {COLOR_TAGS.map(tag => (
+                                    <DropdownMenuItem key={tag.id} onClick={(e) => { e.stopPropagation(); onColorTag(student, student.color_tag === tag.id ? null : tag.id); }}>
+                                        <div className={`h-3 w-3 rounded-full mr-2 ${tag.dot}`} />
+                                        {student.color_tag === tag.id ? `Remove ${tag.label}` : tag.label}
+                                    </DropdownMenuItem>
+                                ))}
+                                {student.color_tag && (
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onColorTag(student, null); }} className="text-muted-foreground">
+                                        Clear Tag
+                                    </DropdownMenuItem>
+                                )}
+                            </>
+                        )}
                         {student.stage === 'activated' && (
                             <>
                                 <DropdownMenuSeparator />
@@ -198,8 +250,26 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
             </div>
             
             <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-3 w-3" />
+                {isShadow ? (
+                    <>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <GraduationCap className="h-3 w-3" />
+                            <span className="text-xs">{student.course_upgrade || student.upgrade_to_course}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <DollarSign className="h-3 w-3" />
+                            <span className="font-mono text-xs">AED {(student.amount || 0).toLocaleString()}</span>
+                        </div>
+                        {student.date && (
+                            <div className="text-xs text-muted-foreground">
+                                {new Date(student.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-3 w-3" />
                     <span className="font-mono flex-1">{student.phone}</span>
                     <ClickToCall 
                         phoneNumber={student.phone} 
@@ -227,6 +297,8 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
                             </span>
                         )}
                     </div>
+                )}
+                    </>
                 )}
             </div>
             
@@ -260,7 +332,7 @@ const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDrag
 };
 
 // Sortable wrapper for StudentCard
-const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign }) => {
+const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
     const {
         attributes,
         listeners,
@@ -286,14 +358,19 @@ const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade
                 isSuperAdmin={isSuperAdmin}
                 csAgents={csAgents}
                 onQuickReassign={onQuickReassign}
+                onColorTag={onColorTag}
             />
         </div>
     );
 };
 
-const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign }) => {
+const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
     const stageStudents = students.filter(s => s.stage === stage.id);
-    const studentIds = stageStudents.map(s => s.id);
+    // For the Upgraded column, merge in shadow cards
+    const displayStudents = stage.id === 'upgraded' && shadowCards?.length > 0
+        ? [...shadowCards, ...stageStudents.filter(s => !s.is_shadow)]
+        : stageStudents;
+    const studentIds = displayStudents.map(s => s.id);
     const StageIcon = stage.icon;
     
     // Make column a drop target
@@ -312,13 +389,13 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrad
                     <StageIcon className={`h-4 w-4 ${stage.color.replace('bg-', 'text-')}`} />
                     <h3 className="font-semibold">{stage.label}</h3>
                 </div>
-                <Badge variant="secondary">{stageStudents.length}</Badge>
+                <Badge variant="secondary">{displayStudents.length}</Badge>
             </div>
             
             <ScrollArea className="flex-1">
                 <SortableContext items={studentIds} strategy={verticalListSortingStrategy}>
                     <div className="space-y-3 min-h-[100px] p-1">
-                        {stageStudents.map((student) => (
+                        {displayStudents.map((student) => (
                             <SortableStudentCard
                                 key={student.id}
                                 student={student}
@@ -328,9 +405,10 @@ const KanbanColumn = ({ stage, students, onView, onSetReminder, onInitiateUpgrad
                                 isSuperAdmin={isSuperAdmin}
                                 csAgents={csAgents}
                                 onQuickReassign={onQuickReassign}
+                                onColorTag={onColorTag}
                             />
                         ))}
-                        {stageStudents.length === 0 && (
+                        {displayStudents.length === 0 && (
                             <div className={`text-center text-muted-foreground py-8 text-sm border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
                                 Drop students here
                             </div>
@@ -361,6 +439,11 @@ const CustomerServicePage = () => {
         onboarding_complete: false,
         classes_attended: 0,
     });
+    
+    // Summary bar state
+    const [stageSummary, setStageSummary] = useState(null);
+    // Shadow cards for Upgraded column
+    const [shadowCards, setShadowCards] = useState([]);
     
     // Upgrade modal state
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -400,6 +483,8 @@ const CustomerServicePage = () => {
 
     useEffect(() => {
         fetchStudents();
+        fetchStageSummary();
+        fetchShadowCards();
     }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize]);
 
     // Fetch CS agents for super admin quick reassign & filtering
@@ -479,6 +564,46 @@ const CustomerServicePage = () => {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchStageSummary = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (filterCSAgent !== 'all') params.set('cs_agent_id', filterCSAgent);
+            if (viewMode === 'my_work' && isHeadOrAdmin) params.set('cs_agent_id', user.id);
+            if (csPeriodFilter) {
+                params.set('date_from', csPeriodFilter.date_from);
+                params.set('date_to', csPeriodFilter.date_to);
+            }
+            const res = await apiClient.get(`/students/stage-summary?${params.toString()}`);
+            setStageSummary(res.data);
+        } catch { /* silent */ }
+    };
+
+    const fetchShadowCards = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (filterCSAgent !== 'all') params.set('cs_agent_id', filterCSAgent);
+            if (viewMode === 'my_work' && isHeadOrAdmin) params.set('cs_agent_id', user.id);
+            if (csPeriodFilter) {
+                params.set('date_from', csPeriodFilter.date_from);
+                params.set('date_to', csPeriodFilter.date_to);
+            }
+            params.set('page_size', '100');
+            const res = await apiClient.get(`/students/upgrade-shadows?${params.toString()}`);
+            setShadowCards(res.data?.items || []);
+        } catch { setShadowCards([]); }
+    };
+
+    const handleColorTag = async (student, tag) => {
+        try {
+            await apiClient.patch(`/students/${student.student_id || student.id}/color-tag`, { color_tag: tag });
+            toast.success(tag ? `Tagged as "${COLOR_TAGS.find(t => t.id === tag)?.label}"` : 'Tag removed');
+            fetchStudents();
+            fetchShadowCards();
+        } catch (e) {
+            toast.error('Failed to set color tag');
         }
     };
 
@@ -764,6 +889,38 @@ const CustomerServicePage = () => {
                 </div>
             )}
 
+            {/* Summary Status Bar */}
+            {stageSummary && (
+                <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-2" data-testid="cs-summary-bar">
+                    {CS_STAGES.map(stage => {
+                        const count = stageSummary.stage_counts?.[stage.id] || 0;
+                        return (
+                            <div key={stage.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
+                                <div className={`w-2 h-2 rounded-full ${stage.color}`} />
+                                <div className="min-w-0">
+                                    <p className="text-[10px] text-muted-foreground truncate">{stage.label}</p>
+                                    <p className="text-sm font-bold">{count}</p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
+                        <BarChart3 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                            <p className="text-[10px] text-muted-foreground">Total</p>
+                            <p className="text-sm font-bold">{stageSummary.total_students}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-950/30">
+                        <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <div className="min-w-0">
+                            <p className="text-[10px] text-muted-foreground">Period Revenue</p>
+                            <p className="text-sm font-bold text-emerald-600">AED {(stageSummary.period_revenue || 0).toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Kanban Board */}
             {loading ? (
                 <div className="flex items-center justify-center h-96">
@@ -782,12 +939,14 @@ const CustomerServicePage = () => {
                                 key={stage.id}
                                 stage={stage}
                                 students={students}
+                                shadowCards={stage.id === 'upgraded' ? shadowCards : []}
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
                                 onInitiateUpgrade={handleInitiateUpgrade}
                                 isSuperAdmin={isSuperAdmin}
                                 csAgents={csAgentsList}
                                 onQuickReassign={handleQuickReassignCS}
+                                onColorTag={handleColorTag}
                             />
                         ))}
                     </div>
@@ -882,6 +1041,21 @@ const CustomerServicePage = () => {
                                                     <GitMerge className="h-3.5 w-3.5" />
                                                     Merge
                                                 </Button>
+                                            </div>
+                                            {/* Color Tag Picker */}
+                                            <div className="flex items-center gap-2 mt-3 flex-wrap" data-testid="color-tag-picker">
+                                                <span className="text-xs text-muted-foreground mr-1"><Palette className="h-3 w-3 inline mr-1" />Tag:</span>
+                                                {COLOR_TAGS.map(tag => (
+                                                    <button
+                                                        key={tag.id}
+                                                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${selectedStudent.color_tag === tag.id ? tag.color + ' ring-2 ring-offset-1 ring-current font-bold' : 'border-muted text-muted-foreground hover:border-foreground'}`}
+                                                        onClick={() => handleColorTag(selectedStudent, selectedStudent.color_tag === tag.id ? null : tag.id)}
+                                                        data-testid={`color-tag-btn-${tag.id}`}
+                                                    >
+                                                        <div className={`h-2 w-2 rounded-full ${tag.dot}`} />
+                                                        {tag.label}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                     </div>

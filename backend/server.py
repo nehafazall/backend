@@ -521,6 +521,7 @@ class StudentUpdate(BaseModel):
     wallet_transfer_confirmed: Optional[bool] = None
     mt5_account_number: Optional[str] = None  # Current MT5 account
     course_level: Optional[str] = None  # Starter, Basic, Intermediate, Advanced, Mastery
+    color_tag: Optional[str] = None  # handle_with_care, do_not_disturb, vip, priority, follow_up
 
 class StudentResponse(StudentBase):
     id: str
@@ -564,6 +565,7 @@ class StudentResponse(StudentBase):
     pitched_upgrade_price: Optional[float] = None
     last_upgrade_amount: Optional[float] = None
     course_level: Optional[str] = None  # Starter, Basic, Intermediate, Advanced, Mastery
+    color_tag: Optional[str] = None  # handle_with_care, do_not_disturb, vip, priority, follow_up
     last_upgrade_path: Optional[str] = None
     last_upgrade_at: Optional[str] = None
     created_at: Optional[str] = None
@@ -5538,6 +5540,116 @@ async def get_students(
     }
 
 
+@api_router.get("/students/stage-summary")
+async def get_students_stage_summary(
+    cs_agent_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get per-stage student counts and upgrade revenue for the summary bar."""
+    base_query = {"merged_into": {"$exists": False}}
+    if user["role"] == "cs_agent":
+        base_query["cs_agent_id"] = user["id"]
+    if cs_agent_id:
+        base_query["cs_agent_id"] = cs_agent_id
+
+    # Count per stage (total — not date-filtered, these are current pipeline counts)
+    pipeline = [
+        {"$match": base_query},
+        {"$group": {"_id": "$stage", "count": {"$sum": 1}}},
+    ]
+    stage_results = await db.students.aggregate(pipeline).to_list(20)
+    stage_counts = {r["_id"]: r["count"] for r in stage_results if r["_id"]}
+    total_students = sum(stage_counts.values())
+
+    # Upgrade revenue for the period from cs_upgrades
+    upgrade_query = {}
+    if cs_agent_id:
+        upgrade_query["cs_agent_id"] = cs_agent_id
+    elif user["role"] == "cs_agent":
+        upgrade_query["cs_agent_id"] = user["id"]
+    if date_from:
+        upgrade_query.setdefault("date", {})["$gte"] = date_from
+    if date_to:
+        upgrade_query.setdefault("date", {})["$lte"] = date_to + "T23:59:59"
+
+    rev_pipeline = [
+        {"$match": upgrade_query},
+        {"$group": {"_id": None, "total_revenue": {"$sum": {"$ifNull": ["$amount", 0]}}, "upgrade_count": {"$sum": 1}}},
+    ]
+    rev_result = await db.cs_upgrades.aggregate(rev_pipeline).to_list(1)
+    rev = rev_result[0] if rev_result else {}
+
+    return {
+        "stage_counts": stage_counts,
+        "total_students": total_students,
+        "period_upgrades": rev.get("upgrade_count", 0),
+        "period_revenue": rev.get("total_revenue", 0),
+    }
+
+
+@api_router.get("/students/upgrade-shadows")
+async def get_upgrade_shadow_cards(
+    cs_agent_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    user=Depends(get_current_user)
+):
+    """Return shadow cards from cs_upgrades for the Upgraded column."""
+    query = {}
+    if user["role"] == "cs_agent":
+        query["cs_agent_id"] = user["id"]
+    if cs_agent_id:
+        query["cs_agent_id"] = cs_agent_id
+    if date_from:
+        query.setdefault("date", {})["$gte"] = date_from
+    if date_to:
+        query.setdefault("date", {})["$lte"] = date_to + "T23:59:59"
+
+    total = await db.cs_upgrades.count_documents(query)
+    skip = (max(page, 1) - 1) * page_size
+    upgrades = await db.cs_upgrades.find(query, {"_id": 0}).sort("date", -1).skip(skip).limit(page_size).to_list(page_size)
+
+    # Enrich shadow cards with student color_tag
+    student_ids = list({u["student_id"] for u in upgrades if u.get("student_id")})
+    color_map = {}
+    if student_ids:
+        students_with_tags = await db.students.find(
+            {"id": {"$in": student_ids}, "color_tag": {"$exists": True, "$ne": None}},
+            {"_id": 0, "id": 1, "color_tag": 1}
+        ).to_list(len(student_ids))
+        color_map = {s["id"]: s["color_tag"] for s in students_with_tags}
+
+    shadow_cards = []
+    for u in upgrades:
+        shadow_cards.append({
+            "id": f"shadow_{u['id']}",
+            "student_id": u.get("student_id"),
+            "full_name": u.get("student_name") or u.get("full_name", "Unknown"),
+            "phone": u.get("phone", ""),
+            "course_upgrade": u.get("course_upgrade", ""),
+            "upgrade_to_course": u.get("upgrade_to_course", ""),
+            "amount": u.get("amount") or u.get("course_amount", 0),
+            "date": u.get("date"),
+            "cs_agent_name": u.get("cs_agent_name", ""),
+            "cs_agent_id": u.get("cs_agent_id", ""),
+            "is_shadow": True,
+            "stage": "upgraded",
+            "color_tag": color_map.get(u.get("student_id")),
+        })
+
+    return {
+        "items": shadow_cards,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
 @api_router.get("/students/export/excel")
 async def export_students_excel(token: str = None, request: Request = None):
     """Export all students as Excel (Sr No, Name, Phone, Email) for super admin."""
@@ -5657,6 +5769,28 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
     
     updated = await db.students.find_one({"id": student_id}, {"_id": 0})
     return updated
+
+
+VALID_COLOR_TAGS = ["handle_with_care", "do_not_disturb", "vip", "priority", "follow_up", None]
+
+@api_router.patch("/students/{student_id}/color-tag")
+async def set_student_color_tag(
+    student_id: str,
+    body: Dict,
+    user=Depends(get_current_user)
+):
+    """Set or clear a color tag on a student. Visible across CS, BDM, Mentor."""
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    tag = body.get("color_tag")
+    if tag and tag not in VALID_COLOR_TAGS:
+        raise HTTPException(status_code=400, detail=f"Invalid color tag. Must be one of: {VALID_COLOR_TAGS}")
+    await db.students.update_one(
+        {"id": student_id},
+        {"$set": {"color_tag": tag, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"success": True, "color_tag": tag}
 
 
 @api_router.post("/students/{student_id}/reassign-mentor")

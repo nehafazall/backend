@@ -15,6 +15,8 @@ export default function CLTAnimation({
 }) {
   const svgRef = useRef(null);
   const timeouts = useRef([]);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   const ids = useMemo(
     () => ({
@@ -261,10 +263,10 @@ export default function CLTAnimation({
       );
 
       // 5) Call onComplete after animation finishes
-      if (onComplete && !loop) {
+      if (onCompleteRef.current && !loop) {
         timeouts.current.push(
           setTimeout(() => {
-            onComplete();
+            if (onCompleteRef.current) onCompleteRef.current();
           }, 13000)
         );
       }
@@ -280,7 +282,7 @@ export default function CLTAnimation({
 
     run();
     return () => clearAll();
-  }, [ids, loop, onComplete]);
+  }, [ids, loop]);
 
   // ERP Dark theme background color: HSL(17, 27%, 10%) = #201612
   const erpBackground = "#1a1310";
