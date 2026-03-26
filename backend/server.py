@@ -5425,6 +5425,41 @@ async def record_activation_call(student_id: str, call_recording_url: Optional[s
 
 # ==================== STUDENTS (CS & MENTOR CRM) ====================
 
+@api_router.post("/students/migrate-to-new-student")
+async def migrate_students_to_new_student(
+    user = Depends(require_roles(["super_admin", "admin", "cs_head"]))
+):
+    """
+    Migrate all 'activated' students WITHOUT a completed activation questionnaire
+    back to 'new_student' stage so they can be properly activated through the system.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Find activated students without questionnaire
+    result = await db.students.update_many(
+        {
+            "stage": "activated",
+            "$or": [
+                {"activation_questionnaire": {"$exists": False}},
+                {"activation_questionnaire": None},
+                {"activation_questionnaire.cs_confirmation": {"$ne": True}}
+            ]
+        },
+        {
+            "$set": {
+                "stage": "new_student",
+                "migration_note": "Migrated to new_student for activation",
+                "migrated_at": now,
+                "updated_at": now
+            }
+        }
+    )
+    
+    return {
+        "message": f"Migrated {result.modified_count} students to 'New Student' stage for activation",
+        "migrated_count": result.modified_count
+    }
+
 @api_router.get("/students")
 async def get_students(
     stage: Optional[str] = None,
@@ -15206,6 +15241,195 @@ async def get_recent_calls(limit: int = 50, extension: Optional[str] = None, use
         "filtered_by_extension": filter_extension
     }
 
+@api_router.get("/3cx/daily-minutes")
+async def get_3cx_daily_minutes(
+    month: str = None,
+    user = Depends(get_current_user)
+):
+    """
+    Get daily call minutes per employee for a given month.
+    month format: YYYY-MM (defaults to current month)
+    Role-based: TL sees team, CEO/COO/admin sees all, SE sees own.
+    """
+    import calendar as cal_module
+    
+    now = datetime.now(timezone.utc)
+    if not month:
+        month = now.strftime("%Y-%m")
+    
+    try:
+        year, m = month.split("-")
+        year, m = int(year), int(m)
+        total_days = cal_module.monthrange(year, m)[1]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+    
+    month_start = f"{year}-{str(m).zfill(2)}-01"
+    month_end = f"{year}-{str(m).zfill(2)}-{total_days}"
+    
+    # Build extension → user mapping
+    users_with_ext = await db.users.find(
+        {"threecx_extension": {"$exists": True, "$ne": None, "$ne": ""}},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "threecx_extension": 1, "team_leader_id": 1}
+    ).to_list(200)
+    
+    ext_to_user = {}
+    user_id_to_info = {}
+    for u in users_with_ext:
+        ext_to_user[u["threecx_extension"]] = u
+        user_id_to_info[u["id"]] = u
+    
+    # Role-based filtering
+    role = user.get("role", "")
+    visible_user_ids = set()
+    
+    if role in ["super_admin", "admin", "coo", "sales_manager"]:
+        visible_user_ids = {u["id"] for u in users_with_ext}
+    elif role == "team_leader":
+        visible_user_ids = {u["id"] for u in users_with_ext if u.get("team_leader_id") == user["id"] or u["id"] == user["id"]}
+    else:
+        visible_user_ids = {user["id"]}
+    
+    # Get call logs for the month
+    call_logs = await db.call_logs.find({
+        "call_date": {"$gte": month_start, "$lte": month_end + "T23:59:59"},
+        "call_duration": {"$gt": 0}
+    }, {"_id": 0, "agent_extension": 1, "call_duration": 1, "call_date": 1, "initiated_by": 1}).to_list(10000)
+    
+    # Aggregate: user_id → { date → total_seconds }
+    daily_data = {}
+    for log in call_logs:
+        # Determine user from extension or initiated_by
+        uid = None
+        ext = log.get("agent_extension")
+        if ext and ext in ext_to_user:
+            uid = ext_to_user[ext]["id"]
+        elif log.get("initiated_by"):
+            uid = log["initiated_by"]
+        
+        if not uid or uid not in visible_user_ids:
+            continue
+        
+        # Extract date from call_date
+        cd = log.get("call_date", "")
+        if isinstance(cd, str):
+            date_part = cd[:10]
+        else:
+            date_part = cd.strftime("%Y-%m-%d") if hasattr(cd, 'strftime') else str(cd)[:10]
+        
+        if uid not in daily_data:
+            daily_data[uid] = {}
+        daily_data[uid][date_part] = daily_data[uid].get(date_part, 0) + log.get("call_duration", 0)
+    
+    # Build response
+    result = []
+    for uid, days in daily_data.items():
+        info = user_id_to_info.get(uid, {})
+        daily_minutes = []
+        total_seconds = 0
+        for day in range(1, total_days + 1):
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day).zfill(2)}"
+            secs = days.get(date_str, 0)
+            total_seconds += secs
+            daily_minutes.append({"date": date_str, "seconds": secs, "minutes": round(secs / 60, 1)})
+        
+        result.append({
+            "user_id": uid,
+            "user_name": info.get("full_name", "Unknown"),
+            "role": info.get("role", ""),
+            "extension": info.get("threecx_extension", ""),
+            "daily": daily_minutes,
+            "total_seconds": total_seconds,
+            "total_minutes": round(total_seconds / 60, 1)
+        })
+    
+    result.sort(key=lambda x: x["total_seconds"], reverse=True)
+    return {"month": month, "data": result}
+
+@api_router.get("/3cx/yearly-summary")
+async def get_3cx_yearly_summary(
+    year: int = None,
+    user = Depends(get_current_user)
+):
+    """
+    Get monthly call minutes per employee for a year.
+    Role-based: TL sees team, CEO/COO/admin sees all, SE sees own.
+    """
+    now = datetime.now(timezone.utc)
+    if not year:
+        year = now.year
+    
+    # Build extension → user mapping
+    users_with_ext = await db.users.find(
+        {"threecx_extension": {"$exists": True, "$ne": None, "$ne": ""}},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "threecx_extension": 1, "team_leader_id": 1}
+    ).to_list(200)
+    
+    ext_to_user = {u["threecx_extension"]: u for u in users_with_ext}
+    user_id_to_info = {u["id"]: u for u in users_with_ext}
+    
+    role = user.get("role", "")
+    visible_user_ids = set()
+    if role in ["super_admin", "admin", "coo", "sales_manager"]:
+        visible_user_ids = {u["id"] for u in users_with_ext}
+    elif role == "team_leader":
+        visible_user_ids = {u["id"] for u in users_with_ext if u.get("team_leader_id") == user["id"] or u["id"] == user["id"]}
+    else:
+        visible_user_ids = {user["id"]}
+    
+    year_start = f"{year}-01-01"
+    year_end = f"{year}-12-31T23:59:59"
+    
+    call_logs = await db.call_logs.find({
+        "call_date": {"$gte": year_start, "$lte": year_end},
+        "call_duration": {"$gt": 0}
+    }, {"_id": 0, "agent_extension": 1, "call_duration": 1, "call_date": 1, "initiated_by": 1}).to_list(50000)
+    
+    # Aggregate: user_id → { month_num → total_seconds }
+    monthly_data = {}
+    for log in call_logs:
+        uid = None
+        ext = log.get("agent_extension")
+        if ext and ext in ext_to_user:
+            uid = ext_to_user[ext]["id"]
+        elif log.get("initiated_by"):
+            uid = log["initiated_by"]
+        
+        if not uid or uid not in visible_user_ids:
+            continue
+        
+        cd = log.get("call_date", "")
+        if isinstance(cd, str) and len(cd) >= 7:
+            m_num = int(cd[5:7])
+        else:
+            continue
+        
+        if uid not in monthly_data:
+            monthly_data[uid] = {}
+        monthly_data[uid][m_num] = monthly_data[uid].get(m_num, 0) + log.get("call_duration", 0)
+    
+    result = []
+    for uid, months in monthly_data.items():
+        info = user_id_to_info.get(uid, {})
+        monthly = []
+        total_seconds = 0
+        for m in range(1, 13):
+            secs = months.get(m, 0)
+            total_seconds += secs
+            monthly.append({"month": m, "seconds": secs, "minutes": round(secs / 60, 1)})
+        
+        result.append({
+            "user_id": uid,
+            "user_name": info.get("full_name", "Unknown"),
+            "role": info.get("role", ""),
+            "monthly": monthly,
+            "total_seconds": total_seconds,
+            "total_minutes": round(total_seconds / 60, 1)
+        })
+    
+    result.sort(key=lambda x: x["total_seconds"], reverse=True)
+    return {"year": year, "data": result}
+
 @api_router.post("/3cx/click-to-call")
 async def click_to_call(phone_number: str, contact_id: Optional[str] = None, user = Depends(get_current_user)):
     """
@@ -19771,10 +19995,6 @@ async def download_attendance_template(
         ("H", "Food Allowance", 14),
         ("I", "Phone Allowance", 14),
         ("J", "Other Allowances", 16),
-        ("K", "Fixed Incentive", 14),
-        ("L", "Full Days", 12),
-        ("M", "Half Days", 12),
-        ("N", "Approved Leaves", 16),
     ]
 
     for col_letter, title, width in headers:
@@ -19786,12 +20006,60 @@ async def download_attendance_template(
         cell.border = thin_border
         ws.column_dimensions[col_letter].width = width
 
+    # Daily columns starting from column K (col 11)
+    day_fill = PatternFill(start_color="D5E8D4", end_color="D5E8D4", fill_type="solid")  # light green
+    for day in range(1, total_days + 1):
+        in_col = 11 + (day - 1) * 2      # K, M, O, ...
+        out_col = in_col + 1               # L, N, P, ...
+        in_letter = get_column_letter(in_col)
+        out_letter = get_column_letter(out_col)
+
+        in_cell = ws.cell(row=5, column=in_col, value=f"Day {day} In")
+        in_cell.font = header_font
+        in_cell.fill = day_fill
+        in_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        in_cell.border = thin_border
+        ws.column_dimensions[in_letter].width = 10
+
+        out_cell = ws.cell(row=5, column=out_col, value=f"Day {day} Out")
+        out_cell.font = header_font
+        out_cell.fill = day_fill
+        out_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        out_cell.border = thin_border
+        ws.column_dimensions[out_letter].width = 10
+
+    # Summary columns after daily columns
+    summary_start = 11 + total_days * 2
+    for offset, title in enumerate(["Full Days", "Half Days", "Absent Days"]):
+        sc = ws.cell(row=5, column=summary_start + offset, value=title)
+        sc.font = header_font
+        sc.fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+        sc.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        sc.border = thin_border
+        ws.column_dimensions[get_column_letter(summary_start + offset)].width = 12
+
+    # Pre-fetch attendance records for all employees for this month
+    month_start_date = f"{year}-{str(m).zfill(2)}-01"
+    month_end_date = f"{year}-{str(m).zfill(2)}-{total_days}"
+    all_attendance = await db.hr_attendance.find({
+        "date": {"$gte": month_start_date, "$lte": month_end_date}
+    }, {"_id": 0}).to_list(5000)
+
+    # Build lookup: emp_id -> { date_str -> record }
+    att_lookup = {}
+    for att in all_attendance:
+        eid = att.get("employee_id") or att.get("employee_code")
+        d = att.get("date", "")
+        if eid not in att_lookup:
+            att_lookup[eid] = {}
+        att_lookup[eid][d] = att
+
     # Data rows (starting row 6)
     for idx, emp in enumerate(employees):
         row = idx + 6
         salary = emp.get("salary_structure") or {}
 
-        # Pre-filled columns (A-K) - locked info
+        # Pre-filled columns (A-J) - locked info
         data = [
             emp.get("employee_id", ""),
             emp.get("full_name", ""),
@@ -19803,7 +20071,6 @@ async def download_attendance_template(
             salary.get("food_allowance", 0) or 0,
             salary.get("phone_allowance", salary.get("telephone_allowance", 0)) or 0,
             salary.get("other_allowances", 0) or 0,
-            salary.get("fixed_incentive", 0) or 0,
         ]
 
         for c, val in enumerate(data, 1):
@@ -19814,13 +20081,66 @@ async def download_attendance_template(
                 cell.number_format = '#,##0.00'
                 cell.alignment = Alignment(horizontal="right")
 
-        # Editable columns (L, M, N) - yellow highlight
-        for c in [12, 13, 14]:
-            cell = ws.cell(row=row, column=c, value=0)
-            cell.border = thin_border
-            cell.fill = input_fill
-            cell.number_format = '0'
-            cell.alignment = Alignment(horizontal="center")
+        # Daily punch in/out columns (pre-filled from attendance data)
+        emp_att = att_lookup.get(emp.get("id"), {})
+        # Also try by employee_code
+        if not emp_att:
+            emp_att = att_lookup.get(emp.get("employee_id"), {})
+
+        full_days = 0
+        half_days = 0
+        absent_days = 0
+
+        for day in range(1, total_days + 1):
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day).zfill(2)}"
+            in_col = 11 + (day - 1) * 2
+            out_col = in_col + 1
+            record = emp_att.get(date_str, {})
+            punch_in = record.get("biometric_in", "")
+            punch_out = record.get("biometric_out", "")
+
+            in_cell = ws.cell(row=row, column=in_col, value=punch_in or "")
+            in_cell.border = thin_border
+            in_cell.fill = input_fill
+            in_cell.alignment = Alignment(horizontal="center")
+
+            out_cell = ws.cell(row=row, column=out_col, value=punch_out or "")
+            out_cell.border = thin_border
+            out_cell.fill = input_fill
+            out_cell.alignment = Alignment(horizontal="center")
+
+            # Calculate day status for summary
+            if punch_in and punch_out:
+                try:
+                    t_in = datetime.strptime(punch_in[:5], "%H:%M") if len(punch_in) >= 5 else None
+                    t_out = datetime.strptime(punch_out[:5], "%H:%M") if len(punch_out) >= 5 else None
+                    if t_in and t_out:
+                        hours = (t_out - t_in).total_seconds() / 3600
+                        if hours >= 6:
+                            full_days += 1
+                        elif hours >= 3:
+                            half_days += 1
+                        else:
+                            absent_days += 1
+                    else:
+                        full_days += 1
+                except Exception:
+                    full_days += 1
+            elif punch_in:
+                half_days += 1
+            elif record.get("status") == "leave":
+                pass  # approved leave, don't count as absent
+            else:
+                # No punch data for this day — leave blank for HR to fill
+                pass
+
+        # Summary columns
+        ws.cell(row=row, column=summary_start, value=full_days).border = thin_border
+        ws.cell(row=row, column=summary_start, value=full_days).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=summary_start + 1, value=half_days).border = thin_border
+        ws.cell(row=row, column=summary_start + 1, value=half_days).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=summary_start + 2, value=absent_days).border = thin_border
+        ws.cell(row=row, column=summary_start + 2, value=absent_days).alignment = Alignment(horizontal="center")
 
     # Freeze panes: header row + employee ID column
     ws.freeze_panes = "B6"
@@ -19877,27 +20197,13 @@ async def import_attendance(
     now = datetime.now(timezone.utc).isoformat()
     results = {"imported": 0, "skipped": 0, "errors": [], "attendance_records_created": 0}
 
-    # Read data rows (starting row 6, columns A-N)
-    for row in ws.iter_rows(min_row=6, max_col=14, values_only=False):
+    # Read data rows (starting row 6) with daily punch times
+    for row in ws.iter_rows(min_row=6, values_only=False):
         employee_id_val = row[0].value  # Column A: Employee ID
         if not employee_id_val:
             continue
 
         employee_id_str = str(employee_id_val).strip()
-        full_days = int(row[11].value or 0)   # Column L
-        half_days = int(row[12].value or 0)    # Column M
-        approved_leaves = int(row[13].value or 0)  # Column N
-
-        # Validate totals
-        total_marked = full_days + half_days + approved_leaves
-        if total_marked > total_days:
-            results["errors"].append(f"{employee_id_str}: Total days ({total_marked}) exceeds calendar days ({total_days})")
-            results["skipped"] += 1
-            continue
-
-        if total_marked == 0:
-            results["skipped"] += 1
-            continue
 
         # Find employee
         emp = await db.hr_employees.find_one({"employee_id": employee_id_str}, {"_id": 0})
@@ -19915,15 +20221,63 @@ async def import_attendance(
             "source": "manual_import"
         })
 
-        # Create daily attendance records
-        day_counter = 1
+        # Read daily punch-in/out columns starting from column K (index 10)
         records_to_insert = []
-
-        # Full days → status="present"
-        for _ in range(full_days):
-            if day_counter > total_days:
-                break
-            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
+        full_days = 0
+        half_days = 0
+        absent_days = 0
+        
+        for day in range(1, total_days + 1):
+            in_col_idx = 10 + (day - 1) * 2   # Column K=10, M=12, ...
+            out_col_idx = in_col_idx + 1
+            
+            punch_in_val = row[in_col_idx].value if in_col_idx < len(row) else None
+            punch_out_val = row[out_col_idx].value if out_col_idx < len(row) else None
+            
+            punch_in = str(punch_in_val).strip() if punch_in_val else ""
+            punch_out = str(punch_out_val).strip() if punch_out_val else ""
+            
+            if not punch_in and not punch_out:
+                continue  # Skip days with no data
+            
+            date_str = f"{year}-{str(m).zfill(2)}-{str(day).zfill(2)}"
+            
+            # Determine status and work hours from punch times
+            status = "present"
+            total_hours = 9  # default full day
+            late_minutes = 0
+            
+            if punch_in and punch_out:
+                try:
+                    # Handle various time formats (HH:MM, HH:MM:SS, etc.)
+                    t_in_str = punch_in[:5] if len(punch_in) >= 5 else punch_in
+                    t_out_str = punch_out[:5] if len(punch_out) >= 5 else punch_out
+                    t_in = datetime.strptime(t_in_str, "%H:%M")
+                    t_out = datetime.strptime(t_out_str, "%H:%M")
+                    total_hours = (t_out - t_in).total_seconds() / 3600
+                    
+                    # Late check (after 9:30 AM)
+                    if t_in.hour > 9 or (t_in.hour == 9 and t_in.minute > 30):
+                        late_minutes = (t_in.hour - 9) * 60 + (t_in.minute - 30)
+                        if late_minutes < 0:
+                            late_minutes = 0
+                    
+                    if total_hours >= 6:
+                        status = "present"
+                        full_days += 1
+                    elif total_hours >= 3:
+                        status = "half_day"
+                        half_days += 1
+                    else:
+                        status = "absent"
+                        absent_days += 1
+                except Exception:
+                    full_days += 1  # Default to full day if parse fails
+            elif punch_in:
+                status = "half_day"
+                half_days += 1
+                total_hours = 4.5
+            
             records_to_insert.append({
                 "id": str(uuid.uuid4()),
                 "employee_id": emp["id"],
@@ -19931,59 +20285,15 @@ async def import_attendance(
                 "employee_name": emp["full_name"],
                 "department": emp.get("department"),
                 "date": date_str,
-                "biometric_in": "09:00:00",
-                "biometric_out": "18:00:00",
-                "total_work_hours": 9,
-                "late_minutes": 0,
-                "status": "present",
+                "biometric_in": punch_in,
+                "biometric_out": punch_out,
+                "total_work_hours": round(total_hours, 2),
+                "late_minutes": late_minutes,
+                "status": status,
                 "source": "manual_import",
                 "created_at": now,
                 "updated_at": now
             })
-            day_counter += 1
-
-        # Half days → status="present" + late_minutes=31 (triggers half-day deduction in payroll)
-        for _ in range(half_days):
-            if day_counter > total_days:
-                break
-            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
-            records_to_insert.append({
-                "id": str(uuid.uuid4()),
-                "employee_id": emp["id"],
-                "employee_code": emp["employee_id"],
-                "employee_name": emp["full_name"],
-                "department": emp.get("department"),
-                "date": date_str,
-                "biometric_in": "13:00:00",
-                "biometric_out": "18:00:00",
-                "total_work_hours": 4.5,
-                "late_minutes": 240,
-                "status": "present",
-                "half_day": True,
-                "source": "manual_import",
-                "created_at": now,
-                "updated_at": now
-            })
-            day_counter += 1
-
-        # Approved leaves → status="leave"
-        for _ in range(approved_leaves):
-            if day_counter > total_days:
-                break
-            date_str = f"{year}-{str(m).zfill(2)}-{str(day_counter).zfill(2)}"
-            records_to_insert.append({
-                "id": str(uuid.uuid4()),
-                "employee_id": emp["id"],
-                "employee_code": emp["employee_id"],
-                "employee_name": emp["full_name"],
-                "department": emp.get("department"),
-                "date": date_str,
-                "status": "leave",
-                "source": "manual_import",
-                "created_at": now,
-                "updated_at": now
-            })
-            day_counter += 1
 
         if records_to_insert:
             await db.hr_attendance.insert_many(records_to_insert)
@@ -20028,446 +20338,366 @@ async def save_biocloud_mapping(
 @api_router.post("/hr/biocloud/fetch-attendance")
 async def fetch_biocloud_attendance(
     date: Optional[str] = None,
-    retry_count: int = 3,
     user = Depends(require_roles(["super_admin", "admin", "hr"]))
 ):
     """
-    Fetch attendance from BioCloud and sync to CLT Synapse
-    Uses Playwright web scraping since direct API not available for attendance
-    Navigates to Attendance > Daily Attendance and scrapes the layui table
-    
-    Improvements:
-    - Retry logic with configurable retry count
-    - Better error handling and recovery
-    - More robust element selection with fallbacks
-    - Date filter support
-    - Detailed logging for debugging
+    Fetch attendance from BioCloud via API and sync to CLT Synapse.
+    Uses BioCloud REST API (ZKTeco BioTime) for reliable data extraction.
+    date format: YYYY-MM-DD (defaults to today)
     """
-    import os as os_module
-    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
-    
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+    import httpx
     
     target_date = date or datetime.now().strftime("%Y-%m-%d")
-    last_error = None
     
-    for attempt in range(retry_count):
-        try:
-            logger.info(f"BioCloud sync: Attempt {attempt + 1}/{retry_count} for date {target_date}")
+    biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085').rstrip('/')
+    biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
+    biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
+    
+    logger.info(f"BioCloud sync: Starting for date {target_date}")
+    
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            # Step 1: Authenticate via JWT
+            auth_resp = await client.post(
+                f"{biocloud_url}/jwt-api-token-auth/",
+                json={"username": biocloud_user, "password": biocloud_pass},
+                headers={"Content-Type": "application/json"}
+            )
             
-            async with async_playwright() as p:
-                # Launch browser with more stable settings
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-                )
-                context = await browser.new_context(
-                    ignore_https_errors=True,
-                    viewport={'width': 1920, 'height': 1080},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                )
-                page = await context.new_page()
-                page.set_default_timeout(30000)  # 30 second default timeout
-                
-                biocloud_url = os.environ.get('BIOCLOUD_URL', 'https://56.biocloud.me:8085')
-                biocloud_user = os.environ.get('BIOCLOUD_USERNAME', 'Admin')
-                biocloud_pass = os.environ.get('BIOCLOUD_PASSWORD', '1')
-                
-                logger.info(f"BioCloud sync: Connecting to {biocloud_url}")
-                
-                # Login to BioCloud with retry on page load
-                try:
-                    await page.goto(biocloud_url, wait_until="domcontentloaded", timeout=45000)
-                    await page.wait_for_timeout(3000)  # Wait for JS to fully load
-                except PlaywrightTimeout:
-                    logger.warning(f"BioCloud sync: Page load timeout, waiting for fallback...")
-                    await page.wait_for_timeout(5000)
-                
-                # Try multiple selectors for login form (more robust)
-                username_input = None
-                password_input = None
-                
-                # Try different selector strategies
-                login_selectors = [
-                    {'user': 'input[type="text"]', 'pass': 'input[type="password"]'},
-                    {'user': 'input[name="username"]', 'pass': 'input[name="password"]'},
-                    {'user': '#username', 'pass': '#password'},
-                    {'user': 'input.form-control', 'pass': 'input[type="password"]'},
-                ]
-                
-                for selectors in login_selectors:
-                    try:
-                        username_input = page.locator(selectors['user']).first
-                        password_input = page.locator(selectors['pass']).first
-                        if await username_input.count() > 0 and await password_input.count() > 0:
-                            break
-                    except:
-                        continue
-                
-                if not username_input or not password_input:
-                    raise Exception("Could not find login form elements")
-                
-                await username_input.fill(biocloud_user)
-                await password_input.fill(biocloud_pass)
-                
-                # Click login button with fallback selectors
-                login_clicked = False
-                login_btn_selectors = [
-                    'button[type="submit"]',
-                    'button:has-text("Login")',
-                    'button:has-text("Sign")',
-                    'input[type="submit"]',
-                    'button.btn-primary',
-                    'button'
-                ]
-                
-                for selector in login_btn_selectors:
-                    try:
-                        login_btn = page.locator(selector).first
-                        if await login_btn.count() > 0:
-                            await login_btn.click()
-                            login_clicked = True
-                            break
-                    except:
-                        continue
-                
-                if not login_clicked:
-                    # Try pressing Enter as fallback
-                    await password_input.press('Enter')
-                
-                await page.wait_for_timeout(5000)
-                
-                # Verify login success by checking for menu items
-                try:
-                    await page.wait_for_selector('a:has-text("Attendance")', timeout=10000)
-                    logger.info("BioCloud sync: Logged in successfully")
-                except PlaywrightTimeout:
-                    # Check if still on login page (login failed)
-                    if await page.locator('input[type="password"]').count() > 0:
-                        raise Exception("Login failed - check credentials")
-                    logger.info("BioCloud sync: Login page changed, assuming success")
-                
-                # Navigate to Attendance menu with retry
-                attendance_menu = None
-                menu_selectors = [
-                    'a:has-text("Attendance")',
-                    'li:has-text("Attendance") a',
-                    '[data-menu="attendance"]',
-                    '.nav-item:has-text("Attendance")'
-                ]
-                
-                for selector in menu_selectors:
-                    try:
-                        attendance_menu = page.locator(selector).first
-                        if await attendance_menu.count() > 0:
-                            await attendance_menu.click()
-                            break
-                    except:
-                        continue
-                
-                if not attendance_menu:
-                    raise Exception("Could not find Attendance menu")
-                
-                await page.wait_for_timeout(2000)
-                
-                # Click on Daily Attendance with fallback
-                daily_att_selectors = [
-                    'a:has-text("Daily Attendance")',
-                    'a:has-text("Daily")',
-                    '[href*="daily"]',
-                    '.submenu a:has-text("Daily")'
-                ]
-                
-                daily_att_clicked = False
-                for selector in daily_att_selectors:
-                    try:
-                        daily_att = page.locator(selector).first
-                        if await daily_att.count() > 0:
-                            await daily_att.click()
-                            daily_att_clicked = True
-                            break
-                    except:
-                        continue
-                
-                if not daily_att_clicked:
-                    raise Exception("Could not find Daily Attendance link")
-                
-                await page.wait_for_timeout(4000)
-                logger.info("BioCloud sync: Navigated to Daily Attendance")
-                
-                # Try to set date filter if needed (for specific date sync)
-                try:
-                    date_input = page.locator('input[type="date"], input.date-picker, input[name="date"]').first
-                    if await date_input.count() > 0:
-                        await date_input.fill(target_date)
-                        await page.wait_for_timeout(1000)
-                        # Try to trigger search/filter
-                        search_btn = page.locator('button:has-text("Search"), button:has-text("Filter"), button.btn-search').first
-                        if await search_btn.count() > 0:
-                            await search_btn.click()
-                            await page.wait_for_timeout(2000)
-                except Exception as e:
-                    logger.info(f"BioCloud sync: Date filter not available or not needed: {e}")
-                
-                # Find the Daily Attendance table container (layui-table-box)
-                # The Daily Attendance table is the second container with Employee ID, Weekday, Name, etc.
-                await page.wait_for_selector('.layui-table-box, .table, table', timeout=15000)
-                layui_containers = await page.locator('.layui-table-box').all()
+            if auth_resp.status_code != 200:
+                logger.error(f"BioCloud auth failed: {auth_resp.status_code} - {auth_resp.text}")
+                raise HTTPException(status_code=502, detail=f"BioCloud authentication failed (HTTP {auth_resp.status_code})")
             
+            token = auth_resp.json().get("token")
+            if not token:
+                raise HTTPException(status_code=502, detail="BioCloud authentication failed - no token returned")
+            
+            headers = {"Authorization": f"JWT {token}", "Content-Type": "application/json"}
+            logger.info("BioCloud sync: Authenticated successfully")
+            
+            # Step 2: Fetch attendance transactions for the date
+            # Try multiple BioCloud API endpoints (varies by version)
             attendance_data = []
+            api_endpoints = [
+                f"/iclock/api/transactions/?start_date={target_date}&end_date={target_date}&page_size=500",
+                f"/att/api/attRecord/?start_date={target_date}&end_date={target_date}&page_size=500",
+                f"/iclock/api/transactions/?page_size=500&start_date={target_date}&end_date={target_date}",
+            ]
             
-            if len(layui_containers) >= 2:
-                daily_container = layui_containers[1]  # Second container has Daily Attendance
-                
-                # Try to set page size to maximum (50) to get more records
+            fetched = False
+            raw_transactions = []
+            
+            for endpoint in api_endpoints:
                 try:
-                    page_size_select = page.locator('.layui-laypage-limits select').nth(1)
-                    await page_size_select.select_option(value='50')
-                    await page.wait_for_timeout(2000)
-                except Exception as e:
-                    logger.warning(f"Could not set page size: {e}")
-                
-                # Get total page count
-                total_pages = 1
-                try:
-                    # Look for last page link to determine total pages
-                    last_page_link = page.locator('.layui-laypage-last')
-                    if await last_page_link.count() > 0:
-                        last_page_text = await last_page_link.get_attribute('data-page')
-                        if last_page_text:
-                            total_pages = int(last_page_text)
-                except:
-                    pass
-                
-                logger.info(f"BioCloud sync: Found {total_pages} pages of data")
-                
-                # Loop through all pages
-                current_page = 1
-                while current_page <= total_pages:
-                    # Get body from the container
-                    body_elements = await daily_container.locator('.layui-table-body').all()
+                    resp = await client.get(f"{biocloud_url}{endpoint}", headers=headers)
+                    logger.info(f"BioCloud sync: Tried {endpoint} -> HTTP {resp.status_code}")
                     
-                    if body_elements:
-                        body = body_elements[0]
-                        rows = await body.locator('tr').all()
-                        
-                        for row in rows:
-                            cells = await row.locator('td').all()
-                            if len(cells) >= 7:
-                                try:
-                                    cell_texts = []
-                                    for cell in cells[:11]:
-                                        try:
-                                            text = await cell.inner_text()
-                                            cell_texts.append(text.strip())
-                                        except:
-                                            cell_texts.append('')
-                                    
-                                    # Columns: Employee ID | Weekday | Employee Name | Department Name | Punch Date | Actual In | Actual Out | Actual BIn | Actual BOut | Day off
-                                    emp_code = cell_texts[0]
-                                    emp_name = cell_texts[2]
-                                    dept = cell_texts[3]
-                                    punch_date = cell_texts[4]
-                                    actual_in = cell_texts[5] if len(cell_texts) > 5 else ""
-                                    actual_out = cell_texts[6] if len(cell_texts) > 6 else ""
-                                    day_off = cell_texts[9] if len(cell_texts) > 9 else ""
-                                    
-                                    # Validate record
-                                    if emp_code.isdigit() and punch_date and '-' in punch_date:
-                                        status = "Absent" if day_off == "Absent" else ("Present" if actual_in else "No Punch")
-                                        
-                                        record = {
-                                            "emp_code": emp_code,
-                                            "name": emp_name,
-                                            "department": dept,
-                                            "punch_date": punch_date,
-                                            "first_in": actual_in if actual_in else None,
-                                            "last_out": actual_out if actual_out else None,
-                                            "status": status
-                                        }
-                                        attendance_data.append(record)
-                                except Exception as e:
-                                    continue
-                    
-                    # Go to next page if not on last page
-                    if current_page < total_pages:
-                        try:
-                            next_page_link = page.locator(f'.layui-laypage a[data-page="{current_page + 1}"]').nth(1)
-                            await next_page_link.click()
-                            await page.wait_for_timeout(2000)
-                        except Exception as e:
-                            logger.warning(f"Could not navigate to page {current_page + 1}: {e}")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # Handle paginated or direct results
+                        if isinstance(data, dict):
+                            raw_transactions = data.get("data", data.get("results", []))
+                            if isinstance(raw_transactions, list):
+                                fetched = True
+                                break
+                        elif isinstance(data, list):
+                            raw_transactions = data
+                            fetched = True
                             break
-                    
-                    current_page += 1
+                except Exception as e:
+                    logger.warning(f"BioCloud sync: Endpoint {endpoint} failed: {e}")
+                    continue
             
-            await browser.close()
+            if not fetched:
+                # Fallback: Try Playwright-based scraping
+                logger.warning("BioCloud sync: API endpoints failed, attempting Playwright fallback...")
+                return await _biocloud_playwright_fallback(target_date, biocloud_url, biocloud_user, biocloud_pass)
             
-            logger.info(f"BioCloud sync: Fetched {len(attendance_data)} raw attendance records")
+            logger.info(f"BioCloud sync: Fetched {len(raw_transactions)} raw transactions")
             
-            # Log all unique emp_codes found for debugging
-            found_emp_codes = set([att["emp_code"] for att in attendance_data])
-            logger.info(f"BioCloud sync: Found emp_codes: {found_emp_codes}")
+            # Step 3: Group transactions by employee (first punch = in, last punch = out)
+            emp_punches = {}
+            for txn in raw_transactions:
+                emp_code = str(txn.get("emp_code", txn.get("employee", "")))
+                punch_time = txn.get("punch_time", txn.get("att_date", txn.get("punch_datetime", "")))
+                
+                if not emp_code or not punch_time:
+                    continue
+                
+                if emp_code not in emp_punches:
+                    emp_punches[emp_code] = {
+                        "emp_code": emp_code,
+                        "name": txn.get("emp__first_name", txn.get("first_name", "")),
+                        "department": txn.get("department__dept_name", txn.get("dept_name", "")),
+                        "punches": []
+                    }
+                emp_punches[emp_code]["punches"].append(punch_time)
             
-            # Get all mapped emp_codes from DB
-            mapped_employees = await db.hr_employees.find(
-                {"biocloud_emp_code": {"$exists": True, "$ne": None}},
-                {"_id": 0, "full_name": 1, "biocloud_emp_code": 1}
-            ).to_list(100)
-            mapped_emp_codes = {emp["biocloud_emp_code"]: emp["full_name"] for emp in mapped_employees}
-            logger.info(f"BioCloud sync: Mapped emp_codes in DB: {list(mapped_emp_codes.keys())}")
+            # Build attendance records from punches
+            for emp_code, info in emp_punches.items():
+                punches = sorted(info["punches"])
+                first_in = punches[0] if punches else None
+                last_out = punches[-1] if len(punches) > 1 else None
+                
+                # Extract time portion
+                def extract_time(dt_str):
+                    if not dt_str:
+                        return None
+                    if "T" in str(dt_str):
+                        return str(dt_str).split("T")[1][:8]
+                    elif " " in str(dt_str):
+                        return str(dt_str).split(" ")[1][:8]
+                    return str(dt_str)[:8]
+                
+                attendance_data.append({
+                    "emp_code": emp_code,
+                    "name": info.get("name", ""),
+                    "department": info.get("department", ""),
+                    "punch_date": target_date,
+                    "first_in": extract_time(first_in),
+                    "last_out": extract_time(last_out),
+                    "status": "Present" if first_in else "No Punch",
+                    "total_punches": len(punches)
+                })
             
-            # Process and save attendance data
+            logger.info(f"BioCloud sync: Processed {len(attendance_data)} employee records")
+            
+            # Step 4: Sync to hr_attendance collection
             synced = 0
             skipped = 0
             unmatched_emp_codes = []
+            now_str = datetime.now(timezone.utc).isoformat()
             
             for att in attendance_data:
                 emp_code = att["emp_code"]
                 
-                # Find mapped employee by biocloud_emp_code
                 employee = await db.hr_employees.find_one(
                     {"biocloud_emp_code": emp_code},
                     {"_id": 0}
                 )
                 
                 if employee:
-                    now = datetime.now(timezone.utc).isoformat()
-                    record_date = att["punch_date"]
-                    
-                    # Check if attendance already exists for this date
                     existing = await db.hr_attendance.find_one({
                         "employee_id": employee["id"],
-                        "date": record_date
+                        "date": target_date,
+                        "source": "biocloud"
                     })
                     
-                    # Determine status
-                    if att["status"] == "Absent":
-                        status = "absent"
-                    elif att["first_in"]:
-                        status = "present"
-                    else:
-                        status = "absent"
-                    
-                    attendance_record = {
+                    record = {
                         "employee_id": employee["id"],
-                        "employee_code": employee["employee_id"],
-                        "employee_name": employee["full_name"],
+                        "employee_code": employee.get("employee_id"),
+                        "employee_name": employee.get("full_name"),
                         "department": employee.get("department"),
-                        "date": record_date,
-                        "biometric_in": att["first_in"],
-                        "biometric_out": att["last_out"],
-                        "status": status,
-                        "source": "biocloud_sync",
-                        "synced_at": now
+                        "date": target_date,
+                        "biometric_in": att.get("first_in"),
+                        "biometric_out": att.get("last_out"),
+                        "total_punches": att.get("total_punches", 0),
+                        "status": "present" if att.get("first_in") else "absent",
+                        "source": "biocloud",
+                        "updated_at": now_str
                     }
                     
-                    # Calculate total worked hours
-                    if att["first_in"] and att["last_out"]:
+                    # Calculate work hours
+                    if att.get("first_in") and att.get("last_out"):
                         try:
-                            in_time = datetime.strptime(att["first_in"][:8], "%H:%M:%S")
-                            out_time = datetime.strptime(att["last_out"][:8], "%H:%M:%S")
-                            if out_time > in_time:
-                                total_seconds = (out_time - in_time).total_seconds()
-                                total_hours = round(total_seconds / 3600, 2)
-                                attendance_record["total_hours"] = total_hours
-                        except Exception as e:
-                            # Try with HH:MM format
-                            try:
-                                in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
-                                out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
-                                if out_time > in_time:
-                                    total_seconds = (out_time - in_time).total_seconds()
-                                    total_hours = round(total_seconds / 3600, 2)
-                                    attendance_record["total_hours"] = total_hours
-                            except:
-                                pass
-                    
-                    # Calculate late minutes (if check-in after 09:00)
-                    if att["first_in"]:
-                        try:
-                            in_time = datetime.strptime(att["first_in"][:5], "%H:%M")
-                            start_time = datetime.strptime("09:00", "%H:%M")
-                            if in_time > start_time:
-                                attendance_record["late_minutes"] = int((in_time - start_time).total_seconds() / 60)
-                            else:
-                                attendance_record["late_minutes"] = 0
-                        except:
-                            pass
-                    
-                    # Calculate early exit minutes (if check-out before 18:00)
-                    if att["last_out"]:
-                        try:
-                            out_time = datetime.strptime(att["last_out"][:5], "%H:%M")
-                            end_time = datetime.strptime("18:00", "%H:%M")
-                            if out_time < end_time:
-                                attendance_record["early_exit_minutes"] = int((end_time - out_time).total_seconds() / 60)
-                            else:
-                                attendance_record["early_exit_minutes"] = 0
-                        except:
-                            pass
+                            t_in = datetime.strptime(att["first_in"][:5], "%H:%M")
+                            t_out = datetime.strptime(att["last_out"][:5], "%H:%M")
+                            hours = (t_out - t_in).total_seconds() / 3600
+                            record["total_work_hours"] = round(hours, 2)
+                            if hours < 6:
+                                record["status"] = "half_day"
+                        except Exception:
+                            record["total_work_hours"] = 0
                     
                     if existing:
                         await db.hr_attendance.update_one(
                             {"id": existing["id"]},
-                            {"$set": attendance_record}
+                            {"$set": record}
                         )
                     else:
-                        attendance_record["id"] = str(uuid.uuid4())
-                        attendance_record["created_at"] = now
-                        await db.hr_attendance.insert_one(attendance_record)
+                        record["id"] = str(uuid.uuid4())
+                        record["created_at"] = now_str
+                        await db.hr_attendance.insert_one(record)
                     
                     synced += 1
                 else:
                     skipped += 1
-                    if emp_code not in unmatched_emp_codes:
-                        unmatched_emp_codes.append(emp_code)
-            
-            # Log unmatched emp_codes
-            if unmatched_emp_codes:
-                logger.warning(f"BioCloud sync: Unmatched emp_codes (not in DB): {unmatched_emp_codes}")
-            
-            # Check which mapped employees didn't have attendance data
-            missing_mapped = [name for code, name in mapped_emp_codes.items() if code not in found_emp_codes]
-            if missing_mapped:
-                logger.warning(f"BioCloud sync: Mapped employees without attendance data: {missing_mapped}")
-            
-            # Log successful sync to history
-            await db.biocloud_sync_log.insert_one({
-                "id": str(uuid.uuid4()),
-                "date": target_date,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "fetched": len(attendance_data),
-                "synced": synced,
-                "skipped": skipped,
-                "success": True,
-                "attempt": attempt + 1,
-                "user_id": user.get("id")
-            })
+                    if emp_code not in [u["emp_code"] for u in unmatched_emp_codes]:
+                        unmatched_emp_codes.append({"emp_code": emp_code, "name": att.get("name", "")})
             
             return {
                 "success": True,
                 "date": target_date,
-                "fetched": len(attendance_data),
+                "total_fetched": len(attendance_data),
                 "synced": synced,
                 "skipped": skipped,
-                "found_emp_codes": list(found_emp_codes),
-                "unmatched_emp_codes": unmatched_emp_codes,
-                "missing_mapped_employees": missing_mapped,
-                "attempt": attempt + 1,
-                "message": f"Fetched {len(attendance_data)} records, synced {synced} to CLT Synapse ({skipped} unmapped employees skipped)"
+                "unmatched": unmatched_emp_codes,
+                "message": f"Synced {synced} attendance records for {target_date}"
             }
-            
-        except Exception as e:
-            last_error = str(e)
-            logger.warning(f"BioCloud sync attempt {attempt + 1} failed: {last_error}")
-            if attempt < retry_count - 1:
-                await asyncio.sleep(2)  # Wait before retry
-                continue
     
-    # All retries failed
-    logger.error(f"BioCloud attendance fetch failed after {retry_count} attempts: {last_error}")
-    raise HTTPException(status_code=500, detail=f"Failed to fetch attendance after {retry_count} attempts: {last_error}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"BioCloud sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"BioCloud sync failed: {str(e)}")
+
+async def _biocloud_playwright_fallback(target_date: str, biocloud_url: str, biocloud_user: str, biocloud_pass: str):
+    """Fallback: Use Playwright web scraping if BioCloud API endpoints fail"""
+    import os as os_module
+    os_module.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
+    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+    
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            )
+            context = await browser.new_context(
+                ignore_https_errors=True,
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            )
+            page = await context.new_page()
+            page.set_default_timeout(30000)
+            
+            logger.info(f"BioCloud Playwright fallback: Connecting to {biocloud_url}")
+            
+            try:
+                await page.goto(biocloud_url, wait_until="domcontentloaded", timeout=45000)
+                await page.wait_for_timeout(3000)
+            except PlaywrightTimeout:
+                await page.wait_for_timeout(5000)
+            
+            # Login
+            login_selectors = [
+                {'user': 'input[type="text"]', 'pass': 'input[type="password"]'},
+                {'user': 'input[name="username"]', 'pass': 'input[name="password"]'},
+                {'user': '#username', 'pass': '#password'},
+            ]
+            
+            logged_in = False
+            for selectors in login_selectors:
+                try:
+                    u_input = page.locator(selectors['user']).first
+                    p_input = page.locator(selectors['pass']).first
+                    if await u_input.count() > 0 and await p_input.count() > 0:
+                        await u_input.fill(biocloud_user)
+                        await p_input.fill(biocloud_pass)
+                        btn = page.locator('button[type="submit"], button:has-text("Login")').first
+                        if await btn.count() > 0:
+                            await btn.click()
+                        else:
+                            await p_input.press('Enter')
+                        await page.wait_for_timeout(5000)
+                        logged_in = True
+                        break
+                except:
+                    continue
+            
+            if not logged_in:
+                await browser.close()
+                raise HTTPException(status_code=502, detail="BioCloud: Could not log in via Playwright")
+            
+            # Navigate to attendance
+            try:
+                att_link = page.locator('a:has-text("Attendance")').first
+                if await att_link.count() > 0:
+                    await att_link.click()
+                    await page.wait_for_timeout(2000)
+                
+                daily_link = page.locator('a:has-text("Daily Attendance"), a:has-text("Daily")').first
+                if await daily_link.count() > 0:
+                    await daily_link.click()
+                    await page.wait_for_timeout(4000)
+            except Exception as e:
+                logger.error(f"BioCloud Playwright: Navigation failed: {e}")
+            
+            # Scrape table data
+            attendance_data = []
+            try:
+                await page.wait_for_selector('.layui-table-box, .table, table', timeout=15000)
+                containers = await page.locator('.layui-table-box').all()
+                
+                target_container = containers[1] if len(containers) >= 2 else (containers[0] if containers else None)
+                
+                if target_container:
+                    body = target_container.locator('.layui-table-body').first
+                    rows = await body.locator('tr').all()
+                    
+                    for row in rows:
+                        cells = await row.locator('td').all()
+                        if len(cells) >= 7:
+                            try:
+                                texts = [await c.inner_text() for c in cells[:11]]
+                                texts = [t.strip() for t in texts]
+                                emp_code = texts[0]
+                                if emp_code.isdigit() and texts[4] and '-' in texts[4]:
+                                    attendance_data.append({
+                                        "emp_code": emp_code,
+                                        "name": texts[2],
+                                        "department": texts[3],
+                                        "punch_date": texts[4],
+                                        "first_in": texts[5] if len(texts) > 5 and texts[5] else None,
+                                        "last_out": texts[6] if len(texts) > 6 and texts[6] else None,
+                                        "status": "Present" if (len(texts) > 5 and texts[5]) else "No Punch"
+                                    })
+                            except:
+                                continue
+            except Exception as e:
+                logger.error(f"BioCloud Playwright: Table scraping failed: {e}")
+            
+            await browser.close()
+            
+            # Process and save (same logic as API path)
+            synced = 0
+            skipped = 0
+            now_str = datetime.now(timezone.utc).isoformat()
+            
+            for att in attendance_data:
+                employee = await db.hr_employees.find_one({"biocloud_emp_code": att["emp_code"]}, {"_id": 0})
+                if employee:
+                    existing = await db.hr_attendance.find_one({
+                        "employee_id": employee["id"],
+                        "date": att["punch_date"],
+                        "source": "biocloud"
+                    })
+                    record = {
+                        "employee_id": employee["id"],
+                        "employee_code": employee.get("employee_id"),
+                        "employee_name": employee.get("full_name"),
+                        "department": employee.get("department"),
+                        "date": att["punch_date"],
+                        "biometric_in": att.get("first_in"),
+                        "biometric_out": att.get("last_out"),
+                        "status": "present" if att.get("first_in") else "absent",
+                        "source": "biocloud",
+                        "updated_at": now_str
+                    }
+                    if existing:
+                        await db.hr_attendance.update_one({"id": existing["id"]}, {"$set": record})
+                    else:
+                        record["id"] = str(uuid.uuid4())
+                        record["created_at"] = now_str
+                        await db.hr_attendance.insert_one(record)
+                    synced += 1
+                else:
+                    skipped += 1
+            
+            return {
+                "success": True,
+                "date": target_date,
+                "method": "playwright_fallback",
+                "total_fetched": len(attendance_data),
+                "synced": synced,
+                "skipped": skipped,
+                "message": f"Synced {synced} records via Playwright fallback"
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"BioCloud Playwright fallback failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"BioCloud Playwright fallback failed: {str(e)}")
 
 @api_router.get("/hr/biocloud/status")
 async def get_biocloud_status(user = Depends(require_roles(["super_admin", "admin", "hr"]))):

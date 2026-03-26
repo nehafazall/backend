@@ -81,6 +81,7 @@ import {
     AlertTriangle,
     PhoneOff,
     BarChart3,
+    RefreshCw,
 } from 'lucide-react';
 
 const COLOR_TAGS = [
@@ -858,6 +859,19 @@ const CustomerServicePage = () => {
                     {['super_admin', 'admin', 'cs_head'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_cs" title="Import Students" onSuccess={fetchStudents} />
+                            <Button variant="outline" size="sm" data-testid="migrate-students-btn"
+                                onClick={async () => {
+                                    if (!window.confirm('This will move all activated students WITHOUT a completed activation questionnaire back to "New Student" stage. Continue?')) return;
+                                    try {
+                                        const res = await apiClient.post('/students/migrate-to-new-student');
+                                        toast.success(res.data.message);
+                                        fetchStudents();
+                                    } catch (err) {
+                                        toast.error('Migration failed: ' + (err.response?.data?.detail || err.message));
+                                    }
+                                }}>
+                                <RefreshCw className="h-4 w-4 mr-1.5" />Migrate Historic Data
+                            </Button>
                         </>
                     )}
                     {isSuperAdmin && (

@@ -53,6 +53,8 @@ const SalesDashboard = () => {
     const [scatterData, setScatterData] = useState(null);
     const [drill, setDrill] = useState({ open: false, title: '', content: null, loading: false, breadcrumbs: [] });
     const [closureData, setClosureData] = useState(null);
+    const [callMinutesMonthly, setCallMinutesMonthly] = useState(null);
+    const [callMinutesYearly, setCallMinutesYearly] = useState(null);
 
     const periodQuery = useCallback(() => {
         let q = `period=${period}`;
@@ -92,6 +94,15 @@ const SalesDashboard = () => {
             setMonthComparison(val(4, null));
             setCommissionInfo(val(5, null));
             setScatterData(val(6, null));
+            // Fetch 3CX call minutes
+            try {
+                const [monthlyRes, yearlyRes] = await Promise.all([
+                    apiClient.get('/3cx/daily-minutes'),
+                    apiClient.get('/3cx/yearly-summary')
+                ]);
+                setCallMinutesMonthly(monthlyRes.data);
+                setCallMinutesYearly(yearlyRes.data);
+            } catch (e) { console.error('3CX fetch error:', e); }
         } catch (err) { console.error(err); }
         setLoading(false);
     };
@@ -826,6 +837,108 @@ const SalesDashboard = () => {
                         ) : (
                             <div className="text-center text-muted-foreground py-6">No closure data for this period</div>
                         )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* 3CX Call Minutes — Current Month */}
+            {callMinutesMonthly?.data?.length > 0 && (
+                <Card className="col-span-full" data-testid="3cx-monthly-chart">
+                    <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5 text-blue-500" />
+                            3CX Call Minutes — {callMinutesMonthly.month}
+                        </CardTitle>
+                        <CardDescription>Daily call minutes per team member this month</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={(() => {
+                                    // Build daily totals per person
+                                    const days = new Set();
+                                    callMinutesMonthly.data.forEach(u => u.daily.forEach(d => { if (d.minutes > 0) days.add(d.date); }));
+                                    const sortedDays = [...days].sort();
+                                    return sortedDays.map(date => {
+                                        const row = { date: date.slice(5) };  // MM-DD
+                                        callMinutesMonthly.data.forEach(u => {
+                                            const dayData = u.daily.find(d => d.date === date);
+                                            row[u.user_name] = dayData ? dayData.minutes : 0;
+                                        });
+                                        return row;
+                                    });
+                                })()}>
+                                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                    <XAxis dataKey="date" fontSize={11} />
+                                    <YAxis fontSize={11} label={{ value: 'Minutes', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                                    <Tooltip />
+                                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                                    {callMinutesMonthly.data.slice(0, 10).map((u, i) => (
+                                        <Bar key={u.user_id} dataKey={u.user_name} stackId="a" fill={COLORS[i % COLORS.length]} />
+                                    ))}
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {/* Summary table */}
+                        <div className="mt-4 overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Agent</TableHead>
+                                        <TableHead className="text-right">Total Minutes</TableHead>
+                                        <TableHead className="text-right">Avg/Day</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {callMinutesMonthly.data.map(u => (
+                                        <TableRow key={u.user_id}>
+                                            <TableCell className="font-medium">{u.user_name}</TableCell>
+                                            <TableCell className="text-right">{u.total_minutes.toFixed(0)} min</TableCell>
+                                            <TableCell className="text-right">{(u.total_minutes / Math.max(u.daily.filter(d => d.minutes > 0).length, 1)).toFixed(1)} min</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* 3CX Call Minutes — Yearly Trend */}
+            {callMinutesYearly?.data?.length > 0 && (
+                <Card className="col-span-full" data-testid="3cx-yearly-chart">
+                    <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <TrendingUp className="h-5 w-5 text-green-500" />
+                            3CX Call Minutes — {callMinutesYearly.year} Yearly Trend
+                        </CardTitle>
+                        <CardDescription>Monthly call minutes per team member</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={(() => {
+                                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                    return months.map((name, i) => {
+                                        const row = { month: name };
+                                        callMinutesYearly.data.forEach(u => {
+                                            const md = u.monthly.find(m => m.month === i + 1);
+                                            row[u.user_name] = md ? md.minutes : 0;
+                                        });
+                                        return row;
+                                    });
+                                })()}>
+                                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                    <XAxis dataKey="month" fontSize={11} />
+                                    <YAxis fontSize={11} label={{ value: 'Minutes', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }} />
+                                    <Tooltip />
+                                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                                    {callMinutesYearly.data.slice(0, 10).map((u, i) => (
+                                        <Line key={u.user_id} type="monotone" dataKey={u.user_name} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                                    ))}
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
                     </CardContent>
                 </Card>
             )}

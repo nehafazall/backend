@@ -21,7 +21,7 @@ import {
 const INITIAL_STATE = {
     // Section 1: Account Opening & Verification
     trading_account_status: '',
-    broker_name: '',
+    broker_name: 'MILES CAPITALS',
     trading_account_number: '',
     kyc_completed: '',
     
