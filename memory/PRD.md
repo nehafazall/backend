@@ -20,7 +20,9 @@ Build and maintain a full-stack ERP system (React + FastAPI + MongoDB) for CLT A
 - **Summary Status Bar**: Shows per-stage student counts + Total + Period Revenue (AED). API: GET /api/students/stage-summary
 - **Shadow Cards**: Upgraded column displays records from `cs_upgrades` collection as shadow cards. Each shows green banner with amount. API: GET /api/students/upgrade-shadows. Shadow cards persist indefinitely and are filtered by page date filter.
 - **Custom Color Tags**: 5 tags (Handle With Care, Do Not Disturb, VIP, Priority, Follow Up). API: PATCH /api/students/{id}/color-tag. Tags sync across CS, BDM, and Mentor CRM pages.
-- **Testing**: 100% pass rate (24/24 backend + all frontend, iteration 83)
+- **LTV Sort**: Toggle in summary bar switches Kanban to a flat table sorted by Lifetime Value (enrollment + upgrades). Click toggles desc→asc→off. Backend uses MongoDB `$lookup` aggregation with cs_upgrades.
+- **Customer Master**: Default sort is newest-first (created_at desc) — confirmed working.
+- **Testing**: 100% pass rate (iteration 83)
 
 ### MT5 Integration (Complete — Mar 26, 2026)
 - MT5 Sync Module, API Endpoints, Student MT5 Linking, Scheduled Auto-Sync

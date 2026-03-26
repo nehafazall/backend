@@ -444,6 +444,8 @@ const CustomerServicePage = () => {
     const [stageSummary, setStageSummary] = useState(null);
     // Shadow cards for Upgraded column
     const [shadowCards, setShadowCards] = useState([]);
+    // LTV sort toggle: null (off), 'desc', 'asc'
+    const [ltvSort, setLtvSort] = useState(null);
     
     // Upgrade modal state
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -485,7 +487,7 @@ const CustomerServicePage = () => {
         fetchStudents();
         fetchStageSummary();
         fetchShadowCards();
-    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize]);
+    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize, ltvSort]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
@@ -511,7 +513,7 @@ const CustomerServicePage = () => {
             }
 
             // For Kanban: fetch per-stage in parallel so every column shows its students
-            if (!searchTerm && !csPeriodFilter) {
+            if (!searchTerm && !csPeriodFilter && !ltvSort) {
                 const stageIds = CS_STAGES.map(s => s.id);
                 const perStageLimit = pageSize;
                 const promises = stageIds.map(stage =>
@@ -541,8 +543,13 @@ const CustomerServicePage = () => {
                     setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
                 }
             } else {
-                // Search or period filter: use single paginated query
+                // Search, period filter, or LTV sort: use single paginated query
                 const params = { ...baseParams, search: searchTerm || undefined, page: currentPage, page_size: pageSize };
+                if (ltvSort) {
+                    params.sort_by = 'ltv';
+                    params.sort_order = ltvSort;
+                    params.page_size = 100; // bigger page for sorted list view
+                }
                 const response = await studentApi.getAll(params);
                 const data = response.data;
                 const items = data?.items || (Array.isArray(data) ? data : []);
@@ -918,13 +925,82 @@ const CustomerServicePage = () => {
                             <p className="text-sm font-bold text-emerald-600">AED {(stageSummary.period_revenue || 0).toLocaleString()}</p>
                         </div>
                     </div>
+                    <button
+                        onClick={() => setLtvSort(prev => prev === null ? 'desc' : prev === 'desc' ? 'asc' : null)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${ltvSort ? 'bg-indigo-50 border-indigo-300 dark:bg-indigo-950/30 ring-1 ring-indigo-400' : 'bg-card hover:bg-muted/50'}`}
+                        data-testid="ltv-sort-toggle"
+                    >
+                        <TrendingUp className={`h-4 w-4 shrink-0 ${ltvSort ? 'text-indigo-600' : 'text-muted-foreground'}`} />
+                        <div className="min-w-0">
+                            <p className="text-[10px] text-muted-foreground">LTV Sort</p>
+                            <p className={`text-sm font-bold ${ltvSort ? 'text-indigo-600' : 'text-muted-foreground'}`}>
+                                {ltvSort === 'desc' ? 'High→Low' : ltvSort === 'asc' ? 'Low→High' : 'Off'}
+                            </p>
+                        </div>
+                    </button>
                 </div>
             )}
 
-            {/* Kanban Board */}
+            {/* Kanban Board or LTV Sorted List */}
             {loading ? (
                 <div className="flex items-center justify-center h-96">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                </div>
+            ) : ltvSort ? (
+                /* LTV Sorted Flat List */
+                <div className="border rounded-lg overflow-hidden" data-testid="ltv-sorted-list">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/50 border-b">
+                            <tr>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">#</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Student</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Phone</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Stage</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Course</th>
+                                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Enrollment</th>
+                                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setLtvSort(prev => prev === 'desc' ? 'asc' : 'desc')}>
+                                    <span className="inline-flex items-center gap-1">
+                                        LTV {ltvSort === 'desc' ? <ArrowUp className="h-3 w-3 rotate-180" /> : <ArrowUp className="h-3 w-3" />}
+                                    </span>
+                                </th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tag</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">CS Agent</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {students.map((s, idx) => {
+                                const stageObj = CS_STAGES.find(st => st.id === s.stage);
+                                const colorTag = getColorTagStyle(s.color_tag);
+                                return (
+                                    <tr key={s.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => handleViewStudent(s)} data-testid={`ltv-row-${s.id}`}>
+                                        <td className="px-4 py-2.5 text-muted-foreground">{(currentPage - 1) * pageSize + idx + 1}</td>
+                                        <td className="px-4 py-2.5 font-medium">{s.full_name}</td>
+                                        <td className="px-4 py-2.5 text-muted-foreground">{s.phone}</td>
+                                        <td className="px-4 py-2.5">
+                                            {stageObj && (
+                                                <Badge className={`${stageObj.color} text-white text-[10px]`}>{stageObj.label}</Badge>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{s.course_level || s.current_course_name || s.package_bought || '—'}</td>
+                                        <td className="px-4 py-2.5 text-right font-mono text-xs">AED {(s.enrollment_amount || 0).toLocaleString()}</td>
+                                        <td className="px-4 py-2.5 text-right font-mono font-bold text-indigo-600">AED {(s.ltv || s.enrollment_amount || 0).toLocaleString()}</td>
+                                        <td className="px-4 py-2.5">
+                                            {colorTag && (
+                                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${colorTag.color}`}>
+                                                    <div className={`h-1.5 w-1.5 rounded-full ${colorTag.dot}`} />
+                                                    {colorTag.label}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-muted-foreground">{s.cs_agent_name || '—'}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {students.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No students found</div>
+                    )}
                 </div>
             ) : (
                 <DndContext

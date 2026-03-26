@@ -5436,6 +5436,8 @@ async def get_students(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     date_field: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = "desc",
     page: int = 1,
     page_size: int = 50,
     user = Depends(get_current_user)
@@ -5511,9 +5513,34 @@ async def get_students(
     page_size = min(max(page_size, 10), 200)
     skip = (max(page, 1) - 1) * page_size
     total_count = await db.students.count_documents(query)
-    # Sort upgraded students by most recent upgrade; others by created_at
-    sort_field = "updated_at" if stage == "upgraded" else "created_at"
-    students = await db.students.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(page_size).to_list(page_size)
+
+    # LTV sort: aggregate with cs_upgrades to compute total lifetime value
+    if sort_by == "ltv":
+        direction = -1 if sort_order == "desc" else 1
+        pipeline = [
+            {"$match": query},
+            {"$lookup": {
+                "from": "cs_upgrades",
+                "localField": "id",
+                "foreignField": "student_id",
+                "as": "_upgrades"
+            }},
+            {"$addFields": {
+                "ltv": {"$add": [
+                    {"$ifNull": ["$enrollment_amount", 0]},
+                    {"$sum": "$_upgrades.amount"}
+                ]}
+            }},
+            {"$sort": {"ltv": direction}},
+            {"$skip": skip},
+            {"$limit": page_size},
+            {"$project": {"_id": 0, "_upgrades": 0}},
+        ]
+        students = await db.students.aggregate(pipeline).to_list(page_size)
+    else:
+        # Sort upgraded students by most recent upgrade; others by created_at
+        sort_field = "updated_at" if stage == "upgraded" else "created_at"
+        students = await db.students.find(query, {"_id": 0}).sort(sort_field, -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Enrich with last_upgrade_date from cs_upgrades
     student_ids = [s["id"] for s in students]
