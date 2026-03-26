@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import {
     Search, Phone, Mail, User, GraduationCap, Clock,
-    Users, ArrowUp, ArrowDown, Database, UserCheck, Calendar,
+    Users, ArrowUp, ArrowDown, Database, UserCheck, Calendar, RefreshCw,
 } from 'lucide-react';
 
 const STAGES = [
@@ -54,6 +54,7 @@ const StudentDirectoryPage = () => {
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState('desc');
     const [selected, setSelected] = useState(null);
+    const [reassigning, setReassigning] = useState(false);
     const pageSize = 50;
 
     useEffect(() => {
@@ -68,8 +69,30 @@ const StudentDirectoryPage = () => {
         try {
             const res = await apiClient.get('/users?role=cs_agent');
             const agents = res.data?.items || (Array.isArray(res.data) ? res.data : []);
-            setCsAgents(agents.filter(a => a.role === 'cs_agent' || a.role === 'cs_head'));
+            // Include cs_agent AND cs_head roles
+            setCsAgents(agents.filter(a => ['cs_agent', 'cs_head'].includes(a.role)));
         } catch { /* ignore */ }
+    };
+
+    const reassignAgent = async (studentId, agentId) => {
+        const agent = csAgents.find(a => a.id === agentId);
+        if (!agent) return;
+        setReassigning(true);
+        try {
+            await apiClient.put(`/students/${studentId}`, {
+                cs_agent_id: agent.id,
+                cs_agent_name: agent.full_name || agent.name,
+            });
+            toast.success(`Reassigned to ${agent.full_name || agent.name}`);
+            // Update local state immediately
+            setStudents(prev => prev.map(s => s.id === studentId ? { ...s, cs_agent_id: agent.id, cs_agent_name: agent.full_name || agent.name } : s));
+            if (selected?.id === studentId) {
+                setSelected(prev => ({ ...prev, cs_agent_id: agent.id, cs_agent_name: agent.full_name || agent.name }));
+            }
+        } catch {
+            toast.error('Failed to reassign');
+        }
+        setReassigning(false);
     };
 
     const loadStudents = async () => {
@@ -217,10 +240,26 @@ const StudentDirectoryPage = () => {
                                             {stage && <Badge className={`${stage.color} text-white text-[10px]`}>{stage.label}</Badge>}
                                         </td>
                                         <td className="px-4 py-2.5 text-xs">
-                                            <span className="flex items-center gap-1">
-                                                <UserCheck className="h-3 w-3 text-muted-foreground" />
-                                                {s.cs_agent_name || '—'}
-                                            </span>
+                                            <Select
+                                                value={s.cs_agent_id || ''}
+                                                onValueChange={(val) => { reassignAgent(s.id, val); }}
+                                            >
+                                                <SelectTrigger
+                                                    className="h-7 text-xs w-[150px] border-dashed"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    data-testid={`dir-reassign-${s.id}`}
+                                                >
+                                                    <span className="flex items-center gap-1 truncate">
+                                                        <UserCheck className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                        {s.cs_agent_name || 'Unassigned'}
+                                                    </span>
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {csAgents.map(a => (
+                                                        <SelectItem key={a.id} value={a.id}>{a.full_name || a.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </td>
                                         <td className="px-4 py-2.5 text-xs text-muted-foreground">{s.course_level || s.current_course_name || s.package_bought || '—'}</td>
                                         <td className="px-4 py-2.5 text-right font-mono text-xs">AED {(s.enrollment_amount || 0).toLocaleString()}</td>
@@ -276,7 +315,23 @@ const StudentDirectoryPage = () => {
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground text-xs">CS Agent</p>
-                                    <p className="font-medium flex items-center gap-1"><UserCheck className="h-3 w-3" />{selected.cs_agent_name || '—'}</p>
+                                    <Select
+                                        value={selected.cs_agent_id || ''}
+                                        onValueChange={(val) => reassignAgent(selected.id, val)}
+                                        disabled={reassigning}
+                                    >
+                                        <SelectTrigger className="h-8 text-sm mt-1" data-testid="modal-reassign-cs">
+                                            <span className="flex items-center gap-1">
+                                                <RefreshCw className={`h-3 w-3 ${reassigning ? 'animate-spin' : ''}`} />
+                                                {selected.cs_agent_name || 'Unassigned'}
+                                            </span>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {csAgents.map(a => (
+                                                <SelectItem key={a.id} value={a.id}>{a.full_name || a.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground text-xs">Course</p>
