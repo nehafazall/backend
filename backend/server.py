@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import UpdateOne
 import os
 import logging
 import asyncio
@@ -1786,6 +1787,9 @@ async def login(data: UserLogin):
         raise HTTPException(status_code=401, detail="Account is disabled")
     
     token = create_token(user["id"], user["email"], user["role"])
+    
+    # Update last_active timestamp
+    await db.users.update_one({"id": user["id"]}, {"$set": {"last_active": datetime.now(timezone.utc).isoformat()}})
     
     # Log successful login
     await log_audit(
@@ -19772,6 +19776,40 @@ async def approve_leave_request(
                 "updated_at": now
             }, "$push": {"approval_history": approval_entry}}
         )
+        
+        # Mark attendance as "on_leave" for each day of the approved leave
+        try:
+            start_date = datetime.strptime(leave_req["start_date"], "%Y-%m-%d")
+            end_date = datetime.strptime(leave_req["end_date"], "%Y-%m-%d")
+            leave_type_label = (leave_req.get("leave_type", "annual")).replace("_", " ").title() + " Leave"
+            leave_ops = []
+            current = start_date
+            while current <= end_date:
+                if current.weekday() < 6:  # Skip Sundays (weekday 6)
+                    date_str = current.strftime("%Y-%m-%d")
+                    leave_record = {
+                        "employee_id": leave_req["employee_id"],
+                        "employee_name": leave_req.get("employee_name", ""),
+                        "date": date_str,
+                        "status": "on_leave",
+                        "biometric_in": None,
+                        "biometric_out": None,
+                        "leave_type": leave_type_label,
+                        "leave_request_id": request_id,
+                        "half_day_reason": f"Approved {leave_type_label}",
+                        "updated_at": now,
+                    }
+                    leave_ops.append(UpdateOne(
+                        {"employee_id": leave_req["employee_id"], "date": date_str},
+                        {"$set": leave_record},
+                        upsert=True
+                    ))
+                current += timedelta(days=1)
+            if leave_ops:
+                await db.hr_attendance.bulk_write(leave_ops, ordered=False)
+        except Exception as e:
+            logger.warning(f"Failed to mark attendance for leave {request_id}: {e}")
+        
         return {"message": "Leave request fully approved", "status": "approved"}
     else:
         # Move to next level
@@ -19896,9 +19934,9 @@ async def sync_biometric_attendance(
 
 # Default shifts
 DEFAULT_SHIFTS = {
-    "morning": {"name": "Morning Shift", "start": "10:00", "end": "19:00", "grace_minutes": 15, "location": "UAE"},
-    "afternoon": {"name": "Afternoon Shift", "start": "13:00", "end": "22:00", "grace_minutes": 15, "location": "UAE"},
-    "india": {"name": "India Shift", "start": "11:00", "end": "20:00", "grace_minutes": 15, "location": "India"},
+    "morning": {"name": "Morning Shift", "start": "10:00", "end": "19:00", "grace_minutes": 30, "location": "UAE"},
+    "afternoon": {"name": "Afternoon Shift", "start": "13:00", "end": "22:00", "grace_minutes": 30, "location": "UAE"},
+    "india": {"name": "India Shift", "start": "11:00", "end": "20:00", "grace_minutes": 30, "location": "India"},
 }
 
 COUNTRY_LIST = [
@@ -20024,7 +20062,7 @@ async def _calculate_attendance_status(emp: dict, biometric_in: str, biometric_o
 
     shift_start = shift.get("start", "10:00")
     shift_end = shift.get("end", "19:00")
-    grace = shift.get("grace_minutes", 15)
+    grace = shift.get("grace_minutes", 30)
     warning_threshold = rules.get("warning_threshold_minutes", 30)
     extra_offset = rules.get("extra_time_offset_minutes", 30)
 
@@ -21469,7 +21507,7 @@ async def upload_biocloud_attendance(
         shift = shift_map.get(shift_id, shift_map.get("morning", DEFAULT_SHIFTS["morning"]))
         shift_start = shift.get("start", "10:00")
         shift_end = shift.get("end", "19:00")
-        grace = shift.get("grace_minutes", 15)
+        grace = shift.get("grace_minutes", 30)
         warning_threshold = rules.get("warning_threshold_minutes", 30)
         extra_offset = rules.get("extra_time_offset_minutes", 30)
         half_day_hours = rules.get("half_day_hours_threshold", 6)
@@ -28832,7 +28870,18 @@ async def get_chat_conversations(user=Depends(get_current_user)):
     
     user_map = {}
     if all_user_ids:
-        async for u in db.users.find({"id": {"$in": list(all_user_ids)}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1}):
+        now = datetime.now(timezone.utc)
+        async for u in db.users.find({"id": {"$in": list(all_user_ids)}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1, "last_active": 1}):
+            la = u.get("last_active")
+            if la:
+                try:
+                    last = datetime.fromisoformat(la.replace("Z", "+00:00"))
+                    diff_minutes = (now - last).total_seconds() / 60
+                    u["status"] = "online" if diff_minutes < 10 else "away" if diff_minutes < 60 else "offline"
+                except Exception:
+                    u["status"] = "offline"
+            else:
+                u["status"] = "offline"
             user_map[u["id"]] = u
     
     result = []
@@ -28972,19 +29021,39 @@ async def get_chat_unread_count(user=Depends(get_current_user)):
 
 @api_router.get("/chat/users")
 async def get_chat_users(user=Depends(get_current_user)):
-    """Get all users available for chat."""
+    """Get all users available for chat with online status."""
     users = await db.users.find(
-        {"is_active": True, "id": {"$ne": user["id"]}},
-        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1}
+        {"id": {"$ne": user["id"]}},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1, "last_active": 1, "is_active": 1}
     ).sort("full_name", 1).to_list(500)
+    
+    now = datetime.now(timezone.utc)
+    for u in users:
+        la = u.get("last_active")
+        if la:
+            try:
+                last = datetime.fromisoformat(la.replace("Z", "+00:00"))
+                diff_minutes = (now - last).total_seconds() / 60
+                u["status"] = "online" if diff_minutes < 10 else "away" if diff_minutes < 60 else "offline"
+            except Exception:
+                u["status"] = "offline"
+        else:
+            u["status"] = "offline"
     return users
+
+
+@api_router.post("/chat/heartbeat")
+async def chat_heartbeat(user=Depends(get_current_user)):
+    """Update user's last_active timestamp."""
+    await db.users.update_one({"id": user["id"]}, {"$set": {"last_active": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True}
 
 
 # ======================== EXECUTIVE DASHBOARD ========================
 
 @api_router.get("/executive/dashboard")
 async def get_executive_dashboard(user=Depends(get_current_user)):
-    """CEO Executive Dashboard — single-page high-level overview."""
+    """CEO Executive Dashboard — merged operational + executive single-page overview."""
     if user["role"] not in ("super_admin", "admin"):
         raise HTTPException(403, "Executive dashboard is restricted")
     
@@ -28993,128 +29062,206 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
     month_start = f"{current_month}-01"
     today = now.strftime("%Y-%m-%d")
     
-    # Run all queries in parallel
-    total_employees_task = db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
-    total_leads_month_task = db.leads.count_documents({"created_at": {"$gte": month_start}})
-    enrolled_month_task = db.leads.count_documents({"stage": "enrolled", "enrolled_at": {"$gte": month_start}})
-    new_leads_today_task = db.leads.count_documents({"created_at": {"$gte": today}})
-    
-    # Revenue this month (from enrolled leads)
-    revenue_pipeline = [
-        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
-        {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}}
-    ]
-    revenue_task = db.leads.aggregate(revenue_pipeline).to_list(1)
-    
-    # CS upgrades this month
-    cs_upgrades_pipeline = [
-        {"$match": {"status": "closed", "upgraded_at": {"$gte": month_start}}},
-        {"$group": {"_id": None, "total": {"$sum": "$upgrade_amount"}, "count": {"$sum": 1}}}
-    ]
-    cs_upgrades_task = db.cs_upgrades.aggregate(cs_upgrades_pipeline).to_list(1)
-    
-    # Active users count
-    active_users_task = db.users.count_documents({"is_active": True})
-    
-    # Pending approvals
-    pending_approvals_task = db.approval_requests.count_documents({"status": "pending"})
-    
-    # Revenue by course this month
-    revenue_by_course_pipeline = [
-        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
-        {"$group": {"_id": "$interested_course_name", "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}},
-        {"$sort": {"total": -1}},
-        {"$limit": 10}
-    ]
-    rev_by_course_task = db.leads.aggregate(revenue_by_course_pipeline).to_list(10)
-    
-    # Monthly revenue trend (last 6 months)
-    trend_tasks = []
+    # Build proper 6-month ranges
+    from calendar import monthrange
     trend_months = []
     for i in range(5, -1, -1):
-        dt = now - timedelta(days=i * 30)
+        dt = (now.replace(day=1) - timedelta(days=i * 28)).replace(day=1)
         m = dt.strftime("%Y-%m")
+        _, last_day = monthrange(dt.year, dt.month)
         m_start = f"{m}-01"
-        # Calculate end of month
-        if i > 0:
-            dt_next = now - timedelta(days=(i - 1) * 30)
-            m_end = f"{dt_next.strftime('%Y-%m')}-01"
-        else:
-            m_end = "2099-12-31"
-        trend_months.append({"month": m, "label": dt.strftime("%b %Y")})
-        trend_tasks.append(db.leads.aggregate([
-            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": m_start, "$lt": m_end}}},
-            {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}}
-        ]).to_list(1))
+        m_end = f"{m}-{last_day}"
+        trend_months.append({"month": m, "label": dt.strftime("%b %Y"), "start": m_start, "end": m_end})
     
-    # Top sales agents this month
-    top_agents_pipeline = [
-        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
-        {"$group": {"_id": "$assigned_to_name", "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}},
-        {"$sort": {"total": -1}},
-        {"$limit": 5}
-    ]
-    top_agents_task = db.leads.aggregate(top_agents_pipeline).to_list(5)
-    
-    # Department headcount
-    dept_count_pipeline = [
-        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
-        {"$group": {"_id": "$department", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    dept_count_task = db.hr_employees.aggregate(dept_count_pipeline).to_list(20)
-    
-    # Lead source distribution this month
-    lead_source_pipeline = [
-        {"$match": {"created_at": {"$gte": month_start}}},
-        {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 8}
-    ]
-    lead_source_task = db.leads.aggregate(lead_source_pipeline).to_list(8)
-    
-    # Execute all in parallel
-    (total_employees, total_leads_month, enrolled_month, new_leads_today,
-     revenue_data, cs_upgrades_data, active_users, pending_approvals,
-     rev_by_course, top_agents, dept_counts, lead_sources,
-     *trend_results) = await asyncio.gather(
-        total_employees_task, total_leads_month_task, enrolled_month_task, new_leads_today_task,
-        revenue_task, cs_upgrades_task, active_users_task, pending_approvals_task,
-        rev_by_course_task, top_agents_task, dept_count_task, lead_source_task,
-        *trend_tasks
+    # === PARALLEL BATCH 1: Counts and aggregates ===
+    (
+        total_employees_count, total_leads_month, enrolled_month, new_leads_today,
+        active_users, pending_approvals,
+        employees_list, attendance_today_list, pending_leaves,
+        revenue_data, cs_revenue_data, mentor_revenue_data,
+        active_pipeline, pending_activations,
+        rev_by_course_data, top_sales_data, top_cs_data, top_mentors_data,
+        dept_count_data, lead_source_data,
+        recent_enrollments_data,
+    ) = await asyncio.gather(
+        db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}}),
+        db.leads.count_documents({"created_at": {"$gte": month_start}}),
+        db.leads.count_documents({"stage": "enrolled", "enrolled_at": {"$gte": month_start}}),
+        db.leads.count_documents({"created_at": {"$gte": today}}),
+        db.users.count_documents({"is_active": True}),
+        db.approval_requests.count_documents({"status": "pending"}),
+        # Full employee list for gender + headcount
+        db.hr_employees.find({"employment_status": {"$in": ["active", "probation"]}}, {"_id": 0, "id": 1, "gender": 1, "full_name": 1, "department": 1}).to_list(500),
+        # Attendance today
+        db.hr_attendance.find({"date": today}, {"_id": 0, "status": 1, "employee_id": 1}).to_list(500),
+        # Pending leave requests
+        db.hr_leave_requests.count_documents({"status": "pending"}),
+        # Sales revenue this month
+        db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "count": {"$sum": 1}}}
+        ]).to_list(1),
+        # CS revenue this month
+        db.cs_upgrades.aggregate([
+            {"$match": {"created_at": {"$gte": month_start}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}}
+        ]).to_list(1),
+        # Mentor/Academics revenue this month
+        db.mentor_redeposits.aggregate([
+            {"$match": {"date": {"$gte": month_start[:10]}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}, "count": {"$sum": 1}}}
+        ]).to_list(1),
+        # Active pipeline
+        db.leads.count_documents({"stage": {"$in": ["warm_lead", "hot_lead", "in_progress"]}}),
+        # Pending activations
+        db.students.count_documents({"status": {"$in": ["pending_activation", "pending"]}}),
+        # Revenue by course (with proper course_name fallback)
+        db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+            {"$addFields": {"display_course": {"$ifNull": ["$course_name", {"$ifNull": ["$interested_course_name", "Unknown Course"]}]}}},
+            {"$group": {"_id": "$display_course", "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "count": {"$sum": 1}}},
+            {"$sort": {"total": -1}}, {"$limit": 10}
+        ]).to_list(10),
+        # Top sales agents
+        db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+            {"$group": {"_id": "$assigned_to_name", "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}, "count": {"$sum": 1}}},
+            {"$sort": {"total": -1}}, {"$limit": 5}
+        ]).to_list(5),
+        # Top CS agents
+        db.cs_upgrades.aggregate([
+            {"$match": {"created_at": {"$gte": month_start}}},
+            {"$group": {"_id": "$agent_name", "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}},
+            {"$sort": {"total": -1}}, {"$limit": 5}
+        ]).to_list(5),
+        # Top mentors
+        db.mentor_redeposits.aggregate([
+            {"$match": {"date": {"$gte": month_start[:10]}}},
+            {"$group": {"_id": "$mentor_name", "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}, "count": {"$sum": 1}}},
+            {"$sort": {"total": -1}}, {"$limit": 5}
+        ]).to_list(5),
+        # Department headcount
+        db.hr_employees.aggregate([
+            {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+            {"$group": {"_id": "$department", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]).to_list(20),
+        # Lead sources
+        db.leads.aggregate([
+            {"$match": {"created_at": {"$gte": month_start}}},
+            {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}, {"$limit": 8}
+        ]).to_list(8),
+        # Recent enrollments
+        db.leads.find({"stage": "enrolled"}, {"_id": 0, "full_name": 1, "sale_amount": 1, "enrollment_amount": 1, "enrolled_at": 1, "assigned_to_name": 1, "interested_course_name": 1, "course_name": 1}).sort("enrolled_at", -1).to_list(5),
     )
     
-    revenue = revenue_data[0] if revenue_data else {"total": 0, "count": 0}
-    cs_upgrade_totals = cs_upgrades_data[0] if cs_upgrades_data else {"total": 0, "count": 0}
+    # === PARALLEL BATCH 2: Monthly revenue trend (3 collections x 6 months) ===
+    trend_tasks = []
+    for tm in trend_months:
+        trend_tasks.append(db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": tm["start"], "$lte": tm["end"]}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$enrollment_amount", {"$ifNull": ["$sale_amount", 0]}]}}}}
+        ]).to_list(1))
+        trend_tasks.append(db.cs_upgrades.aggregate([
+            {"$match": {"created_at": {"$gte": tm["start"], "$lte": tm["end"]}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}}}
+        ]).to_list(1))
+        trend_tasks.append(db.mentor_redeposits.aggregate([
+            {"$match": {"date": {"$gte": tm["start"][:10], "$lte": tm["end"][:10]}}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$amount_aed", {"$ifNull": ["$amount", 0]}]}}}}
+        ]).to_list(1))
+    trend_results = await asyncio.gather(*trend_tasks)
     
-    # Build monthly trend
+    # Process revenue values
+    s_rev = (revenue_data[0] if revenue_data else {}).get("total", 0) or 0
+    cs_rev = (cs_revenue_data[0] if cs_revenue_data else {}).get("total", 0) or 0
+    m_rev = (mentor_revenue_data[0] if mentor_revenue_data else {}).get("total", 0) or 0
+    total_rev = s_rev + cs_rev + m_rev
+    
+    # Build monthly trend with 3-department breakdown
     monthly_trend = []
     for i, tm in enumerate(trend_months):
-        tr = trend_results[i]
-        t = tr[0] if tr else {"total": 0, "count": 0}
-        monthly_trend.append({"month": tm["month"], "label": tm["label"], "revenue": t.get("total", 0) or 0, "deals": t.get("count", 0) or 0})
+        s_val = (trend_results[i*3][0] if trend_results[i*3] else {}).get("total", 0) or 0
+        c_val = (trend_results[i*3+1][0] if trend_results[i*3+1] else {}).get("total", 0) or 0
+        m_val = (trend_results[i*3+2][0] if trend_results[i*3+2] else {}).get("total", 0) or 0
+        monthly_trend.append({
+            "month": tm["month"], "label": tm["label"],
+            "sales": round(s_val, 2), "cs": round(c_val, 2), "mentors": round(m_val, 2),
+            "total": round(s_val + c_val + m_val, 2)
+        })
+    
+    # Attendance breakdown for today
+    present_count = sum(1 for a in attendance_today_list if a.get("status") in ["present", "late"])
+    half_day_count = sum(1 for a in attendance_today_list if a.get("status") == "half_day")
+    absent_count = sum(1 for a in attendance_today_list if a.get("status") == "absent")
+    on_leave_count = sum(1 for a in attendance_today_list if a.get("status") == "on_leave")
+    warning_count = sum(1 for a in attendance_today_list if a.get("status") == "warning")
+    
+    # Gender bifurcation - ensure proper tagging
+    gender_breakdown = {"Male": 0, "Female": 0}
+    for emp in employees_list:
+        g = (emp.get("gender") or "").strip().lower()
+        if g in ("male", "m"):
+            gender_breakdown["Male"] += 1
+        elif g in ("female", "f"):
+            gender_breakdown["Female"] += 1
+        else:
+            gender_breakdown.setdefault("Other", 0)
+            gender_breakdown["Other"] += 1
+    # Remove "Other" if 0
+    if gender_breakdown.get("Other", 0) == 0:
+        gender_breakdown.pop("Other", None)
     
     # Commission approval status
     approvals = await db.commission_approvals.find({"month": current_month}, {"_id": 0}).to_list(10)
     commission_approvals = {a["department"]: a["status"] for a in approvals}
     
+    # Revenue split by department
+    revenue_split = [
+        {"name": "Sales", "value": round(s_rev, 2)},
+        {"name": "Customer Service", "value": round(cs_rev, 2)},
+        {"name": "Academics", "value": round(m_rev, 2)},
+    ]
+    
     return {
         "kpis": {
-            "total_employees": total_employees,
+            "total_employees": total_employees_count,
             "active_users": active_users,
             "new_leads_today": new_leads_today,
             "total_leads_month": total_leads_month,
             "enrolled_month": enrolled_month,
-            "revenue_month": revenue.get("total", 0) or 0,
-            "cs_upgrades_month": cs_upgrade_totals.get("count", 0) or 0,
-            "cs_upgrade_revenue": cs_upgrade_totals.get("total", 0) or 0,
+            "revenue_month": round(total_rev, 2),
+            "sales_revenue": round(s_rev, 2),
+            "cs_revenue": round(cs_rev, 2),
+            "mentor_revenue": round(m_rev, 2),
+            "cs_upgrades_month": (cs_revenue_data[0] if cs_revenue_data else {}).get("count", 0) or 0,
+            "cs_upgrade_revenue": round(cs_rev, 2),
             "pending_approvals": pending_approvals,
+            "pending_leaves": pending_leaves,
+            "active_pipeline": active_pipeline,
+            "pending_activations": pending_activations,
         },
+        "attendance": {
+            "present": present_count,
+            "half_day": half_day_count,
+            "absent": absent_count,
+            "on_leave": on_leave_count,
+            "warning": warning_count,
+            "total": len(attendance_today_list) if attendance_today_list else total_employees_count,
+        },
+        "gender_breakdown": gender_breakdown,
         "monthly_trend": monthly_trend,
-        "revenue_by_course": [{"course": r["_id"] or "Unknown", "revenue": r["total"], "count": r["count"]} for r in rev_by_course],
-        "top_agents": [{"name": a["_id"] or "Unknown", "revenue": a["total"], "deals": a["count"]} for a in top_agents],
-        "department_headcount": [{"department": d["_id"] or "Unknown", "count": d["count"]} for d in dept_counts],
-        "lead_sources": [{"source": s["_id"] or "Unknown", "count": s["count"]} for s in lead_sources],
+        "revenue_split": revenue_split,
+        "revenue_by_course": [{"course": r["_id"] or "Unknown Course", "revenue": r.get("total", 0) or 0, "count": r.get("count", 0)} for r in rev_by_course_data],
+        "top_performers": {
+            "sales": [{"name": a["_id"] or "Unknown", "revenue": round(a.get("total", 0), 2), "deals": a.get("count", 0)} for a in top_sales_data],
+            "cs": [{"name": a["_id"] or "Unknown", "revenue": round(a.get("total", 0), 2), "upgrades": a.get("count", 0)} for a in top_cs_data],
+            "mentors": [{"name": a["_id"] or "Unknown", "revenue": round(a.get("total", 0), 2), "deposits": a.get("count", 0)} for a in top_mentors_data],
+        },
+        "department_headcount": [{"department": d["_id"] or "Unknown", "count": d["count"]} for d in dept_count_data],
+        "lead_sources": [{"source": s["_id"] or "Unknown", "count": s["count"]} for s in lead_source_data],
+        "recent_enrollments": [{"name": e.get("full_name"), "amount": e.get("enrollment_amount") or e.get("sale_amount", 0), "date": e.get("enrolled_at"), "agent": e.get("assigned_to_name"), "course": e.get("course_name") or e.get("interested_course_name")} for e in recent_enrollments_data],
         "commission_approvals": commission_approvals,
         "current_month": current_month,
     }

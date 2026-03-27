@@ -14,6 +14,8 @@ const ROLE_COLORS = {
   mentor: 'text-yellow-600', hr: 'text-rose-500', finance: 'text-cyan-500',
 };
 
+const STATUS_DOT = { online: 'bg-emerald-400', away: 'bg-amber-400', offline: 'bg-slate-400' };
+
 const formatRole = (r) => (r || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const timeAgo = (iso) => {
   if (!iso) return '';
@@ -55,10 +57,14 @@ export default function ChatPage() {
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
-  // Poll for new messages
+  // Poll for new messages + heartbeat
   useEffect(() => {
+    // Send initial heartbeat
+    apiClient.post('/chat/heartbeat').catch(() => {});
+    
     pollRef.current = setInterval(() => {
       fetchConversations();
+      apiClient.post('/chat/heartbeat').catch(() => {});
       if (activeConvo) fetchMessages(activeConvo.id, true);
     }, 5000);
     return () => clearInterval(pollRef.current);
@@ -167,8 +173,13 @@ export default function ChatPage() {
                     data-testid={`convo-${c.id}`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                        {c.is_group ? <Users className="h-4 w-4" /> : (c.display_name?.charAt(0) || '?')}
+                      <div className="relative w-9 h-9 flex-shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+                          {c.is_group ? <Users className="h-4 w-4" /> : (c.display_name?.charAt(0) || '?')}
+                        </div>
+                        {!c.is_group && c.other_participants?.[0]?.status && (
+                          <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background ${STATUS_DOT[c.other_participants[0].status] || STATUS_DOT.offline}`} />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
@@ -297,15 +308,24 @@ export default function ChatPage() {
                     onClick={() => startNewChat(u)}
                     data-testid={`chat-start-${u.id}`}
                   >
-                    <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-medium">
-                      {u.full_name?.charAt(0) || '?'}
+                    <div className="relative w-9 h-9 flex-shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-medium">
+                        {u.full_name?.charAt(0) || '?'}
+                      </div>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background ${STATUS_DOT[u.status] || STATUS_DOT.offline}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{u.full_name}</p>
+                      <p className="font-medium text-sm flex items-center gap-1.5">
+                        {u.full_name}
+                        {!u.is_active && <Badge variant="secondary" className="text-[9px] px-1 py-0">Inactive</Badge>}
+                      </p>
                       <p className={`text-xs ${ROLE_COLORS[u.role] || 'text-muted-foreground'}`}>
                         {formatRole(u.role)} {u.department ? `- ${u.department}` : ''}
                       </p>
                     </div>
+                    <span className={`text-[9px] ${u.status === 'online' ? 'text-emerald-500' : u.status === 'away' ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                      {u.status === 'online' ? 'Online' : u.status === 'away' ? 'Away' : 'Offline'}
+                    </span>
                   </button>
                 ))}
                 {filteredUsers.length === 0 && (
