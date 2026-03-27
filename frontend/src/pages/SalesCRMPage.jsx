@@ -72,6 +72,7 @@ import {
     GitMerge,
     Package,
     ShoppingCart,
+    CheckCircle,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
@@ -239,10 +240,18 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging, isSuperAd
             {/* Show sale amount for enrolled leads */}
             {lead.stage === 'enrolled' && lead.sale_amount > 0 && (
                 <div className="mt-2 p-2 bg-emerald-500/10 rounded-md border border-emerald-500/20">
-                    <p className="text-xs text-emerald-600">Enrolled</p>
+                    <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Enrolled</p>
                     <p className="text-sm font-bold text-emerald-600">
                         {formatCurrency(lead.sale_amount)}
                     </p>
+                </div>
+            )}
+
+            {/* Show rejection reason for rejected leads */}
+            {lead.stage === 'rejected' && (
+                <div className="mt-2 p-2 bg-rose-500/10 rounded-md border border-rose-500/20">
+                    <p className="text-xs text-rose-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Rejected</p>
+                    {lead.rejection_reason && <p className="text-xs text-rose-500 mt-0.5">{lead.rejection_reason}</p>}
                 </div>
             )}
             

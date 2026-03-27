@@ -21546,27 +21546,29 @@ async def upload_biocloud_attendance(
             "updated_at": now_str
         }
         
-        # Upsert: update if exists, insert if new (check by employee_id + date only)
-        existing = await db.hr_attendance.find_one({
-            "employee_id": emp["id"],
-            "date": date_str
-        }, {"_id": 1, "id": 1})
+        # Use pre-fetched existing_records cache instead of per-record DB query
+        existing = existing_records.get((emp["id"], date_str))
         
         if existing:
-            await db.hr_attendance.update_one({"_id": existing["_id"]}, {"$set": record})
+            bulk_ops.append(UpdateOne(
+                {"employee_id": emp["id"], "date": date_str},
+                {"$set": record}
+            ))
             updated += 1
         else:
             record["id"] = str(uuid.uuid4())
             record["created_at"] = now_str
-            try:
-                await db.hr_attendance.insert_one(record)
-                synced += 1
-            except Exception:
-                await db.hr_attendance.update_one(
-                    {"employee_id": emp["id"], "date": date_str},
-                    {"$set": record}
-                )
-                updated += 1
+            bulk_ops.append(UpdateOne(
+                {"employee_id": emp["id"], "date": date_str},
+                {"$set": record},
+                upsert=True
+            ))
+            synced += 1
+    
+    # Execute all DB operations in one batch
+    if bulk_ops:
+        await db.hr_attendance.bulk_write(bulk_ops, ordered=False)
+        logger.info(f"BioCloud upload: bulk_write executed {len(bulk_ops)} operations")
     
     # Log the sync
     await db.biocloud_sync_log.insert_one({
@@ -28812,6 +28814,310 @@ async def _run_mt5_withdrawal_sync(triggered_by="auto"):
     return {k: v for k, v in sync_log.items() if k != "_id"}
 
 
+# ======================== INTERNAL CHAT SYSTEM ========================
+
+@api_router.get("/chat/conversations")
+async def get_chat_conversations(user=Depends(get_current_user)):
+    """Get all conversations for the current user."""
+    user_id = user["id"]
+    convos = await db.chat_conversations.find(
+        {"participants": user_id},
+        {"_id": 0}
+    ).sort("last_message_at", -1).to_list(100)
+    
+    # Enrich with participant names and unread counts
+    all_user_ids = set()
+    for c in convos:
+        all_user_ids.update(c.get("participants", []))
+    
+    user_map = {}
+    if all_user_ids:
+        async for u in db.users.find({"id": {"$in": list(all_user_ids)}}, {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1}):
+            user_map[u["id"]] = u
+    
+    result = []
+    for c in convos:
+        is_group = c.get("is_group", False)
+        other_participants = [user_map.get(p, {"id": p, "full_name": "Unknown"}) for p in c["participants"] if p != user_id]
+        unread = await db.chat_messages.count_documents({
+            "conversation_id": c["id"],
+            "sender_id": {"$ne": user_id},
+            "read_by": {"$nin": [user_id]}
+        })
+        result.append({
+            **c,
+            "display_name": c.get("group_name") if is_group else (other_participants[0]["full_name"] if other_participants else "Unknown"),
+            "other_participants": other_participants,
+            "unread_count": unread,
+        })
+    return result
+
+
+@api_router.post("/chat/conversations")
+async def create_conversation(data: dict = Body(...), user=Depends(get_current_user)):
+    """Create a new DM or group conversation."""
+    user_id = user["id"]
+    participant_ids = data.get("participant_ids", [])
+    is_group = data.get("is_group", False)
+    group_name = data.get("group_name", "")
+    
+    if not participant_ids:
+        raise HTTPException(400, "At least one participant required")
+    
+    all_participants = list(set([user_id] + participant_ids))
+    
+    # For DMs, check if conversation already exists
+    if not is_group and len(all_participants) == 2:
+        existing = await db.chat_conversations.find_one({
+            "is_group": False,
+            "participants": {"$all": all_participants, "$size": 2}
+        }, {"_id": 0})
+        if existing:
+            return existing
+    
+    now = datetime.now(timezone.utc).isoformat()
+    convo = {
+        "id": str(uuid.uuid4()),
+        "participants": all_participants,
+        "is_group": is_group,
+        "group_name": group_name if is_group else "",
+        "created_by": user_id,
+        "created_at": now,
+        "last_message_at": now,
+        "last_message_preview": "",
+    }
+    await db.chat_conversations.insert_one(convo)
+    convo.pop("_id", None)
+    return convo
+
+
+@api_router.get("/chat/conversations/{conversation_id}/messages")
+async def get_chat_messages(conversation_id: str, limit: int = 50, before: str = None, user=Depends(get_current_user)):
+    """Get messages for a conversation."""
+    convo = await db.chat_conversations.find_one({"id": conversation_id}, {"_id": 0})
+    if not convo or user["id"] not in convo.get("participants", []):
+        raise HTTPException(403, "Access denied")
+    
+    query = {"conversation_id": conversation_id}
+    if before:
+        query["created_at"] = {"$lt": before}
+    
+    messages = await db.chat_messages.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    messages.reverse()
+    
+    # Mark messages as read
+    await db.chat_messages.update_many(
+        {"conversation_id": conversation_id, "sender_id": {"$ne": user["id"]}, "read_by": {"$nin": [user["id"]]}},
+        {"$addToSet": {"read_by": user["id"]}}
+    )
+    
+    return {"messages": messages, "conversation": convo}
+
+
+@api_router.post("/chat/conversations/{conversation_id}/messages")
+async def send_chat_message(conversation_id: str, data: dict = Body(...), user=Depends(get_current_user)):
+    """Send a message in a conversation."""
+    convo = await db.chat_conversations.find_one({"id": conversation_id}, {"_id": 0})
+    if not convo or user["id"] not in convo.get("participants", []):
+        raise HTTPException(403, "Access denied")
+    
+    text = data.get("text", "").strip()
+    if not text:
+        raise HTTPException(400, "Message cannot be empty")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    message = {
+        "id": str(uuid.uuid4()),
+        "conversation_id": conversation_id,
+        "sender_id": user["id"],
+        "sender_name": user.get("full_name", ""),
+        "text": text,
+        "read_by": [user["id"]],
+        "created_at": now,
+    }
+    await db.chat_messages.insert_one(message)
+    
+    # Update conversation
+    preview = text[:80] + ("..." if len(text) > 80 else "")
+    await db.chat_conversations.update_one(
+        {"id": conversation_id},
+        {"$set": {"last_message_at": now, "last_message_preview": preview, "last_message_sender": user.get("full_name", "")}}
+    )
+    
+    message.pop("_id", None)
+    return message
+
+
+@api_router.get("/chat/unread-count")
+async def get_chat_unread_count(user=Depends(get_current_user)):
+    """Get total unread message count for badge."""
+    user_id = user["id"]
+    convo_ids = []
+    async for c in db.chat_conversations.find({"participants": user_id}, {"id": 1, "_id": 0}):
+        convo_ids.append(c["id"])
+    
+    if not convo_ids:
+        return {"unread_count": 0}
+    
+    count = await db.chat_messages.count_documents({
+        "conversation_id": {"$in": convo_ids},
+        "sender_id": {"$ne": user_id},
+        "read_by": {"$nin": [user_id]}
+    })
+    return {"unread_count": count}
+
+
+@api_router.get("/chat/users")
+async def get_chat_users(user=Depends(get_current_user)):
+    """Get all users available for chat."""
+    users = await db.users.find(
+        {"is_active": True, "id": {"$ne": user["id"]}},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1}
+    ).sort("full_name", 1).to_list(500)
+    return users
+
+
+# ======================== EXECUTIVE DASHBOARD ========================
+
+@api_router.get("/executive/dashboard")
+async def get_executive_dashboard(user=Depends(get_current_user)):
+    """CEO Executive Dashboard — single-page high-level overview."""
+    if user["role"] not in ("super_admin", "admin"):
+        raise HTTPException(403, "Executive dashboard is restricted")
+    
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+    month_start = f"{current_month}-01"
+    today = now.strftime("%Y-%m-%d")
+    
+    # Run all queries in parallel
+    total_employees_task = db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}})
+    total_leads_month_task = db.leads.count_documents({"created_at": {"$gte": month_start}})
+    enrolled_month_task = db.leads.count_documents({"stage": "enrolled", "enrolled_at": {"$gte": month_start}})
+    new_leads_today_task = db.leads.count_documents({"created_at": {"$gte": today}})
+    
+    # Revenue this month (from enrolled leads)
+    revenue_pipeline = [
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+        {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}}
+    ]
+    revenue_task = db.leads.aggregate(revenue_pipeline).to_list(1)
+    
+    # CS upgrades this month
+    cs_upgrades_pipeline = [
+        {"$match": {"status": "closed", "upgraded_at": {"$gte": month_start}}},
+        {"$group": {"_id": None, "total": {"$sum": "$upgrade_amount"}, "count": {"$sum": 1}}}
+    ]
+    cs_upgrades_task = db.cs_upgrades.aggregate(cs_upgrades_pipeline).to_list(1)
+    
+    # Active users count
+    active_users_task = db.users.count_documents({"is_active": True})
+    
+    # Pending approvals
+    pending_approvals_task = db.approval_requests.count_documents({"status": "pending"})
+    
+    # Revenue by course this month
+    revenue_by_course_pipeline = [
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+        {"$group": {"_id": "$interested_course_name", "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 10}
+    ]
+    rev_by_course_task = db.leads.aggregate(revenue_by_course_pipeline).to_list(10)
+    
+    # Monthly revenue trend (last 6 months)
+    trend_tasks = []
+    trend_months = []
+    for i in range(5, -1, -1):
+        dt = now - timedelta(days=i * 30)
+        m = dt.strftime("%Y-%m")
+        m_start = f"{m}-01"
+        # Calculate end of month
+        if i > 0:
+            dt_next = now - timedelta(days=(i - 1) * 30)
+            m_end = f"{dt_next.strftime('%Y-%m')}-01"
+        else:
+            m_end = "2099-12-31"
+        trend_months.append({"month": m, "label": dt.strftime("%b %Y")})
+        trend_tasks.append(db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": m_start, "$lt": m_end}}},
+            {"$group": {"_id": None, "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}}
+        ]).to_list(1))
+    
+    # Top sales agents this month
+    top_agents_pipeline = [
+        {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+        {"$group": {"_id": "$assigned_to_name", "total": {"$sum": "$sale_amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 5}
+    ]
+    top_agents_task = db.leads.aggregate(top_agents_pipeline).to_list(5)
+    
+    # Department headcount
+    dept_count_pipeline = [
+        {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+        {"$group": {"_id": "$department", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    dept_count_task = db.hr_employees.aggregate(dept_count_pipeline).to_list(20)
+    
+    # Lead source distribution this month
+    lead_source_pipeline = [
+        {"$match": {"created_at": {"$gte": month_start}}},
+        {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 8}
+    ]
+    lead_source_task = db.leads.aggregate(lead_source_pipeline).to_list(8)
+    
+    # Execute all in parallel
+    (total_employees, total_leads_month, enrolled_month, new_leads_today,
+     revenue_data, cs_upgrades_data, active_users, pending_approvals,
+     rev_by_course, top_agents, dept_counts, lead_sources,
+     *trend_results) = await asyncio.gather(
+        total_employees_task, total_leads_month_task, enrolled_month_task, new_leads_today_task,
+        revenue_task, cs_upgrades_task, active_users_task, pending_approvals_task,
+        rev_by_course_task, top_agents_task, dept_count_task, lead_source_task,
+        *trend_tasks
+    )
+    
+    revenue = revenue_data[0] if revenue_data else {"total": 0, "count": 0}
+    cs_upgrade_totals = cs_upgrades_data[0] if cs_upgrades_data else {"total": 0, "count": 0}
+    
+    # Build monthly trend
+    monthly_trend = []
+    for i, tm in enumerate(trend_months):
+        tr = trend_results[i]
+        t = tr[0] if tr else {"total": 0, "count": 0}
+        monthly_trend.append({"month": tm["month"], "label": tm["label"], "revenue": t.get("total", 0) or 0, "deals": t.get("count", 0) or 0})
+    
+    # Commission approval status
+    approvals = await db.commission_approvals.find({"month": current_month}, {"_id": 0}).to_list(10)
+    commission_approvals = {a["department"]: a["status"] for a in approvals}
+    
+    return {
+        "kpis": {
+            "total_employees": total_employees,
+            "active_users": active_users,
+            "new_leads_today": new_leads_today,
+            "total_leads_month": total_leads_month,
+            "enrolled_month": enrolled_month,
+            "revenue_month": revenue.get("total", 0) or 0,
+            "cs_upgrades_month": cs_upgrade_totals.get("count", 0) or 0,
+            "cs_upgrade_revenue": cs_upgrade_totals.get("total", 0) or 0,
+            "pending_approvals": pending_approvals,
+        },
+        "monthly_trend": monthly_trend,
+        "revenue_by_course": [{"course": r["_id"] or "Unknown", "revenue": r["total"], "count": r["count"]} for r in rev_by_course],
+        "top_agents": [{"name": a["_id"] or "Unknown", "revenue": a["total"], "deals": a["count"]} for a in top_agents],
+        "department_headcount": [{"department": d["_id"] or "Unknown", "count": d["count"]} for d in dept_counts],
+        "lead_sources": [{"source": s["_id"] or "Unknown", "count": s["count"]} for s in lead_sources],
+        "commission_approvals": commission_approvals,
+        "current_month": current_month,
+    }
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -29243,3 +29549,5 @@ async def mt5_auto_sync_loop():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+

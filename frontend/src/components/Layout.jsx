@@ -64,6 +64,8 @@ import {
     GitMerge,
     Server,
     Database,
+    MessageSquare,
+    Zap,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -231,6 +233,26 @@ const SECTIONS = {
             { title: 'Analytics Dashboard', icon: BarChart3, path: '/marketing/dashboard' },
             { title: 'Lead Connectors', icon: Inbox, path: '/marketing/connectors' },
             { title: 'Settings', icon: Settings, path: '/marketing/settings', roles: ['super_admin', 'admin'] },
+        ],
+    },
+    chat: {
+        id: 'chat',
+        title: 'Team Chat',
+        icon: MessageSquare,
+        color: 'bg-blue-600',
+        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'business_development_manager_', 'business_development_manager', 'staff'],
+        items: [
+            { title: 'Team Chat', icon: MessageSquare, path: '/chat' },
+        ],
+    },
+    executive: {
+        id: 'executive',
+        title: 'Executive',
+        icon: Zap,
+        color: 'bg-amber-500',
+        roles: ['super_admin', 'admin'],
+        items: [
+            { title: 'Executive Dashboard', icon: Zap, path: '/executive' },
         ],
     },
 };

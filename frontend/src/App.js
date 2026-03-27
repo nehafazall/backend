@@ -45,6 +45,8 @@ import StudentPortalPage from "@/pages/StudentPortalPage";
 import CommissionDashboard from "@/pages/CommissionDashboard";
 import CrossMentorDepositsPage from "@/pages/CrossMentorDepositsPage";
 import MT5SyncPage from "@/pages/MT5SyncPage";
+import ChatPage from "@/pages/ChatPage";
+import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -581,6 +583,16 @@ function AppRoutes() {
                 <Route path="admin-settings" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <AdminSettingsPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Internal Chat */}
+                <Route path="chat" element={<ChatPage />} />
+                
+                {/* Executive Dashboard */}
+                <Route path="executive" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <ExecutiveDashboard />
                     </ProtectedRoute>
                 } />
                 
