@@ -47,6 +47,7 @@ import CrossMentorDepositsPage from "@/pages/CrossMentorDepositsPage";
 import MT5SyncPage from "@/pages/MT5SyncPage";
 import ChatPage from "@/pages/ChatPage";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
+import OrganizationMapPage from "@/pages/OrganizationMapPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -593,6 +594,13 @@ function AppRoutes() {
                 <Route path="executive" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
                         <ExecutiveDashboard />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Organization Map */}
+                <Route path="organization" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <OrganizationMapPage />
                     </ProtectedRoute>
                 } />
                 

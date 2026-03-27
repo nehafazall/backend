@@ -66,6 +66,7 @@ import {
     Database,
     MessageSquare,
     Zap,
+    Network,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -249,9 +250,10 @@ const SECTIONS = {
         title: 'Executive',
         icon: Zap,
         color: 'bg-amber-500',
-        roles: ['super_admin', 'admin'],
+        roles: ['super_admin', 'admin', 'hr'],
         items: [
-            { title: 'Executive Dashboard', icon: Zap, path: '/executive' },
+            { title: 'Executive Dashboard', icon: Zap, path: '/executive', roles: ['super_admin', 'admin'] },
+            { title: 'Organization Map', icon: Network, path: '/organization' },
         ],
     },
 };

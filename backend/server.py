@@ -29406,6 +29406,212 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         "commission_approvals": commission_approvals,
         "current_month": current_month,
     }
+
+
+# ─── Organization Map ───────────────────────────────────────────────────
+@api_router.get("/organization/map")
+async def get_organization_map(user=Depends(get_current_user)):
+    """Return the full org hierarchy: CEO → Dept Heads → TLs → Members, plus approval matrix."""
+    
+    all_users = await db.users.find(
+        {"is_active": True},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "department": 1, "team_id": 1, "team_leader_id": 1, "employee_id": 1}
+    ).to_list(500)
+    
+    all_teams = await db.teams.find({}, {"_id": 0}).to_list(100)
+    team_map = {t["id"]: t for t in all_teams}
+    
+    # Get designations from hr_employees
+    hr_emps = await db.hr_employees.find(
+        {}, {"_id": 0, "user_id": 1, "designation": 1, "department": 1, "employment_status": 1}
+    ).to_list(500)
+    hr_map = {h["user_id"]: h for h in hr_emps if h.get("user_id")}
+    
+    # Build user enrichment
+    def enrich(u):
+        hr = hr_map.get(u["id"], {})
+        team = team_map.get(u.get("team_id"), {})
+        return {
+            "id": u["id"],
+            "name": u["full_name"],
+            "role": u["role"],
+            "department": u.get("department", ""),
+            "designation": hr.get("designation", ""),
+            "team_name": team.get("name", ""),
+            "team_id": u.get("team_id", ""),
+            "status": hr.get("employment_status", "active"),
+        }
+    
+    # Identify hierarchy
+    ceo = None
+    dept_heads = []
+    team_leaders = []
+    members = []
+    
+    # Map roles to their natural department
+    ROLE_DEPT_MAP = {
+        "admin": "Operations",
+        "cs_head": "Customer Service",
+        "hr": "HR",
+        "finance": "Finance", "finance_manager": "Finance",
+        "master_of_academics": "Mentors/Academics", "master_of_academics_": "Mentors/Academics",
+        "business_development": "Business Development", "business_development_manager": "Business Development",
+        "business_development_manager_": "Business Development",
+        "quality_control": "Quality Control",
+    }
+    HEAD_ROLES = set(ROLE_DEPT_MAP.keys())
+    TL_ROLES = {"team_leader"}
+    
+    for u in all_users:
+        enriched = enrich(u)
+        if u["role"] == "super_admin":
+            ceo = enriched
+        elif u["role"] in TL_ROLES:
+            team_leaders.append(enriched)
+        elif u["role"] in HEAD_ROLES:
+            dept_heads.append(enriched)
+        else:
+            members.append(enriched)
+    
+    # Group members under their team leaders
+    tl_member_map = {}
+    unassigned = []
+    for m in members:
+        tl_id = None
+        # Find TL via team_id
+        for u in all_users:
+            if u.get("team_id") == m.get("team_id") and u["role"] in TL_ROLES:
+                tl_id = u["id"]
+                break
+        if not tl_id:
+            # Check if user has a team_leader_id
+            for u in all_users:
+                if u["id"] == m["id"] and u.get("team_leader_id"):
+                    tl_id = u["team_leader_id"]
+                    break
+        if tl_id:
+            tl_member_map.setdefault(tl_id, []).append(m)
+        else:
+            unassigned.append(m)
+    
+    # Build departments tree
+    departments = {}
+    for u in all_users:
+        dept = u.get("department", "Unknown")
+        if dept not in departments:
+            departments[dept] = {"name": dept, "head": None, "teams": [], "direct_members": [], "count": 0}
+        departments[dept]["count"] += 1
+    
+    # Assign heads — prefer role-dept match, then fall back to department match
+    assigned_as_head = set()
+    for h in dept_heads:
+        # First try matching via ROLE_DEPT_MAP
+        natural_dept = ROLE_DEPT_MAP.get(h["role"])
+        actual_dept = h.get("department", "Unknown")
+        target_dept = natural_dept if natural_dept and natural_dept in departments else actual_dept
+        if target_dept in departments and not departments[target_dept]["head"]:
+            departments[target_dept]["head"] = h
+            assigned_as_head.add(h["id"])
+    
+    # Assign TLs and their teams (dedup by leader id per dept, skip heads)
+    seen_tl_dept = set()
+    for tl in team_leaders:
+        dept = tl.get("department", "Unknown")
+        key = (tl["id"], dept)
+        if key in seen_tl_dept or tl["id"] in assigned_as_head:
+            continue
+        seen_tl_dept.add(key)
+        if dept not in departments:
+            departments[dept] = {"name": dept, "head": None, "teams": [], "direct_members": [], "count": 0}
+        team_members = tl_member_map.get(tl["id"], [])
+        departments[dept]["teams"].append({
+            "leader": tl,
+            "members": team_members,
+        })
+    
+    # Also add teams that have non-TL leaders (from team_map), dedup; skip heads
+    tl_ids = {tl["id"] for tl in team_leaders}
+    seen_extra_teams = set()
+    for team in all_teams:
+        lid = team.get("leader_id")
+        if lid and lid not in tl_ids and lid not in seen_extra_teams and lid not in assigned_as_head:
+            seen_extra_teams.add(lid)
+            leader_info = None
+            for h in dept_heads + members:
+                if h["id"] == lid:
+                    leader_info = h
+                    break
+            if leader_info:
+                dept = leader_info.get("department") or team.get("department", "Unknown")
+                if dept in departments:
+                    departments[dept]["teams"].append({
+                        "leader": {**leader_info, "team_name": team.get("name", "")},
+                        "members": tl_member_map.get(lid, []),
+                    })
+    
+    # Group unassigned by dept — exclude heads and TL team leaders
+    team_leader_ids = {tl["id"] for tl in team_leaders}
+    for m in unassigned:
+        dept = m.get("department", "Unknown")
+        if dept in departments and m["id"] not in assigned_as_head and m["id"] not in team_leader_ids:
+            departments[dept]["direct_members"].append(m)
+    
+    # Build approval matrix
+    approval_matrix = [
+        {
+            "type": "Leave Request",
+            "flow": ["Employee", "Team Leader / Dept Head", "HR", "CEO (if > 5 days)"],
+            "description": "Standard leave approval flow"
+        },
+        {
+            "type": "Commission Payout",
+            "flow": ["System Calculates", "CEO Approves", "Finance Processes"],
+            "description": "Monthly commission approval by CEO"
+        },
+        {
+            "type": "Payroll",
+            "flow": ["HR Runs Payroll", "Finance Reviews", "CEO Approves", "Bank Transfer"],
+            "description": "Monthly salary disbursement"
+        },
+        {
+            "type": "Lead Transfer",
+            "flow": ["Sales Executive", "Team Leader Approves", "Admin Confirms"],
+            "description": "Transfer leads between agents/teams"
+        },
+        {
+            "type": "Expense Claim",
+            "flow": ["Employee", "Dept Head", "Finance", "CEO (if > 5000 AED)"],
+            "description": "Expense reimbursement process"
+        },
+        {
+            "type": "Student Merge",
+            "flow": ["CS Agent", "CS Head Approves"],
+            "description": "Duplicate student record merge"
+        },
+    ]
+    
+    # Stats
+    role_counts = {}
+    dept_counts = {}
+    for u in all_users:
+        role_counts[u["role"]] = role_counts.get(u["role"], 0) + 1
+        d = u.get("department", "Unknown")
+        dept_counts[d] = dept_counts.get(d, 0) + 1
+    
+    return {
+        "ceo": ceo,
+        "departments": list(departments.values()),
+        "approval_matrix": approval_matrix,
+        "stats": {
+            "total_employees": len(all_users),
+            "total_departments": len(departments),
+            "total_teams": len(all_teams),
+            "role_distribution": role_counts,
+            "department_distribution": dept_counts,
+        }
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
