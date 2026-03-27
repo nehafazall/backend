@@ -20519,6 +20519,139 @@ async def get_my_attendance_for_date(date: str, user=Depends(get_current_user)):
         }
     }
 
+@api_router.get("/hr/my-monthly-attendance")
+async def get_my_monthly_attendance(year: int = None, month: int = None, user=Depends(get_current_user)):
+    """Get full monthly attendance for current user - all days with status"""
+    now = datetime.now(timezone.utc)
+    y = year or now.year
+    m = month or now.month
+    
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"id": user.get("employee_id")}]},
+        {"_id": 0, "id": 1, "employee_id": 1, "shift_id": 1, "full_name": 1}
+    )
+    if not employee:
+        return {"days": [], "summary": {}, "shift": None}
+    
+    emp_id = employee.get("employee_id") or employee["id"]
+    
+    # Get shift
+    shift_id = employee.get("shift_id", "morning")
+    shift = await db.hr_shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
+        shifts = await db.hr_shifts.find({}, {"_id": 0}).to_list(10)
+        shift = shifts[0] if shifts else {"name": "Morning", "start": "10:00", "end": "19:00"}
+    
+    # Get all attendance records for the month
+    import calendar
+    _, days_in_month = calendar.monthrange(y, m)
+    date_start = f"{y:04d}-{m:02d}-01"
+    date_end = f"{y:04d}-{m:02d}-{days_in_month:02d}"
+    
+    att_records = await db.hr_attendance.find(
+        {"employee_code": emp_id, "date": {"$gte": date_start, "$lte": date_end}},
+        {"_id": 0}
+    ).to_list(50)
+    
+    # Also try by employee ID (uuid)
+    if not att_records:
+        att_records = await db.hr_attendance.find(
+            {"employee_id": employee["id"], "date": {"$gte": date_start, "$lte": date_end}},
+            {"_id": 0}
+        ).to_list(50)
+    
+    att_map = {a["date"]: a for a in att_records}
+    
+    # Get leave records for the month
+    leave_records = await db.hr_leave_requests.find(
+        {"user_id": user["id"], "status": "approved"},
+        {"_id": 0, "start_date": 1, "end_date": 1, "leave_type": 1}
+    ).to_list(50)
+    
+    leave_dates = {}
+    for lr in leave_records:
+        sd = lr.get("start_date", "")
+        ed = lr.get("end_date", sd)
+        lt = lr.get("leave_type", "leave")
+        # Expand date range
+        try:
+            start_d = datetime.strptime(sd, "%Y-%m-%d")
+            end_d = datetime.strptime(ed, "%Y-%m-%d")
+            while start_d <= end_d:
+                ds = start_d.strftime("%Y-%m-%d")
+                if ds >= date_start and ds <= date_end:
+                    leave_dates[ds] = lt
+                start_d += timedelta(days=1)
+        except (ValueError, TypeError):
+            pass
+    
+    # Build day-by-day view
+    today = now.strftime("%Y-%m-%d")
+    days = []
+    summary = {"present": 0, "absent": 0, "half_day": 0, "late": 0, "on_leave": 0, "wfh": 0, "weekend": 0, "no_data": 0, "total_hours": 0}
+    
+    for d in range(1, days_in_month + 1):
+        date_str = f"{y:04d}-{m:02d}-{d:02d}"
+        dow = datetime(y, m, d).weekday()  # 0=Mon, 6=Sun
+        is_weekend = dow >= 5  # Sat/Sun
+        is_future = date_str > today
+        
+        att = att_map.get(date_str)
+        leave_type = leave_dates.get(date_str)
+        
+        if is_weekend:
+            status = "weekend"
+            summary["weekend"] += 1
+        elif is_future:
+            status = "upcoming"
+        elif leave_type:
+            status = "on_leave"
+            summary["on_leave"] += 1
+        elif att:
+            status = att.get("status", "present")
+            if status == "present":
+                summary["present"] += 1
+            elif status == "half_day":
+                summary["half_day"] += 1
+            elif status == "absent":
+                summary["absent"] += 1
+            if att.get("late_minutes", 0) > 0:
+                summary["late"] += 1
+            summary["total_hours"] += att.get("total_work_hours", 0) or 0
+        else:
+            status = "no_data"
+            if not is_future:
+                summary["no_data"] += 1
+        
+        day_entry = {
+            "date": date_str,
+            "day": d,
+            "day_name": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][dow],
+            "is_weekend": is_weekend,
+            "is_future": is_future,
+            "status": status,
+            "leave_type": leave_type,
+            "biometric_in": att.get("biometric_in") if att else None,
+            "biometric_out": att.get("biometric_out") if att else None,
+            "total_work_hours": att.get("total_work_hours") if att else None,
+            "late_minutes": att.get("late_minutes", 0) if att else 0,
+        }
+        days.append(day_entry)
+    
+    summary["total_hours"] = round(summary["total_hours"], 1)
+    
+    return {
+        "year": y,
+        "month": m,
+        "days": days,
+        "summary": summary,
+        "shift": {
+            "name": shift.get("name", ""),
+            "start": shift.get("start", "10:00"),
+            "end": shift.get("end", "19:00"),
+        }
+    }
+
 
 
 @api_router.get("/hr/attendance")

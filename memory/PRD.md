@@ -11,49 +11,38 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 
 ## Implemented Features
 
-### P0 Fixes (Mar 27, 2026)
-- **Welcome Page**: Shows full name + designation (fetched from hr_employees)
-- **Employee ID Editable**: employee_id field now updatable via EmployeeUpdate model for BioCloud sync alignment
-- **COO Full Access**: `coo` role has identical permissions to `super_admin` (backend require_roles + check_permission, frontend ProtectedRoute + Layout sidebar)
+### SSHR Monthly Attendance View (Mar 27, 2026)
+- Full month-by-month attendance list with day-by-day status (Present/Absent/Half Day/On Leave/Late/No Data/Weekend)
+- Month picker + shift badge display (Morning Shift: 10:00 - 19:00)
+- 6 summary cards: Present, Absent, Half Day, On Leave, Late, No Data
+- Click any day to apply regularization (pre-fills attendance times + shift schedule)
+- Color-coded left border per status for quick visual scanning
+- API: `GET /hr/my-monthly-attendance?year=YYYY&month=MM`
 
-### Task Management System (New — Mar 27, 2026)
-- **Manager Task Assignment**: Managers create tasks with title, description, category, priority (low/medium/high/urgent), assignees, due date, recurring flag
-- **13 Task Categories**: Marketing, Development, Design, Content, Admin, IT, Web Development, Video Editing, Script Writing, Quality Control, Sales, Customer Service, Other
-- **Employee Task Logging**: Employees pick assigned tasks or add custom entries, log hours + notes per task
-- **Progress Tracking**: Tasks move through Open → In Progress → Completed
-- **Task Manager Page** (`/hr/tasks`): Full CRUD with stats, filters, priority badges
-- **Enhanced Timesheet**: Integrates with assigned tasks, shows recent submissions
+### IT Assets Removed from HR Panel (Mar 27, 2026)
+- IT Assets now only accessible via dedicated IT & Assets module on home page
+- HR sidebar cleaned up — no longer shows Assets link
 
-### IT & Asset Management (New — Mar 27, 2026)
-- **IT Assets Page** (`/it/assets`): Track hardware, software, equipment
-- **Asset Types**: Laptop, Desktop, Monitor, Phone, Printer, Server, Networking, Storage, Software License
-- **Full CRUD**: Create, edit, delete assets with assignment tracking
-- **Stats Dashboard**: Total, In Use, Available, Maintenance counts
-- **Home Page Module**: Visible on welcome grid as "IT & Assets" tile
+### Welcome Page (Mar 27, 2026)
+- Shows "Welcome, {Full Name}!" + designation (CEO, etc.) from hr_employees
 
-### Attendance & Regularization Enhancement (Mar 27, 2026)
-- **Shift-based Display**: Regularization modal auto-fetches shift schedule (name, start/end times, grace period) when date is picked
-- **Auto-populate Times**: Pre-fills punch-in/out from attendance record or shift defaults
-- **API**: `GET /hr/my-attendance-for-date?date=YYYY-MM-DD` returns attendance + shift info
+### COO Full Access (Mar 27, 2026)
+- `coo` role has identical permissions to `super_admin`
+
+### Task Management System (Mar 27, 2026)
+- 13 categories incl. IT, Web Development, Video Editing, Script Writing
+- Manager assigns tasks with priority tracking (Open → In Progress → Completed)
+- Enhanced timesheet: pick assigned tasks or add custom, log hours + notes
 
 ### Organization Map (Mar 27, 2026)
 - Interactive org chart: CEO → Departments → Teams → Members
-- 3 tabs: Org Chart, Approval Matrix (6 workflows), Statistics
-- Search/filter across all departments
+- Approval Matrix + Statistics tabs
 
 ### Payroll System
-- Attendance validation: soft warning when no attendance data
-- Only processes active/probation employees
-- Deductions only for explicit absent/half-day statuses
-- Auto-deletes old batches on re-run
+- Attendance validation, only active/probation employees, deductions only for explicit absent/half-day
 
 ### Commission System
-- Course + Addon decomposition
-- TL commission from team sales (18K benchmark removed)
-- Net Pay chart with correct salary from hr_employees
-
-### Internal Chat System
-- DM conversations + group chat with online/away/offline status
+- Course + Addon decomposition, TL commission from team sales
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -73,9 +62,8 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 ### P2
 - Workflow Automation Engine
 - Scheduled Email Reports
-- Group chat channels (#sales-team, #cs-team)
+- Group chat channels
 
 ### P3
 - Refactor monolithic server.py (~30K lines)
-- Special Periods frontend UI for attendance rules
-- Document expiry tracking data entry (HR module)
+- Document expiry tracking data entry

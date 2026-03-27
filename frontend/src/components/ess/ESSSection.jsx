@@ -48,6 +48,11 @@ const ESSSection = () => {
     const [assignedTasks, setAssignedTasks] = useState([]);
     const [categories, setCategories] = useState([]);
     const [timesheetHistory, setTimesheetHistory] = useState([]);
+    const [monthlyAttendance, setMonthlyAttendance] = useState(null);
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
 
     const fetchESSData = useCallback(async () => {
         setLoading(true);
@@ -70,6 +75,18 @@ const ESSSection = () => {
             setLoading(false);
         }
     }, []);
+
+    const fetchMonthlyAttendance = useCallback(async () => {
+        try {
+            const [y, m] = selectedMonth.split('-');
+            const res = await apiClient.get(`/hr/my-monthly-attendance?year=${y}&month=${m}`);
+            setMonthlyAttendance(res.data);
+        } catch {
+            console.error('Failed to fetch monthly attendance');
+        }
+    }, [selectedMonth]);
+
+    useEffect(() => { fetchMonthlyAttendance(); }, [fetchMonthlyAttendance]);
 
     useEffect(() => {
         fetchESSData();
@@ -351,60 +368,125 @@ const ESSSection = () => {
                     </div>
                 </TabsContent>
                 
-                {/* Attendance Tab */}
-                <TabsContent value="attendance" className="mt-4">
+                {/* Attendance Tab — Full Monthly View */}
+                <TabsContent value="attendance" className="mt-4 space-y-4">
+                    {/* Month Selector + Summary */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="month"
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                className="px-3 py-2 rounded-md border bg-background text-sm"
+                                data-testid="attendance-month-picker"
+                            />
+                            {monthlyAttendance?.shift && (
+                                <Badge variant="outline" className="text-xs">
+                                    {monthlyAttendance.shift.name}: {monthlyAttendance.shift.start} - {monthlyAttendance.shift.end}
+                                </Badge>
+                            )}
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => setShowRegularization(true)} data-testid="apply-regularization-btn">
+                            <Plus className="h-4 w-4 mr-1" />Apply Regularization
+                        </Button>
+                    </div>
+
+                    {/* Summary Cards */}
+                    {monthlyAttendance?.summary && (
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                            {[
+                                { label: 'Present', value: monthlyAttendance.summary.present, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950' },
+                                { label: 'Absent', value: monthlyAttendance.summary.absent, color: 'text-red-600 bg-red-50 dark:bg-red-950' },
+                                { label: 'Half Day', value: monthlyAttendance.summary.half_day, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950' },
+                                { label: 'On Leave', value: monthlyAttendance.summary.on_leave, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950' },
+                                { label: 'Late', value: monthlyAttendance.summary.late, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950' },
+                                { label: 'No Data', value: monthlyAttendance.summary.no_data, color: 'text-slate-500 bg-slate-50 dark:bg-slate-900' },
+                            ].map(s => (
+                                <div key={s.label} className={`p-2.5 rounded-lg text-center ${s.color}`}>
+                                    <p className="text-lg font-bold">{s.value}</p>
+                                    <p className="text-[10px] font-medium uppercase tracking-wider">{s.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Daily Records */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Attendance Records</CardTitle>
-                            <CardDescription>Click on any date to request regularization</CardDescription>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">Daily Attendance</CardTitle>
+                            <CardDescription>Click any row to apply for regularization or WFH</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <ScrollArea className="h-[400px]">
-                                <div className="space-y-2">
-                                    {essData?.attendance?.recent_records?.length === 0 ? (
+                                <div className="space-y-1">
+                                    {!monthlyAttendance?.days?.length ? (
                                         <div className="text-center py-8 text-muted-foreground">
                                             <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                            <p>No attendance records found</p>
+                                            <p>No attendance data for this month</p>
                                         </div>
-                                    ) : (
-                                        essData?.attendance?.recent_records?.map((record) => (
+                                    ) : monthlyAttendance.days.map((day) => {
+                                        const statusStyles = {
+                                            present: 'border-l-emerald-500 bg-emerald-500/5',
+                                            half_day: 'border-l-amber-500 bg-amber-500/5',
+                                            absent: 'border-l-red-500 bg-red-500/5',
+                                            on_leave: 'border-l-blue-500 bg-blue-500/5',
+                                            weekend: 'border-l-slate-300 bg-slate-500/5 opacity-50',
+                                            upcoming: 'border-l-slate-200 bg-slate-500/3 opacity-40',
+                                            no_data: 'border-l-orange-400 bg-orange-500/5',
+                                        };
+                                        const statusLabels = {
+                                            present: 'Present', half_day: 'Half Day', absent: 'Absent',
+                                            on_leave: 'On Leave', weekend: 'Weekend', upcoming: 'Upcoming',
+                                            no_data: 'No Record',
+                                        };
+                                        const statusBadgeColors = {
+                                            present: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+                                            half_day: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+                                            absent: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+                                            on_leave: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                                            weekend: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+                                            upcoming: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
+                                            no_data: 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300',
+                                        };
+                                        const isClickable = !day.is_weekend && !day.is_future;
+
+                                        return (
                                             <div
-                                                key={record.id || record.date}
-                                                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer transition-colors"
-                                                onClick={() => handleAttendanceClick(record)}
-                                                data-testid={`attendance-row-${record.date}`}
+                                                key={day.date}
+                                                className={`flex items-center justify-between p-2.5 rounded-lg border-l-4 cursor-${isClickable ? 'pointer hover:shadow-sm' : 'default'} transition-all ${statusStyles[day.status] || ''}`}
+                                                onClick={() => isClickable && handleAttendanceClick({ date: day.date, biometric_in: day.biometric_in, biometric_out: day.biometric_out })}
+                                                data-testid={`monthly-att-${day.date}`}
                                             >
-                                                <div className="flex items-center gap-4">
-                                                    <div className="text-center">
-                                                        <p className="text-lg font-bold">{record.date?.split('-')[2]}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {new Date(record.date).toLocaleDateString('en', { weekday: 'short' })}
-                                                        </p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 text-center">
+                                                        <p className="text-sm font-bold">{day.day}</p>
+                                                        <p className="text-[10px] text-muted-foreground">{day.day_name}</p>
                                                     </div>
                                                     <div>
-                                                        <div className="flex items-center gap-2 text-sm">
-                                                            <span className="text-muted-foreground">In:</span>
-                                                            <span className="font-mono">{record.biometric_in || '--:--'}</span>
-                                                            <span className="text-muted-foreground ml-2">Out:</span>
-                                                            <span className="font-mono">{record.biometric_out || '--:--'}</span>
-                                                        </div>
-                                                        {record.late_minutes > 0 && (
-                                                            <p className="text-xs text-amber-500">Late by {record.late_minutes} mins</p>
+                                                        {!day.is_weekend && !day.is_future && (
+                                                            <div className="flex items-center gap-3 text-xs">
+                                                                <span className="text-muted-foreground">In: <span className="font-mono font-medium text-foreground">{day.biometric_in || '--:--'}</span></span>
+                                                                <span className="text-muted-foreground">Out: <span className="font-mono font-medium text-foreground">{day.biometric_out || '--:--'}</span></span>
+                                                                {day.total_work_hours != null && <span className="text-muted-foreground">{day.total_work_hours}h</span>}
+                                                            </div>
+                                                        )}
+                                                        {day.late_minutes > 0 && (
+                                                            <p className="text-[10px] text-amber-500">Late by {day.late_minutes} mins</p>
+                                                        )}
+                                                        {day.leave_type && (
+                                                            <p className="text-[10px] text-blue-500">{day.leave_type.replace(/_/g, ' ')}</p>
                                                         )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <Badge variant={record.status === 'present' ? 'default' : 'destructive'}>
-                                                        {record.status || 'N/A'}
-                                                    </Badge>
-                                                    {record.regularized && (
-                                                        <Badge variant="outline" className="text-xs">Regularized</Badge>
-                                                    )}
-                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusBadgeColors[day.status] || ''}`}>
+                                                        {statusLabels[day.status] || day.status}
+                                                    </span>
+                                                    {isClickable && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
                                                 </div>
                                             </div>
-                                        ))
-                                    )}
+                                        );
+                                    })}
                                 </div>
                             </ScrollArea>
                         </CardContent>
