@@ -5,54 +5,49 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 
 ## Architecture
 - **Frontend**: React (CRA + Craco) with Shadcn/UI, Tailwind CSS
-- **Backend**: FastAPI monolith (`server.py` ~29.7K lines) + `biocloud_sync.py`
+- **Backend**: FastAPI monolith (`server.py` ~30K lines) + `biocloud_sync.py`
 - **Database**: MongoDB Atlas (`clt_academy_erp`)
 - **Integrations**: Google Sheets, Meta Ads, SMTP, 3CX, BioCloud, MetaTrader 5
 
 ## Implemented Features
 
+### Organization Map (New — Mar 27, 2026)
+- Interactive org chart with CEO at top, departments, teams, and members
+- 3 tabs: Org Chart, Approval Matrix, Statistics
+- Approval Matrix: 6 workflow types (Leave, Commission, Payroll, Lead Transfer, Expense, Student Merge)
+- Statistics: Role distribution bars, department distribution grid, 4 KPI cards
+- Search/filter across all departments and people
+- Accessible under Executive sidebar section for super_admin, admin, hr
+
+### Payroll Attendance Validation (Verified — Mar 27, 2026)
+- Soft warning when no attendance data exists for selected month
+- Payroll generates with zero deductions when no attendance
+- Only processes active/probation employees
+- Auto-deletes old batches on re-run
+
 ### Executive Dashboard (Enriched — Mar 27, 2026)
 - Merged operational dashboard into CEO executive view
 - 12 KPI cards: Total/Sales/CS/Academics revenue, Salary Payout, Total Payout, New Leads, Pipeline, Activations, Employees, Present Today, Pending Approvals
-- Revenue Trend (6 months, 3-dept stacked area chart)
-- Revenue by Department, Revenue by Course (with proper name tags)
-- Attendance Today donut (present/half-day/absent/on-leave/warning)
-- Gender Bifurcation (compact pie, normalized Male/Female/Other tagging)
-- Course Bifurcation for new accounts this month
-- Salary + Commission Payout panel (AED gross + commission = total)
-- Top Performers: Sales, CS, Academics leaderboards
-- Department Headcount, Lead Sources, Expiring Documents (30-day), Recent Enrollments
-- Operations sidebar "Dashboard" link removed, replaced by Executive section
+- Revenue Trend, Attendance, Gender, Course Bifurcation, Top Performers, etc.
 
 ### Internal Chat System (Complete — Mar 27, 2026)
-- DM conversations + group chat
-- Online/Away/Offline status with green/amber/gray dots
-- Heartbeat tracking (POST /api/chat/heartbeat)
-- All employees visible (85+ users including inactive)
-- 5s polling for real-time updates
-- Available to all authenticated users
+- DM conversations + group chat with online/away/offline status
+- Heartbeat tracking, 5s polling
 
-### Attendance Rules (Updated — Mar 27, 2026)
-- Grace period changed from 15 to 30 minutes (after 10:30 = late for morning shift)
-- Updated in DEFAULT_SHIFTS code + DB records
-- Leave approval now marks attendance as "on_leave" (bulk write for each leave day)
+### Commission System
+- Course + Addon decomposition
+- CEO approval workflow (transaction-level)
+- TL commission from team sales (18K benchmark removed)
+- Net Pay chart with correct salary from hr_employees
 
-### CEO Commission Approval Workflow (Complete)
-- CEO approve/revoke Sales & CS commissions
-- Transaction-level approval with edit and bulk approve
-- Pending/Approved status banners for agents
+### HR Module
+- Payroll: multi-currency, deductions only for explicit absent/half-day
+- Attendance: Grace period 30 mins, leave approval marks as on_leave
+- BioCloud bulk upload optimized
+- SSHR universal visibility for punch-in
 
-### Color-Coded Closed Leads (Complete)
-- Enrolled: emerald green bg + ring + "Enrolled" badge with amount
-- Rejected: rose/red bg + ring + opacity + "Rejected" badge with reason
-
-### Previous Session Work
-- Payroll multi-currency (AED/INR), Employee Birthday, SSHR Announcements
-- 3CX Call Minutes, CS Historic Data Migration
-- Attendance Rules Engine, Manual Punch-In/Out + Timesheets
-- Commission decomposition (Course + Addon), TL commission fix
-- Role-based sidebar filtering, environment badge hiding
-- Biocloud Upload timeout fix (bulk_write)
+### Color-Coded Closed Leads
+- Enrolled: emerald green, Rejected: rose/red
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -74,6 +69,6 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 - Group chat channels (#sales-team, #cs-team)
 
 ### P3
-- Refactor monolithic server.py (~29.7K lines)
+- Refactor monolithic server.py (~30K lines)
 - Special Periods frontend UI for attendance rules
 - Document expiry tracking data entry (HR module)
