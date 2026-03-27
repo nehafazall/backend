@@ -18967,12 +18967,25 @@ async def generate_payslip(
     transport = salary.get("transport_allowance", 0)
     telephone = salary.get("telephone_allowance", 0)
     other_allowances = salary.get("other_allowances", 0)
-    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    commission = payroll.get("total_additions", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
     incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
-    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
     
-    gross = basic + housing + transport + telephone + other_allowances + commission + incentives
-    net = gross - deductions
+    # Deductions: payroll stores as list, salary stores as number
+    if payroll:
+        deductions_val = payroll.get("total_deductions", 0)
+        if isinstance(deductions_val, list):
+            deductions_val = sum(d.get("amount", 0) for d in deductions_val)
+        deduction_breakdown = payroll.get("deductions", [])
+        if isinstance(deduction_breakdown, (int, float)):
+            deduction_breakdown = []
+    else:
+        deductions_val = salary.get("deductions", 0) or 0
+        if isinstance(deductions_val, list):
+            deductions_val = sum(d.get("amount", 0) for d in deductions_val)
+        deduction_breakdown = []
+    
+    gross = basic + housing + transport + telephone + other_allowances
+    net = gross - deductions_val + (commission if isinstance(commission, (int, float)) else 0) + (incentives if isinstance(incentives, (int, float)) else 0)
     
     # Month name
     month_names = ["", "January", "February", "March", "April", "May", "June", 
@@ -19012,12 +19025,12 @@ async def generate_payslip(
             "gross_salary": gross
         },
         "deductions": {
-            "total_deductions": deductions,
-            "breakdown": payroll.get("deduction_breakdown", []) if payroll else []
+            "total_deductions": deductions_val,
+            "breakdown": deduction_breakdown if isinstance(deduction_breakdown, list) else []
         },
         "summary": {
             "gross_salary": gross,
-            "total_deductions": deductions,
+            "total_deductions": deductions_val,
             "net_salary": net,
             "currency": salary.get("currency", "AED")
         },
@@ -19057,11 +19070,17 @@ async def email_payslip(
     transport = salary.get("transport_allowance", 0)
     telephone = salary.get("telephone_allowance", 0)
     other = salary.get("other_allowances", 0)
-    commission = payroll.get("commission", salary.get("commission", 0)) if payroll else salary.get("commission", 0)
+    commission = payroll.get("total_additions", 0) if payroll else salary.get("commission", 0)
     incentives = payroll.get("incentives", salary.get("incentives", 0)) if payroll else salary.get("incentives", 0)
-    deductions = payroll.get("deductions", salary.get("deductions", 0)) if payroll else salary.get("deductions", 0)
-    gross = basic + housing + transport + telephone + other + commission + incentives
-    net = gross - deductions
+    deductions_val = 0
+    if payroll:
+        dv = payroll.get("total_deductions", 0)
+        deductions_val = sum(d.get("amount", 0) for d in dv) if isinstance(dv, list) else (dv or 0)
+    else:
+        dv = salary.get("deductions", 0)
+        deductions_val = sum(d.get("amount", 0) for d in dv) if isinstance(dv, list) else (dv or 0)
+    gross = basic + housing + transport + telephone + other
+    net = gross - deductions_val + (commission if isinstance(commission, (int, float)) else 0) + (incentives if isinstance(incentives, (int, float)) else 0)
     
     month_names = ["", "January", "February", "March", "April", "May", "June", 
                    "July", "August", "September", "October", "November", "December"]
@@ -22245,9 +22264,23 @@ async def run_payroll(
         }).to_list(31)
         
         # Calculate attendance metrics
-        present_days = len([a for a in attendance if a.get("status") == "present"])
-        absent_days = total_days - present_days - len([a for a in attendance if a.get("status") in ["leave", "holiday", "wfh"]])
+        present_days = len([a for a in attendance if a.get("status") in ("present", "late", "warning")])
+        half_days = len([a for a in attendance if a.get("status") == "half_day"])
+        leave_days = len([a for a in attendance if a.get("status") in ("leave", "holiday", "wfh", "on_leave")])
+        explicitly_absent = len([a for a in attendance if a.get("status") == "absent"])
         total_late_minutes = sum(a.get("late_minutes", 0) for a in attendance)
+        
+        # Only deduct for EXPLICITLY absent days (not missing records)
+        # If no attendance data exists at all, assume full salary (no deduction)
+        absent_days = explicitly_absent
+        
+        # Working days calculation: weekdays in the month (exclude Fridays as off for UAE)
+        import calendar as cal_mod
+        working_days = 0
+        for day in range(1, total_days + 1):
+            wd = cal_mod.weekday(data.year, data.month, day)
+            if wd != 4:  # 4 = Friday
+                working_days += 1
         
         # Get currency from salary structure
         currency = salary.get("currency", "AED")
@@ -22267,17 +22300,16 @@ async def run_payroll(
         # Calculate deductions based on attendance
         deductions = []
         
-        # Half-day deduction for late arrivals (> 30 mins late = half day)
-        late_days = len([a for a in attendance if a.get("late_minutes", 0) > 30])
-        if late_days > 0:
-            late_deduction = round((late_days * 0.5) * daily_rate, 2)  # Half day per late day
+        # Half-day deductions (employees marked half_day by the attendance rules engine)
+        if half_days > 0:
+            half_day_deduction = round(half_days * 0.5 * daily_rate, 2)
             deductions.append({
-                "type": "late",
-                "description": f"Late arrivals ({late_days} days > 30 mins = {late_days * 0.5} half days)",
-                "amount": late_deduction
+                "type": "half_day",
+                "description": f"Half-day deductions ({half_days} days)",
+                "amount": half_day_deduction
             })
         
-        # Full day absence deduction
+        # Full day absence deduction (only for explicitly marked absent days)
         if absent_days > 0:
             absence_deduction = round(absent_days * daily_rate, 2)
             deductions.append({
@@ -22330,8 +22362,10 @@ async def run_payroll(
             "additions": additions,
             "total_additions": round(total_additions, 2),
             "net_salary": round(net_salary, 2),
-            "days_worked": present_days,
+            "days_worked": present_days + half_days,
             "absent_days": absent_days,
+            "half_days": half_days,
+            "leave_days": leave_days,
             "late_minutes": total_late_minutes,
             "bank_details": emp.get("bank_details", {}),
             "status": "draft",
@@ -29083,7 +29117,7 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         rev_by_course_data, top_sales_data, top_cs_data, top_mentors_data,
         dept_count_data, lead_source_data,
         recent_enrollments_data, course_bifurcation_data,
-        expiring_docs_raw, salary_payout_data,
+        expiring_docs_raw, salary_payout_data, salary_fallback_data,
     ) = await asyncio.gather(
         db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}}),
         db.leads.count_documents({"created_at": {"$gte": month_start}}),
@@ -29167,10 +29201,15 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
             {"employment_status": {"$in": ["active", "probation"]}},
             {"_id": 0, "id": 1, "full_name": 1, "department": 1, "passport_expiry": 1, "visa_expiry": 1, "emirates_id_expiry": 1, "labour_card_expiry": 1, "insurance_expiry": 1}
         ).to_list(500),
-        # Total salary payout (all active employees gross salary)
+        # Total salary payout (from latest payroll batch or fallback to salary_structure)
+        db.hr_payroll.aggregate([
+            {"$match": {"month": current_month}},
+            {"$group": {"_id": None, "total_gross": {"$sum": "$gross_salary"}, "total_net": {"$sum": "$net_salary"}, "total_deductions": {"$sum": "$total_deductions"}, "count": {"$sum": 1}}}
+        ]).to_list(1),
+        # Fallback: salary_structure totals
         db.hr_employees.aggregate([
             {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
-            {"$group": {"_id": None, "total_gross": {"$sum": {"$ifNull": ["$salary_structure.gross_salary", 0]}}, "total_net": {"$sum": {"$ifNull": ["$salary_structure.net_salary", 0]}}, "count": {"$sum": 1}}}
+            {"$group": {"_id": None, "total_gross": {"$sum": {"$ifNull": ["$salary_structure.gross_salary", 0]}}, "count": {"$sum": 1}}}
         ]).to_list(1),
     )
     
@@ -29255,21 +29294,48 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
                 })
     expiring_documents.sort(key=lambda x: x.get("days_left", 99))
     
-    # Salary payout
-    payout = salary_payout_data[0] if salary_payout_data else {}
-    total_salary_payout = payout.get("total_gross", 0) or 0
+    # Salary payout: prefer actual payroll data, fallback to salary_structure
+    payout = salary_payout_data[0] if salary_payout_data else None
+    if payout and payout.get("count", 0) > 0:
+        total_salary_payout = payout.get("total_gross", 0) or 0
+        total_net_payout = payout.get("total_net", 0) or 0
+        payout_count = payout.get("count", 0)
+        total_deductions = payout.get("total_deductions", 0) or 0
+    else:
+        fb = salary_fallback_data[0] if salary_fallback_data else {}
+        total_salary_payout = fb.get("total_gross", 0) or 0
+        total_net_payout = total_salary_payout
+        payout_count = fb.get("count", 0)
+        total_deductions = 0
     
-    # Estimated total commission payout this month (from enrolled leads commission)
+    # Estimated total commission payout this month (from live commission calculations)
     total_commission_estimate = 0
     try:
-        comm_pipeline = [
-            {"$match": {"month": current_month, "status": {"$ne": "cancelled"}}},
-            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-        ]
-        comm_data = await db.commission_transactions.aggregate(comm_pipeline).to_list(1)
-        total_commission_estimate = round((comm_data[0]["total"] if comm_data else 0) or 0, 2)
-    except Exception:
-        pass
+        # Quick commission total — sum from sales+CS agents directly
+        sales_agents = await db.users.find(
+            {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
+            {"_id": 0, "id": 1}
+        ).to_list(100)
+        cs_agents = await db.users.find(
+            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(50)
+        
+        sales_tasks = [_calc_sales_commissions(a["id"], current_month) for a in sales_agents]
+        cs_tasks = [_calc_cs_commissions(a["id"], a.get("full_name", ""), current_month) for a in cs_agents]
+        all_comms = await asyncio.gather(*sales_tasks, *cs_tasks)
+        
+        sales_comms = all_comms[:len(sales_agents)]
+        cs_comms = all_comms[len(sales_agents):]
+        
+        total_commission_estimate = round(
+            sum(c.get("earned_commission", 0) + c.get("pending_commission", 0) for c in sales_comms) +
+            sum(c.get("earned_tl", 0) + c.get("pending_tl", 0) for c in sales_comms if c.get("is_tl_or_sm")) +
+            sum(c.get("earned_commission", 0) + c.get("pending_commission", 0) for c in cs_comms) +
+            sum(c.get("earned_cs_head", 0) for c in cs_comms),
+        2)
+    except Exception as e:
+        logger.warning(f"Failed to get commission totals for exec dash: {e}")
     
     # Revenue split by department
     revenue_split = [
@@ -29320,9 +29386,11 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         "expiring_documents": expiring_documents[:10],
         "salary_payout": {
             "total_gross": round(total_salary_payout, 2),
+            "total_net": round(total_net_payout, 2),
+            "total_deductions": round(total_deductions, 2),
             "total_commission": total_commission_estimate,
-            "total_payout": round(total_salary_payout + total_commission_estimate, 2),
-            "employee_count": payout.get("count", 0),
+            "total_payout": round(total_net_payout + total_commission_estimate, 2),
+            "employee_count": payout_count,
         },
         "commission_approvals": commission_approvals,
         "current_month": current_month,

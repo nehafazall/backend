@@ -140,8 +140,8 @@ export default function ExecutiveDashboard() {
         <KPICard title="Sales" value={fmtCur(k.sales_revenue)} icon={TrendingUp} color="text-red-500" bgColor="bg-red-500/10" onClick={() => navigate('/sales/dashboard')} />
         <KPICard title="CS Revenue" value={fmtCur(k.cs_revenue)} subtitle={`${k.cs_upgrades_month} upgrades`} icon={Activity} color="text-blue-500" bgColor="bg-blue-500/10" onClick={() => navigate('/cs/dashboard')} />
         <KPICard title="Academics" value={fmtCur(k.mentor_revenue)} icon={Award} color="text-emerald-500" bgColor="bg-emerald-500/10" onClick={() => navigate('/academics')} />
-        <KPICard title="Salary Payout" value={fmtCur(sp.total_gross)} subtitle={`${sp.employee_count} employees`} icon={Wallet} color="text-cyan-500" bgColor="bg-cyan-500/10" />
-        <KPICard title="Total Payout" value={fmtCur(sp.total_payout)} subtitle={`Salary + Commission`} icon={DollarSign} color="text-violet-500" bgColor="bg-violet-500/10" />
+        <KPICard title="Net Salary" value={fmtCur(sp.total_net || sp.total_gross)} subtitle={`${sp.employee_count} employees`} icon={Wallet} color="text-cyan-500" bgColor="bg-cyan-500/10" />
+        <KPICard title="Total Payout" value={fmtCur(sp.total_payout)} subtitle={`Net Salary + Commission`} icon={DollarSign} color="text-violet-500" bgColor="bg-violet-500/10" />
       </div>
 
       {/* Operational KPIs */}
@@ -282,21 +282,26 @@ export default function ExecutiveDashboard() {
             <CardTitle className="text-xs font-medium flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-cyan-500" /> Salary + Commission Payout</CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-2">
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
               <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                <p className="text-[10px] text-muted-foreground uppercase">Salary</p>
-                <p className="text-lg font-bold font-mono text-blue-500 mt-0.5">{fmtCur(sp.total_gross)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">Gross Salary</p>
+                <p className="text-base font-bold font-mono text-blue-500 mt-0.5">{fmtCur(sp.total_gross)}</p>
                 <p className="text-[10px] text-muted-foreground">{sp.employee_count} employees</p>
+              </div>
+              <div className="p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
+                <p className="text-[10px] text-muted-foreground uppercase">Deductions</p>
+                <p className="text-base font-bold font-mono text-orange-500 mt-0.5">{fmtCur(sp.total_deductions)}</p>
+                <p className="text-[10px] text-muted-foreground">Half-day + Absent</p>
               </div>
               <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
                 <p className="text-[10px] text-muted-foreground uppercase">Commission</p>
-                <p className="text-lg font-bold font-mono text-emerald-500 mt-0.5">{fmtCur(sp.total_commission)}</p>
-                <p className="text-[10px] text-muted-foreground">This month</p>
+                <p className="text-base font-bold font-mono text-emerald-500 mt-0.5">{fmtCur(sp.total_commission)}</p>
+                <p className="text-[10px] text-muted-foreground">All departments</p>
               </div>
               <div className="p-3 rounded-lg bg-violet-500/5 border border-violet-500/10">
                 <p className="text-[10px] text-muted-foreground uppercase">Total Payout</p>
-                <p className="text-lg font-bold font-mono text-violet-500 mt-0.5">{fmtCur(sp.total_payout)}</p>
-                <p className="text-[10px] text-muted-foreground">Salary + Commission</p>
+                <p className="text-base font-bold font-mono text-violet-500 mt-0.5">{fmtCur(sp.total_payout)}</p>
+                <p className="text-[10px] text-muted-foreground">Net + Commission</p>
               </div>
             </div>
           </CardContent>
