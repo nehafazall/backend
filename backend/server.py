@@ -22226,16 +22226,11 @@ async def run_payroll(
     data: PayrollRunCreate,
     user = Depends(require_roles(["super_admin", "admin", "hr", "finance"]))
 ):
-    """Generate payroll for a specific month"""
+    """Generate payroll for a specific month. Only active/probation employees."""
     now = datetime.now(timezone.utc).isoformat()
     month_str = f"{data.year}-{str(data.month).zfill(2)}"
     
-    # Check if payroll batch already exists for this month
-    existing_batch = await db.hr_payroll_batches.find_one({"month": month_str, "status": {"$ne": "draft"}})
-    if existing_batch:
-        raise HTTPException(status_code=400, detail=f"Payroll for {month_str} already processed (status: {existing_batch['status']})")
-    
-    # Get all active employees
+    # Get only active/probation employees
     emp_query = {"employment_status": {"$in": ["active", "probation"]}}
     if data.department:
         emp_query["department"] = data.department
@@ -22243,11 +22238,21 @@ async def run_payroll(
     employees = await db.hr_employees.find(emp_query, {"_id": 0}).to_list(500)
     
     if not employees:
-        raise HTTPException(status_code=404, detail="No employees found for payroll processing")
+        raise HTTPException(status_code=404, detail="No active employees found for payroll processing")
     
-    # Calculate working days in month
+    # Check if attendance data exists for this month
     import calendar
     total_days = calendar.monthrange(data.year, data.month)[1]
+    start_date = f"{data.year}-{str(data.month).zfill(2)}-01"
+    end_date = f"{data.year}-{str(data.month).zfill(2)}-{total_days}"
+    
+    attendance_count = await db.hr_attendance.count_documents({
+        "date": {"$gte": start_date, "$lte": end_date}
+    })
+    
+    attendance_warning = None
+    if attendance_count == 0:
+        attendance_warning = f"No attendance records found for {month_str}. Payroll generated with full salary (zero deductions). Upload attendance first for accurate deductions."
     
     payroll_records = []
     
@@ -22376,8 +22381,9 @@ async def run_payroll(
         
         payroll_records.append(payroll_record)
     
-    # Delete existing draft payroll for this month
-    await db.hr_payroll.delete_many({"month": month_str, "status": "draft"})
+    # Delete existing payroll and batch for this month (allows re-run)
+    await db.hr_payroll.delete_many({"month": month_str})
+    await db.hr_payroll_batches.delete_many({"month": month_str})
     
     # Insert new payroll records
     if payroll_records:
@@ -22403,13 +22409,18 @@ async def run_payroll(
     
     await db.hr_payroll_batches.insert_one(batch)
     
-    return {
-        "message": f"Payroll generated for {len(payroll_records)} employees",
+    response = {
+        "message": f"Payroll generated for {len(payroll_records)} active employees",
         "batch_id": batch["id"],
         "month": month_str,
-        "total_gross": batch["total_gross"],
-        "total_net": batch["total_net"]
+        "total_gross": round(batch["total_gross"], 2),
+        "total_net": round(batch["total_net"], 2),
+        "total_deductions": round(batch["total_deductions"], 2),
+        "employee_count": len(payroll_records),
     }
+    if attendance_warning:
+        response["warning"] = attendance_warning
+    return response
 
 @api_router.get("/hr/payroll")
 async def get_payroll(
