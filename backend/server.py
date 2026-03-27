@@ -29082,7 +29082,8 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         active_pipeline, pending_activations,
         rev_by_course_data, top_sales_data, top_cs_data, top_mentors_data,
         dept_count_data, lead_source_data,
-        recent_enrollments_data,
+        recent_enrollments_data, course_bifurcation_data,
+        expiring_docs_raw, salary_payout_data,
     ) = await asyncio.gather(
         db.hr_employees.count_documents({"employment_status": {"$in": ["active", "probation"]}}),
         db.leads.count_documents({"created_at": {"$gte": month_start}}),
@@ -29131,7 +29132,7 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         # Top CS agents
         db.cs_upgrades.aggregate([
             {"$match": {"created_at": {"$gte": month_start}}},
-            {"$group": {"_id": "$agent_name", "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}},
+            {"$group": {"_id": "$cs_agent_name", "total": {"$sum": {"$ifNull": ["$amount", {"$ifNull": ["$upgrade_amount", 0]}]}}, "count": {"$sum": 1}}},
             {"$sort": {"total": -1}}, {"$limit": 5}
         ]).to_list(5),
         # Top mentors
@@ -29154,6 +29155,23 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         ]).to_list(8),
         # Recent enrollments
         db.leads.find({"stage": "enrolled"}, {"_id": 0, "full_name": 1, "sale_amount": 1, "enrollment_amount": 1, "enrolled_at": 1, "assigned_to_name": 1, "interested_course_name": 1, "course_name": 1}).sort("enrolled_at", -1).to_list(5),
+        # Course bifurcation for new accounts this month
+        db.leads.aggregate([
+            {"$match": {"stage": "enrolled", "enrolled_at": {"$gte": month_start}}},
+            {"$addFields": {"display_course": {"$ifNull": ["$course_name", {"$ifNull": ["$interested_course_name", "Unknown"]}]}}},
+            {"$group": {"_id": "$display_course", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]).to_list(20),
+        # Expiring documents in next 30 days
+        db.hr_employees.find(
+            {"employment_status": {"$in": ["active", "probation"]}},
+            {"_id": 0, "id": 1, "full_name": 1, "department": 1, "passport_expiry": 1, "visa_expiry": 1, "emirates_id_expiry": 1, "labour_card_expiry": 1, "insurance_expiry": 1}
+        ).to_list(500),
+        # Total salary payout (all active employees gross salary)
+        db.hr_employees.aggregate([
+            {"$match": {"employment_status": {"$in": ["active", "probation"]}}},
+            {"$group": {"_id": None, "total_gross": {"$sum": {"$ifNull": ["$salary_structure.gross_salary", 0]}}, "total_net": {"$sum": {"$ifNull": ["$salary_structure.net_salary", 0]}}, "count": {"$sum": 1}}}
+        ]).to_list(1),
     )
     
     # === PARALLEL BATCH 2: Monthly revenue trend (3 collections x 6 months) ===
@@ -29217,6 +29235,42 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
     approvals = await db.commission_approvals.find({"month": current_month}, {"_id": 0}).to_list(10)
     commission_approvals = {a["department"]: a["status"] for a in approvals}
     
+    # Process expiring documents (next 30 days)
+    expiring_documents = []
+    cutoff_date = (now + timedelta(days=30)).strftime("%Y-%m-%d")
+    for emp in expiring_docs_raw:
+        doc_types = [
+            ("Passport", emp.get("passport_expiry")),
+            ("Visa", emp.get("visa_expiry")),
+            ("Emirates ID", emp.get("emirates_id_expiry")),
+            ("Labour Card", emp.get("labour_card_expiry")),
+            ("Insurance", emp.get("insurance_expiry")),
+        ]
+        for doc_name, expiry in doc_types:
+            if expiry and expiry <= cutoff_date and expiry >= today:
+                expiring_documents.append({
+                    "employee": emp.get("full_name"), "department": emp.get("department"),
+                    "document": doc_name, "expiry_date": expiry,
+                    "days_left": (datetime.strptime(expiry, "%Y-%m-%d") - datetime.strptime(today, "%Y-%m-%d")).days
+                })
+    expiring_documents.sort(key=lambda x: x.get("days_left", 99))
+    
+    # Salary payout
+    payout = salary_payout_data[0] if salary_payout_data else {}
+    total_salary_payout = payout.get("total_gross", 0) or 0
+    
+    # Estimated total commission payout this month (from enrolled leads commission)
+    total_commission_estimate = 0
+    try:
+        comm_pipeline = [
+            {"$match": {"month": current_month, "status": {"$ne": "cancelled"}}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+        ]
+        comm_data = await db.commission_transactions.aggregate(comm_pipeline).to_list(1)
+        total_commission_estimate = round((comm_data[0]["total"] if comm_data else 0) or 0, 2)
+    except Exception:
+        pass
+    
     # Revenue split by department
     revenue_split = [
         {"name": "Sales", "value": round(s_rev, 2)},
@@ -29262,6 +29316,14 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
         "department_headcount": [{"department": d["_id"] or "Unknown", "count": d["count"]} for d in dept_count_data],
         "lead_sources": [{"source": s["_id"] or "Unknown", "count": s["count"]} for s in lead_source_data],
         "recent_enrollments": [{"name": e.get("full_name"), "amount": e.get("enrollment_amount") or e.get("sale_amount", 0), "date": e.get("enrolled_at"), "agent": e.get("assigned_to_name"), "course": e.get("course_name") or e.get("interested_course_name")} for e in recent_enrollments_data],
+        "course_bifurcation": [{"course": c["_id"] or "Unknown", "count": c["count"]} for c in course_bifurcation_data],
+        "expiring_documents": expiring_documents[:10],
+        "salary_payout": {
+            "total_gross": round(total_salary_payout, 2),
+            "total_commission": total_commission_estimate,
+            "total_payout": round(total_salary_payout + total_commission_estimate, 2),
+            "employee_count": payout.get("count", 0),
+        },
         "commission_approvals": commission_approvals,
         "current_month": current_month,
     }

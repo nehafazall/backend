@@ -109,7 +109,7 @@ const ESSSection = () => {
         return <Badge variant="outline">{status}</Badge>;
     };
 
-    if (!essData?.employee) {
+    if (!essData?.employee && !punchStatus?.has_employee_record) {
         return (
             <Card className="border-amber-500/50 bg-amber-500/5">
                 <CardContent className="p-6">
