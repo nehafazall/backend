@@ -14,6 +14,7 @@ const AttendancePage = () => {
     const [attendance, setAttendance] = useState([]);
     const [regularizations, setRegularizations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [attendanceData, setAttendanceData] = useState(null);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [filterDept, setFilterDept] = useState('');
     const [activeTab, setActiveTab] = useState('daily');
@@ -42,7 +43,8 @@ const AttendancePage = () => {
                 api.get(`/hr/attendance?${params.toString()}`),
                 api.get('/hr/regularization-requests?pending_approval=true')
             ]);
-            setAttendance(attendanceRes.data || []);
+            setAttendanceData(attendanceRes.data || {});
+            setAttendance(attendanceRes.data?.records || attendanceRes.data || []);
             setRegularizations(regRes.data || []);
         } catch (error) {
             console.error('Error:', error);
@@ -122,17 +124,23 @@ const AttendancePage = () => {
         if (record.status === 'wfh') return <Badge className="bg-blue-500 text-white">WFH</Badge>;
         if (record.status === 'leave') return <Badge className="bg-purple-500 text-white">Leave</Badge>;
         if (record.status === 'holiday') return <Badge className="bg-slate-500 text-white">Holiday</Badge>;
-        if (record.half_day) return <Badge className="bg-orange-500 text-white">Half Day</Badge>;
-        if (record.late_minutes > 0) return <Badge className="bg-amber-500 text-white">Late</Badge>;
+        if (record.status === 'warning') return <Badge className="bg-orange-600 text-white">Warning</Badge>;
+        if (record.status === 'half_day') return <Badge className="bg-orange-500 text-white">Half Day</Badge>;
+        if (record.status === 'late') return <Badge className="bg-amber-500 text-white">Late</Badge>;
+        if (record.late_minutes > 0 && record.status === 'present') return <Badge className="bg-amber-500 text-white">Late</Badge>;
         if (record.status === 'present') return <Badge className="bg-green-500 text-white">Present</Badge>;
         return <Badge className="bg-red-500 text-white">Absent</Badge>;
     };
 
-    const presentCount = attendance.filter(a => a.status === 'present').length;
-    const lateCount = attendance.filter(a => a.late_minutes > 0 && !a.half_day).length;
-    const absentCount = attendance.filter(a => a.status === 'absent').length;
+    // Use summary from API if available
+    const teamStrength = attendanceData?.team_strength || {};
+    const summary = attendanceData?.summary || {};
+    const presentCount = summary.present || attendance.filter(a => a.status === 'present').length;
+    const lateCount = summary.late || attendance.filter(a => a.status === 'late').length;
+    const warningCount = summary.warning || attendance.filter(a => a.status === 'warning').length;
+    const halfDayCount = summary.half_day || attendance.filter(a => a.status === 'half_day').length;
+    const absentCount = summary.absent || 0;
     const wfhCount = attendance.filter(a => a.status === 'wfh').length;
-    const halfDayCount = attendance.filter(a => a.half_day).length;
 
     // Generate month options for the selector
     const monthOptions = [];
@@ -157,70 +165,57 @@ const AttendancePage = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                                <CheckCircle className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{presentCount}</p>
-                                <p className="text-sm text-muted-foreground">Present</p>
-                            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                <Card className="border-l-4 border-l-blue-500">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold">{teamStrength.total || '-'}</p>
+                        <p className="text-xs text-muted-foreground">Team Strength</p>
+                        <div className="flex gap-2 mt-1 text-[10px] text-muted-foreground">
+                            <span>UAE: {teamStrength.uae || 0}</span>
+                            <span>IND: {teamStrength.india || 0}</span>
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30">
-                                <Clock className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{lateCount}</p>
-                                <p className="text-sm text-muted-foreground">Late</p>
-                            </div>
-                        </div>
+                <Card className="border-l-4 border-l-green-500">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-green-600">{presentCount}</p>
+                        <p className="text-xs text-muted-foreground">Present</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                                <AlertTriangle className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{absentCount}</p>
-                                <p className="text-sm text-muted-foreground">Absent</p>
-                            </div>
-                        </div>
+                <Card className="border-l-4 border-l-amber-500">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-amber-600">{lateCount}</p>
+                        <p className="text-xs text-muted-foreground">Late</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                                <UserCheck className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{wfhCount}</p>
-                                <p className="text-sm text-muted-foreground">WFH</p>
-                            </div>
-                        </div>
+                <Card className="border-l-4 border-l-orange-600">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-orange-600">{warningCount}</p>
+                        <p className="text-xs text-muted-foreground">Warning</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/30">
-                                <Calendar className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{regularizations.length}</p>
-                                <p className="text-sm text-muted-foreground">Pending Reg.</p>
-                            </div>
-                        </div>
+                <Card className="border-l-4 border-l-orange-400">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-orange-500">{halfDayCount}</p>
+                        <p className="text-xs text-muted-foreground">Half Day</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-red-500">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-red-600">{absentCount}</p>
+                        <p className="text-xs text-muted-foreground">Absent</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-blue-400">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-blue-500">{wfhCount}</p>
+                        <p className="text-xs text-muted-foreground">WFH</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-purple-500">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-purple-600">{regularizations.length}</p>
+                        <p className="text-xs text-muted-foreground">Pending Reg.</p>
                     </CardContent>
                 </Card>
             </div>
@@ -271,6 +266,7 @@ const AttendancePage = () => {
                                     <TableHead>Work Hours</TableHead>
                                     <TableHead>Late (mins)</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Remarks</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -292,6 +288,9 @@ const AttendancePage = () => {
                                             ) : '-'}
                                         </TableCell>
                                         <TableCell>{getStatusBadge(record)}</TableCell>
+                                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                                            {record.half_day_reason || record.shift_name || '-'}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                                 {attendance.length === 0 && (

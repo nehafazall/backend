@@ -365,8 +365,48 @@ const EmployeeDetailsPage = () => {
                                         <p className="font-medium">{employee.joining_date}</p>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground">Location</span>
-                                        <p className="font-medium">{employee.work_location}</p>
+                                        <span className="text-muted-foreground">Country</span>
+                                        <Select
+                                            value={employee.country || employee.work_location || 'UAE'}
+                                            onValueChange={async (v) => {
+                                                try {
+                                                    await api.put(`/hr/employees/${employee.id}`, { country: v, work_location: v });
+                                                    toast.success('Country updated');
+                                                    fetchEmployee();
+                                                } catch(e) { toast.error('Failed to update'); }
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 text-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {["UAE", "India", "Saudi Arabia", "Oman", "Bahrain", "Kuwait", "Qatar", "Egypt", "Kenya", "Nigeria", "South Africa", "Ghana", "Ethiopia", "Tanzania", "United Kingdom", "United States", "Pakistan", "Bangladesh", "Sri Lanka", "Nepal", "Philippines"].map(c => (
+                                                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Shift</span>
+                                        <Select
+                                            value={employee.shift_id || 'morning'}
+                                            onValueChange={async (v) => {
+                                                try {
+                                                    await api.put(`/hr/employees/${employee.id}/shift`, { shift_id: v });
+                                                    toast.success('Shift updated');
+                                                    fetchEmployee();
+                                                } catch(e) { toast.error('Failed to update'); }
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 text-sm" data-testid="shift-select">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="morning">Morning (10AM-7PM)</SelectItem>
+                                                <SelectItem value="afternoon">Afternoon (1PM-10PM)</SelectItem>
+                                                <SelectItem value="india">India (11AM-8PM)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Employment Type</span>

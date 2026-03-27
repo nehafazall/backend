@@ -161,6 +161,8 @@ class EmployeeCreate(BaseModel):
     reporting_manager_id: Optional[str] = None
     employment_type: EmploymentType = EmploymentType.FULL_TIME
     work_location: str = "UAE"
+    shift_id: str = "morning"
+    country: str = "UAE"
     joining_date: str  # YYYY-MM-DD
     probation_days: int = 90
     confirmation_date: Optional[str] = None
@@ -198,6 +200,8 @@ class EmployeeUpdate(BaseModel):
     reporting_manager_id: Optional[str] = None
     employment_type: Optional[EmploymentType] = None
     work_location: Optional[str] = None
+    shift_id: Optional[str] = None
+    country: Optional[str] = None
     probation_days: Optional[int] = None
     confirmation_date: Optional[str] = None
     notice_period_days: Optional[int] = None

@@ -19892,6 +19892,422 @@ async def sync_biometric_attendance(
     
     return {"message": f"Attendance {punch_type} recorded", "employee_id": employee["employee_id"], "time": time_str}
 
+# ==================== HR SETTINGS, SHIFTS & ATTENDANCE RULES ====================
+
+# Default shifts
+DEFAULT_SHIFTS = {
+    "morning": {"name": "Morning Shift", "start": "10:00", "end": "19:00", "grace_minutes": 15, "location": "UAE"},
+    "afternoon": {"name": "Afternoon Shift", "start": "13:00", "end": "22:00", "grace_minutes": 15, "location": "UAE"},
+    "india": {"name": "India Shift", "start": "11:00", "end": "20:00", "grace_minutes": 15, "location": "India"},
+}
+
+COUNTRY_LIST = [
+    "UAE", "India", "Saudi Arabia", "Oman", "Bahrain", "Kuwait", "Qatar",
+    "Egypt", "Kenya", "Nigeria", "South Africa", "Ghana", "Ethiopia", "Tanzania",
+    "United Kingdom", "United States", "Canada", "Australia", "Germany", "France",
+    "Pakistan", "Bangladesh", "Sri Lanka", "Nepal", "Philippines", "Indonesia", "Malaysia"
+]
+
+@api_router.get("/hr/shifts")
+async def get_shifts(user = Depends(get_current_user)):
+    """Get all defined shifts"""
+    shifts = await db.hr_shifts.find({}, {"_id": 0}).to_list(50)
+    if not shifts:
+        # Seed defaults
+        now = datetime.now(timezone.utc).isoformat()
+        for sid, s in DEFAULT_SHIFTS.items():
+            shift_doc = {"id": sid, **s, "created_at": now}
+            await db.hr_shifts.insert_one(shift_doc)
+            shifts.append({k: v for k, v in shift_doc.items() if k != "_id"})
+    return shifts
+
+@api_router.post("/hr/shifts")
+async def create_shift(data: Dict, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Create a new shift"""
+    shift = {
+        "id": str(uuid.uuid4()),
+        "name": data["name"],
+        "start": data["start"],       # HH:MM
+        "end": data["end"],           # HH:MM
+        "grace_minutes": data.get("grace_minutes", 15),
+        "location": data.get("location", "UAE"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.hr_shifts.insert_one(shift)
+    shift.pop("_id", None)
+    return shift
+
+@api_router.put("/hr/employees/{employee_id}/shift")
+async def assign_shift(employee_id: str, data: Dict, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Assign a shift to an employee"""
+    emp = await db.hr_employees.find_one({"$or": [{"id": employee_id}, {"employee_id": employee_id}]})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    await db.hr_employees.update_one(
+        {"id": emp["id"]},
+        {"$set": {"shift_id": data.get("shift_id", "morning"), "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Shift assigned"}
+
+@api_router.get("/hr/settings/attendance-rules")
+async def get_attendance_rules(user = Depends(get_current_user)):
+    """Get current attendance rules and special periods"""
+    rules = await db.hr_settings.find_one({"type": "attendance_rules"}, {"_id": 0})
+    if not rules:
+        rules = {
+            "type": "attendance_rules",
+            "half_day_hours_threshold": 6,
+            "full_day_hours_min": 6,
+            "warning_threshold_minutes": 30,
+            "extra_time_offset_minutes": 30,
+            "special_periods": []
+        }
+        await db.hr_settings.insert_one(rules)
+        rules.pop("_id", None)
+    return rules
+
+@api_router.put("/hr/settings/attendance-rules")
+async def update_attendance_rules(data: Dict, user = Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Update attendance rules including special periods like Ramadan"""
+    now = datetime.now(timezone.utc).isoformat()
+    update = {
+        "type": "attendance_rules",
+        "half_day_hours_threshold": data.get("half_day_hours_threshold", 6),
+        "full_day_hours_min": data.get("full_day_hours_min", 6),
+        "warning_threshold_minutes": data.get("warning_threshold_minutes", 30),
+        "extra_time_offset_minutes": data.get("extra_time_offset_minutes", 30),
+        "special_periods": data.get("special_periods", []),
+        "updated_at": now
+    }
+    await db.hr_settings.update_one({"type": "attendance_rules"}, {"$set": update}, upsert=True)
+    update.pop("_id", None)
+    return update
+
+@api_router.get("/hr/countries")
+async def get_countries(user = Depends(get_current_user)):
+    """Get list of available countries for location tagging"""
+    return COUNTRY_LIST
+
+async def _calculate_attendance_status(emp: dict, biometric_in: str, biometric_out: str, date_str: str, shift_cache: dict = None, rules_cache: dict = None, warning_counts: dict = None):
+    """
+    Calculate attendance status based on shift, rules, and warning count.
+    Returns dict with: status, late_minutes, total_work_hours, warning_flag, half_day_reason
+    """
+    # Get employee's shift (use cache if provided)
+    shift_id = emp.get("shift_id", "morning")
+    if shift_cache and shift_id in shift_cache:
+        shift = shift_cache[shift_id]
+    else:
+        shift = await db.hr_shifts.find_one({"id": shift_id}, {"_id": 0})
+        if not shift:
+            shift = DEFAULT_SHIFTS.get(shift_id, DEFAULT_SHIFTS["morning"])
+        if shift_cache is not None:
+            shift_cache[shift_id] = shift
+
+    # Get attendance rules (use cache if provided)
+    if rules_cache and "rules" in rules_cache:
+        rules = rules_cache["rules"]
+    else:
+        rules = await db.hr_settings.find_one({"type": "attendance_rules"}, {"_id": 0})
+        if not rules:
+            rules = {"half_day_hours_threshold": 6, "warning_threshold_minutes": 30, "extra_time_offset_minutes": 30, "special_periods": []}
+        if rules_cache is not None:
+            rules_cache["rules"] = rules
+
+    # Check for special period (e.g., Ramadan)
+    full_day_hours = rules.get("full_day_hours_min", 6)
+    for sp in rules.get("special_periods", []):
+        if sp.get("start_date") and sp.get("end_date"):
+            if sp["start_date"] <= date_str <= sp["end_date"]:
+                full_day_hours = sp.get("reduced_hours", full_day_hours)
+                break
+
+    shift_start = shift.get("start", "10:00")
+    shift_end = shift.get("end", "19:00")
+    grace = shift.get("grace_minutes", 15)
+    warning_threshold = rules.get("warning_threshold_minutes", 30)
+    extra_offset = rules.get("extra_time_offset_minutes", 30)
+
+    result = {
+        "status": "present",
+        "late_minutes": 0,
+        "total_work_hours": 0,
+        "warning_flag": False,
+        "half_day_reason": None,
+        "shift_name": shift.get("name", "Morning Shift"),
+        "shift_start": shift_start,
+        "shift_end": shift_end
+    }
+
+    if not biometric_in:
+        result["status"] = "absent"
+        return result
+
+    try:
+        t_in = datetime.strptime(biometric_in[:5], "%H:%M")
+        t_shift_start = datetime.strptime(shift_start, "%H:%M")
+        t_shift_end = datetime.strptime(shift_end, "%H:%M")
+
+        # Calculate late minutes
+        late_mins = max(0, int((t_in - t_shift_start).total_seconds() / 60))
+        result["late_minutes"] = late_mins
+
+        # Calculate work hours
+        if biometric_out:
+            t_out = datetime.strptime(biometric_out[:5], "%H:%M")
+            work_hours = (t_out - t_in).total_seconds() / 3600
+            result["total_work_hours"] = round(work_hours, 2)
+
+            # Extra time calculation (past shift end)
+            extra_mins = max(0, int((t_out - t_shift_end).total_seconds() / 60))
+
+            # Rule: ≤6 hours (or special period hours) = half day
+            if work_hours <= full_day_hours:
+                result["status"] = "half_day"
+                result["half_day_reason"] = f"Worked {round(work_hours, 1)}h (< {full_day_hours}h threshold)"
+                return result
+
+            # Rule: Within grace period (≤15 min late) = Present
+            if late_mins <= grace:
+                result["status"] = "present"
+                result["late_minutes"] = 0  # Within grace, don't mark as late
+                return result
+
+            # Rule: 15-30 min late but did extra time (≥30 min past shift end) = Full Day
+            if late_mins <= warning_threshold and extra_mins >= extra_offset:
+                result["status"] = "present"
+                result["half_day_reason"] = f"Late {late_mins}min but stayed {extra_mins}min extra"
+                return result
+
+            # Rule: 15-30 min late without enough extra = Late
+            if late_mins <= warning_threshold:
+                result["status"] = "late"
+                return result
+
+            # Rule: >30 min late = Warning (1st in month) or Half Day (2nd+ in month)
+            if late_mins > warning_threshold:
+                # Count warnings this month for this employee
+                month_key = date_str[:7]
+                if warning_counts is not None:
+                    warning_count = warning_counts.get((emp["id"], month_key), 0)
+                else:
+                    month_start = date_str[:8] + "01"
+                    warning_count = await db.hr_attendance.count_documents({
+                        "employee_id": emp["id"],
+                        "date": {"$gte": month_start, "$lt": date_str},
+                        "warning_flag": True
+                    })
+
+                if warning_count == 0:
+                    # First time this month = Warning
+                    result["status"] = "warning"
+                    result["warning_flag"] = True
+                    result["half_day_reason"] = f"Late {late_mins}min (>30min) — 1st warning this month"
+                else:
+                    # 2nd+ time = Half Day
+                    result["status"] = "half_day"
+                    result["warning_flag"] = True
+                    result["half_day_reason"] = f"Late {late_mins}min (>30min) — {warning_count + 1}th occurrence, marked half day"
+                return result
+        else:
+            # No punch out — half day
+            result["status"] = "half_day"
+            result["total_work_hours"] = 4  # assumed
+            result["half_day_reason"] = "No punch out recorded"
+
+    except Exception as e:
+        logger.warning(f"Attendance calc error for {emp.get('full_name')}: {e}")
+
+    return result
+
+# ==================== INDIA TEAM PUNCH IN/OUT + TIMESHEET ====================
+
+@api_router.post("/hr/punch")
+async def punch_in_out(
+    data: Dict,
+    user = Depends(get_current_user)
+):
+    """
+    Manual punch in/out for remote team members.
+    data: { "type": "in" | "out" }
+    """
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"id": user.get("employee_id")}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee record not found")
+
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    time_str = now.strftime("%H:%M:%S")
+    punch_type = data.get("type", "in").lower()
+
+    existing = await db.hr_attendance.find_one({
+        "employee_id": employee["id"],
+        "date": today_str
+    })
+
+    if punch_type == "in":
+        if existing and existing.get("biometric_in"):
+            raise HTTPException(status_code=400, detail="Already punched in today")
+
+        if existing:
+            await db.hr_attendance.update_one(
+                {"id": existing["id"]},
+                {"$set": {"biometric_in": time_str, "status": "present", "source": "self_punch", "updated_at": now.isoformat()}}
+            )
+        else:
+            record = {
+                "id": str(uuid.uuid4()),
+                "employee_id": employee["id"],
+                "employee_code": employee.get("employee_id"),
+                "employee_name": employee.get("full_name"),
+                "department": employee.get("department"),
+                "date": today_str,
+                "biometric_in": time_str,
+                "status": "present",
+                "source": "self_punch",
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat()
+            }
+            await db.hr_attendance.insert_one(record)
+
+        return {"message": "Punched in successfully", "time": time_str}
+
+    elif punch_type == "out":
+        if not existing or not existing.get("biometric_in"):
+            raise HTTPException(status_code=400, detail="No punch-in found for today")
+        if existing.get("biometric_out"):
+            raise HTTPException(status_code=400, detail="Already punched out today")
+
+        # Calculate status using rules engine
+        att_status = await _calculate_attendance_status(employee, existing["biometric_in"], time_str, today_str)
+
+        await db.hr_attendance.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "biometric_out": time_str,
+                "total_work_hours": att_status["total_work_hours"],
+                "late_minutes": att_status["late_minutes"],
+                "status": att_status["status"],
+                "warning_flag": att_status.get("warning_flag", False),
+                "half_day_reason": att_status.get("half_day_reason"),
+                "shift_name": att_status.get("shift_name"),
+                "source": "self_punch",
+                "updated_at": now.isoformat()
+            }}
+        )
+
+        return {
+            "message": "Punched out successfully",
+            "time": time_str,
+            "work_hours": att_status["total_work_hours"],
+            "status": att_status["status"]
+        }
+
+    raise HTTPException(status_code=400, detail="Invalid punch type. Use 'in' or 'out'")
+
+@api_router.get("/hr/my-punch-status")
+async def get_my_punch_status(user = Depends(get_current_user)):
+    """Get current user's punch status for today"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"id": user.get("employee_id")}]},
+        {"_id": 0, "id": 1, "full_name": 1, "shift_id": 1, "work_location": 1}
+    )
+    if not employee:
+        return {"has_employee_record": False}
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    attendance = await db.hr_attendance.find_one(
+        {"employee_id": employee["id"], "date": today_str},
+        {"_id": 0}
+    )
+
+    shift_id = employee.get("shift_id", "morning")
+    shift = await db.hr_shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
+        shift = DEFAULT_SHIFTS.get(shift_id, DEFAULT_SHIFTS["morning"])
+
+    return {
+        "has_employee_record": True,
+        "employee_name": employee.get("full_name"),
+        "location": employee.get("work_location", "UAE"),
+        "shift": shift,
+        "punched_in": bool(attendance and attendance.get("biometric_in")),
+        "punched_out": bool(attendance and attendance.get("biometric_out")),
+        "punch_in_time": attendance.get("biometric_in") if attendance else None,
+        "punch_out_time": attendance.get("biometric_out") if attendance else None,
+        "status": attendance.get("status") if attendance else None,
+        "work_hours": attendance.get("total_work_hours") if attendance else None
+    }
+
+# ==================== DAILY TIMESHEET ====================
+
+@api_router.post("/hr/timesheet")
+async def submit_timesheet(data: Dict, user = Depends(get_current_user)):
+    """Submit daily timesheet entry"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"id": user.get("employee_id")}]},
+        {"_id": 0}
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee record not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    date_str = data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+    # Check if already submitted for today
+    existing = await db.hr_timesheets.find_one({"employee_id": employee["id"], "date": date_str})
+
+    entry = {
+        "employee_id": employee["id"],
+        "employee_code": employee.get("employee_id"),
+        "employee_name": employee.get("full_name"),
+        "department": employee.get("department"),
+        "date": date_str,
+        "tasks": data.get("tasks", []),  # [{description, hours, project/category}]
+        "summary": data.get("summary", ""),
+        "total_logged_hours": sum(t.get("hours", 0) for t in data.get("tasks", [])),
+        "updated_at": now
+    }
+
+    if existing:
+        await db.hr_timesheets.update_one({"id": existing["id"]}, {"$set": entry})
+        return {"message": "Timesheet updated", "id": existing["id"]}
+    else:
+        entry["id"] = str(uuid.uuid4())
+        entry["created_at"] = now
+        await db.hr_timesheets.insert_one(entry)
+        entry.pop("_id", None)
+        return {"message": "Timesheet submitted", "id": entry["id"]}
+
+@api_router.get("/hr/timesheet")
+async def get_timesheets(
+    employee_id: Optional[str] = None,
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """Get timesheet entries"""
+    query = {}
+
+    if user["role"] not in ["super_admin", "admin", "hr", "team_leader"]:
+        employee = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+        if employee:
+            query["employee_id"] = employee["id"]
+    elif employee_id:
+        query["employee_id"] = employee_id
+
+    if date:
+        query["date"] = date
+    elif start_date and end_date:
+        query["date"] = {"$gte": start_date, "$lte": end_date}
+
+    records = await db.hr_timesheets.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+    return records
+
 @api_router.get("/hr/attendance")
 async def get_attendance(
     employee_id: Optional[str] = None,
@@ -19901,7 +20317,7 @@ async def get_attendance(
     department: Optional[str] = None,
     user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
 ):
-    """Get attendance records"""
+    """Get attendance records with team strength by location"""
     query = {}
     
     if employee_id:
@@ -19914,7 +20330,26 @@ async def get_attendance(
         query["department"] = department
     
     records = await db.hr_attendance.find(query, {"_id": 0}).sort([("date", -1), ("employee_code", 1)]).to_list(1000)
-    return records
+    
+    # Team strength by location
+    active_employees = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0, "id": 1, "work_location": 1, "country": 1}
+    ).to_list(500)
+    
+    total_strength = len(active_employees)
+    uae_strength = len([e for e in active_employees if (e.get("country") or e.get("work_location") or "UAE") in ["UAE", "Office"]])
+    india_strength = len([e for e in active_employees if (e.get("country") or e.get("work_location")) == "India"])
+    
+    return {
+        "records": records,
+        "team_strength": {
+            "total": total_strength,
+            "uae": uae_strength,
+            "india": india_strength,
+            "other": total_strength - uae_strength - india_strength
+        }
+    }
 
 # ==================== MANUAL ATTENDANCE IMPORT ====================
 
@@ -20963,6 +21398,51 @@ async def upload_biocloud_attendance(
     unmatched = []
     unmatched_set = set()
     
+    # Pre-fetch all warning counts for the month to avoid N+1 queries
+    all_emp_ids = set()
+    all_months = set()
+    for (badge, date_str), _ in punches.items():
+        emp = emp_lookup.get(badge)
+        if emp:
+            all_emp_ids.add(emp["id"])
+            all_months.add(date_str[:7])
+    
+    warning_counts = {}
+    for month_key in all_months:
+        month_start = f"{month_key}-01"
+        month_end = f"{month_key}-31"
+        wc_cursor = db.hr_attendance.aggregate([
+            {"$match": {"employee_id": {"$in": list(all_emp_ids)}, "date": {"$gte": month_start, "$lte": month_end}, "warning_flag": True}},
+            {"$group": {"_id": {"employee_id": "$employee_id", "date": "$date"}}},
+            {"$group": {"_id": "$_id.employee_id", "count": {"$sum": 1}}}
+        ])
+        async for doc in wc_cursor:
+            warning_counts[(doc["_id"], month_key)] = doc["count"]
+    
+    # Pre-fetch shift and rules once
+    all_shifts = await db.hr_shifts.find({}, {"_id": 0}).to_list(50)
+    shift_map = {s["id"]: s for s in all_shifts}
+    for sid, s in DEFAULT_SHIFTS.items():
+        if sid not in shift_map:
+            shift_map[sid] = s
+    
+    rules = await db.hr_settings.find_one({"type": "attendance_rules"}, {"_id": 0})
+    if not rules:
+        rules = {"half_day_hours_threshold": 6, "warning_threshold_minutes": 30, "extra_time_offset_minutes": 30, "special_periods": []}
+    
+    # Pre-fetch ALL existing attendance records for matched employees + dates
+    unique_dates = sorted(set(d for _, d in punches.keys()))
+    existing_records = {}
+    if all_emp_ids and unique_dates:
+        async for doc in db.hr_attendance.find(
+            {"employee_id": {"$in": list(all_emp_ids)}, "date": {"$in": unique_dates}},
+            {"_id": 1, "id": 1, "employee_id": 1, "date": 1}
+        ):
+            existing_records[(doc["employee_id"], doc["date"])] = doc
+    
+    from pymongo import UpdateOne, InsertOne
+    bulk_ops = []
+    
     for (badge, date_str), times in punches.items():
         # Determine first_in and last_out
         ins = sorted(check_ins.get((badge, date_str), []))
@@ -20984,30 +21464,68 @@ async def upload_biocloud_attendance(
                 unmatched_set.add(badge)
             continue
         
-        # Calculate work hours and status
+        # Inline attendance calculation (avoid per-record DB queries)
+        shift_id = emp.get("shift_id", "morning")
+        shift = shift_map.get(shift_id, shift_map.get("morning", DEFAULT_SHIFTS["morning"]))
+        shift_start = shift.get("start", "10:00")
+        shift_end = shift.get("end", "19:00")
+        grace = shift.get("grace_minutes", 15)
+        warning_threshold = rules.get("warning_threshold_minutes", 30)
+        extra_offset = rules.get("extra_time_offset_minutes", 30)
+        half_day_hours = rules.get("half_day_hours_threshold", 6)
+        
+        # Check special periods
+        for sp in rules.get("special_periods", []):
+            if sp.get("start_date") and sp.get("end_date"):
+                if sp["start_date"] <= date_str <= sp["end_date"]:
+                    half_day_hours = sp.get("reduced_hours", half_day_hours)
+                    break
+        
+        att_status = "present"
+        late_mins = 0
         total_hours = 0
-        status = "present"
-        late_minutes = 0
+        warning_flag = False
+        half_day_reason = None
         
         if first_in and last_out:
             try:
                 t_in = datetime.strptime(first_in[:5], "%H:%M")
                 t_out = datetime.strptime(last_out[:5], "%H:%M")
+                t_start = datetime.strptime(shift_start, "%H:%M")
+                t_end = datetime.strptime(shift_end, "%H:%M")
+                
                 total_hours = round((t_out - t_in).total_seconds() / 3600, 2)
+                late_mins = max(0, int((t_in - t_start).total_seconds() / 60))
+                extra_mins = max(0, int((t_out - t_end).total_seconds() / 60))
                 
-                # Late check (after 9:30 AM)
-                if t_in.hour > 9 or (t_in.hour == 9 and t_in.minute > 30):
-                    late_minutes = max(0, (t_in.hour - 9) * 60 + (t_in.minute - 30))
-                
-                if total_hours < 3:
-                    status = "absent"
-                elif total_hours < 6:
-                    status = "half_day"
+                if total_hours <= half_day_hours:
+                    att_status = "half_day"
+                    half_day_reason = f"Worked {total_hours}h (< {half_day_hours}h)"
+                elif late_mins <= grace:
+                    att_status = "present"
+                    late_mins = 0
+                elif late_mins <= warning_threshold and extra_mins >= extra_offset:
+                    att_status = "present"
+                    half_day_reason = f"Late {late_mins}min but extra {extra_mins}min"
+                elif late_mins <= warning_threshold:
+                    att_status = "late"
+                else:
+                    month_key = date_str[:7]
+                    wc = warning_counts.get((emp["id"], month_key), 0)
+                    if wc == 0:
+                        att_status = "warning"
+                        warning_flag = True
+                        half_day_reason = f"Late {late_mins}min (>30) — 1st warning"
+                    else:
+                        att_status = "half_day"
+                        warning_flag = True
+                        half_day_reason = f"Late {late_mins}min — {wc+1}th occurrence"
             except Exception:
-                total_hours = 9  # default
+                total_hours = 9
         elif first_in:
-            status = "half_day"
+            att_status = "half_day"
             total_hours = 4
+            half_day_reason = "No punch out"
         
         record = {
             "employee_id": emp["id"],
@@ -21018,9 +21536,12 @@ async def upload_biocloud_attendance(
             "biometric_in": first_in,
             "biometric_out": last_out,
             "total_work_hours": total_hours,
-            "late_minutes": late_minutes,
+            "late_minutes": late_mins,
             "total_punches": len(all_times),
-            "status": status,
+            "status": att_status,
+            "warning_flag": warning_flag,
+            "half_day_reason": half_day_reason,
+            "shift_name": shift.get("name"),
             "source": "biocloud",
             "updated_at": now_str
         }
@@ -21029,7 +21550,7 @@ async def upload_biocloud_attendance(
         existing = await db.hr_attendance.find_one({
             "employee_id": emp["id"],
             "date": date_str
-        })
+        }, {"_id": 1, "id": 1})
         
         if existing:
             await db.hr_attendance.update_one({"_id": existing["_id"]}, {"$set": record})
@@ -21040,8 +21561,7 @@ async def upload_biocloud_attendance(
             try:
                 await db.hr_attendance.insert_one(record)
                 synced += 1
-            except Exception as dup_err:
-                # Duplicate key - try update instead
+            except Exception:
                 await db.hr_attendance.update_one(
                     {"employee_id": emp["id"], "date": date_str},
                     {"$set": record}
@@ -21227,12 +21747,29 @@ async def create_regularization_request(data: RegularizationRequest, user = Depe
     now = datetime.now(timezone.utc).isoformat()
     request_id = str(uuid.uuid4())
     
+    # Determine approval chain based on employee's reporting structure
+    reporting_manager_id = employee.get("reporting_manager_id")
+    
+    if user["role"] == "hr":
+        # HR → CEO directly
+        approval_chain = ["ceo"]
+        current_level = "ceo"
+    elif not reporting_manager_id:
+        # No manager defined → HR → CEO
+        approval_chain = ["hr", "ceo"]
+        current_level = "hr"
+    else:
+        # Normal chain: Manager → HR → CEO
+        approval_chain = ["manager", "hr", "ceo"]
+        current_level = "manager"
+    
     request = {
         "id": request_id,
         "employee_id": employee["id"],
         "employee_code": employee["employee_id"],
         "employee_name": employee["full_name"],
         "department": employee.get("department"),
+        "reporting_manager_id": reporting_manager_id,
         "date": data.date,
         "type": data.type.value,
         "original_in": data.original_in,
@@ -21242,7 +21779,8 @@ async def create_regularization_request(data: RegularizationRequest, user = Depe
         "reason": data.reason,
         "supporting_document_url": data.supporting_document_url,
         "status": "pending",
-        "current_approver_level": "team_lead",
+        "current_approver_level": current_level,
+        "approval_chain": approval_chain,
         "approval_history": [],
         "created_at": now,
         "updated_at": now,
@@ -21284,7 +21822,7 @@ async def approve_regularization(
     comments: Optional[str] = None,
     user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
 ):
-    """Approve or reject regularization request - CEO approval required for final"""
+    """Approve or reject regularization request — Manager → HR → CEO workflow"""
     request = await db.hr_regularization_requests.find_one({"id": request_id})
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -21294,8 +21832,8 @@ async def approve_regularization(
     
     now = datetime.now(timezone.utc).isoformat()
     
-    level_progression = ["team_lead", "hr", "ceo"]
-    current_level = request.get("current_approver_level", "team_lead")
+    approval_chain = request.get("approval_chain", ["manager", "hr", "ceo"])
+    current_level = request.get("current_approver_level", "manager")
     
     approval_entry = {
         "level": current_level,
@@ -21313,64 +21851,71 @@ async def approve_regularization(
         )
         return {"message": "Request rejected", "status": "rejected"}
     
-    # CEO approval (super_admin) is final
-    if current_level == "ceo" or user["role"] == "super_admin":
-        # Apply the regularization to attendance record
-        attendance = await db.hr_attendance.find_one({
-            "employee_id": request["employee_id"],
-            "date": request["date"]
-        })
+    # Find next level in chain
+    try:
+        current_idx = approval_chain.index(current_level)
+        if current_idx < len(approval_chain) - 1:
+            # Move to next approver
+            next_level = approval_chain[current_idx + 1]
+            await db.hr_regularization_requests.update_one(
+                {"id": request_id},
+                {"$set": {"current_approver_level": next_level, "updated_at": now}, "$push": {"approval_history": approval_entry}}
+            )
+            return {"message": f"Approved at {current_level} level. Forwarded to {next_level}", "status": "pending", "next_level": next_level}
+        else:
+            # Final approval — apply changes
+            pass
+    except ValueError:
+        # Current level not in chain — treat as final
+        pass
+    
+    # Final approval (CEO or super_admin)
+    # Apply the regularization to attendance record
+    attendance = await db.hr_attendance.find_one({
+        "employee_id": request["employee_id"],
+        "date": request["date"]
+    })
+    
+    if attendance:
+        update = {"updated_at": now}
+        if request.get("corrected_in"):
+            update["biometric_in"] = request["corrected_in"]
+            update["regularized"] = True
+        if request.get("corrected_out"):
+            update["biometric_out"] = request["corrected_out"]
+            update["regularized"] = True
+        if request["type"] == "work_from_home":
+            update["status"] = "wfh"
+            update["regularized"] = True
         
-        if attendance:
-            update = {"updated_at": now}
-            if request.get("corrected_in"):
-                update["biometric_in"] = request["corrected_in"]
-                update["regularized"] = True
-            if request.get("corrected_out"):
-                update["biometric_out"] = request["corrected_out"]
-                update["regularized"] = True
-            if request["type"] == "work_from_home":
-                update["status"] = "wfh"
-                update["regularized"] = True
-            
-            await db.hr_attendance.update_one({"id": attendance["id"]}, {"$set": update})
-        
-        await db.hr_regularization_requests.update_one(
-            {"id": request_id},
-            {"$set": {
-                "status": "approved",
-                "final_approved_by": user["id"],
-                "final_approved_at": now,
-                "updated_at": now
-            }, "$push": {"approval_history": approval_entry}}
-        )
-        
-        # Audit log
-        await db.hr_audit_logs.insert_one({
-            "id": str(uuid.uuid4()),
-            "entity_type": "regularization",
-            "entity_id": request_id,
-            "action": "final_approval",
-            "user_id": user["id"],
-            "user_name": user["full_name"],
-            "timestamp": now,
-            "changes": {
-                "old": {"in": request.get("original_in"), "out": request.get("original_out")},
-                "new": {"in": request.get("corrected_in"), "out": request.get("corrected_out")}
-            }
-        })
-        
-        return {"message": "Regularization approved and applied", "status": "approved"}
-    else:
-        # Move to next level
-        current_idx = level_progression.index(current_level) if current_level in level_progression else 0
-        next_level = level_progression[min(current_idx + 1, len(level_progression) - 1)]
-        
-        await db.hr_regularization_requests.update_one(
-            {"id": request_id},
-            {"$set": {"current_approver_level": next_level, "updated_at": now}, "$push": {"approval_history": approval_entry}}
-        )
-        return {"message": f"Approved at {current_level}. Pending {next_level} approval", "next_level": next_level}
+        await db.hr_attendance.update_one({"id": attendance["id"]}, {"$set": update})
+    
+    await db.hr_regularization_requests.update_one(
+        {"id": request_id},
+        {"$set": {
+            "status": "approved",
+            "final_approved_by": user["id"],
+            "final_approved_at": now,
+            "updated_at": now
+        }, "$push": {"approval_history": approval_entry}}
+    )
+    
+    # Audit log
+    await db.hr_audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "regularization",
+        "entity_id": request_id,
+        "action": "final_approval",
+        "user_id": user["id"],
+        "user_name": user["full_name"],
+        "timestamp": now,
+        "changes": {
+            "old": {"in": request.get("original_in"), "out": request.get("original_out")},
+            "new": {"in": request.get("corrected_in"), "out": request.get("corrected_out")}
+        }
+    })
+    
+    return {"message": "Regularization approved and applied", "status": "approved"}
 
 # ==================== HR MODULE - DASHBOARD ====================
 

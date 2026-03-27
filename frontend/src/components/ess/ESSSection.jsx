@@ -39,12 +39,19 @@ const ESSSection = () => {
     const [showRegModal, setShowRegModal] = useState(false);
     const [selectedAttendance, setSelectedAttendance] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
+    const [punchStatus, setPunchStatus] = useState(null);
+    const [timesheetTasks, setTimesheetTasks] = useState([{ description: '', hours: 0, category: '' }]);
+    const [timesheetSummary, setTimesheetSummary] = useState('');
 
     const fetchESSData = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await apiClient.get('/ess/dashboard');
-            setEssData(res.data);
+            const [essRes, punchRes] = await Promise.all([
+                apiClient.get('/ess/dashboard'),
+                apiClient.get('/hr/my-punch-status').catch(() => ({ data: { has_employee_record: false } }))
+            ]);
+            setEssData(essRes.data);
+            setPunchStatus(punchRes.data);
         } catch (error) {
             console.error('Failed to fetch ESS data:', error);
         } finally {
@@ -64,6 +71,35 @@ const ESSSection = () => {
     const handleRefresh = () => {
         fetchESSData();
         toast.success('Data refreshed');
+    };
+
+    const handlePunch = async (type) => {
+        try {
+            const res = await apiClient.post('/hr/punch', { type });
+            toast.success(res.data.message);
+            fetchESSData();
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Punch failed');
+        }
+    };
+
+    const handleSubmitTimesheet = async () => {
+        const validTasks = timesheetTasks.filter(t => t.description.trim());
+        if (validTasks.length === 0) {
+            toast.error('Add at least one task');
+            return;
+        }
+        try {
+            await apiClient.post('/hr/timesheet', {
+                tasks: validTasks,
+                summary: timesheetSummary
+            });
+            toast.success('Timesheet submitted');
+            setTimesheetTasks([{ description: '', hours: 0, category: '' }]);
+            setTimesheetSummary('');
+        } catch (err) {
+            toast.error(err.response?.data?.detail || 'Timesheet submission failed');
+        }
     };
 
     const getStatusBadge = (status) => {
@@ -185,12 +221,67 @@ const ESSSection = () => {
                 </Card>
             </div>
 
+            {/* Punch In/Out Card */}
+            {punchStatus?.has_employee_record && (
+                <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent" data-testid="punch-card">
+                    <CardContent className="py-4 px-6">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 rounded-full bg-primary/10">
+                                    <Clock className="h-6 w-6 text-primary" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-lg">
+                                        {punchStatus.shift?.name || 'Morning Shift'}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {punchStatus.shift?.start || '10:00'} — {punchStatus.shift?.end || '19:00'} | {punchStatus.location || 'UAE'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                {punchStatus.punch_in_time && (
+                                    <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">Punched In</p>
+                                        <p className="font-mono font-bold text-green-600">{punchStatus.punch_in_time}</p>
+                                    </div>
+                                )}
+                                {punchStatus.punch_out_time && (
+                                    <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">Punched Out</p>
+                                        <p className="font-mono font-bold text-blue-600">{punchStatus.punch_out_time}</p>
+                                    </div>
+                                )}
+                                {punchStatus.work_hours && (
+                                    <div className="text-center">
+                                        <p className="text-xs text-muted-foreground">Hours</p>
+                                        <p className="font-bold">{punchStatus.work_hours?.toFixed(1)}h</p>
+                                    </div>
+                                )}
+                                {!punchStatus.punched_in ? (
+                                    <Button onClick={() => handlePunch('in')} className="bg-green-600 hover:bg-green-700" data-testid="punch-in-btn">
+                                        <Clock className="h-4 w-4 mr-2" />Punch In
+                                    </Button>
+                                ) : !punchStatus.punched_out ? (
+                                    <Button onClick={() => handlePunch('out')} variant="destructive" data-testid="punch-out-btn">
+                                        <Clock className="h-4 w-4 mr-2" />Punch Out
+                                    </Button>
+                                ) : (
+                                    <Badge className="bg-green-600 text-white px-4 py-2">Completed</Badge>
+                                )}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Tabs Section */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="attendance">Attendance</TabsTrigger>
                     <TabsTrigger value="leaves">Leaves</TabsTrigger>
+                    <TabsTrigger value="timesheet" data-testid="timesheet-tab">Timesheet</TabsTrigger>
                     <TabsTrigger value="requests">Requests</TabsTrigger>
                 </TabsList>
                 
@@ -349,6 +440,101 @@ const ESSSection = () => {
                     </div>
                 </TabsContent>
                 
+                {/* Timesheet Tab */}
+                <TabsContent value="timesheet" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <FileText className="h-5 w-5" />
+                                Daily Timesheet
+                            </CardTitle>
+                            <CardDescription>Log your daily tasks and work hours</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {timesheetTasks.map((task, i) => (
+                                <div key={i} className="flex gap-3 items-start">
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            placeholder="Task description"
+                                            value={task.description}
+                                            onChange={(e) => {
+                                                const updated = [...timesheetTasks];
+                                                updated[i].description = e.target.value;
+                                                setTimesheetTasks(updated);
+                                            }}
+                                            className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+                                            data-testid={`timesheet-task-${i}`}
+                                        />
+                                    </div>
+                                    <div className="w-20">
+                                        <input
+                                            type="number"
+                                            placeholder="Hrs"
+                                            step="0.5"
+                                            min="0"
+                                            max="12"
+                                            value={task.hours || ''}
+                                            onChange={(e) => {
+                                                const updated = [...timesheetTasks];
+                                                updated[i].hours = parseFloat(e.target.value) || 0;
+                                                setTimesheetTasks(updated);
+                                            }}
+                                            className="w-full px-3 py-2 rounded-md border bg-background text-sm text-center"
+                                        />
+                                    </div>
+                                    <div className="w-28">
+                                        <select
+                                            value={task.category}
+                                            onChange={(e) => {
+                                                const updated = [...timesheetTasks];
+                                                updated[i].category = e.target.value;
+                                                setTimesheetTasks(updated);
+                                            }}
+                                            className="w-full px-2 py-2 rounded-md border bg-background text-sm"
+                                        >
+                                            <option value="">Category</option>
+                                            <option value="marketing">Marketing</option>
+                                            <option value="development">Development</option>
+                                            <option value="design">Design</option>
+                                            <option value="content">Content</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    {timesheetTasks.length > 1 && (
+                                        <Button variant="ghost" size="sm" className="text-red-500 h-9"
+                                            onClick={() => setTimesheetTasks(timesheetTasks.filter((_, idx) => idx !== i))}>
+                                            <XCircle className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                            <Button variant="outline" size="sm" onClick={() => setTimesheetTasks([...timesheetTasks, { description: '', hours: 0, category: '' }])}>
+                                <Plus className="h-4 w-4 mr-1" />Add Task
+                            </Button>
+                            <div>
+                                <label className="text-sm font-medium mb-1 block">Daily Summary</label>
+                                <textarea
+                                    value={timesheetSummary}
+                                    onChange={(e) => setTimesheetSummary(e.target.value)}
+                                    placeholder="Brief summary of what you accomplished today..."
+                                    className="w-full px-3 py-2 rounded-md border bg-background text-sm min-h-[60px]"
+                                    data-testid="timesheet-summary"
+                                />
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                                <p className="text-sm text-muted-foreground">
+                                    Total: <span className="font-bold">{timesheetTasks.reduce((s, t) => s + (t.hours || 0), 0).toFixed(1)} hours</span>
+                                </p>
+                                <Button onClick={handleSubmitTimesheet} data-testid="submit-timesheet-btn">
+                                    <CheckCircle className="h-4 w-4 mr-2" />Submit Timesheet
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
                 {/* Requests Tab */}
                 <TabsContent value="requests" className="mt-4">
                     <div className="grid md:grid-cols-2 gap-4">
