@@ -67,6 +67,7 @@ import {
     MessageSquare,
     Zap,
     Network,
+    ListTodo,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -99,9 +100,10 @@ const SECTIONS = {
         title: 'My Self-Service',
         icon: UserCog,
         color: 'bg-teal-500',
-        roles: ['super_admin', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'business_development_manager_', 'business_development_manager', 'staff'],
+        roles: ['super_admin', 'coo', 'admin', 'sales_manager', 'team_leader', 'sales_executive', 'cs_head', 'cs_agent', 'mentor', 'academic_master', 'master_of_academics', 'master_of_academics_', 'hr', 'finance', 'finance_manager', 'operations', 'marketing', 'quality_control', 'business_development', 'business_development_manager_', 'business_development_manager', 'staff'],
         items: [
             { title: 'SSHR Dashboard', icon: UserCog, path: '/sshr' },
+            { title: 'Task Manager', icon: ListTodo, path: '/hr/tasks' },
             { title: 'My Payslips', icon: Receipt, path: '/sshr/payslips' },
             { title: 'Announcements', icon: Megaphone, path: '/sshr/announcements' },
         ],
@@ -245,14 +247,24 @@ const SECTIONS = {
             { title: 'Team Chat', icon: MessageSquare, path: '/chat' },
         ],
     },
+    it: {
+        id: 'it',
+        title: 'IT & Assets',
+        icon: Monitor,
+        color: 'bg-slate-600',
+        roles: ['super_admin', 'coo', 'admin', 'hr'],
+        items: [
+            { title: 'IT Assets', icon: Monitor, path: '/it/assets' },
+        ],
+    },
     executive: {
         id: 'executive',
         title: 'Executive',
         icon: Zap,
         color: 'bg-amber-500',
-        roles: ['super_admin', 'admin', 'hr'],
+        roles: ['super_admin', 'coo', 'admin', 'hr'],
         items: [
-            { title: 'Executive Dashboard', icon: Zap, path: '/executive', roles: ['super_admin', 'admin'] },
+            { title: 'Executive Dashboard', icon: Zap, path: '/executive', roles: ['super_admin', 'coo', 'admin'] },
             { title: 'Organization Map', icon: Network, path: '/organization' },
         ],
     },
@@ -427,7 +439,7 @@ function Layout() {
         if (section && section.items.length > 0) {
             // Find the first item accessible by ROLE (not permissions — permissions may not be loaded yet)
             const firstItem = section.items.find(item => {
-                if (userRole === 'super_admin') return true;
+                if (userRole === 'super_admin' || userRole === 'coo') return true;
                 // Use role-based check: if item has roles restriction, user must be in the list
                 if (item.roles && !item.roles.includes(userRole)) return false;
                 return true;
@@ -440,8 +452,8 @@ function Layout() {
 
     // Check if user can access a path using roles AND permissions
     function checkAccess(path, roles) {
-        // Super admin always has access
-        if (userRole === 'super_admin') return true;
+        // Super admin and COO always has access
+        if (userRole === 'super_admin' || userRole === 'coo') return true;
         
         // First check item-level role restriction (most specific)
         if (roles && roles.length > 0 && !roles.includes(userRole)) {
@@ -463,7 +475,7 @@ function Layout() {
     }
 
     function getRoleBadgeColor(r) {
-        const map = { super_admin: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500', business_development: 'bg-sky-500', business_development_manager: 'bg-sky-500', business_development_manager_: 'bg-sky-500' };
+        const map = { super_admin: 'bg-purple-500', coo: 'bg-purple-500', admin: 'bg-blue-500', sales_manager: 'bg-green-500', team_leader: 'bg-cyan-500', sales_executive: 'bg-yellow-500', cs_head: 'bg-pink-500', cs_agent: 'bg-indigo-500', mentor: 'bg-orange-500', finance: 'bg-emerald-500', hr: 'bg-rose-500', business_development: 'bg-sky-500', business_development_manager: 'bg-sky-500', business_development_manager_: 'bg-sky-500' };
         return map[r] || 'bg-slate-500';
     }
 
@@ -476,8 +488,8 @@ function Layout() {
     for (let i = 0; i < sectionKeys.length; i++) {
         const key = sectionKeys[i];
         const section = SECTIONS[key];
-        // Super admin sees everything
-        if (userRole === 'super_admin') {
+        // Super admin and COO see everything
+        if (userRole === 'super_admin' || userRole === 'coo') {
             visibleSections.push(section);
         } else {
             // First check: user's role must be in the section's allowed roles
@@ -499,7 +511,7 @@ function Layout() {
     if (currentSection) {
         for (let i = 0; i < currentSection.items.length; i++) {
             const item = currentSection.items[i];
-            if (userRole === 'super_admin') {
+            if (userRole === 'super_admin' || userRole === 'coo') {
                 sidebarItems.push(item);
             } else {
                 // If item has specific roles, check against user role
@@ -654,7 +666,7 @@ function Layout() {
                         <h1 className="text-lg font-semibold text-foreground">CLT Synapse</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        {userRole === 'super_admin' && <EnvironmentSwitcher />}
+                        {(userRole === 'super_admin' || userRole === 'coo') && <EnvironmentSwitcher />}
                         <Button variant="ghost" size="icon" onClick={toggleTheme} title={`Theme: ${themeMode || 'auto'}`} data-testid="theme-toggle">
                             {themeMode === 'auto' ? <Monitor className="h-5 w-5" /> : theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                         </Button>
@@ -743,7 +755,10 @@ function HomePageContent({ user, visibleSections, selectSection }) {
                 
                 {/* Welcome message */}
                 <div className="text-center mb-6">
-                    <h2 className="text-3xl font-bold mb-2">Welcome, {user?.full_name?.split(' ')[0]}!</h2>
+                    <h2 className="text-3xl font-bold mb-1">Welcome, {user?.designation ? user.full_name : user?.full_name || 'User'}!</h2>
+                    {user?.designation && (
+                        <p className="text-base text-primary/80 font-medium mb-1">{user.designation}</p>
+                    )}
                     <p className="text-muted-foreground">Select a module to get started</p>
                 </div>
                 

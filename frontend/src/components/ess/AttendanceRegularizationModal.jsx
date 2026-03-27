@@ -23,6 +23,8 @@ const AttendanceRegularizationModal = ({
     attendanceRecord // Pre-filled if clicking on a specific date
 }) => {
     const [submitting, setSubmitting] = useState(false);
+    const [shiftInfo, setShiftInfo] = useState(null);
+    const [fetchingDate, setFetchingDate] = useState(false);
     
     const [formData, setFormData] = useState({
         date: '',
@@ -41,6 +43,36 @@ const AttendanceRegularizationModal = ({
             });
         }
     }, [attendanceRecord]);
+
+    // Auto-fetch attendance + shift when date changes
+    const handleDateChange = async (dateVal) => {
+        setFormData(prev => ({ ...prev, date: dateVal }));
+        if (!dateVal) return;
+        setFetchingDate(true);
+        try {
+            const res = await apiClient.get(`/hr/my-attendance-for-date?date=${dateVal}`);
+            const { attendance, shift } = res.data;
+            setShiftInfo(shift);
+            if (attendance) {
+                setFormData(prev => ({
+                    ...prev,
+                    requested_check_in: attendance.biometric_in || shift?.start || '',
+                    requested_check_out: attendance.biometric_out || shift?.end || '',
+                }));
+            } else {
+                // No attendance record — pre-fill with shift times
+                setFormData(prev => ({
+                    ...prev,
+                    requested_check_in: shift?.start || '',
+                    requested_check_out: shift?.end || '',
+                }));
+            }
+        } catch {
+            // Ignore
+        } finally {
+            setFetchingDate(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -98,11 +130,31 @@ const AttendanceRegularizationModal = ({
                         <Input
                             type="date"
                             value={formData.date}
-                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                            onChange={(e) => handleDateChange(e.target.value)}
                             max={new Date().toISOString().split('T')[0]}
                             data-testid="reg-date"
                         />
+                        {fetchingDate && <p className="text-xs text-muted-foreground">Loading schedule...</p>}
                     </div>
+                    
+                    {/* Shift Schedule Info */}
+                    {shiftInfo && (
+                        <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                            <Label className="text-xs text-blue-600 dark:text-blue-400 mb-1 block font-semibold">Shift Schedule: {shiftInfo.name}</Label>
+                            <div className="flex items-center gap-4 text-sm">
+                                <div>
+                                    <span className="text-muted-foreground">Expected In: </span>
+                                    <span className="font-mono font-medium">{shiftInfo.start}</span>
+                                </div>
+                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                    <span className="text-muted-foreground">Expected Out: </span>
+                                    <span className="font-mono font-medium">{shiftInfo.end}</span>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1">Grace period: {shiftInfo.grace_minutes} minutes</p>
+                        </div>
+                    )}
                     
                     {/* Original Times (if available) */}
                     {(originalIn || originalOut) && (

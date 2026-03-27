@@ -20,6 +20,9 @@ import {
     Briefcase,
     ChevronRight,
     User,
+    ListTodo,
+    ArrowUpDown,
+    Trash2,
 } from 'lucide-react';
 import {
     LeaveBalanceWidget,
@@ -40,18 +43,27 @@ const ESSSection = () => {
     const [selectedAttendance, setSelectedAttendance] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
     const [punchStatus, setPunchStatus] = useState(null);
-    const [timesheetTasks, setTimesheetTasks] = useState([{ description: '', hours: 0, category: '' }]);
+    const [timesheetTasks, setTimesheetTasks] = useState([{ task_id: '', task_title: '', description: '', hours: 0, category: '', notes: '' }]);
     const [timesheetSummary, setTimesheetSummary] = useState('');
+    const [assignedTasks, setAssignedTasks] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [timesheetHistory, setTimesheetHistory] = useState([]);
 
     const fetchESSData = useCallback(async () => {
         setLoading(true);
         try {
-            const [essRes, punchRes] = await Promise.all([
+            const [essRes, punchRes, tasksRes, catRes, tsRes] = await Promise.all([
                 apiClient.get('/ess/dashboard'),
-                apiClient.get('/hr/my-punch-status').catch(() => ({ data: { has_employee_record: false } }))
+                apiClient.get('/hr/my-punch-status').catch(() => ({ data: { has_employee_record: false } })),
+                apiClient.get('/hr/tasks').catch(() => ({ data: [] })),
+                apiClient.get('/hr/task-categories').catch(() => ({ data: [] })),
+                apiClient.get('/hr/timesheet').catch(() => ({ data: [] })),
             ]);
             setEssData(essRes.data);
             setPunchStatus(punchRes.data);
+            setAssignedTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
+            setCategories(Array.isArray(catRes.data) ? catRes.data : []);
+            setTimesheetHistory(Array.isArray(tsRes.data) ? tsRes.data : []);
         } catch (error) {
             console.error('Failed to fetch ESS data:', error);
         } finally {
@@ -84,21 +96,49 @@ const ESSSection = () => {
     };
 
     const handleSubmitTimesheet = async () => {
-        const validTasks = timesheetTasks.filter(t => t.description.trim());
+        const validTasks = timesheetTasks.filter(t => (t.description?.trim() || t.task_title?.trim()) && t.hours > 0);
         if (validTasks.length === 0) {
-            toast.error('Add at least one task');
+            toast.error('Add at least one task with hours');
             return;
         }
         try {
             await apiClient.post('/hr/timesheet', {
-                tasks: validTasks,
+                tasks: validTasks.map(t => ({
+                    task_id: t.task_id || '',
+                    task_title: t.task_title || t.description || '',
+                    description: t.notes || t.description || '',
+                    hours: t.hours,
+                    category: t.category || 'Other',
+                })),
                 summary: timesheetSummary
             });
             toast.success('Timesheet submitted');
-            setTimesheetTasks([{ description: '', hours: 0, category: '' }]);
+            setTimesheetTasks([{ task_id: '', task_title: '', description: '', hours: 0, category: '', notes: '' }]);
             setTimesheetSummary('');
+            fetchESSData();
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Timesheet submission failed');
+        }
+    };
+
+    const handlePickTask = (task) => {
+        setTimesheetTasks(prev => [...prev, {
+            task_id: task.id,
+            task_title: task.title,
+            description: '',
+            hours: 0,
+            category: task.category || '',
+            notes: '',
+        }]);
+    };
+
+    const handleUpdateTaskStatus = async (taskId, newStatus) => {
+        try {
+            await apiClient.put(`/hr/tasks/${taskId}`, { status: newStatus });
+            toast.success('Task updated');
+            fetchESSData();
+        } catch (err) {
+            toast.error('Failed to update task');
         }
     };
 
@@ -442,97 +482,187 @@ const ESSSection = () => {
                 
                 {/* Timesheet Tab */}
                 <TabsContent value="timesheet" className="mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <FileText className="h-5 w-5" />
-                                Daily Timesheet
-                            </CardTitle>
-                            <CardDescription>Log your daily tasks and work hours</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {timesheetTasks.map((task, i) => (
-                                <div key={i} className="flex gap-3 items-start">
-                                    <div className="flex-1">
-                                        <input
-                                            type="text"
-                                            placeholder="Task description"
-                                            value={task.description}
+                    <div className="space-y-4">
+                        {/* Assigned Tasks - Pick from manager assignments */}
+                        {assignedTasks.filter(t => t.status !== 'completed').length > 0 && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <ListTodo className="h-4 w-4" />
+                                        Assigned Tasks
+                                    </CardTitle>
+                                    <CardDescription>Pick a task to log time against it</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                        {assignedTasks.filter(t => t.status !== 'completed').map(task => (
+                                            <div key={task.id} className="flex items-center justify-between p-2.5 bg-muted/40 rounded-lg hover:bg-muted/60 transition-colors" data-testid={`assigned-task-${task.id}`}>
+                                                <div className="flex-1 min-w-0 mr-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-medium truncate">{task.title}</span>
+                                                        <Badge variant={task.priority === 'urgent' ? 'destructive' : task.priority === 'high' ? 'default' : 'secondary'} className="text-[10px] shrink-0">
+                                                            {task.priority}
+                                                        </Badge>
+                                                        <Badge variant="outline" className="text-[10px] shrink-0">{task.category}</Badge>
+                                                    </div>
+                                                    {task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <select
+                                                        value={task.status}
+                                                        onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                                                        className="text-xs px-1.5 py-1 rounded border bg-background"
+                                                    >
+                                                        <option value="open">Open</option>
+                                                        <option value="in_progress">In Progress</option>
+                                                        <option value="completed">Done</option>
+                                                    </select>
+                                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handlePickTask(task)}>
+                                                        <Plus className="h-3 w-3 mr-1" />Log
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Timesheet Entry */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <FileText className="h-5 w-5" />
+                                    Daily Timesheet
+                                </CardTitle>
+                                <CardDescription>Log tasks & hours. You can pick assigned tasks or add custom entries.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {timesheetTasks.map((task, i) => (
+                                    <div key={i} className="p-3 border border-border/50 rounded-lg space-y-2 bg-muted/20" data-testid={`timesheet-entry-${i}`}>
+                                        <div className="flex gap-2 items-start">
+                                            <div className="flex-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder={task.task_id ? task.task_title : "Task name / description"}
+                                                    value={task.task_title || task.description || ''}
+                                                    onChange={(e) => {
+                                                        const updated = [...timesheetTasks];
+                                                        if (updated[i].task_id) {
+                                                            // Assigned task — title is locked
+                                                        } else {
+                                                            updated[i].description = e.target.value;
+                                                            updated[i].task_title = e.target.value;
+                                                        }
+                                                        setTimesheetTasks(updated);
+                                                    }}
+                                                    readOnly={!!task.task_id}
+                                                    className={`w-full px-3 py-2 rounded-md border bg-background text-sm ${task.task_id ? 'bg-muted/50 cursor-default' : ''}`}
+                                                    data-testid={`timesheet-task-${i}`}
+                                                />
+                                            </div>
+                                            <div className="w-20">
+                                                <input
+                                                    type="number"
+                                                    placeholder="Hrs"
+                                                    step="0.5"
+                                                    min="0"
+                                                    max="12"
+                                                    value={task.hours || ''}
+                                                    onChange={(e) => {
+                                                        const updated = [...timesheetTasks];
+                                                        updated[i].hours = parseFloat(e.target.value) || 0;
+                                                        setTimesheetTasks(updated);
+                                                    }}
+                                                    className="w-full px-3 py-2 rounded-md border bg-background text-sm text-center"
+                                                />
+                                            </div>
+                                            <div className="w-32">
+                                                <select
+                                                    value={task.category}
+                                                    onChange={(e) => {
+                                                        const updated = [...timesheetTasks];
+                                                        updated[i].category = e.target.value;
+                                                        setTimesheetTasks(updated);
+                                                    }}
+                                                    className="w-full px-2 py-2 rounded-md border bg-background text-sm"
+                                                >
+                                                    <option value="">Category</option>
+                                                    {categories.map(c => (
+                                                        <option key={c} value={c.toLowerCase().replace(/ /g, '_')}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {timesheetTasks.length > 1 && (
+                                                <Button variant="ghost" size="sm" className="text-red-500 h-9"
+                                                    onClick={() => setTimesheetTasks(timesheetTasks.filter((_, idx) => idx !== i))}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <textarea
+                                            placeholder="Notes — what specifically did you work on?"
+                                            value={task.notes || ''}
                                             onChange={(e) => {
                                                 const updated = [...timesheetTasks];
-                                                updated[i].description = e.target.value;
+                                                updated[i].notes = e.target.value;
                                                 setTimesheetTasks(updated);
                                             }}
-                                            className="w-full px-3 py-2 rounded-md border bg-background text-sm"
-                                            data-testid={`timesheet-task-${i}`}
+                                            className="w-full px-3 py-1.5 rounded-md border bg-background text-xs min-h-[36px] resize-none"
+                                            rows={1}
                                         />
                                     </div>
-                                    <div className="w-20">
-                                        <input
-                                            type="number"
-                                            placeholder="Hrs"
-                                            step="0.5"
-                                            min="0"
-                                            max="12"
-                                            value={task.hours || ''}
-                                            onChange={(e) => {
-                                                const updated = [...timesheetTasks];
-                                                updated[i].hours = parseFloat(e.target.value) || 0;
-                                                setTimesheetTasks(updated);
-                                            }}
-                                            className="w-full px-3 py-2 rounded-md border bg-background text-sm text-center"
-                                        />
-                                    </div>
-                                    <div className="w-28">
-                                        <select
-                                            value={task.category}
-                                            onChange={(e) => {
-                                                const updated = [...timesheetTasks];
-                                                updated[i].category = e.target.value;
-                                                setTimesheetTasks(updated);
-                                            }}
-                                            className="w-full px-2 py-2 rounded-md border bg-background text-sm"
-                                        >
-                                            <option value="">Category</option>
-                                            <option value="marketing">Marketing</option>
-                                            <option value="development">Development</option>
-                                            <option value="design">Design</option>
-                                            <option value="content">Content</option>
-                                            <option value="admin">Admin</option>
-                                            <option value="other">Other</option>
-                                        </select>
-                                    </div>
-                                    {timesheetTasks.length > 1 && (
-                                        <Button variant="ghost" size="sm" className="text-red-500 h-9"
-                                            onClick={() => setTimesheetTasks(timesheetTasks.filter((_, idx) => idx !== i))}>
-                                            <XCircle className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                </div>
-                            ))}
-                            <Button variant="outline" size="sm" onClick={() => setTimesheetTasks([...timesheetTasks, { description: '', hours: 0, category: '' }])}>
-                                <Plus className="h-4 w-4 mr-1" />Add Task
-                            </Button>
-                            <div>
-                                <label className="text-sm font-medium mb-1 block">Daily Summary</label>
-                                <textarea
-                                    value={timesheetSummary}
-                                    onChange={(e) => setTimesheetSummary(e.target.value)}
-                                    placeholder="Brief summary of what you accomplished today..."
-                                    className="w-full px-3 py-2 rounded-md border bg-background text-sm min-h-[60px]"
-                                    data-testid="timesheet-summary"
-                                />
-                            </div>
-                            <div className="flex items-center justify-between pt-2 border-t">
-                                <p className="text-sm text-muted-foreground">
-                                    Total: <span className="font-bold">{timesheetTasks.reduce((s, t) => s + (t.hours || 0), 0).toFixed(1)} hours</span>
-                                </p>
-                                <Button onClick={handleSubmitTimesheet} data-testid="submit-timesheet-btn">
-                                    <CheckCircle className="h-4 w-4 mr-2" />Submit Timesheet
+                                ))}
+                                <Button variant="outline" size="sm" onClick={() => setTimesheetTasks([...timesheetTasks, { task_id: '', task_title: '', description: '', hours: 0, category: '', notes: '' }])}>
+                                    <Plus className="h-4 w-4 mr-1" />Add Custom Task
                                 </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                <div>
+                                    <label className="text-sm font-medium mb-1 block">Daily Summary</label>
+                                    <textarea
+                                        value={timesheetSummary}
+                                        onChange={(e) => setTimesheetSummary(e.target.value)}
+                                        placeholder="Brief summary of what you accomplished today..."
+                                        className="w-full px-3 py-2 rounded-md border bg-background text-sm min-h-[50px]"
+                                        data-testid="timesheet-summary"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                    <p className="text-sm text-muted-foreground">
+                                        Total: <span className="font-bold">{timesheetTasks.reduce((s, t) => s + (t.hours || 0), 0).toFixed(1)} hours</span>
+                                    </p>
+                                    <Button onClick={handleSubmitTimesheet} data-testid="submit-timesheet-btn">
+                                        <CheckCircle className="h-4 w-4 mr-2" />Submit Timesheet
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Recent Timesheets */}
+                        {timesheetHistory.length > 0 && (
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base">Recent Submissions</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <ScrollArea className="h-[200px]">
+                                        <div className="space-y-2">
+                                            {timesheetHistory.slice(0, 7).map(ts => (
+                                                <div key={ts.id} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg">
+                                                    <div>
+                                                        <p className="text-sm font-medium">{ts.date}</p>
+                                                        <p className="text-xs text-muted-foreground">{ts.tasks?.length || 0} tasks</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-sm font-bold">{ts.total_logged_hours?.toFixed(1) || 0}h</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
                 </TabsContent>
 
                 {/* Requests Tab */}

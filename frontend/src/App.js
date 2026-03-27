@@ -48,6 +48,8 @@ import MT5SyncPage from "@/pages/MT5SyncPage";
 import ChatPage from "@/pages/ChatPage";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 import OrganizationMapPage from "@/pages/OrganizationMapPage";
+import ITAssetsPage from "@/pages/ITAssetsPage";
+import TaskManagerPage from "@/pages/TaskManagerPage";
 
 // Finance Module
 import FinanceEntitySelector from "@/pages/FinanceEntitySelector";
@@ -136,6 +138,10 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     }
     
     if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
+        // COO has same access as super_admin
+        if (user?.role === 'coo' && allowedRoles.includes('super_admin')) {
+            return children;
+        }
         return <Navigate to="/dashboard" replace />;
     }
     
@@ -598,9 +604,24 @@ function AppRoutes() {
                 } />
                 
                 {/* Organization Map */}
+                {/* Organization Map */}
                 <Route path="organization" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
                         <OrganizationMapPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* IT Assets */}
+                <Route path="it/assets" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <ITAssetsPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Task Manager */}
+                <Route path="hr/tasks" element={
+                    <ProtectedRoute>
+                        <TaskManagerPage />
                     </ProtectedRoute>
                 } />
                 

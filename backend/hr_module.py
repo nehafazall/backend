@@ -186,6 +186,7 @@ class EmployeeCreate(BaseModel):
     user_id: Optional[str] = None
 
 class EmployeeUpdate(BaseModel):
+    employee_id: Optional[str] = None  # Allow editing for BioCloud sync
     full_name: Optional[str] = None
     gender: Optional[Gender] = None
     date_of_birth: Optional[str] = None

@@ -993,14 +993,18 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 def require_roles(allowed_roles: List[str]):
     async def role_checker(user = Depends(get_current_user)):
-        if user.get("role") not in allowed_roles:
+        role = user.get("role")
+        # COO has same access as super_admin
+        if role == "coo" and "super_admin" in allowed_roles:
+            return user
+        if role not in allowed_roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user
     return role_checker
 
 def check_permission(user: Dict, module: str, required_level: str) -> bool:
     """Check if user has required permission level for a module"""
-    if user.get("role") == "super_admin":
+    if user.get("role") in ("super_admin", "coo"):
         return True
     
     permissions = user.get("permissions", {})
@@ -1806,6 +1810,14 @@ async def login(data: UserLogin):
 @api_router.get("/auth/me")
 async def get_me(user = Depends(get_current_user)):
     user_data = {k: v for k, v in user.items() if k != "password" and k != "_id"}
+    # Enrich with designation from hr_employees
+    if not user_data.get("designation"):
+        hr_emp = await db.hr_employees.find_one(
+            {"user_id": user_data.get("id")},
+            {"_id": 0, "designation": 1}
+        )
+        if hr_emp and hr_emp.get("designation"):
+            user_data["designation"] = hr_emp["designation"]
     return user_data
 
 # ==================== FORGOT PASSWORD ====================
@@ -20350,7 +20362,7 @@ async def get_timesheets(
     """Get timesheet entries"""
     query = {}
 
-    if user["role"] not in ["super_admin", "admin", "hr", "team_leader"]:
+    if user["role"] not in ["super_admin", "coo", "admin", "hr", "team_leader"]:
         employee = await db.hr_employees.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
         if employee:
             query["employee_id"] = employee["id"]
@@ -20364,6 +20376,150 @@ async def get_timesheets(
 
     records = await db.hr_timesheets.find(query, {"_id": 0}).sort("date", -1).to_list(100)
     return records
+
+# ─── Task Management (Timesheet Tasks) ─────────────────────────────────
+
+TASK_CATEGORIES = [
+    "Marketing", "Development", "Design", "Content", "Admin",
+    "IT", "Web Development", "Video Editing", "Script Writing",
+    "Quality Control", "Sales", "Customer Service", "Other"
+]
+
+@api_router.get("/hr/task-categories")
+async def get_task_categories(user=Depends(get_current_user)):
+    """Get all task categories"""
+    return TASK_CATEGORIES
+
+@api_router.post("/hr/tasks")
+async def create_task(data: Dict, user=Depends(require_roles(["super_admin", "admin", "hr", "team_leader", "master_of_academics", "cs_head"]))):
+    """Manager creates a task and assigns to employees"""
+    now = datetime.now(timezone.utc).isoformat()
+    task = {
+        "id": str(uuid.uuid4()),
+        "title": data["title"],
+        "description": data.get("description", ""),
+        "category": data.get("category", "Other"),
+        "priority": data.get("priority", "medium"),  # low, medium, high, urgent
+        "status": "open",  # open, in_progress, completed
+        "assigned_to": data.get("assigned_to", []),  # list of user_ids
+        "assigned_to_names": [],
+        "created_by": user["id"],
+        "created_by_name": user.get("full_name", ""),
+        "department": data.get("department", user.get("department", "")),
+        "due_date": data.get("due_date"),
+        "recurring": data.get("recurring", False),  # For repeated tasks like video editing
+        "created_at": now,
+        "updated_at": now,
+    }
+    # Resolve names
+    if task["assigned_to"]:
+        assigned_users = await db.users.find(
+            {"id": {"$in": task["assigned_to"]}},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(50)
+        task["assigned_to_names"] = [u["full_name"] for u in assigned_users]
+    
+    await db.hr_tasks.insert_one(task)
+    task.pop("_id", None)
+    return task
+
+@api_router.get("/hr/tasks")
+async def get_tasks(
+    status: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    department: Optional[str] = None,
+    user=Depends(get_current_user)
+):
+    """Get tasks — managers see all dept tasks, employees see their assigned tasks"""
+    query = {}
+    mgr_roles = ["super_admin", "coo", "admin", "hr", "team_leader", "master_of_academics", "cs_head"]
+    
+    if user["role"] not in mgr_roles:
+        query["assigned_to"] = user["id"]
+    else:
+        if assigned_to:
+            query["assigned_to"] = assigned_to
+        if department:
+            query["department"] = department
+    
+    if status:
+        query["status"] = status
+    
+    tasks = await db.hr_tasks.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return tasks
+
+@api_router.put("/hr/tasks/{task_id}")
+async def update_task(task_id: str, data: Dict, user=Depends(get_current_user)):
+    """Update task status or details"""
+    task = await db.hr_tasks.find_one({"id": task_id})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update = {}
+    
+    for field in ["title", "description", "category", "priority", "status", "due_date", "assigned_to", "recurring"]:
+        if field in data:
+            update[field] = data[field]
+    
+    # If assigned_to updated, resolve names
+    if "assigned_to" in update:
+        assigned_users = await db.users.find(
+            {"id": {"$in": update["assigned_to"]}},
+            {"_id": 0, "full_name": 1}
+        ).to_list(50)
+        update["assigned_to_names"] = [u["full_name"] for u in assigned_users]
+    
+    update["updated_at"] = now
+    await db.hr_tasks.update_one({"id": task_id}, {"$set": update})
+    return {"message": "Task updated"}
+
+@api_router.delete("/hr/tasks/{task_id}")
+async def delete_task(task_id: str, user=Depends(require_roles(["super_admin", "admin", "hr", "team_leader", "master_of_academics", "cs_head"]))):
+    """Delete a task"""
+    await db.hr_tasks.delete_one({"id": task_id})
+    return {"message": "Task deleted"}
+
+# ─── Regularization: Fetch attendance for date ───────────────────────
+
+@api_router.get("/hr/my-attendance-for-date")
+async def get_my_attendance_for_date(date: str, user=Depends(get_current_user)):
+    """Get attendance record + shift info for a specific date for current user"""
+    employee = await db.hr_employees.find_one(
+        {"$or": [{"user_id": user["id"]}, {"id": user.get("employee_id")}]},
+        {"_id": 0, "id": 1, "employee_id": 1, "shift_id": 1}
+    )
+    if not employee:
+        return {"attendance": None, "shift": None}
+    
+    # Get attendance
+    att = await db.hr_attendance.find_one(
+        {"$or": [
+            {"employee_id": employee["id"], "date": date},
+            {"employee_code": employee.get("employee_id"), "date": date}
+        ]},
+        {"_id": 0}
+    )
+    
+    # Get shift info
+    shift_id = employee.get("shift_id", "morning")
+    shift = await db.hr_shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
+        # Try defaults
+        shifts = await db.hr_shifts.find({}, {"_id": 0}).to_list(10)
+        shift = shifts[0] if shifts else {"name": "Morning", "start": "10:00", "end": "19:00"}
+    
+    return {
+        "attendance": att,
+        "shift": {
+            "name": shift.get("name", ""),
+            "start": shift.get("start", "10:00"),
+            "end": shift.get("end", "19:00"),
+            "grace_minutes": shift.get("grace_minutes", 30),
+        }
+    }
+
+
 
 @api_router.get("/hr/attendance")
 async def get_attendance(
@@ -29610,6 +29766,76 @@ async def get_organization_map(user=Depends(get_current_user)):
             "department_distribution": dept_counts,
         }
     }
+
+
+
+# ─── IT Asset Management ────────────────────────────────────────────────
+
+@api_router.get("/it/assets")
+async def get_it_assets(user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Get all IT assets"""
+    assets = await db.it_assets.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return assets
+
+@api_router.post("/it/assets")
+async def create_it_asset(data: Dict, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Create a new IT asset"""
+    now = datetime.now(timezone.utc).isoformat()
+    assigned_name = ""
+    assigned_to = data.get("assigned_to", "")
+    if assigned_to and assigned_to != "none":
+        u = await db.users.find_one({"id": assigned_to}, {"_id": 0, "full_name": 1})
+        assigned_name = u["full_name"] if u else ""
+    else:
+        assigned_to = ""
+    
+    asset = {
+        "id": str(uuid.uuid4()),
+        "asset_type": data.get("asset_type", "other"),
+        "name": data["name"],
+        "brand": data.get("brand", ""),
+        "model": data.get("model", ""),
+        "serial_number": data.get("serial_number", ""),
+        "assigned_to": assigned_to,
+        "assigned_to_name": assigned_name,
+        "status": data.get("status", "available"),
+        "purchase_date": data.get("purchase_date", ""),
+        "warranty_expiry": data.get("warranty_expiry", ""),
+        "notes": data.get("notes", ""),
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.it_assets.insert_one(asset)
+    asset.pop("_id", None)
+    return asset
+
+@api_router.put("/it/assets/{asset_id}")
+async def update_it_asset(asset_id: str, data: Dict, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Update an IT asset"""
+    now = datetime.now(timezone.utc).isoformat()
+    update = {}
+    for field in ["asset_type", "name", "brand", "model", "serial_number", "assigned_to", "status", "purchase_date", "warranty_expiry", "notes"]:
+        if field in data:
+            update[field] = data[field]
+    
+    assigned_to = update.get("assigned_to", "")
+    if assigned_to and assigned_to != "none":
+        u = await db.users.find_one({"id": assigned_to}, {"_id": 0, "full_name": 1})
+        update["assigned_to_name"] = u["full_name"] if u else ""
+    elif "assigned_to" in update:
+        update["assigned_to"] = ""
+        update["assigned_to_name"] = ""
+    
+    update["updated_at"] = now
+    await db.it_assets.update_one({"id": asset_id}, {"$set": update})
+    return {"message": "Asset updated"}
+
+@api_router.delete("/it/assets/{asset_id}")
+async def delete_it_asset(asset_id: str, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Delete an IT asset"""
+    await db.it_assets.delete_one({"id": asset_id})
+    return {"message": "Asset deleted"}
 
 
 # Include the router in the main app
