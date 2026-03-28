@@ -548,12 +548,13 @@ const CustomerServicePage = () => {
     const [csAgentsList, setCsAgentsList] = useState([]);
     const [filterCSAgent, setFilterCSAgent] = useState('all');
     const [displayMode, setDisplayMode] = useState('kanban'); // 'kanban' or 'table'
+    const [tableStageFilter, setTableStageFilter] = useState('all'); // stage filter for table view
 
     useEffect(() => {
         fetchStudents();
         fetchStageSummary();
         fetchShadowCards();
-    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize, ltvSort, displayMode]);
+    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize, ltvSort, displayMode, tableStageFilter]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
@@ -604,12 +605,16 @@ const CustomerServicePage = () => {
                 setLoading(false);
                 return;
             } else {
-                // Search, period filter, or LTV sort: use single paginated query
+                // Search, period filter, LTV sort, or Table mode: use single paginated query
                 const params = { ...baseParams, search: searchTerm || undefined, page: currentPage, page_size: pageSize };
                 if (ltvSort) {
                     params.sort_by = 'ltv';
                     params.sort_order = ltvSort;
-                    params.page_size = 100; // bigger page for sorted list view
+                    params.page_size = 100;
+                }
+                // Apply stage filter in table mode
+                if (displayMode === 'table' && tableStageFilter && tableStageFilter !== 'all') {
+                    params.stage = tableStageFilter;
                 }
                 const response = await studentApi.getAll(params);
                 const data = response.data;
@@ -1035,7 +1040,7 @@ const CustomerServicePage = () => {
                         Kanban
                     </button>
                     <button
-                        onClick={() => { setDisplayMode('table'); setLtvSort(null); }}
+                        onClick={() => { setDisplayMode('table'); setLtvSort(null); setCurrentPage(1); }}
                         className={`px-3 py-1 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${displayMode === 'table' && !ltvSort ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         data-testid="cs-table-toggle"
                     >
@@ -1043,6 +1048,26 @@ const CustomerServicePage = () => {
                         Table
                     </button>
                 </div>
+
+                {/* Stage filter — visible in Table mode */}
+                {(displayMode === 'table' || ltvSort) && (
+                    <Select value={tableStageFilter} onValueChange={(v) => { setTableStageFilter(v); setCurrentPage(1); }}>
+                        <SelectTrigger className="w-[180px] h-9 text-xs" data-testid="table-stage-filter">
+                            <SelectValue placeholder="Filter by Stage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Stages</SelectItem>
+                            {CS_STAGES.map(s => (
+                                <SelectItem key={s.id} value={s.id}>
+                                    <span className="flex items-center gap-2">
+                                        <span className={`inline-block w-2 h-2 rounded-full ${s.color}`} />
+                                        {s.label} {stageSummary?.stage_counts?.[s.id] != null ? `(${stageSummary.stage_counts[s.id]})` : ''}
+                                    </span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
 
             {loading ? (
