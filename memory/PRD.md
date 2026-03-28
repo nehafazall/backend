@@ -11,51 +11,37 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 
 ## Implemented Features
 
+### SSHR & HR Attendance Overhaul (Mar 28, 2026)
+- **SSHR Overview**: Changed from weekly to monthly stats (Days Present, Hours Worked)
+- **SSHR Calendar View**: Full monthly calendar grid (Mon-Sun), color-coded cells per status
+  - Click any working day to open regularization request
+  - Legend: Present (green), Late (amber), Absent (red), On Leave (blue), Holiday (purple), Off Day (gray)
+- **Weekend Logic**: Only Sunday is OFF day (Fri/Sat are working days) — affects payroll, leaves, attendance
+- **Late Recalculation**: Late minutes recalculated on-the-fly using current shift config, not stale stored values
+- **Missing Employees**: HR Attendance now shows employees who didn't punch in with "No Record" badge
+- **Loading Fix**: SSHR shows spinner during data fetch instead of premature "Employee Record Not Found"
+
 ### CEO Commission Approval Workflow (Mar 28, 2026)
 - CEO/COO can approve or revoke commissions per department (Sales/CS) per month
 - Until CEO approves, employees see commissions as "Awaiting Approval" (amber)
 - Once approved, employees see "Approved Commission" (green)
-- Backend returns `approved_commission`, `pending_approval_commission` for non-CEO users
-- CEO has "Approve Transactions" tab: generate, review, edit, bulk-approve individual deals
-- Transaction generation is now async with polling to avoid K8s ingress timeout
+- Transaction-level approval with generate, review, edit, bulk-approve
 - COO role has same access as CEO for all commission endpoints
 
 ### Attendance Rules Engine (Mar 27, 2026)
 - Company Holidays and Special Periods (e.g., Ramadan reduced hours)
 - Payroll skips deductions for declared Company Holidays
-- CRUD UI in AttendanceSettingsPage
 
-### SSHR Monthly Attendance View (Mar 27, 2026)
-- Full month-by-month attendance list with day-by-day status
-- 6 summary cards, color-coded, direct regularization link
-- API: `GET /hr/my-monthly-attendance?year=YYYY&month=MM`
+### SSHR & Timesheet System (Mar 27, 2026)
+- Full monthly attendance view with color-coded summary
+- Task Manager for managers, enhanced employee timesheet UI
 
-### IT Assets Module (Mar 27, 2026)
-- Dedicated IT & Assets module on home page (removed from HR sidebar)
-
-### Welcome Page (Mar 27, 2026)
-- Shows "Welcome, {Full Name}!" + designation from hr_employees
-
-### COO Full Access (Mar 27, 2026)
-- `coo` role has identical permissions to `super_admin`
-
-### Task Management System (Mar 27, 2026)
-- 13 categories incl. IT, Web Development, Video Editing, Script Writing
-- Manager assigns tasks, enhanced timesheet
-
-### Organization Map (Mar 27, 2026)
-- Interactive org chart: CEO → Departments → Teams → Members
-
-### Payroll System
-- Attendance validation, deductions only for explicit absent/half-day
-
-### Commission System
-- Course + Addon decomposition, TL commission from team sales
-- Round-robin mentor assignment on student activation
+### Organization, IT, Welcome (Mar 27, 2026)
+- Interactive org chart, dedicated IT Assets module, Welcome page with Full Name + Designation
+- COO role has full system access equivalent to super_admin
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
-- COO: Faizeen@clt-academy.com (role: coo)
 - CS Head: falja@clt-academy.com / Falja@123
 - Sales Executive: aleesha@clt-academy.com / Aleesha@123
 
@@ -67,12 +53,11 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 ### P1
 - Invoice Generation — Auto-generate PDF invoices
 - WhatsApp Integration — Send templated messages
+- CEO Commission Approval Workflow — Complete (tested)
 
 ### P2
 - Workflow Automation Engine
 - Scheduled Email Reports
-- Group chat channels
 
 ### P3
 - Refactor monolithic server.py (~30K lines)
-- Document expiry tracking data entry
