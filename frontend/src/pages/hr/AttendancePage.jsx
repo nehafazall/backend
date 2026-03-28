@@ -135,12 +135,14 @@ const AttendancePage = () => {
     // Use summary from API if available
     const teamStrength = attendanceData?.team_strength || {};
     const summary = attendanceData?.summary || {};
+    const missingEmployees = attendanceData?.missing_employees || [];
     const presentCount = summary.present || attendance.filter(a => a.status === 'present').length;
     const lateCount = summary.late || attendance.filter(a => a.status === 'late').length;
     const warningCount = summary.warning || attendance.filter(a => a.status === 'warning').length;
     const halfDayCount = summary.half_day || attendance.filter(a => a.status === 'half_day').length;
     const absentCount = summary.absent || 0;
     const wfhCount = attendance.filter(a => a.status === 'wfh').length;
+    const noRecordCount = summary.no_record || missingEmployees.length;
 
     // Generate month options for the selector
     const monthOptions = [];
@@ -165,7 +167,7 @@ const AttendancePage = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
                 <Card className="border-l-4 border-l-blue-500">
                     <CardContent className="pt-4 pb-3 px-4">
                         <p className="text-2xl font-bold">{teamStrength.total || '-'}</p>
@@ -210,6 +212,12 @@ const AttendancePage = () => {
                     <CardContent className="pt-4 pb-3 px-4">
                         <p className="text-2xl font-bold text-blue-500">{wfhCount}</p>
                         <p className="text-xs text-muted-foreground">WFH</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-slate-400">
+                    <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-2xl font-bold text-slate-600">{noRecordCount}</p>
+                        <p className="text-xs text-muted-foreground">No Record</p>
                     </CardContent>
                 </Card>
                 <Card className="border-l-4 border-l-purple-500">
@@ -293,13 +301,31 @@ const AttendancePage = () => {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {attendance.length === 0 && (
+                                {attendance.length === 0 && missingEmployees.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                                             No attendance records for this date
                                         </TableCell>
                                     </TableRow>
                                 )}
+                                {/* Missing Employees — No Punch Record */}
+                                {missingEmployees.map((emp) => (
+                                    <TableRow key={`missing-${emp.employee_code}`} className="bg-slate-50/50 dark:bg-slate-900/20">
+                                        <TableCell>
+                                            <div>
+                                                <p className="font-medium text-muted-foreground">{emp.employee_name}</p>
+                                                <p className="text-xs text-muted-foreground">{emp.employee_code}</p>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">{emp.department}</TableCell>
+                                        <TableCell className="text-muted-foreground">-</TableCell>
+                                        <TableCell className="text-muted-foreground">-</TableCell>
+                                        <TableCell className="text-muted-foreground">-</TableCell>
+                                        <TableCell className="text-muted-foreground">-</TableCell>
+                                        <TableCell><Badge className="bg-slate-500 text-white">No Record</Badge></TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">{emp.designation || 'Did not punch in'}</TableCell>
+                                    </TableRow>
+                                ))}
                             </TableBody>
                         </Table>
                     </Card>

@@ -166,6 +166,14 @@ const ESSSection = () => {
         return <Badge variant="outline">{status}</Badge>;
     };
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
     if (!essData?.employee && !punchStatus?.has_employee_record) {
         return (
             <Card className="border-amber-500/50 bg-amber-500/5">
@@ -224,8 +232,8 @@ const ESSSection = () => {
                                 <CheckCircle className="h-5 w-5 text-emerald-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{essData?.attendance?.weekly_summary?.present || 0}</p>
-                                <p className="text-xs text-muted-foreground">Days Present (Week)</p>
+                                <p className="text-2xl font-bold">{essData?.attendance?.monthly_summary?.present || 0}</p>
+                                <p className="text-xs text-muted-foreground">Days Present (Month)</p>
                             </div>
                         </div>
                     </CardContent>
@@ -238,8 +246,8 @@ const ESSSection = () => {
                                 <Timer className="h-5 w-5 text-blue-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{essData?.attendance?.weekly_summary?.total_hours || 0}</p>
-                                <p className="text-xs text-muted-foreground">Hours Worked (Week)</p>
+                                <p className="text-2xl font-bold">{essData?.attendance?.monthly_summary?.total_hours || 0}</p>
+                                <p className="text-xs text-muted-foreground">Hours Worked (Month)</p>
                             </div>
                         </div>
                     </CardContent>
@@ -368,7 +376,7 @@ const ESSSection = () => {
                     </div>
                 </TabsContent>
                 
-                {/* Attendance Tab — Full Monthly View */}
+                {/* Attendance Tab — Calendar View */}
                 <TabsContent value="attendance" className="mt-4 space-y-4">
                     {/* Month Selector + Summary */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -386,9 +394,6 @@ const ESSSection = () => {
                                 </Badge>
                             )}
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => setShowRegularization(true)} data-testid="apply-regularization-btn">
-                            <Plus className="h-4 w-4 mr-1" />Apply Regularization
-                        </Button>
                     </div>
 
                     {/* Summary Cards */}
@@ -411,93 +416,114 @@ const ESSSection = () => {
                         </div>
                     )}
 
-                    {/* Daily Records */}
+                    {/* Calendar Grid */}
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Daily Attendance</CardTitle>
-                            <CardDescription>Click any row to apply for regularization or WFH</CardDescription>
+                            <CardTitle className="text-base">Monthly Calendar</CardTitle>
+                            <CardDescription>Click any working day to view details or apply for regularization</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <ScrollArea className="h-[400px]">
-                                <div className="space-y-1">
-                                    {!monthlyAttendance?.days?.length ? (
-                                        <div className="text-center py-8 text-muted-foreground">
-                                            <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                            <p>No attendance data for this month</p>
-                                        </div>
-                                    ) : monthlyAttendance.days.map((day) => {
-                                        const statusStyles = {
-                                            present: 'border-l-emerald-500 bg-emerald-500/5',
-                                            half_day: 'border-l-amber-500 bg-amber-500/5',
-                                            absent: 'border-l-red-500 bg-red-500/5',
-                                            on_leave: 'border-l-blue-500 bg-blue-500/5',
-                                            holiday: 'border-l-purple-500 bg-purple-500/5',
-                                            weekend: 'border-l-slate-300 bg-slate-500/5 opacity-50',
-                                            upcoming: 'border-l-slate-200 bg-slate-500/3 opacity-40',
-                                            no_data: 'border-l-orange-400 bg-orange-500/5',
-                                        };
-                                        const statusLabels = {
-                                            present: 'Present', half_day: 'Half Day', absent: 'Absent',
-                                            on_leave: 'On Leave', holiday: 'Holiday', weekend: 'Weekend', upcoming: 'Upcoming',
-                                            no_data: 'No Record',
-                                        };
-                                        const statusBadgeColors = {
-                                            present: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
-                                            half_day: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-                                            absent: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-                                            on_leave: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-                                            holiday: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-                                            weekend: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
-                                            upcoming: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
-                                            no_data: 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300',
-                                        };
-                                        const isClickable = !day.is_weekend && !day.is_future && day.status !== 'holiday';
-
-                                        return (
-                                            <div
-                                                key={day.date}
-                                                className={`flex items-center justify-between p-2.5 rounded-lg border-l-4 cursor-${isClickable ? 'pointer hover:shadow-sm' : 'default'} transition-all ${statusStyles[day.status] || ''}`}
-                                                onClick={() => isClickable && handleAttendanceClick({ date: day.date, biometric_in: day.biometric_in, biometric_out: day.biometric_out })}
-                                                data-testid={`monthly-att-${day.date}`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 text-center">
-                                                        <p className="text-sm font-bold">{day.day}</p>
-                                                        <p className="text-[10px] text-muted-foreground">{day.day_name}</p>
-                                                    </div>
-                                                    <div>
-                                                        {!day.is_weekend && !day.is_future && (
-                                                            <div className="flex items-center gap-3 text-xs">
-                                                                <span className="text-muted-foreground">In: <span className="font-mono font-medium text-foreground">{day.biometric_in || '--:--'}</span></span>
-                                                                <span className="text-muted-foreground">Out: <span className="font-mono font-medium text-foreground">{day.biometric_out || '--:--'}</span></span>
-                                                                {day.total_work_hours != null && <span className="text-muted-foreground">{day.total_work_hours}h</span>}
+                            {/* Day headers */}
+                            <div className="grid grid-cols-7 gap-1 mb-1">
+                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                                    <div key={d} className={`text-center text-[10px] font-semibold uppercase tracking-wider py-1 ${d === 'Sun' ? 'text-red-400' : 'text-muted-foreground'}`}>{d}</div>
+                                ))}
+                            </div>
+                            {/* Calendar cells */}
+                            {(() => {
+                                if (!monthlyAttendance?.days?.length) return (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                        <p>No attendance data for this month</p>
+                                    </div>
+                                );
+                                
+                                // Build calendar rows (pad leading empty cells for day alignment)
+                                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                const firstDayName = monthlyAttendance.days[0]?.day_name;
+                                const startOffset = dayNames.indexOf(firstDayName);
+                                const padded = [...Array(startOffset >= 0 ? startOffset : 0).fill(null), ...monthlyAttendance.days];
+                                const rows = [];
+                                for (let i = 0; i < padded.length; i += 7) rows.push(padded.slice(i, i + 7));
+                                
+                                const cellColors = {
+                                    present: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200',
+                                    half_day: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 hover:bg-amber-200',
+                                    absent: 'bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 hover:bg-red-200',
+                                    on_leave: 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
+                                    holiday: 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700',
+                                    weekend: 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-50',
+                                    upcoming: 'bg-slate-50/50 dark:bg-slate-900/20 border-slate-200 dark:border-slate-800 opacity-30',
+                                    no_data: 'bg-orange-50 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700 hover:bg-orange-100',
+                                };
+                                const dotColors = {
+                                    present: 'bg-emerald-500',
+                                    half_day: 'bg-amber-500',
+                                    absent: 'bg-red-500',
+                                    on_leave: 'bg-blue-500',
+                                    holiday: 'bg-purple-500',
+                                    weekend: 'bg-slate-300',
+                                    upcoming: 'bg-slate-200',
+                                    no_data: 'bg-orange-400',
+                                };
+                                
+                                return (
+                                    <div className="space-y-1">
+                                        {rows.map((row, ri) => (
+                                            <div key={ri} className="grid grid-cols-7 gap-1">
+                                                {row.map((day, ci) => {
+                                                    if (!day) return <div key={`empty-${ci}`} className="min-h-[72px]" />;
+                                                    const isClickable = !day.is_weekend && !day.is_future && day.status !== 'holiday';
+                                                    return (
+                                                        <div
+                                                            key={day.date}
+                                                            onClick={() => isClickable && handleAttendanceClick({ date: day.date, biometric_in: day.biometric_in, biometric_out: day.biometric_out })}
+                                                            className={`min-h-[72px] p-1.5 rounded-lg border text-center transition-all ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${cellColors[day.status] || 'border-slate-200'}`}
+                                                            data-testid={`cal-${day.date}`}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <span className={`text-xs font-bold ${day.is_weekend ? 'text-red-400' : ''}`}>{day.day}</span>
+                                                                <span className={`w-2 h-2 rounded-full ${dotColors[day.status] || ''}`} />
                                                             </div>
-                                                        )}
-                                                        {day.late_minutes > 0 && (
-                                                            <p className="text-[10px] text-amber-500">Late by {day.late_minutes} mins</p>
-                                                        )}
-                                                        {day.leave_type && (
-                                                            <p className="text-[10px] text-blue-500">{day.leave_type.replace(/_/g, ' ')}</p>
-                                                        )}
-                                                        {day.holiday_name && (
-                                                            <p className="text-[10px] text-purple-500 font-medium">{day.holiday_name}</p>
-                                                        )}
-                                                        {day.special_period && (
-                                                            <p className="text-[10px] text-purple-400">{day.special_period}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusBadgeColors[day.status] || ''}`}>
-                                                        {statusLabels[day.status] || day.status}
-                                                    </span>
-                                                    {isClickable && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
-                                                </div>
+                                                            {!day.is_weekend && !day.is_future && day.status !== 'holiday' && (
+                                                                <div className="text-[9px] space-y-0.5">
+                                                                    {day.biometric_in && <p className="font-mono text-foreground">{day.biometric_in?.slice(0,5)}</p>}
+                                                                    {day.total_work_hours != null && <p className="text-muted-foreground">{day.total_work_hours}h</p>}
+                                                                    {day.late_minutes > 0 && <p className="text-amber-600 font-medium">Late {day.late_minutes}m</p>}
+                                                                    {!day.biometric_in && day.status === 'no_data' && <p className="text-orange-500">No punch</p>}
+                                                                </div>
+                                                            )}
+                                                            {day.status === 'holiday' && <p className="text-[8px] text-purple-500 mt-1 truncate">{day.holiday_name}</p>}
+                                                            {day.status === 'on_leave' && <p className="text-[8px] text-blue-500 mt-1">{day.leave_type?.replace(/_/g,' ')}</p>}
+                                                            {day.status === 'weekend' && <p className="text-[8px] text-slate-400 mt-1">Off</p>}
+                                                            {day.special_period && <p className="text-[7px] text-purple-400 truncate">{day.special_period}</p>}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </ScrollArea>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Legend */}
+                            <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t">
+                                {[
+                                    { label: 'Present', color: 'bg-emerald-500' },
+                                    { label: 'Late', color: 'bg-amber-500' },
+                                    { label: 'Half Day', color: 'bg-amber-500' },
+                                    { label: 'Absent', color: 'bg-red-500' },
+                                    { label: 'On Leave', color: 'bg-blue-500' },
+                                    { label: 'Holiday', color: 'bg-purple-500' },
+                                    { label: 'No Record', color: 'bg-orange-400' },
+                                    { label: 'Off Day', color: 'bg-slate-300' },
+                                ].map(l => (
+                                    <div key={l.label} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                        <span className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
+                                        {l.label}
+                                    </div>
+                                ))}
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

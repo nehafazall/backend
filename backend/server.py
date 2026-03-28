@@ -20696,7 +20696,7 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
     for d in range(1, days_in_month + 1):
         date_str = f"{y:04d}-{m:02d}-{d:02d}"
         dow = datetime(y, m, d).weekday()  # 0=Mon, 6=Sun
-        is_weekend = dow >= 5  # Sat/Sun
+        is_weekend = dow == 6  # Only Sunday is off
         is_future = date_str > today
         
         att = att_map.get(date_str)
@@ -20723,6 +20723,23 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
             status = "on_leave"
             summary["on_leave"] += 1
         elif att:
+            # Recalculate late_minutes using current shift config
+            bio_in = att.get("biometric_in")
+            actual_late = att.get("late_minutes", 0)
+            used_shift_start = shift.get("start", "10:00")
+            if active_sp and active_sp.get("shift_start"):
+                used_shift_start = active_sp["shift_start"]
+            if bio_in:
+                try:
+                    t_in = datetime.strptime(bio_in[:5], "%H:%M")
+                    t_ss = datetime.strptime(used_shift_start, "%H:%M")
+                    actual_late = max(0, int((t_in - t_ss).total_seconds() / 60))
+                    grace = shift.get("grace_minutes", 30)
+                    if actual_late <= grace:
+                        actual_late = 0
+                except (ValueError, TypeError):
+                    pass
+            
             status = att.get("status", "present")
             if status == "present":
                 summary["present"] += 1
@@ -20730,13 +20747,19 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
                 summary["half_day"] += 1
             elif status == "absent":
                 summary["absent"] += 1
-            if att.get("late_minutes", 0) > 0:
+            if actual_late > 0:
                 summary["late"] += 1
             summary["total_hours"] += att.get("total_work_hours", 0) or 0
         else:
             status = "no_data"
             if not is_future:
                 summary["no_data"] += 1
+            actual_late = 0
+        
+        # Use recalculated late for the day entry
+        used_shift_start = shift.get("start", "10:00")
+        if active_sp and active_sp.get("shift_start"):
+            used_shift_start = active_sp["shift_start"]
         
         day_entry = {
             "date": date_str,
@@ -20751,7 +20774,8 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
             "biometric_in": att.get("biometric_in") if att else None,
             "biometric_out": att.get("biometric_out") if att else None,
             "total_work_hours": att.get("total_work_hours") if att else None,
-            "late_minutes": att.get("late_minutes", 0) if att else 0,
+            "late_minutes": actual_late if att else 0,
+            "shift_start": used_shift_start,
         }
         days.append(day_entry)
     
@@ -20778,9 +20802,9 @@ async def get_attendance(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     department: Optional[str] = None,
-    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader"]))
+    user = Depends(require_roles(["super_admin", "admin", "hr", "team_leader", "coo"]))
 ):
-    """Get attendance records with team strength by location"""
+    """Get attendance records with team strength by location, recalculated late minutes, and missing employees"""
     query = {}
     
     if employee_id:
@@ -20794,18 +20818,108 @@ async def get_attendance(
     
     records = await db.hr_attendance.find(query, {"_id": 0}).sort([("date", -1), ("employee_code", 1)]).to_list(1000)
     
+    # Load shifts for on-the-fly late recalculation
+    all_shifts = await db.hr_shifts.find({}, {"_id": 0}).to_list(50)
+    shift_map = {s["id"]: s for s in all_shifts}
+    if not shift_map:
+        shift_map = {sid: s for sid, s in DEFAULT_SHIFTS.items()}
+    
+    # Load attendance rules for special period overrides
+    rules = await db.hr_settings.find_one({"type": "attendance_rules"}, {"_id": 0})
+    special_periods = rules.get("special_periods", []) if rules else []
+    
     # Team strength by location
+    emp_query = {"employment_status": {"$in": ["active", "probation"]}}
+    if department and department != "all":
+        emp_query["department"] = department
     active_employees = await db.hr_employees.find(
-        {"employment_status": {"$in": ["active", "probation"]}},
-        {"_id": 0, "id": 1, "work_location": 1, "country": 1}
+        emp_query,
+        {"_id": 0, "id": 1, "employee_id": 1, "full_name": 1, "department": 1, "designation": 1,
+         "work_location": 1, "country": 1, "shift_id": 1}
     ).to_list(500)
     
-    total_strength = len(active_employees)
-    uae_strength = len([e for e in active_employees if (e.get("country") or e.get("work_location") or "UAE") in ["UAE", "Office"]])
-    india_strength = len([e for e in active_employees if (e.get("country") or e.get("work_location")) == "India"])
+    all_active = await db.hr_employees.find(
+        {"employment_status": {"$in": ["active", "probation"]}},
+        {"_id": 0, "id": 1, "work_location": 1, "country": 1}
+    ).to_list(500) if (department and department != "all") else active_employees
+    
+    total_strength = len(all_active)
+    uae_strength = len([e for e in all_active if (e.get("country") or e.get("work_location") or "UAE") in ["UAE", "Office"]])
+    india_strength = len([e for e in all_active if (e.get("country") or e.get("work_location")) == "India"])
+    
+    # Recalculate late_minutes for each record based on current shift config
+    for rec in records:
+        bio_in = rec.get("biometric_in")
+        if bio_in:
+            emp_shift_id = rec.get("shift_id", "morning")
+            shift = shift_map.get(emp_shift_id, shift_map.get("morning", DEFAULT_SHIFTS["morning"]))
+            shift_start = shift.get("start", "10:00")
+            grace = shift.get("grace_minutes", 30)
+            
+            # Check special period override
+            rec_date = rec.get("date", "")
+            for sp in special_periods:
+                if sp.get("start_date") and sp.get("end_date"):
+                    if sp["start_date"] <= rec_date <= sp["end_date"]:
+                        if sp.get("shift_start"):
+                            shift_start = sp["shift_start"]
+                        break
+            
+            try:
+                t_in = datetime.strptime(bio_in[:5], "%H:%M")
+                t_shift_start = datetime.strptime(shift_start, "%H:%M")
+                late_mins = max(0, int((t_in - t_shift_start).total_seconds() / 60))
+                rec["late_minutes"] = late_mins if late_mins > grace else 0
+                rec["shift_start"] = shift_start
+            except (ValueError, TypeError):
+                pass
+    
+    # Build summary from records
+    present_codes = set()
+    summary = {"present": 0, "late": 0, "warning": 0, "half_day": 0, "absent": 0, "wfh": 0, "holiday": 0}
+    for rec in records:
+        present_codes.add(rec.get("employee_code"))
+        st = rec.get("status", "")
+        if st in summary:
+            summary[st] += 1
+        if rec.get("late_minutes", 0) > 0 and st == "present":
+            summary["late"] += 1
+    
+    # Find missing employees (no attendance record for the date)
+    missing_employees = []
+    if date and not employee_id:
+        # Check if date is a Sunday (weekend) or holiday
+        try:
+            dt = datetime.strptime(date, "%Y-%m-%d")
+            is_sunday = dt.weekday() == 6
+        except:
+            is_sunday = False
+        
+        hol = await db.hr_holidays.find_one({"type": "company_holiday", "date": date}, {"_id": 0})
+        
+        if not is_sunday and not hol:
+            for emp in active_employees:
+                emp_code = emp.get("employee_id") or emp.get("id")
+                if emp_code not in present_codes:
+                    missing_employees.append({
+                        "employee_id": emp.get("id"),
+                        "employee_code": emp_code,
+                        "employee_name": emp.get("full_name", ""),
+                        "department": emp.get("department", ""),
+                        "designation": emp.get("designation", ""),
+                        "status": "no_record",
+                        "biometric_in": None,
+                        "biometric_out": None,
+                        "late_minutes": 0,
+                        "total_work_hours": 0,
+                        "date": date,
+                    })
+            summary["no_record"] = len(missing_employees)
     
     return {
         "records": records,
+        "missing_employees": missing_employees,
+        "summary": summary,
         "team_strength": {
             "total": total_strength,
             "uae": uae_strength,
@@ -22700,7 +22814,7 @@ async def run_payroll(
         for day in range(1, total_days + 1):
             wd = cal_mod.weekday(data.year, data.month, day)
             date_key = f"{data.year}-{str(data.month).zfill(2)}-{str(day).zfill(2)}"
-            if wd != 4 and date_key not in payroll_holidays:  # 4 = Friday
+            if wd != 6 and date_key not in payroll_holidays:  # 6 = Sunday (only off day)
                 working_days += 1
         
         # Get currency from salary structure
@@ -23866,8 +23980,8 @@ def calculate_leave_days(start_date: str, end_date: str, half_day_type: str = No
     total_days = 0
     current = start
     while current <= end:
-        # Skip weekends (Saturday=5, Sunday=6)
-        if current.weekday() < 5:
+        # Skip weekends (Sunday=6 only)
+        if current.weekday() != 6:
             total_days += 1
         current += timedelta(days=1)
     
@@ -24631,6 +24745,7 @@ async def get_ess_dashboard(user = Depends(get_current_user)):
     today = now.strftime("%Y-%m-%d")
     week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
     month = now.strftime("%Y-%m")
+    month_start = f"{now.year}-{str(now.month).zfill(2)}-01"
     
     result = {
         "user": {
@@ -24644,6 +24759,7 @@ async def get_ess_dashboard(user = Depends(get_current_user)):
         "attendance": {
             "today": None,
             "weekly_summary": {"present": 0, "absent": 0, "late": 0, "total_hours": 0},
+            "monthly_summary": {"present": 0, "absent": 0, "late": 0, "half_day": 0, "total_hours": 0},
             "recent_records": []
         },
         "leave_balance": [],
@@ -24679,6 +24795,20 @@ async def get_ess_dashboard(user = Depends(get_current_user)):
             "absent": sum(1 for a in weekly_att if a.get("status") == "absent"),
             "late": sum(1 for a in weekly_att if a.get("late_minutes", 0) > 0),
             "total_hours": round(sum(a.get("worked_hours", 0) for a in weekly_att), 2)
+        }
+        
+        # Monthly attendance summary
+        monthly_att = await db.hr_attendance.find({
+            "$or": [{"employee_id": emp_id}, {"employee_code": emp_id}],
+            "date": {"$gte": month_start, "$lte": today}
+        }, {"_id": 0}).to_list(50)
+        
+        result["attendance"]["monthly_summary"] = {
+            "present": sum(1 for a in monthly_att if a.get("status") in ("present", "late", "warning")),
+            "absent": sum(1 for a in monthly_att if a.get("status") == "absent"),
+            "half_day": sum(1 for a in monthly_att if a.get("status") == "half_day"),
+            "late": sum(1 for a in monthly_att if a.get("late_minutes", 0) > 0),
+            "total_hours": round(sum(a.get("total_work_hours", 0) or a.get("worked_hours", 0) or 0 for a in monthly_att), 1)
         }
         
         # Recent attendance records (last 10)
