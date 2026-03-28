@@ -200,11 +200,26 @@ export default function CommissionDashboard() {
     const generateTransactions = async () => {
         setGenerating(true);
         try {
-            const res = await apiClient.post('/commissions/generate-transactions', { month });
-            toast.success(res.data.message);
-            fetchTransactions(txnFilter);
-        } catch { toast.error('Failed to generate transactions'); }
-        finally { setGenerating(false); }
+            await apiClient.post('/commissions/generate-transactions', { month });
+            toast.info('Commission generation started. Checking progress...');
+            // Poll for completion
+            const poll = async () => {
+                try {
+                    const res = await apiClient.get(`/commissions/generation-status?month=${month}`);
+                    if (res.data.status === 'completed') {
+                        toast.success(`Generated ${res.data.created || 0} commission transactions`);
+                        setGenerating(false);
+                        fetchTransactions(txnFilter);
+                    } else if (res.data.status === 'failed') {
+                        toast.error('Commission generation failed');
+                        setGenerating(false);
+                    } else {
+                        setTimeout(poll, 2000);
+                    }
+                } catch { setTimeout(poll, 2000); }
+            };
+            setTimeout(poll, 2000);
+        } catch { toast.error('Failed to start generation'); setGenerating(false); }
     };
 
     if (loading) return <div className="text-center py-12 text-muted-foreground">Loading commission data...</div>;

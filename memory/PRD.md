@@ -11,38 +11,47 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 
 ## Implemented Features
 
+### CEO Commission Approval Workflow (Mar 28, 2026)
+- CEO/COO can approve or revoke commissions per department (Sales/CS) per month
+- Until CEO approves, employees see commissions as "Awaiting Approval" (amber)
+- Once approved, employees see "Approved Commission" (green)
+- Backend returns `approved_commission`, `pending_approval_commission` for non-CEO users
+- CEO has "Approve Transactions" tab: generate, review, edit, bulk-approve individual deals
+- Transaction generation is now async with polling to avoid K8s ingress timeout
+- COO role has same access as CEO for all commission endpoints
+
+### Attendance Rules Engine (Mar 27, 2026)
+- Company Holidays and Special Periods (e.g., Ramadan reduced hours)
+- Payroll skips deductions for declared Company Holidays
+- CRUD UI in AttendanceSettingsPage
+
 ### SSHR Monthly Attendance View (Mar 27, 2026)
-- Full month-by-month attendance list with day-by-day status (Present/Absent/Half Day/On Leave/Late/No Data/Weekend)
-- Month picker + shift badge display (Morning Shift: 10:00 - 19:00)
-- 6 summary cards: Present, Absent, Half Day, On Leave, Late, No Data
-- Click any day to apply regularization (pre-fills attendance times + shift schedule)
-- Color-coded left border per status for quick visual scanning
+- Full month-by-month attendance list with day-by-day status
+- 6 summary cards, color-coded, direct regularization link
 - API: `GET /hr/my-monthly-attendance?year=YYYY&month=MM`
 
-### IT Assets Removed from HR Panel (Mar 27, 2026)
-- IT Assets now only accessible via dedicated IT & Assets module on home page
-- HR sidebar cleaned up — no longer shows Assets link
+### IT Assets Module (Mar 27, 2026)
+- Dedicated IT & Assets module on home page (removed from HR sidebar)
 
 ### Welcome Page (Mar 27, 2026)
-- Shows "Welcome, {Full Name}!" + designation (CEO, etc.) from hr_employees
+- Shows "Welcome, {Full Name}!" + designation from hr_employees
 
 ### COO Full Access (Mar 27, 2026)
 - `coo` role has identical permissions to `super_admin`
 
 ### Task Management System (Mar 27, 2026)
 - 13 categories incl. IT, Web Development, Video Editing, Script Writing
-- Manager assigns tasks with priority tracking (Open → In Progress → Completed)
-- Enhanced timesheet: pick assigned tasks or add custom, log hours + notes
+- Manager assigns tasks, enhanced timesheet
 
 ### Organization Map (Mar 27, 2026)
 - Interactive org chart: CEO → Departments → Teams → Members
-- Approval Matrix + Statistics tabs
 
 ### Payroll System
-- Attendance validation, only active/probation employees, deductions only for explicit absent/half-day
+- Attendance validation, deductions only for explicit absent/half-day
 
 ### Commission System
 - Course + Addon decomposition, TL commission from team sales
+- Round-robin mentor assignment on student activation
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234

@@ -29017,17 +29017,33 @@ async def edit_commission_transaction(txn_id: str, data: dict = Body(...), user=
 
 @api_router.post("/commissions/generate-transactions")
 async def generate_commission_transactions(data: dict = Body(...), user=Depends(get_current_user)):
-    """Generate commission transactions for a given month."""
+    """Generate commission transactions for a given month. Runs async to avoid timeout."""
     if user["role"] not in ("super_admin", "coo"):
         raise HTTPException(403, "CEO/COO only")
     month = data.get("month", datetime.now(timezone.utc).strftime("%Y-%m"))
-    try:
-        from commission_generator import generate_transactions_for_month
-        created = await generate_transactions_for_month(db, month)
-        return {"message": f"Generated {created} commission transactions for {month}", "created": created}
-    except Exception as e:
-        logger.error(f"Commission generation failed: {e}")
-        raise HTTPException(500, f"Generation failed: {str(e)}")
+
+    async def _run_generation():
+        try:
+            await db.commission_generation_status.update_one(
+                {"month": month},
+                {"$set": {"month": month, "status": "in_progress", "started_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+            from commission_generator import generate_transactions_for_month
+            created = await generate_transactions_for_month(db, month)
+            await db.commission_generation_status.update_one(
+                {"month": month},
+                {"$set": {"status": "completed", "created": created, "completed_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        except Exception as e:
+            logger.error(f"Commission generation failed: {e}")
+            await db.commission_generation_status.update_one(
+                {"month": month},
+                {"$set": {"status": "failed", "error": str(e)}},
+            )
+
+    asyncio.create_task(_run_generation())
+    return {"message": f"Commission generation started for {month}. Check status via GET /commissions/generation-status.", "status": "started"}
 
 
 @api_router.get("/commissions/generation-status")
