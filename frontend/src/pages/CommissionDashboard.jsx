@@ -107,7 +107,7 @@ export default function CommissionDashboard() {
     const [myTxns, setMyTxns] = useState([]);
     const monthOpts = months();
 
-    const isCEO = user?.role === 'super_admin';
+    const isCEO = ['super_admin', 'coo'].includes(user?.role);
     const isTL = user?.role === 'team_leader';
     const isSales = ['sales_executive', 'team_leader'].includes(user?.role);
     const isCS = ['cs_agent', 'cs_head'].includes(user?.role);
@@ -232,11 +232,11 @@ export default function CommissionDashboard() {
                     {/* Approval Status Banner */}
                     {userApprovalStatus === 'approved' ? (
                         <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2" data-testid="approval-status-approved">
-                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>.
+                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>. Your earned commissions are confirmed.
                         </div>
                     ) : (
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2" data-testid="approval-status-pending">
-                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>.
+                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>. Earned amounts will be confirmed once approved.
                         </div>
                     )}
 
@@ -279,11 +279,21 @@ export default function CommissionDashboard() {
                         </Card>
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <StatCard title="Earned Commission" value={fmtCur(my.earned_commission)} subtitle={my.benchmark_crossed ? 'Benchmark crossed' : `${fmtCur(my.total_revenue)} / ${fmtCur(my.benchmark)} benchmark`} icon={CheckCircle} color="text-emerald-500" bgColor="bg-emerald-500/10" />
-                        <StatCard title="Pending Commission" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count || 0} pipeline + ${!my.benchmark_crossed ? my.deals_closed + ' closed (below 18K)' : ''}`} icon={Clock} color="text-amber-500" bgColor="bg-amber-500/10" />
+                        {userApprovalStatus === 'approved' ? (
+                            <StatCard title="Approved Commission" value={fmtCur(data.approved_commission)} subtitle="CEO approved" icon={ShieldCheck} color="text-emerald-500" bgColor="bg-emerald-500/10" />
+                        ) : (
+                            <StatCard title="Awaiting Approval" value={fmtCur(data.pending_approval_commission)} subtitle="Pending CEO approval" icon={ShieldAlert} color="text-amber-500" bgColor="bg-amber-500/10" />
+                        )}
+                        <StatCard title="Pipeline Pending" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count || 0} in pipeline${!my.benchmark_crossed && my.deals_closed ? ' + below 18K' : ''}`} icon={Clock} color="text-orange-500" bgColor="bg-orange-500/10" />
                         <StatCard title="Revenue Achieved" value={fmtCur(my.total_revenue)} subtitle={`${my.deals_closed} deals closed`} icon={Target} color="text-blue-500" bgColor="bg-blue-500/10" />
-                        {isTL && <StatCard title="TL Commission" value={fmtCur((data.my_tl_earned || 0) + (data.my_tl_pending || 0))} subtitle={`Earned: ${fmtCur(data.my_tl_earned)} | Pending: ${fmtCur(data.my_tl_pending)}`} icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />}
-                        {!isTL && <StatCard title="18K Benchmark" value={my.benchmark_crossed ? 'Crossed' : `${Math.round((my.total_revenue / SALES_BENCHMARK_AED || 0) * 100)}%`} subtitle={my.benchmark_crossed ? 'All commissions unlocked' : `Need ${fmtCur(SALES_BENCHMARK_AED - my.total_revenue)} more`} icon={Target} color={my.benchmark_crossed ? "text-emerald-500" : "text-red-500"} bgColor={my.benchmark_crossed ? "bg-emerald-500/10" : "bg-red-500/10"} />}
+                        {isTL && (
+                            userApprovalStatus === 'approved' ? (
+                                <StatCard title="TL Commission (Approved)" value={fmtCur(data.approved_tl_commission)} subtitle="From team sales" icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />
+                            ) : (
+                                <StatCard title="TL Commission (Pending)" value={fmtCur(data.pending_approval_tl_commission)} subtitle="Awaiting CEO approval" icon={Award} color="text-purple-400" bgColor="bg-purple-400/10" />
+                            )
+                        )}
+                        {!isTL && <StatCard title="18K Benchmark" value={my.benchmark_crossed ? 'Crossed' : `${Math.round(((my.total_revenue || 0) / SALES_BENCHMARK_AED) * 100)}%`} subtitle={my.benchmark_crossed ? 'All commissions unlocked' : `Need ${fmtCur(SALES_BENCHMARK_AED - (my.total_revenue || 0))} more`} icon={Target} color={my.benchmark_crossed ? "text-emerald-500" : "text-red-500"} bgColor={my.benchmark_crossed ? "bg-emerald-500/10" : "bg-red-500/10"} />}
                     </div>
 
                     {!my.benchmark_crossed && (
@@ -324,18 +334,27 @@ export default function CommissionDashboard() {
                     {/* Approval Status Banner */}
                     {userApprovalStatus === 'approved' ? (
                         <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2" data-testid="cs-approval-status-approved">
-                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>.
+                            <ShieldCheck className="h-4 w-4" /> Commissions for this month have been <strong>approved by CEO</strong>. Your earned commissions are confirmed.
                         </div>
                     ) : (
                         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2" data-testid="cs-approval-status-pending">
-                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>.
+                            <ShieldAlert className="h-4 w-4" /> Commissions for this month are <strong>pending CEO approval</strong>. Earned amounts will be confirmed once approved.
                         </div>
                     )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <StatCard title="Earned Commission" value={fmtCur(my.earned_commission)} subtitle={`${my.upgrades_closed} upgrades closed`} icon={CheckCircle} color="text-emerald-500" bgColor="bg-emerald-500/10" />
-                        <StatCard title="Pending Commission" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count} in pipeline`} icon={Clock} color="text-amber-500" bgColor="bg-amber-500/10" />
-                        {isCSHead && <StatCard title="CS Head Earned" value={fmtCur(data.total_cs_head_earned)} subtitle="From all team upgrades" icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />}
-                        {isCSHead && <StatCard title="CS Head Pending" value={fmtCur(data.total_cs_head_pending)} subtitle="Pipeline upgrades" icon={Clock} color="text-purple-400" bgColor="bg-purple-400/10" />}
+                        {userApprovalStatus === 'approved' ? (
+                            <StatCard title="Approved Commission" value={fmtCur(data.approved_commission)} subtitle={`${my.upgrades_closed} upgrades closed`} icon={ShieldCheck} color="text-emerald-500" bgColor="bg-emerald-500/10" />
+                        ) : (
+                            <StatCard title="Awaiting Approval" value={fmtCur(data.pending_approval_commission)} subtitle={`${my.upgrades_closed} upgrades closed`} icon={ShieldAlert} color="text-amber-500" bgColor="bg-amber-500/10" />
+                        )}
+                        <StatCard title="Pipeline Pending" value={fmtCur(my.pending_commission)} subtitle={`${my.pipeline_count} in pipeline`} icon={Clock} color="text-orange-500" bgColor="bg-orange-500/10" />
+                        {isCSHead && (
+                            userApprovalStatus === 'approved' ? (
+                                <StatCard title="CS Head (Approved)" value={fmtCur(data.approved_cs_head_commission)} subtitle="From all team upgrades" icon={Award} color="text-purple-500" bgColor="bg-purple-500/10" />
+                            ) : (
+                                <StatCard title="CS Head (Pending)" value={fmtCur(data.pending_approval_cs_head_commission)} subtitle="Awaiting CEO approval" icon={Award} color="text-purple-400" bgColor="bg-purple-400/10" />
+                            )
+                        )}
                         {!isCSHead && <StatCard title="Upgrades Closed" value={my.upgrades_closed} subtitle="This month" icon={TrendingUp} color="text-blue-500" bgColor="bg-blue-500/10" />}
                         {!isCSHead && <StatCard title="Pipeline" value={my.pipeline_count} subtitle="Pending upgrades" icon={ArrowUpRight} color="text-orange-500" bgColor="bg-orange-500/10" />}
                     </div>

@@ -28717,8 +28717,8 @@ async def get_commission_dashboard(month: str = None, user=Depends(get_current_u
             result["total_cs_head_earned"] = my_comm["earned_cs_head"] + sum(t["earned_cs_head"] for t in team_data)
             result["total_cs_head_pending"] = my_comm["pending_cs_head"] + sum(t["pending_cs_head"] for t in team_data)
 
-    elif role == "super_admin":
-        # CEO: see everything — parallelize agent calculations
+    elif role in ("super_admin", "coo"):
+        # CEO/COO: see everything — parallelize agent calculations
         sales_agents = await db.users.find(
             {"role": {"$in": ["sales_executive", "team_leader"]}, "is_active": True},
             {"_id": 0, "id": 1, "full_name": 1, "role": 1}
@@ -28766,12 +28766,43 @@ async def get_commission_dashboard(month: str = None, user=Depends(get_current_u
         approvals = await db.commission_approvals.find({"month": month}, {"_id": 0}).to_list(10)
         result["approvals"] = {a["department"]: {"status": a["status"], "approved_by": a.get("approved_by_name", ""), "approved_at": a.get("approved_at", "")} for a in approvals}
 
-    # For non-CEO: include their department's approval status
-    if role not in ["super_admin"]:
+    # For non-CEO/COO: include their department's approval status and reclassify earned
+    if role not in ["super_admin", "coo"]:
         dept = "sales" if role in ["sales_executive", "team_leader"] else "cs" if role in ["cs_agent", "cs_head"] else None
         if dept:
             approval = await db.commission_approvals.find_one({"month": month, "department": dept}, {"_id": 0})
-            result["approval_status"] = approval["status"] if approval else "pending"
+            is_approved = approval["status"] == "approved" if approval else False
+            result["approval_status"] = "approved" if is_approved else "pending"
+
+            my = result.get("my_commission", {})
+            earned = my.get("earned_commission", 0)
+
+            if is_approved:
+                result["approved_commission"] = earned
+                result["pending_approval_commission"] = 0
+            else:
+                result["approved_commission"] = 0
+                result["pending_approval_commission"] = earned
+
+            # Also handle TL-specific fields
+            if role == "team_leader":
+                tl_earned = result.get("my_tl_earned", 0)
+                if is_approved:
+                    result["approved_tl_commission"] = tl_earned
+                    result["pending_approval_tl_commission"] = 0
+                else:
+                    result["approved_tl_commission"] = 0
+                    result["pending_approval_tl_commission"] = tl_earned
+
+            # CS Head fields
+            if role == "cs_head":
+                csh_earned = result.get("total_cs_head_earned", 0)
+                if is_approved:
+                    result["approved_cs_head_commission"] = csh_earned
+                    result["pending_approval_cs_head_commission"] = 0
+                else:
+                    result["approved_cs_head_commission"] = 0
+                    result["pending_approval_cs_head_commission"] = csh_earned
 
     return result
 
@@ -28848,9 +28879,9 @@ async def get_commission_approval_status(month: str = None, user=Depends(get_cur
 
 @api_router.post("/commissions/approve")
 async def approve_commissions(data: dict = Body(...), user=Depends(get_current_user)):
-    """CEO approves commissions for a department and month."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "Only CEO can approve commissions")
+    """CEO/COO approves commissions for a department and month."""
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "Only CEO/COO can approve commissions")
     department = data.get("department")
     month = data.get("month")
     action = data.get("action", "approve")
@@ -28896,8 +28927,8 @@ async def get_commission_transactions(
         query["agent_id"] = agent_id
     if status:
         query["status"] = status
-    # Non-CEO can only see their own
-    if user["role"] not in ("super_admin", "admin"):
+    # Non-CEO/COO can only see their own
+    if user["role"] not in ("super_admin", "admin", "coo"):
         query["agent_id"] = user["id"]
     txns = await db.commission_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     # Summary stats
@@ -28917,9 +28948,9 @@ async def get_commission_transactions(
 
 @api_router.post("/commissions/transactions/{txn_id}/approve")
 async def approve_commission_transaction(txn_id: str, user=Depends(get_current_user)):
-    """CEO approves a single commission transaction."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "Only CEO can approve commissions")
+    """CEO/COO approves a single commission transaction."""
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "Only CEO/COO can approve commissions")
     txn = await db.commission_transactions.find_one({"id": txn_id}, {"_id": 0})
     if not txn:
         raise HTTPException(404, "Transaction not found")
@@ -28933,9 +28964,9 @@ async def approve_commission_transaction(txn_id: str, user=Depends(get_current_u
 
 @api_router.post("/commissions/transactions/bulk-approve")
 async def bulk_approve_commission_transactions(data: dict = Body(...), user=Depends(get_current_user)):
-    """CEO bulk-approves multiple transactions at once."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "Only CEO can approve commissions")
+    """CEO/COO bulk-approves multiple transactions at once."""
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "Only CEO/COO can approve commissions")
     txn_ids = data.get("transaction_ids", [])
     if not txn_ids:
         # Approve all pending for given month/department
@@ -28960,9 +28991,9 @@ async def bulk_approve_commission_transactions(data: dict = Body(...), user=Depe
 
 @api_router.put("/commissions/transactions/{txn_id}")
 async def edit_commission_transaction(txn_id: str, data: dict = Body(...), user=Depends(get_current_user)):
-    """CEO edits commission amount for a transaction."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "Only CEO can edit commissions")
+    """CEO/COO edits commission amount for a transaction."""
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "Only CEO/COO can edit commissions")
     txn = await db.commission_transactions.find_one({"id": txn_id}, {"_id": 0})
     if not txn:
         raise HTTPException(404, "Transaction not found")
@@ -28987,8 +29018,8 @@ async def edit_commission_transaction(txn_id: str, data: dict = Body(...), user=
 @api_router.post("/commissions/generate-transactions")
 async def generate_commission_transactions(data: dict = Body(...), user=Depends(get_current_user)):
     """Generate commission transactions for a given month."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "CEO only")
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "CEO/COO only")
     month = data.get("month", datetime.now(timezone.utc).strftime("%Y-%m"))
     try:
         from commission_generator import generate_transactions_for_month
@@ -29012,9 +29043,9 @@ async def get_commission_generation_status(month: str = None, user=Depends(get_c
 
 @api_router.get("/commissions/ceo/drill")
 async def get_ceo_commission_drill(dept: str = "sales", month: str = None, user=Depends(get_current_user)):
-    """CEO drill-down: table of Sr No, Name, Achieved, Commission Amount."""
-    if user["role"] != "super_admin":
-        raise HTTPException(403, "CEO only")
+    """CEO/COO drill-down: table of Sr No, Name, Achieved, Commission Amount."""
+    if user["role"] not in ("super_admin", "coo"):
+        raise HTTPException(403, "CEO/COO only")
     if not month:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
 

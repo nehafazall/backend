@@ -271,37 +271,48 @@ const CSDashboard = () => {
             {/* My Commission & Net Pay Summary */}
             {myCommission && myCommission.my_commission && (() => {
                 const mc = myCommission.my_commission;
-                const headEarned = myCommission.total_cs_head_earned || 0;
-                const headPending = myCommission.total_cs_head_pending || 0;
-                const totalEarned = (mc.earned_commission || 0) + (isHeadOrAdmin ? headEarned : 0);
-                const totalPending = (mc.pending_commission || 0) + (isHeadOrAdmin ? headPending : 0);
+                const isApproved = myCommission.approval_status === 'approved';
+                const approvedComm = myCommission.approved_commission || 0;
+                const pendingApprovalComm = myCommission.pending_approval_commission || 0;
+                const headEarned = isApproved ? (myCommission.approved_cs_head_commission || 0) : 0;
+                const headPendingApproval = !isApproved ? (myCommission.pending_approval_cs_head_commission || myCommission.total_cs_head_earned || 0) : 0;
+                const totalApproved = approvedComm + (isHeadOrAdmin ? headEarned : 0);
+                const totalPendingApproval = pendingApprovalComm + (isHeadOrAdmin ? headPendingApproval : 0);
+                const totalPipeline = (mc.pending_commission || 0) + (isHeadOrAdmin ? (myCommission.total_cs_head_pending || 0) : 0);
                 const salary = netPayData?.base_salary || 0;
-                const netPay = salary + totalEarned;
+                const netPay = salary + totalApproved;
                 return (
                     <Card data-testid="cs-my-commission">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-5 w-5 text-emerald-500" />My Commission — {myCommission.month}</CardTitle>
-                            <CardDescription>{mc.upgrades_closed || 0} personal upgrades closed this month</CardDescription>
+                            <CardDescription>
+                                {mc.upgrades_closed || 0} personal upgrades closed this month
+                                {isApproved ? (
+                                    <Badge className="ml-2 bg-emerald-500/10 text-emerald-600 text-xs">CEO Approved</Badge>
+                                ) : (
+                                    <Badge className="ml-2 bg-amber-500/10 text-amber-600 text-xs">Pending CEO Approval</Badge>
+                                )}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {/* Net Pay + Commission Summary */}
                             <div className={`grid ${isHeadOrAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-3'} gap-3`}>
-                                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                                    <p className="text-xs text-muted-foreground">Agent Commission</p>
-                                    <p className="text-xl font-bold font-mono text-emerald-500" data-testid="cs-my-agent-commission">{fmtCur(mc.earned_commission)}</p>
+                                <div className={`p-3 rounded-lg border ${isApproved ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                                    <p className="text-xs text-muted-foreground">{isApproved ? 'Agent Commission (Approved)' : 'Agent Commission (Pending Approval)'}</p>
+                                    <p className={`text-xl font-bold font-mono ${isApproved ? 'text-emerald-500' : 'text-amber-500'}`} data-testid="cs-my-agent-commission">{fmtCur(isApproved ? approvedComm : pendingApprovalComm)}</p>
                                     <p className="text-xs text-muted-foreground">{mc.upgrades_closed || 0} upgrades</p>
                                 </div>
                                 {isHeadOrAdmin && (
-                                    <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                                        <p className="text-xs text-muted-foreground">Head Commission</p>
-                                        <p className="text-xl font-bold font-mono text-purple-500" data-testid="cs-my-head-commission">{fmtCur(headEarned)}</p>
+                                    <div className={`p-3 rounded-lg border ${isApproved ? 'bg-purple-500/10 border-purple-500/20' : 'bg-purple-400/10 border-purple-400/20'}`}>
+                                        <p className="text-xs text-muted-foreground">{isApproved ? 'Head Commission (Approved)' : 'Head Commission (Pending)'}</p>
+                                        <p className={`text-xl font-bold font-mono ${isApproved ? 'text-purple-500' : 'text-purple-400'}`} data-testid="cs-my-head-commission">{fmtCur(isApproved ? headEarned : headPendingApproval)}</p>
                                         <p className="text-xs text-muted-foreground">From team upgrades</p>
                                     </div>
                                 )}
                                 <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                                    <p className="text-xs text-muted-foreground">Total Commission</p>
-                                    <p className="text-xl font-bold font-mono text-blue-500" data-testid="cs-my-total-commission">{fmtCur(totalEarned)}</p>
-                                    {totalPending > 0 && <p className="text-xs text-amber-500">+{fmtCur(totalPending)} pending</p>}
+                                    <p className="text-xs text-muted-foreground">{isApproved ? 'Total Approved' : 'Total (Pending Approval)'}</p>
+                                    <p className="text-xl font-bold font-mono text-blue-500" data-testid="cs-my-total-commission">{fmtCur(isApproved ? totalApproved : totalPendingApproval)}</p>
+                                    {totalPipeline > 0 && <p className="text-xs text-orange-500">+{fmtCur(totalPipeline)} pipeline</p>}
                                 </div>
                                 <div className="p-3 rounded-lg bg-muted/50 border">
                                     <p className="text-xs text-muted-foreground">Base Salary</p>
@@ -309,8 +320,8 @@ const CSDashboard = () => {
                                     <p className="text-xs text-muted-foreground">Monthly</p>
                                 </div>
                                 <div className="p-3 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
-                                    <p className="text-xs text-muted-foreground">Net Pay</p>
-                                    <p className="text-xl font-bold font-mono text-primary" data-testid="cs-my-net-pay">{fmtCur(netPay)}</p>
+                                    <p className="text-xs text-muted-foreground">Net Pay{!isApproved ? ' (Estimated)' : ''}</p>
+                                    <p className="text-xl font-bold font-mono text-primary" data-testid="cs-my-net-pay">{fmtCur(isApproved ? netPay : salary + totalPendingApproval)}</p>
                                     <p className="text-xs text-muted-foreground">Salary + Commission</p>
                                 </div>
                             </div>
