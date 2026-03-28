@@ -18093,6 +18093,8 @@ class EmployeeResponse(BaseModel):
     documents: List[Dict] = []
     user_id: Optional[str] = None
     team_id: Optional[str] = None
+    shift_id: Optional[str] = None
+    country: Optional[str] = None
     created_via: Optional[str] = None
     created_at: str
     updated_at: str

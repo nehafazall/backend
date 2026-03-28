@@ -82,6 +82,8 @@ import {
     PhoneOff,
     BarChart3,
     RefreshCw,
+    LayoutGrid,
+    List,
 } from 'lucide-react';
 
 const COLOR_TAGS = [
@@ -99,10 +101,7 @@ const CS_STAGES = [
     { id: 'activated', label: 'Activated', color: 'bg-emerald-500', icon: CheckCircle },
     { id: 'satisfactory_call', label: 'Satisfactory Call', color: 'bg-purple-500', icon: Phone },
     { id: 'pitched_for_upgrade', label: 'Pitched Upgrade', color: 'bg-orange-500', icon: TrendingUp },
-    { id: 'in_progress', label: 'In Progress', color: 'bg-cyan-500', icon: Clock },
-    { id: 'interested', label: 'Interested', color: 'bg-yellow-500', icon: CheckCircle },
     { id: 'upgraded', label: 'Upgraded', color: 'bg-emerald-600', icon: ArrowUp },
-    { id: 'not_interested', label: 'Not Interested', color: 'bg-rose-500', icon: User },
 ];
 
 const StudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade, isDragging, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
@@ -365,12 +364,19 @@ const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade
     );
 };
 
+const COLUMN_PAGE_SIZE = 20;
+
 const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
+    const [colPage, setColPage] = React.useState(1);
     const stageStudents = students.filter(s => s.stage === stage.id);
     // For the Upgraded column, merge in shadow cards
-    const displayStudents = stage.id === 'upgraded' && shadowCards?.length > 0
+    const allStudents = stage.id === 'upgraded' && shadowCards?.length > 0
         ? [...shadowCards, ...stageStudents.filter(s => !s.is_shadow)]
         : stageStudents;
+    
+    const totalInColumn = allStudents.length;
+    const totalColPages = Math.ceil(totalInColumn / COLUMN_PAGE_SIZE);
+    const displayStudents = allStudents.slice((colPage - 1) * COLUMN_PAGE_SIZE, colPage * COLUMN_PAGE_SIZE);
     const studentIds = displayStudents.map(s => s.id);
     const StageIcon = stage.icon;
     
@@ -382,20 +388,21 @@ const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onI
     return (
         <div 
             ref={setNodeRef}
-            className={`kanban-column ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`} 
+            className={`flex flex-col min-w-0 flex-1 bg-muted/50 rounded-xl p-3 ${isOver ? 'ring-2 ring-primary ring-offset-2' : ''}`} 
             data-testid={`cs-column-${stage.id}`}
+            style={{ minHeight: '400px', maxHeight: 'calc(100vh - 280px)' }}
         >
-            <div className="kanban-column-header">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+                <div className="flex items-center gap-1.5">
                     <StageIcon className={`h-4 w-4 ${stage.color.replace('bg-', 'text-')}`} />
-                    <h3 className="font-semibold">{stage.label}</h3>
+                    <h3 className="font-semibold text-sm">{stage.label}</h3>
                 </div>
-                <Badge variant="secondary">{displayStudents.length}</Badge>
+                <Badge variant="secondary" className="text-xs">{totalInColumn}</Badge>
             </div>
             
             <ScrollArea className="flex-1">
                 <SortableContext items={studentIds} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3 min-h-[100px] p-1">
+                    <div className="space-y-2 min-h-[80px] p-0.5">
                         {displayStudents.map((student) => (
                             <SortableStudentCard
                                 key={student.id}
@@ -410,13 +417,36 @@ const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onI
                             />
                         ))}
                         {displayStudents.length === 0 && (
-                            <div className={`text-center text-muted-foreground py-8 text-sm border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
+                            <div className={`text-center text-muted-foreground py-6 text-xs border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
                                 Drop students here
                             </div>
                         )}
                     </div>
                 </SortableContext>
             </ScrollArea>
+            
+            {/* Per-column pagination */}
+            {totalColPages > 1 && (
+                <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
+                    <button 
+                        onClick={() => setColPage(p => Math.max(1, p - 1))} 
+                        disabled={colPage <= 1}
+                        className="text-xs px-2 py-1 rounded bg-background border hover:bg-accent disabled:opacity-40"
+                        data-testid={`col-prev-${stage.id}`}
+                    >
+                        Prev
+                    </button>
+                    <span className="text-[10px] text-muted-foreground">{colPage}/{totalColPages}</span>
+                    <button 
+                        onClick={() => setColPage(p => Math.min(totalColPages, p + 1))} 
+                        disabled={colPage >= totalColPages}
+                        className="text-xs px-2 py-1 rounded bg-background border hover:bg-accent disabled:opacity-40"
+                        data-testid={`col-next-${stage.id}`}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -483,12 +513,13 @@ const CustomerServicePage = () => {
     );
     const [csAgentsList, setCsAgentsList] = useState([]);
     const [filterCSAgent, setFilterCSAgent] = useState('all');
+    const [displayMode, setDisplayMode] = useState('kanban'); // 'kanban' or 'table'
 
     useEffect(() => {
         fetchStudents();
         fetchStageSummary();
         fetchShadowCards();
-    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize, ltvSort]);
+    }, [viewMode, filterCSAgent, csPeriodFilter, currentPage, pageSize, ltvSort, displayMode]);
 
     // Fetch CS agents for super admin quick reassign & filtering
     useEffect(() => {
@@ -513,10 +544,10 @@ const CustomerServicePage = () => {
                 baseParams.date_field = 'upgrade_date';
             }
 
-            // For Kanban: fetch per-stage in parallel so every column shows its students
-            if (!searchTerm && !csPeriodFilter && !ltvSort) {
+            // For Kanban mode: fetch per-stage in parallel so every column shows its students
+            if (!searchTerm && !csPeriodFilter && !ltvSort && displayMode === 'kanban') {
                 const stageIds = CS_STAGES.map(s => s.id);
-                const perStageLimit = pageSize;
+                const perStageLimit = 200; // Fetch more for per-column pagination
                 const promises = stageIds.map(stage =>
                     studentApi.getAll({ ...baseParams, stage, page: 1, page_size: perStageLimit })
                 );
@@ -920,7 +951,7 @@ const CustomerServicePage = () => {
 
             {/* Summary Status Bar */}
             {stageSummary && (
-                <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-2" data-testid="cs-summary-bar">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2" data-testid="cs-summary-bar">
                     {CS_STAGES.map(stage => {
                         const count = stageSummary.stage_counts?.[stage.id] || 0;
                         return (
@@ -963,14 +994,35 @@ const CustomerServicePage = () => {
                 </div>
             )}
 
-            {/* Kanban Board or LTV Sorted List */}
+            {/* Kanban/Table Toggle + Display */}
+            <div className="flex items-center justify-between">
+                <div className="inline-flex rounded-lg border p-1 bg-muted/30" data-testid="cs-display-toggle">
+                    <button
+                        onClick={() => { setDisplayMode('kanban'); setLtvSort(null); }}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${displayMode === 'kanban' && !ltvSort ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="cs-kanban-toggle"
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Kanban
+                    </button>
+                    <button
+                        onClick={() => { setDisplayMode('table'); setLtvSort(null); }}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${displayMode === 'table' && !ltvSort ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="cs-table-toggle"
+                    >
+                        <List className="h-3.5 w-3.5" />
+                        Table
+                    </button>
+                </div>
+            </div>
+
             {loading ? (
                 <div className="flex items-center justify-center h-96">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
                 </div>
-            ) : ltvSort ? (
-                /* LTV Sorted Flat List */
-                <div className="border rounded-lg overflow-hidden" data-testid="ltv-sorted-list">
+            ) : ltvSort || displayMode === 'table' ? (
+                /* Table / LTV Sorted List */
+                <div className="border rounded-lg overflow-hidden" data-testid="cs-table-view">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 border-b">
                             <tr>
@@ -980,9 +1032,9 @@ const CustomerServicePage = () => {
                                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Stage</th>
                                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Course</th>
                                 <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Enrollment</th>
-                                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setLtvSort(prev => prev === 'desc' ? 'asc' : 'desc')}>
+                                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setLtvSort(prev => !prev ? 'desc' : prev === 'desc' ? 'asc' : null)}>
                                     <span className="inline-flex items-center gap-1">
-                                        LTV {ltvSort === 'desc' ? <ArrowUp className="h-3 w-3 rotate-180" /> : <ArrowUp className="h-3 w-3" />}
+                                        LTV {ltvSort === 'desc' ? <ArrowUp className="h-3 w-3 rotate-180" /> : ltvSort === 'asc' ? <ArrowUp className="h-3 w-3" /> : null}
                                     </span>
                                 </th>
                                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tag</th>
@@ -994,13 +1046,15 @@ const CustomerServicePage = () => {
                                 const stageObj = CS_STAGES.find(st => st.id === s.stage);
                                 const colorTag = getColorTagStyle(s.color_tag);
                                 return (
-                                    <tr key={s.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => handleViewStudent(s)} data-testid={`ltv-row-${s.id}`}>
+                                    <tr key={s.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => handleViewStudent(s)} data-testid={`table-row-${s.id}`}>
                                         <td className="px-4 py-2.5 text-muted-foreground">{(currentPage - 1) * pageSize + idx + 1}</td>
                                         <td className="px-4 py-2.5 font-medium">{s.full_name}</td>
                                         <td className="px-4 py-2.5 text-muted-foreground">{s.phone}</td>
                                         <td className="px-4 py-2.5">
-                                            {stageObj && (
+                                            {stageObj ? (
                                                 <Badge className={`${stageObj.color} text-white text-[10px]`}>{stageObj.label}</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[10px]">{s.stage}</Badge>
                                             )}
                                         </td>
                                         <td className="px-4 py-2.5 text-muted-foreground text-xs">{s.course_level || s.current_course_name || s.package_bought || '—'}</td>
@@ -1031,7 +1085,7 @@ const CustomerServicePage = () => {
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    <div className="kanban-board">
+                    <div className="flex gap-3" style={{ minHeight: 'calc(100vh - 280px)' }} data-testid="cs-kanban-board">
                         {CS_STAGES.map((stage) => (
                             <KanbanColumn
                                 key={stage.id}
@@ -1062,8 +1116,8 @@ const CustomerServicePage = () => {
                 </DndContext>
             )}
 
-            {/* Pagination */}
-            {!loading && students.length > 0 && (
+            {/* Pagination — only for table/search/LTV mode */}
+            {!loading && students.length > 0 && (displayMode === 'table' || ltvSort || searchTerm) && (
                 <Pagination
                     page={currentPage}
                     totalPages={totalPages}

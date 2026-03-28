@@ -128,7 +128,7 @@ const ClaretChatWidget = () => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center group"
+          className="fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center group"
           data-testid="claret-toggle-btn"
         >
           <Sparkles className="w-6 h-6 group-hover:animate-pulse" />
@@ -140,7 +140,7 @@ const ClaretChatWidget = () => {
 
       {/* Chat Panel */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] h-[560px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden bg-background" data-testid="claret-chat-panel">
+        <div className="fixed bottom-6 left-6 z-50 w-[380px] h-[560px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden bg-background" data-testid="claret-chat-panel">
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">

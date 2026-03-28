@@ -70,9 +70,11 @@ const EmployeeDetailsPage = () => {
     const [payslipYear, setPayslipYear] = useState(new Date().getFullYear());
     const [payslip, setPayslip] = useState(null);
     const [sendingPayslip, setSendingPayslip] = useState(false);
+    const [shifts, setShifts] = useState([]);
 
     useEffect(() => {
         fetchEmployee();
+        api.get('/hr/shifts').then(res => setShifts(res.data || [])).catch(() => {});
     }, [id]);
 
     const fetchEmployee = async () => {
@@ -402,9 +404,15 @@ const EmployeeDetailsPage = () => {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="morning">Morning (10AM-7PM)</SelectItem>
-                                                <SelectItem value="afternoon">Afternoon (1PM-10PM)</SelectItem>
-                                                <SelectItem value="india">India (11AM-8PM)</SelectItem>
+                                                {shifts.length > 0 ? shifts.map(s => (
+                                                    <SelectItem key={s.id} value={s.id}>{s.name} ({s.start}-{s.end})</SelectItem>
+                                                )) : (
+                                                    <>
+                                                        <SelectItem value="morning">Morning (10AM-7PM)</SelectItem>
+                                                        <SelectItem value="afternoon">Afternoon (1PM-10PM)</SelectItem>
+                                                        <SelectItem value="india">India (11AM-8PM)</SelectItem>
+                                                    </>
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>

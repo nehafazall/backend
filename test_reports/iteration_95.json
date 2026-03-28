@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 95 testing complete. All 3 fixes verified: CS Kanban overhaul (5 stages only, Kanban/Table toggle, per-column pagination), Claret Chat Widget moved to bottom-left, HR shift_id persistence fixed. Backend: 15/15 tests passed (100%). Frontend: All features verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_95_cs_kanban_chat_shift.py",
+    "/app/test_reports/pytest/pytest_iteration_95.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_95_cs_kanban_chat_shift.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "super_admin": "aqib@clt-academy.com / @Aqib1234",
+    "cs_head": "falja@clt-academy.com / Falja@123"
+  },
+  "seed_data_creation": "None - used existing seeded data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 95 verified 3 fixes: 1) CS Kanban page at /cs now shows only 5 stages: New Student (884), Activated (33), Satisfactory Call (1), Pitched Upgrade (0), Upgraded (128). Removed stages: 'In Progress', 'Interested', 'Not Interested'. 2) Kanban/Table toggle works - both views functional with data-testid='cs-kanban-toggle' and 'cs-table-toggle'. 3) All 5 columns fit on 1920px screen without horizontal scroll (Kanban board width=1616px). 4) Per-column pagination exists with Prev/Next buttons (data-testid='col-prev-{stage}', 'col-next-{stage}'). 5) Claret Chat Widget button positioned at bottom-LEFT (x=24px) with data-testid='claret-toggle-btn'. 6) HR Employee shift_id now persists - EmployeeResponse model includes shift_id field (line 18096 in server.py). PUT /api/hr/employees/{id}/shift saves and GET returns shift_id correctly. Shift dropdown visible on Employee Details page showing current shift (e.g., 'Afternoon Shift (13:00-22:00)').",
+  "features_verified": {
+    "cs_kanban_5_stages": {
+      "status": "PASS",
+      "details": "CS Kanban shows only 5 stages: new_student, activated, satisfactory_call, pitched_for_upgrade, upgraded. Removed: in_progress, interested, not_interested"
+    },
+    "cs_kanban_table_toggle": {
+      "status": "PASS",
+      "details": "Kanban/Table toggle buttons found with data-testid='cs-kanban-toggle' and 'cs-table-toggle'. Both views work correctly."
+    },
+    "cs_kanban_no_horizontal_scroll": {
+      "status": "PASS",
+      "details": "All 5 columns fit on 1920px viewport. Body scroll width = client width = 1920px. Kanban board width=1616px fits within viewport."
+    },
+    "cs_kanban_per_column_pagination": {
+      "status": "PASS",
+      "details": "Per-column pagination exists with 6 pagination buttons found. New Student column (884 items) has pagination as expected."
+    },
+    "claret_chat_bottom_left": {
+      "status": "PASS",
+      "details": "Claret chat widget button positioned at x=24, y=1000 (bottom-left corner). Changed from right-6 to left-6 in ClaretChatWidget.jsx lines 131, 143."
+    },
+    "hr_shift_id_persistence": {
+      "status": "PASS",
+      "details": "EmployeeResponse model now includes shift_id (line 18096) and country (line 18097). PUT /api/hr/employees/{id}/shift saves shift_id. GET returns shift_id correctly. UI shows shift dropdown on Employee Details page."
+    },
+    "backend_api_tests": {
+      "status": "PASS",
+      "details": "15/15 pytest tests passed: students endpoint, stage filters (5 stages), stage-summary, shifts list, employees list with shift_id, single employee with shift_id, shift update persistence, Claret chat endpoints, CS Head login and access."
+    }
+  }
+}
