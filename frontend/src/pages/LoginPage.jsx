@@ -31,7 +31,15 @@ function LoginPage() {
         try {
             await login(email, password);
         } catch (error) {
-            const message = error.response?.data?.detail || 'Login failed. Please check your credentials.';
+            const status = error.response?.status;
+            let message;
+            if (status === 401) {
+                message = error.response?.data?.detail || 'Invalid email or password.';
+            } else if (!error.response || status >= 500 || error.code === 'ECONNABORTED') {
+                message = 'Server is temporarily busy. Please try again in a few seconds.';
+            } else {
+                message = error.response?.data?.detail || 'Login failed. Please try again.';
+            }
             toast.error(message);
             setLoading(false);
         }

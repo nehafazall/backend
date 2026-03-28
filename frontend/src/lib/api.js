@@ -7,6 +7,7 @@ const API = `${BACKEND_URL}/api`;
 // Create axios instance with interceptors
 const api = axios.create({
     baseURL: API,
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -71,15 +72,33 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (email, password) => {
-        const response = await api.post('/auth/login', { email, password });
-        const { access_token, user: userData } = response.data;
-        
-        localStorage.setItem('clt_token', access_token);
-        localStorage.setItem('clt_user', JSON.stringify(userData));
-        setJustLoggedIn(true);
-        setUser(userData);
-        
-        return userData;
+        // Retry up to 2 times for transient network/server errors
+        let lastError;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const response = await api.post('/auth/login', { email, password });
+                const { access_token, user: userData } = response.data;
+                
+                localStorage.setItem('clt_token', access_token);
+                localStorage.setItem('clt_user', JSON.stringify(userData));
+                setJustLoggedIn(true);
+                setUser(userData);
+                
+                return userData;
+            } catch (error) {
+                lastError = error;
+                const status = error.response?.status;
+                // Only retry on server/network errors, not on auth failures
+                if (status === 401 || status === 403) throw error;
+                // Retry on 502, 504, timeout, network errors
+                if (attempt < 2 && (!status || status >= 500)) {
+                    await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+                    continue;
+                }
+                throw error;
+            }
+        }
+        throw lastError;
     };
 
     const logout = () => {
