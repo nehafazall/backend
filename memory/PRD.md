@@ -1,44 +1,54 @@
 # CLT Synapse ERP — Product Requirements Document
 
 ## Original Problem Statement
-Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales CRM, customer service, HR, finance, commissions, and operational workflows.
+Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales CRM, customer service, HR, finance, commissions, and operational workflows. Enhanced with Claret AI assistant for employee wellness, motivation, and knowledge base access.
 
 ## Architecture
 - **Frontend**: React (CRA + Craco) with Shadcn/UI, Tailwind CSS
-- **Backend**: FastAPI monolith (`server.py` ~30K lines) + `biocloud_sync.py`
+- **Backend**: FastAPI monolith (`server.py` ~31K lines) + `claret_module.py` + `hr_module.py`
 - **Database**: MongoDB Atlas (`clt_academy_erp`)
+- **AI**: Claude Sonnet 4.5 via emergentintegrations (EMERGENT_LLM_KEY)
 - **Integrations**: Google Sheets, Meta Ads, SMTP, 3CX, BioCloud, MetaTrader 5
 
 ## Implemented Features
 
+### Claret AI Assistant (Mar 28, 2026) — NEW
+- **AI Chatbot**: Floating widget (bottom-right) on all pages, powered by Claude Sonnet 4.5
+  - Personality: Warm, witty, empathetic. Mixes English/Malayalam (Manglish)/Hindi (Hinglish)
+  - Features: ERP navigation help, policy Q&A, motivation, knock-knock jokes, mood check-ins
+  - TTS (browser built-in speech synthesis), Malayalam translation button
+  - Proactive idle prompts for engagement
+  - All chats stored in `claret_chats` collection
+- **Knowledge Base**: Separate module at `/knowledge-base`
+  - Upload: PDF, DOCX, XLSX, TXT, video files
+  - Categories: SOPs, Policies, Training Materials, Training Videos, General
+  - Search, filter, download functionality
+  - AI reads uploaded PDFs for context in chat responses
+  - Access: All users can read; HR/Admin/CEO/COO can upload/delete
+- **Claret Dashboard**: Mood tracking at `/claret`
+  - 5 dimensions: Energy, Stress, Motivation, Happiness, Overall (1-10)
+  - Mood labels: Excited, Happy, Motivated, Calm, Neutral, Tired, Anxious, Stressed, Sad, Frustrated, Overwhelmed
+  - Mood Journey calendar (last 30 days with emojis)
+  - 6 customizable theme presets (colors stored per user)
+  - CEO/HR: Team Overview tab, Analytics tab (distribution, daily trend)
+  - Employee: Self-awareness via own mood scores
+
+### Organization Map (Mar 28, 2026) — UPDATED
+- Drag-and-drop: Admin/HR/CEO/COO can drag people between departments
+- Backend: PUT /api/organization/move-user endpoint
+- Department heads dynamically pulled from database
+
 ### SSHR & HR Attendance Overhaul (Mar 28, 2026)
-- **SSHR Overview**: Changed from weekly to monthly stats (Days Present, Hours Worked)
-- **SSHR Calendar View**: Full monthly calendar grid (Mon-Sun), color-coded cells per status
-  - Click any working day to open regularization request
-  - Legend: Present (green), Late (amber), Absent (red), On Leave (blue), Holiday (purple), Off Day (gray)
-- **Weekend Logic**: Only Sunday is OFF day (Fri/Sat are working days) — affects payroll, leaves, attendance
-- **Late Recalculation**: Late minutes recalculated on-the-fly using current shift config, not stale stored values
-- **Missing Employees**: HR Attendance now shows employees who didn't punch in with "No Record" badge
-- **Loading Fix**: SSHR shows spinner during data fetch instead of premature "Employee Record Not Found"
+- Monthly stats, calendar view, Sunday-only OFF, late recalculation, missing employees
 
 ### CEO Commission Approval Workflow (Mar 28, 2026)
-- CEO/COO can approve or revoke commissions per department (Sales/CS) per month
-- Until CEO approves, employees see commissions as "Awaiting Approval" (amber)
-- Once approved, employees see "Approved Commission" (green)
-- Transaction-level approval with generate, review, edit, bulk-approve
-- COO role has same access as CEO for all commission endpoints
+- Approval-dependent commission display, COO access
 
-### Attendance Rules Engine (Mar 27, 2026)
-- Company Holidays and Special Periods (e.g., Ramadan reduced hours)
-- Payroll skips deductions for declared Company Holidays
-
-### SSHR & Timesheet System (Mar 27, 2026)
-- Full monthly attendance view with color-coded summary
-- Task Manager for managers, enhanced employee timesheet UI
-
-### Organization, IT, Welcome (Mar 27, 2026)
-- Interactive org chart, dedicated IT Assets module, Welcome page with Full Name + Designation
-- COO role has full system access equivalent to super_admin
+## Key Database Collections (New)
+- `knowledge_base`: Document metadata + extracted text for AI
+- `claret_chats`: All chat messages (user + assistant) per session
+- `claret_mood_scores`: Daily mood scores per user
+- `claret_settings`: Dashboard theme preferences per user
 
 ## Key Credentials
 - CEO: aqib@clt-academy.com / @Aqib1234
@@ -53,11 +63,10 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 ### P1
 - Invoice Generation — Auto-generate PDF invoices
 - WhatsApp Integration — Send templated messages
-- CEO Commission Approval Workflow — Complete (tested)
 
 ### P2
 - Workflow Automation Engine
 - Scheduled Email Reports
 
 ### P3
-- Refactor monolithic server.py (~30K lines)
+- Refactor monolithic server.py (~31K lines)
