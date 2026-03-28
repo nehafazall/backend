@@ -17,7 +17,7 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
     }, [open]);
 
     useEffect(() => {
-        setF(employee || { employee_id: '', full_name: '', company_email: '', department: '', designation: '', role: '', joining_date: '', employment_status: 'probation', gender: '', create_user_account: true });
+        setF(employee || { employee_id: '', full_name: '', company_email: '', department: '', designation: '', role: '', joining_date: '', employment_status: 'probation', gender: '', date_of_birth: '', mobile_number: '', create_user_account: true });
     }, [employee]);
 
     const set = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -56,6 +56,10 @@ const EmployeeModal = ({ open, onOpenChange, employee, onSave }) => {
                                 </SelectContent>
                             </Select>
                         </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div><Label>Date of Birth</Label><Input type="date" value={f.date_of_birth||''} onChange={e => set('date_of_birth', e.target.value)} data-testid="dob-input" /></div>
+                        <div><Label>Mobile Number</Label><Input type="tel" placeholder="+971501234567" value={f.mobile_number||''} onChange={e => set('mobile_number', e.target.value)} data-testid="mobile-input" /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div><Label>Department *</Label>
