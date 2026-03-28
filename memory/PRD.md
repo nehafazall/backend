@@ -12,8 +12,22 @@ Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales
 
 ## Implemented Features
 
-### Claret AI Assistant (Mar 28, 2026) — NEW
-- **AI Chatbot**: Floating widget (bottom-right) on all pages, powered by Claude Sonnet 4.5
+### CS Kanban Overhaul (Mar 28, 2026) — NEW
+- Removed stages: In Progress, Interested, Not Interested (only 5 active stages remain)
+- Per-column server-side pagination (50 per page, each column fetches independently)
+- Kanban/Table view toggle
+- All columns fit on one screen, no horizontal scrolling
+- Real student counts displayed (not capped)
+
+### Claret Chat Widget Repositioned (Mar 28, 2026)
+- Moved from bottom-right to bottom-left corner
+
+### HR Shift Fix (Mar 28, 2026)
+- Fixed EmployeeResponse Pydantic model to include shift_id and country fields
+- Shift dropdown now dynamically fetches shifts from /api/hr/shifts
+
+### Claret AI Assistant (Mar 28, 2026)
+- **AI Chatbot**: Floating widget (bottom-left) on all pages, powered by Claude Sonnet 4.5
   - Personality: Warm, witty, empathetic. Mixes English/Malayalam (Manglish)/Hindi (Hinglish)
   - Features: ERP navigation help, policy Q&A, motivation, knock-knock jokes, mood check-ins
   - TTS (browser built-in speech synthesis), Malayalam translation button
