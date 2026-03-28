@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import EnvironmentSwitcher from '@/components/EnvironmentSwitcher';
+import ClaretChatWidget from '@/components/ClaretChatWidget';
 import {
     LayoutDashboard,
     Users,
@@ -68,6 +69,7 @@ import {
     Zap,
     Network,
     ListTodo,
+    Sparkles,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -480,7 +482,9 @@ function Layout() {
     }
 
     const currentSection = activeSection ? SECTIONS[activeSection] : null;
-    const isHomePage = !activeSection || currentPath === '/home';
+    const standalonePages = ['/knowledge-base', '/claret', '/organization', '/it-assets'];
+    const isStandalonePage = standalonePages.some(p => currentPath.startsWith(p));
+    const isHomePage = (!activeSection && !isStandalonePage) || currentPath === '/home';
 
     // Determine visible sections using BOTH role restrictions and permission system
     const visibleSections = [];
@@ -697,6 +701,9 @@ function Layout() {
 
             {/* Mobile overlay */}
             {mobileMenuOpen && !isHomePage && <div className="lg:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setMobileMenuOpen(false)} />}
+            
+            {/* Claret AI Chat Widget */}
+            <ClaretChatWidget />
         </div>
     );
 }
@@ -772,6 +779,32 @@ function HomePageContent({ user, visibleSections, selectSection }) {
                     {visibleSections.map(section => (
                         <SectionIcon key={section.id} section={section} onClick={() => selectSection(section.id)} />
                     ))}
+                </div>
+                
+                {/* Knowledge Base & Claret Quick Access */}
+                <div className="flex flex-wrap gap-3 mt-6 max-w-5xl w-full justify-center">
+                    <a
+                        href="/knowledge-base"
+                        className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
+                        data-testid="home-kb-btn"
+                    >
+                        <BookOpen className="w-5 h-5 text-blue-500" />
+                        <div>
+                            <p className="font-semibold text-sm">Knowledge Base</p>
+                            <p className="text-[10px] text-muted-foreground">SOPs, Policies & Training</p>
+                        </div>
+                    </a>
+                    <a
+                        href="/claret"
+                        className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
+                        data-testid="home-claret-btn"
+                    >
+                        <Sparkles className="w-5 h-5 text-indigo-500" />
+                        <div>
+                            <p className="font-semibold text-sm">Claret Dashboard</p>
+                            <p className="text-[10px] text-muted-foreground">Mood & Wellness Tracking</p>
+                        </div>
+                    </a>
                 </div>
             </div>
         </div>

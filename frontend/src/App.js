@@ -49,6 +49,8 @@ import ChatPage from "@/pages/ChatPage";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 import OrganizationMapPage from "@/pages/OrganizationMapPage";
 import ITAssetsPage from "@/pages/ITAssetsPage";
+import KnowledgeBasePage from "@/pages/KnowledgeBasePage";
+import ClaretDashboardPage from "@/pages/ClaretDashboardPage";
 import TaskManagerPage from "@/pages/TaskManagerPage";
 
 // Finance Module
@@ -633,6 +635,20 @@ function AppRoutes() {
                 
                 {/* Settings */}
                 <Route path="settings" element={<SettingsPage />} />
+                
+                {/* Knowledge Base */}
+                <Route path="knowledge-base" element={
+                    <ProtectedRoute>
+                        <KnowledgeBasePage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Claret Dashboard */}
+                <Route path="claret" element={
+                    <ProtectedRoute>
+                        <ClaretDashboardPage />
+                    </ProtectedRoute>
+                } />
             </Route>
             
             {/* Catch all */}

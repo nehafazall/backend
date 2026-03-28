@@ -17966,6 +17966,86 @@ from hr_module import (
     calculate_gross_salary, generate_wps_record, WPS_BANK_CODES
 )
 
+# Claret AI Module
+import claret_module
+claret_module.init_module(db, get_current_user, require_roles)
+
+# Override the upload endpoint to inject auth
+@api_router.post("/claret/knowledge-base/upload")
+async def _kb_upload(
+    file: UploadFile = File(...),
+    category: str = Form("general"),
+    title: str = Form(""),
+    description: str = Form(""),
+    user=Depends(require_roles(["super_admin", "admin", "hr", "coo"]))
+):
+    doc = await claret_module.upload_knowledge_base_doc(file, category, title, description, user)
+    doc["uploaded_by"] = user["id"]
+    doc["uploaded_by_name"] = user["full_name"]
+    await db.knowledge_base.update_one({"id": doc["id"]}, {"$set": {"uploaded_by": user["id"], "uploaded_by_name": user["full_name"]}})
+    return doc
+
+# Chat endpoint with auth
+@api_router.post("/claret/chat")
+async def _claret_chat(data: dict = Body(...), user=Depends(get_current_user)):
+    data["user_id"] = user["id"]
+    data["user_name"] = user["full_name"]
+    return await claret_module.claret_chat(data)
+
+# Chat history — own for regular users, any for CEO/HR
+@api_router.get("/claret/chat/history")
+async def _claret_history(user_id: str = None, session_id: str = None, limit: int = 50, user=Depends(get_current_user)):
+    if user["role"] not in ("super_admin", "coo", "hr", "admin"):
+        user_id = user["id"]
+    return await claret_module.get_chat_history(user_id, session_id, limit)
+
+@api_router.get("/claret/chat/sessions")
+async def _claret_sessions(user_id: str = None, user=Depends(get_current_user)):
+    if user["role"] not in ("super_admin", "coo", "hr", "admin"):
+        user_id = user["id"]
+    return await claret_module.get_chat_sessions(user_id)
+
+# Knowledge base — read for all, delete for admins
+@api_router.get("/claret/knowledge-base")
+async def _kb_list(category: str = None, user=Depends(get_current_user)):
+    return await claret_module.list_knowledge_base(category)
+
+@api_router.get("/claret/knowledge-base/{doc_id}")
+async def _kb_get(doc_id: str, user=Depends(get_current_user)):
+    return await claret_module.get_knowledge_base_doc(doc_id)
+
+@api_router.delete("/claret/knowledge-base/{doc_id}")
+async def _kb_delete(doc_id: str, user=Depends(require_roles(["super_admin", "admin", "hr", "coo"]))):
+    return await claret_module.delete_knowledge_base_doc(doc_id)
+
+@api_router.get("/claret/knowledge-base/{doc_id}/download")
+async def _kb_download(doc_id: str, user=Depends(get_current_user)):
+    return await claret_module.download_knowledge_base_doc(doc_id)
+
+# Mood endpoints
+@api_router.get("/claret/mood/my-scores")
+async def _my_mood(days: int = 30, user=Depends(get_current_user)):
+    return await claret_module.get_my_mood_scores(user["id"], days)
+
+@api_router.get("/claret/mood/team-overview")
+async def _team_mood(user=Depends(require_roles(["super_admin", "coo", "hr"]))):
+    return await claret_module.get_team_mood_overview()
+
+@api_router.get("/claret/mood/analytics")
+async def _mood_analytics(days: int = 30, user=Depends(require_roles(["super_admin", "coo", "hr"]))):
+    return await claret_module.get_mood_analytics(days)
+
+@api_router.get("/claret/settings")
+async def _get_settings(user=Depends(get_current_user)):
+    return await claret_module.get_claret_settings(user["id"])
+
+@api_router.put("/claret/settings")
+async def _update_settings(data: dict = Body(...), user=Depends(get_current_user)):
+    data["user_id"] = user["id"]
+    return await claret_module.update_claret_settings(data)
+
+
+
 class EmployeeResponse(BaseModel):
     id: str
     employee_id: str
@@ -30203,6 +30283,34 @@ async def get_organization_map(user=Depends(get_current_user)):
             "department_distribution": dept_counts,
         }
     }
+
+
+@api_router.put("/organization/move-user")
+async def move_user_in_org(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "hr", "coo"]))):
+    """Drag-and-drop: Move a user to a different department or team."""
+    user_id = data.get("user_id")
+    new_department = data.get("department")
+    new_team_id = data.get("team_id")
+    
+    if not user_id:
+        raise HTTPException(400, "user_id required")
+    
+    update = {}
+    if new_department:
+        update["department"] = new_department
+    if new_team_id is not None:
+        update["team_id"] = new_team_id if new_team_id else None
+    
+    if not update:
+        raise HTTPException(400, "No changes specified")
+    
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    # Also update hr_employees
+    if new_department:
+        await db.hr_employees.update_one({"user_id": user_id}, {"$set": {"department": new_department}})
+    
+    return {"message": "User moved successfully", "user_id": user_id, "changes": update}
+
 
 
 

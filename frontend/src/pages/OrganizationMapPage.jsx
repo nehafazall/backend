@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Crown, Users, UserCircle, ChevronDown, ChevronRight,
   Building2, Search, Shield, ArrowRight, Network,
-  Briefcase, ChevronUp
+  Briefcase, ChevronUp, GripVertical
 } from "lucide-react";
 
 const ROLE_COLORS = {
@@ -50,16 +50,25 @@ const ROLE_LABELS = {
   staff: "Staff",
 };
 
-function PersonCard({ person, size = "md", highlight = false }) {
+function PersonCard({ person, size = "md", highlight = false, draggable: isDraggable = false }) {
   const colorClass = ROLE_COLORS[person.role] || "bg-slate-400 text-white";
   const initials = person.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   const isSm = size === "sm";
 
+  const handleDragStart = (e) => {
+    if (!isDraggable) return;
+    e.dataTransfer.setData("application/json", JSON.stringify({ userId: person.id, name: person.name }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   return (
     <div
-      className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all duration-200 hover:shadow-md ${highlight ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 bg-card hover:border-border"}`}
+      className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all duration-200 hover:shadow-md ${highlight ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 bg-card hover:border-border"} ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       data-testid={`person-card-${person.id}`}
+      draggable={isDraggable}
+      onDragStart={handleDragStart}
     >
+      {isDraggable && <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />}
       <div className={`${isSm ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm"} rounded-full ${colorClass} flex items-center justify-center font-bold shrink-0`}>
         {initials}
       </div>
@@ -98,7 +107,7 @@ function TeamBlock({ team, expanded, onToggle }) {
       {expanded && memberCount > 0 && (
         <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5 border-t border-border/30 pt-2">
           {team.members.map(m => (
-            <PersonCard key={m.id} person={m} size="sm" />
+            <PersonCard key={m.id} person={m} size="sm" draggable={canEdit} />
           ))}
         </div>
       )}
@@ -109,11 +118,31 @@ function TeamBlock({ team, expanded, onToggle }) {
   );
 }
 
-function DepartmentSection({ dept, searchQuery }) {
+function DepartmentSection({ dept, searchQuery, canEdit, onMoveUser }) {
   const [open, setOpen] = useState(true);
   const [expandedTeams, setExpandedTeams] = useState({});
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const toggleTeam = (id) => setExpandedTeams(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const handleDragOver = (e) => {
+    if (!canEdit) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => setIsDragOver(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!canEdit) return;
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      onMoveUser(data.userId, data.name, dept.name);
+    } catch {}
+  };
 
   const matchesSearch = (p) => {
     if (!searchQuery) return true;
@@ -148,8 +177,13 @@ function DepartmentSection({ dept, searchQuery }) {
   const gradient = DEPT_COLORS[dept.name] || "from-slate-500/10 to-slate-600/5 border-slate-500/20";
 
   return (
-    <Card className={`bg-gradient-to-br ${gradient} overflow-hidden`} data-testid={`dept-section-${dept.name}`}>
-      <button
+    <Card
+      className={`bg-gradient-to-br ${gradient} overflow-hidden ${isDragOver ? "ring-2 ring-primary ring-offset-2" : ""}`}
+      data-testid={`dept-section-${dept.name}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >      <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted/10 transition-colors"
       >
@@ -188,7 +222,7 @@ function DepartmentSection({ dept, searchQuery }) {
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-semibold mb-1.5">Direct Members</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
                 {filteredDirect.map(m => (
-                  <PersonCard key={m.id} person={m} size="sm" />
+                  <PersonCard key={m.id} person={m} size="sm" draggable={canEdit} />
                 ))}
               </div>
             </div>
@@ -222,6 +256,19 @@ export default function OrganizationMapPage() {
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
   }, [data]);
+
+  const canEdit = ["super_admin", "admin", "hr", "coo"].includes(user?.role);
+
+  const handleMoveUser = useCallback(async (userId, userName, newDepartment) => {
+    if (!window.confirm(`Move ${userName} to ${newDepartment}?`)) return;
+    try {
+      await apiClient.put("/organization/move-user", { user_id: userId, department: newDepartment });
+      toast.success(`${userName} moved to ${newDepartment}`);
+      fetchData();
+    } catch (e) {
+      toast.error("Failed to move user");
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -308,7 +355,7 @@ export default function OrganizationMapPage() {
           {/* Departments */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {sortedDepts.filter(d => d.name !== "Management").map(dept => (
-              <DepartmentSection key={dept.name} dept={dept} searchQuery={searchQuery} />
+              <DepartmentSection key={dept.name} dept={dept} searchQuery={searchQuery} canEdit={canEdit} onMoveUser={handleMoveUser} />
             ))}
           </div>
         </div>
