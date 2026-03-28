@@ -593,7 +593,8 @@ const CustomerServicePage = () => {
             if (filterCSAgent !== 'all') {
                 baseParams.cs_agent_id = filterCSAgent;
             }
-            if (csPeriodFilter && !searchTerm) {
+            // Only apply period filter for Kanban/LTV views, not Table view
+            if (csPeriodFilter && !searchTerm && displayMode !== 'table') {
                 baseParams.date_from = csPeriodFilter.date_from;
                 baseParams.date_to = csPeriodFilter.date_to;
                 baseParams.date_field = 'upgrade_date';
