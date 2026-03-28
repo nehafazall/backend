@@ -364,27 +364,53 @@ const SortableStudentCard = ({ student, onView, onSetReminder, onInitiateUpgrade
     );
 };
 
-const COLUMN_PAGE_SIZE = 20;
+const COLUMN_PAGE_SIZE = 50;
 
-const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign, onColorTag }) => {
+const KanbanColumn = ({ stage, baseParams, shadowCards, onView, onSetReminder, onInitiateUpgrade, isSuperAdmin, csAgents, onQuickReassign, onColorTag, stageTotal, onStudentsFetched }) => {
     const [colPage, setColPage] = React.useState(1);
-    const stageStudents = students.filter(s => s.stage === stage.id);
-    // For the Upgraded column, merge in shadow cards
-    const allStudents = stage.id === 'upgraded' && shadowCards?.length > 0
-        ? [...shadowCards, ...stageStudents.filter(s => !s.is_shadow)]
-        : stageStudents;
-    
-    const totalInColumn = allStudents.length;
-    const totalColPages = Math.ceil(totalInColumn / COLUMN_PAGE_SIZE);
-    const displayStudents = allStudents.slice((colPage - 1) * COLUMN_PAGE_SIZE, colPage * COLUMN_PAGE_SIZE);
-    const studentIds = displayStudents.map(s => s.id);
+    const [colStudents, setColStudents] = React.useState([]);
+    const [colTotal, setColTotal] = React.useState(stageTotal || 0);
+    const [colLoading, setColLoading] = React.useState(true);
     const StageIcon = stage.icon;
-    
+
+    // Fetch this column's data independently
+    React.useEffect(() => {
+        let cancelled = false;
+        const fetchColumnData = async () => {
+            setColLoading(true);
+            try {
+                const res = await studentApi.getAll({ ...baseParams, stage: stage.id, page: colPage, page_size: COLUMN_PAGE_SIZE });
+                if (cancelled) return;
+                const data = res.data;
+                const items = data?.items || (Array.isArray(data) ? data : []);
+                setColStudents(items);
+                setColTotal(data?.total || items.length);
+                if (onStudentsFetched) onStudentsFetched(stage.id, items);
+            } catch {
+                if (!cancelled) setColStudents([]);
+            }
+            if (!cancelled) setColLoading(false);
+        };
+        fetchColumnData();
+        return () => { cancelled = true; };
+    }, [colPage, baseParams?.cs_agent_id, stage.id]);
+
+    // For the Upgraded column, merge in shadow cards on page 1
+    const displayStudents = stage.id === 'upgraded' && shadowCards?.length > 0 && colPage === 1
+        ? [...shadowCards, ...colStudents.filter(s => !s.is_shadow)]
+        : colStudents;
+
+    const totalForDisplay = stage.id === 'upgraded' && shadowCards?.length > 0
+        ? colTotal + shadowCards.length
+        : colTotal;
+    const totalColPages = Math.ceil(colTotal / COLUMN_PAGE_SIZE);
+    const studentIds = displayStudents.map(s => s.id);
+
     // Make column a drop target
     const { setNodeRef, isOver } = useDroppable({
         id: stage.id,
     });
-    
+
     return (
         <div 
             ref={setNodeRef}
@@ -397,33 +423,39 @@ const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onI
                     <StageIcon className={`h-4 w-4 ${stage.color.replace('bg-', 'text-')}`} />
                     <h3 className="font-semibold text-sm">{stage.label}</h3>
                 </div>
-                <Badge variant="secondary" className="text-xs">{totalInColumn}</Badge>
+                <Badge variant="secondary" className="text-xs">{totalForDisplay}</Badge>
             </div>
             
-            <ScrollArea className="flex-1">
-                <SortableContext items={studentIds} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-2 min-h-[80px] p-0.5">
-                        {displayStudents.map((student) => (
-                            <SortableStudentCard
-                                key={student.id}
-                                student={student}
-                                onView={onView}
-                                onSetReminder={onSetReminder}
-                                onInitiateUpgrade={onInitiateUpgrade}
-                                isSuperAdmin={isSuperAdmin}
-                                csAgents={csAgents}
-                                onQuickReassign={onQuickReassign}
-                                onColorTag={onColorTag}
-                            />
-                        ))}
-                        {displayStudents.length === 0 && (
-                            <div className={`text-center text-muted-foreground py-6 text-xs border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
-                                Drop students here
-                            </div>
-                        )}
-                    </div>
-                </SortableContext>
-            </ScrollArea>
+            {colLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary"></div>
+                </div>
+            ) : (
+                <ScrollArea className="flex-1">
+                    <SortableContext items={studentIds} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2 min-h-[80px] p-0.5">
+                            {displayStudents.map((student) => (
+                                <SortableStudentCard
+                                    key={student.id}
+                                    student={student}
+                                    onView={onView}
+                                    onSetReminder={onSetReminder}
+                                    onInitiateUpgrade={onInitiateUpgrade}
+                                    isSuperAdmin={isSuperAdmin}
+                                    csAgents={csAgents}
+                                    onQuickReassign={onQuickReassign}
+                                    onColorTag={onColorTag}
+                                />
+                            ))}
+                            {displayStudents.length === 0 && (
+                                <div className={`text-center text-muted-foreground py-6 text-xs border-2 border-dashed rounded-lg transition-colors ${isOver ? 'border-primary bg-primary/5' : 'border-muted'}`}>
+                                    Drop students here
+                                </div>
+                            )}
+                        </div>
+                    </SortableContext>
+                </ScrollArea>
+            )}
             
             {/* Per-column pagination */}
             {totalColPages > 1 && (
@@ -436,7 +468,9 @@ const KanbanColumn = ({ stage, students, shadowCards, onView, onSetReminder, onI
                     >
                         Prev
                     </button>
-                    <span className="text-[10px] text-muted-foreground">{colPage}/{totalColPages}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                        {(colPage - 1) * COLUMN_PAGE_SIZE + 1}-{Math.min(colPage * COLUMN_PAGE_SIZE, colTotal)} of {colTotal}
+                    </span>
                     <button 
                         onClick={() => setColPage(p => Math.min(totalColPages, p + 1))} 
                         disabled={colPage >= totalColPages}
@@ -528,6 +562,26 @@ const CustomerServicePage = () => {
         }
     }, [isSuperAdmin, isHeadOrAdmin]);
 
+    // Track all visible students across columns for DnD
+    const [kanbanStudentsMap, setKanbanStudentsMap] = useState({});
+    const allKanbanStudents = React.useMemo(() => Object.values(kanbanStudentsMap).flat(), [kanbanStudentsMap]);
+
+    const handleColumnStudentsFetched = React.useCallback((stageId, items) => {
+        setKanbanStudentsMap(prev => ({ ...prev, [stageId]: items }));
+    }, []);
+
+    // Build baseParams for columns
+    const kanbanBaseParams = React.useMemo(() => {
+        const params = {};
+        if (viewMode === 'my_work' && isHeadOrAdmin) {
+            params.cs_agent_id = user.id;
+        }
+        if (filterCSAgent !== 'all') {
+            params.cs_agent_id = filterCSAgent;
+        }
+        return params;
+    }, [viewMode, isHeadOrAdmin, user?.id, filterCSAgent]);
+
     const fetchStudents = async () => {
         try {
             setLoading(true);
@@ -544,36 +598,11 @@ const CustomerServicePage = () => {
                 baseParams.date_field = 'upgrade_date';
             }
 
-            // For Kanban mode: fetch per-stage in parallel so every column shows its students
+            // For Kanban mode: columns fetch their own data independently
             if (!searchTerm && !csPeriodFilter && !ltvSort && displayMode === 'kanban') {
-                const stageIds = CS_STAGES.map(s => s.id);
-                const perStageLimit = 200; // Fetch more for per-column pagination
-                const promises = stageIds.map(stage =>
-                    studentApi.getAll({ ...baseParams, stage, page: 1, page_size: perStageLimit })
-                );
-                const results = await Promise.all(promises);
-                let allItems = [];
-                let totalCount = 0;
-                const agentMap = {};
-                results.forEach((res) => {
-                    const data = res.data;
-                    const items = data?.items || (Array.isArray(data) ? data : []);
-                    allItems = allItems.concat(items);
-                    totalCount += data?.total || items.length;
-                    if (viewMode === 'team' && isHeadOrAdmin) {
-                        items.forEach(s => {
-                            const key = s.cs_agent_id || 'unassigned';
-                            if (!agentMap[key]) agentMap[key] = { id: key, name: s.cs_agent_name || 'Unassigned', count: 0 };
-                            agentMap[key].count++;
-                        });
-                    }
-                });
-                setStudents(allItems);
-                setTotalRecords(totalCount);
-                setTotalPages(1);
-                if (viewMode === 'team' && isHeadOrAdmin) {
-                    setTeamAgents(Object.values(agentMap).sort((a, b) => b.count - a.count));
-                }
+                // Just set loading false — columns handle their own fetching
+                setLoading(false);
+                return;
             } else {
                 // Search, period filter, or LTV sort: use single paginated query
                 const params = { ...baseParams, search: searchTerm || undefined, page: currentPage, page_size: pageSize };
@@ -1090,7 +1119,7 @@ const CustomerServicePage = () => {
                             <KanbanColumn
                                 key={stage.id}
                                 stage={stage}
-                                students={students}
+                                baseParams={kanbanBaseParams}
                                 shadowCards={stage.id === 'upgraded' ? shadowCards : []}
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
@@ -1099,13 +1128,15 @@ const CustomerServicePage = () => {
                                 csAgents={csAgentsList}
                                 onQuickReassign={handleQuickReassignCS}
                                 onColorTag={handleColorTag}
+                                stageTotal={stageSummary?.stage_counts?.[stage.id] || 0}
+                                onStudentsFetched={handleColumnStudentsFetched}
                             />
                         ))}
                     </div>
                     <DragOverlay>
                         {activeId ? (
                             <StudentCard
-                                student={students.find(s => s.id === activeId)}
+                                student={allKanbanStudents.find(s => s.id === activeId) || students.find(s => s.id === activeId)}
                                 onView={() => {}}
                                 onSetReminder={() => {}}
                                 onInitiateUpgrade={() => {}}
