@@ -93,6 +93,7 @@ import EmployeeMasterPage from "@/pages/hr/EmployeeMasterPage";
 import EmployeeDetailsPage from "@/pages/hr/EmployeeDetailsPage";
 import LeavePage from "@/pages/hr/LeavePage";
 import AttendancePage from "@/pages/hr/AttendancePage";
+import AttendanceSettingsPage from "@/pages/hr/AttendanceSettingsPage";
 import PayrollPage from "@/pages/hr/PayrollPage";
 import PerformancePage from "@/pages/hr/PerformancePage";
 import AssetsPage from "@/pages/hr/AssetsPage";
@@ -428,6 +429,11 @@ function AppRoutes() {
                 <Route path="hr/attendance" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
                         <AttendancePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="hr/attendance-settings" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'hr']}>
+                        <AttendanceSettingsPage />
                     </ProtectedRoute>
                 } />
                 <Route path="hr/biocloud" element={

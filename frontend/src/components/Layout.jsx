@@ -166,6 +166,7 @@ const SECTIONS = {
             { title: 'Company Documents', icon: FolderOpen, path: '/hr/documents' },
             { title: 'Leave Management', icon: Calendar, path: '/hr/leave' },
             { title: 'Attendance', icon: Clock, path: '/hr/attendance' },
+            { title: 'Attendance Settings', icon: Settings, path: '/hr/attendance-settings' },
             { title: 'Approval Queue', icon: ClipboardCheck, path: '/hr/approvals' },
             { title: 'BioCloud Sync', icon: Fingerprint, path: '/hr/biocloud' },
             { title: 'Payroll', icon: DollarSign, path: '/hr/payroll' },

@@ -393,12 +393,13 @@ const ESSSection = () => {
 
                     {/* Summary Cards */}
                     {monthlyAttendance?.summary && (
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
                             {[
                                 { label: 'Present', value: monthlyAttendance.summary.present, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950' },
                                 { label: 'Absent', value: monthlyAttendance.summary.absent, color: 'text-red-600 bg-red-50 dark:bg-red-950' },
                                 { label: 'Half Day', value: monthlyAttendance.summary.half_day, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950' },
                                 { label: 'On Leave', value: monthlyAttendance.summary.on_leave, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950' },
+                                { label: 'Holiday', value: monthlyAttendance.summary.holiday || 0, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950' },
                                 { label: 'Late', value: monthlyAttendance.summary.late, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950' },
                                 { label: 'No Data', value: monthlyAttendance.summary.no_data, color: 'text-slate-500 bg-slate-50 dark:bg-slate-900' },
                             ].map(s => (
@@ -430,13 +431,14 @@ const ESSSection = () => {
                                             half_day: 'border-l-amber-500 bg-amber-500/5',
                                             absent: 'border-l-red-500 bg-red-500/5',
                                             on_leave: 'border-l-blue-500 bg-blue-500/5',
+                                            holiday: 'border-l-purple-500 bg-purple-500/5',
                                             weekend: 'border-l-slate-300 bg-slate-500/5 opacity-50',
                                             upcoming: 'border-l-slate-200 bg-slate-500/3 opacity-40',
                                             no_data: 'border-l-orange-400 bg-orange-500/5',
                                         };
                                         const statusLabels = {
                                             present: 'Present', half_day: 'Half Day', absent: 'Absent',
-                                            on_leave: 'On Leave', weekend: 'Weekend', upcoming: 'Upcoming',
+                                            on_leave: 'On Leave', holiday: 'Holiday', weekend: 'Weekend', upcoming: 'Upcoming',
                                             no_data: 'No Record',
                                         };
                                         const statusBadgeColors = {
@@ -444,11 +446,12 @@ const ESSSection = () => {
                                             half_day: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
                                             absent: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
                                             on_leave: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+                                            holiday: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
                                             weekend: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
                                             upcoming: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
                                             no_data: 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300',
                                         };
-                                        const isClickable = !day.is_weekend && !day.is_future;
+                                        const isClickable = !day.is_weekend && !day.is_future && day.status !== 'holiday';
 
                                         return (
                                             <div
@@ -475,6 +478,12 @@ const ESSSection = () => {
                                                         )}
                                                         {day.leave_type && (
                                                             <p className="text-[10px] text-blue-500">{day.leave_type.replace(/_/g, ' ')}</p>
+                                                        )}
+                                                        {day.holiday_name && (
+                                                            <p className="text-[10px] text-purple-500 font-medium">{day.holiday_name}</p>
+                                                        )}
+                                                        {day.special_period && (
+                                                            <p className="text-[10px] text-purple-400">{day.special_period}</p>
                                                         )}
                                                     </div>
                                                 </div>

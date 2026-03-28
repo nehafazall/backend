@@ -20052,6 +20052,75 @@ async def update_attendance_rules(data: Dict, user = Depends(require_roles(["sup
     update.pop("_id", None)
     return update
 
+# ─── Company Holidays ────────────────────────────────────────────────
+
+@api_router.get("/hr/holidays")
+async def get_company_holidays(year: Optional[int] = None, user=Depends(get_current_user)):
+    """Get company holidays, optionally filtered by year"""
+    query = {"type": "company_holiday"}
+    if year:
+        query["date"] = {"$regex": f"^{year}"}
+    holidays = await db.hr_holidays.find(query, {"_id": 0}).sort("date", 1).to_list(200)
+    return holidays
+
+@api_router.post("/hr/holidays")
+async def create_company_holiday(data: Dict, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Create a company holiday (single date or date range)"""
+    now = datetime.now(timezone.utc).isoformat()
+    start_date = data["start_date"]
+    end_date = data.get("end_date", start_date)
+    name = data["name"]
+    holiday_type = data.get("holiday_type", "public")  # public, religious, company
+    
+    holidays_created = []
+    current = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    while current <= end:
+        date_str = current.strftime("%Y-%m-%d")
+        existing = await db.hr_holidays.find_one({"date": date_str, "type": "company_holiday"})
+        if not existing:
+            doc = {
+                "id": str(uuid.uuid4()),
+                "type": "company_holiday",
+                "date": date_str,
+                "name": name,
+                "holiday_type": holiday_type,
+                "created_by": user["id"],
+                "created_at": now,
+            }
+            await db.hr_holidays.insert_one(doc)
+            doc.pop("_id", None)
+            holidays_created.append(doc)
+        current += timedelta(days=1)
+    
+    return {"message": f"{len(holidays_created)} holiday(s) created", "holidays": holidays_created}
+
+@api_router.delete("/hr/holidays/{holiday_id}")
+async def delete_company_holiday(holiday_id: str, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Delete a company holiday"""
+    await db.hr_holidays.delete_one({"id": holiday_id})
+    return {"message": "Holiday deleted"}
+
+@api_router.put("/hr/shifts/{shift_id}")
+async def update_shift(shift_id: str, data: Dict, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Update an existing shift"""
+    update = {}
+    for field in ["name", "start", "end", "grace_minutes", "location"]:
+        if field in data:
+            update[field] = data[field]
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.hr_shifts.update_one({"id": shift_id}, {"$set": update})
+    return {"message": "Shift updated"}
+
+@api_router.delete("/hr/shifts/{shift_id}")
+async def delete_shift(shift_id: str, user=Depends(require_roles(["super_admin", "admin", "hr"]))):
+    """Delete a shift"""
+    await db.hr_shifts.delete_one({"id": shift_id})
+    return {"message": "Shift deleted"}
+
+
+
 @api_router.get("/hr/countries")
 async def get_countries(user = Depends(get_current_user)):
     """Get list of available countries for location tagging"""
@@ -20089,7 +20158,30 @@ async def _calculate_attendance_status(emp: dict, biometric_in: str, biometric_o
         if sp.get("start_date") and sp.get("end_date"):
             if sp["start_date"] <= date_str <= sp["end_date"]:
                 full_day_hours = sp.get("reduced_hours", full_day_hours)
+                # Override shift times during special period if configured
+                if sp.get("shift_start"):
+                    shift = {**shift, "start": sp["shift_start"]}
+                if sp.get("shift_end"):
+                    shift = {**shift, "end": sp["shift_end"]}
                 break
+    
+    # Check if date is a company holiday (use cache)
+    if rules_cache and "holidays" in rules_cache:
+        holiday_dates = rules_cache["holidays"]
+    else:
+        hol_docs = await db.hr_holidays.find({"type": "company_holiday"}, {"_id": 0, "date": 1}).to_list(200)
+        holiday_dates = {h["date"] for h in hol_docs}
+        if rules_cache is not None:
+            rules_cache["holidays"] = holiday_dates
+    
+    if date_str in holiday_dates:
+        return {
+            "status": "holiday",
+            "late_minutes": 0,
+            "total_work_hours": 0,
+            "warning_flag": False,
+            "half_day_reason": None,
+        }
 
     shift_start = shift.get("start", "10:00")
     shift_end = shift.get("end", "19:00")
@@ -20562,6 +20654,17 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
     
     att_map = {a["date"]: a for a in att_records}
     
+    # Get company holidays for the month
+    hol_docs = await db.hr_holidays.find(
+        {"type": "company_holiday", "date": {"$gte": date_start, "$lte": date_end}},
+        {"_id": 0, "date": 1, "name": 1}
+    ).to_list(50)
+    holiday_map = {h["date"]: h.get("name", "Holiday") for h in hol_docs}
+    
+    # Get special periods
+    rules = await db.hr_settings.find_one({"type": "attendance_rules"}, {"_id": 0})
+    special_periods = rules.get("special_periods", []) if rules else []
+    
     # Get leave records for the month
     leave_records = await db.hr_leave_requests.find(
         {"user_id": user["id"], "status": "approved"},
@@ -20588,7 +20691,7 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
     # Build day-by-day view
     today = now.strftime("%Y-%m-%d")
     days = []
-    summary = {"present": 0, "absent": 0, "half_day": 0, "late": 0, "on_leave": 0, "wfh": 0, "weekend": 0, "no_data": 0, "total_hours": 0}
+    summary = {"present": 0, "absent": 0, "half_day": 0, "late": 0, "on_leave": 0, "wfh": 0, "weekend": 0, "holiday": 0, "no_data": 0, "total_hours": 0}
     
     for d in range(1, days_in_month + 1):
         date_str = f"{y:04d}-{m:02d}-{d:02d}"
@@ -20598,8 +20701,20 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
         
         att = att_map.get(date_str)
         leave_type = leave_dates.get(date_str)
+        holiday_name = holiday_map.get(date_str)
         
-        if is_weekend:
+        # Check if in special period
+        active_sp = None
+        for sp in special_periods:
+            if sp.get("start_date") and sp.get("end_date"):
+                if sp["start_date"] <= date_str <= sp["end_date"]:
+                    active_sp = sp
+                    break
+        
+        if holiday_name:
+            status = "holiday"
+            summary["holiday"] += 1
+        elif is_weekend:
             status = "weekend"
             summary["weekend"] += 1
         elif is_future:
@@ -20631,6 +20746,8 @@ async def get_my_monthly_attendance(year: int = None, month: int = None, user=De
             "is_future": is_future,
             "status": status,
             "leave_type": leave_type,
+            "holiday_name": holiday_name,
+            "special_period": active_sp.get("name") if active_sp else None,
             "biometric_in": att.get("biometric_in") if att else None,
             "biometric_out": att.get("biometric_out") if att else None,
             "total_work_hours": att.get("total_work_hours") if att else None,
@@ -22568,12 +22685,22 @@ async def run_payroll(
         # If no attendance data exists at all, assume full salary (no deduction)
         absent_days = explicitly_absent
         
-        # Working days calculation: weekdays in the month (exclude Fridays as off for UAE)
+        # Working days calculation: weekdays in the month (exclude weekends and company holidays)
         import calendar as cal_mod
+        # Get company holidays for this month (cached for all employees)
+        if not hasattr(run_payroll, '_holiday_cache') or run_payroll._holiday_cache.get("month") != f"{data.year}-{data.month}":
+            hol_docs_p = await db.hr_holidays.find(
+                {"type": "company_holiday", "date": {"$gte": start_date, "$lte": end_date}},
+                {"_id": 0, "date": 1}
+            ).to_list(50)
+            run_payroll._holiday_cache = {"month": f"{data.year}-{data.month}", "dates": {h["date"] for h in hol_docs_p}}
+        payroll_holidays = run_payroll._holiday_cache["dates"]
+        
         working_days = 0
         for day in range(1, total_days + 1):
             wd = cal_mod.weekday(data.year, data.month, day)
-            if wd != 4:  # 4 = Friday
+            date_key = f"{data.year}-{str(data.month).zfill(2)}-{str(day).zfill(2)}"
+            if wd != 4 and date_key not in payroll_holidays:  # 4 = Friday
                 working_days += 1
         
         # Get currency from salary structure
