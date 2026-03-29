@@ -646,3 +646,437 @@ async def get_battle_card(competitor_id: str) -> dict:
     if not card:
         return {"competitor_id": competitor_id, "battle_card": None, "message": "No battle card generated yet. Click 'Generate' first."}
     return card
+
+
+# ═══════════════════════════════════════════
+# FB AD LIBRARY DEEP PARSING
+# ═══════════════════════════════════════════
+
+async def scrape_fb_ad_library(competitor_id: str) -> dict:
+    """Scrape Facebook Ad Library for a competitor's active ads."""
+    comp = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    if not comp:
+        raise HTTPException(404, "Competitor not found")
+
+    fb_page_url = comp.get("social_links", {}).get("facebook", "")
+    ad_lib_url = comp.get("social_links", {}).get("fb_ad_library", "")
+
+    # Build Ad Library search URL if not provided
+    if not ad_lib_url and fb_page_url:
+        # Extract page name from FB URL
+        page_name = fb_page_url.rstrip("/").split("/")[-1]
+        ad_lib_url = f"https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=AE&q={page_name}"
+
+    if not ad_lib_url:
+        return {"competitor": comp["name"], "ads": [], "message": "No Facebook page or Ad Library URL configured"}
+
+    # Scrape the ad library page
+    scraped = await _scrape_url(ad_lib_url)
+
+    # Parse ad-related content from scraped data
+    ads_found = []
+    if scraped.get("content"):
+        content = scraped["content"]
+        # Look for ad text patterns
+        lines = content.split("\n")
+        current_ad = {}
+        for line in lines:
+            line = line.strip()
+            if not line or len(line) < 10:
+                if current_ad:
+                    ads_found.append(current_ad)
+                    current_ad = {}
+                continue
+            # Detect ad content markers
+            if any(kw in line.lower() for kw in ["started running", "active", "inactive"]):
+                if current_ad:
+                    ads_found.append(current_ad)
+                current_ad = {"status": line[:100]}
+            elif any(kw in line.lower() for kw in ["learn more", "sign up", "enroll", "register", "apply now", "get started", "book", "join"]):
+                current_ad["cta"] = line[:200]
+            elif len(line) > 30:
+                current_ad.setdefault("text", "")
+                current_ad["text"] = (current_ad["text"] + " " + line)[:500]
+
+        if current_ad:
+            ads_found.append(current_ad)
+
+    # Store in DB
+    ad_doc = {
+        "competitor_id": competitor_id,
+        "competitor_name": comp["name"],
+        "source_type": "fb_ad_library",
+        "url": ad_lib_url,
+        "ads_found": len(ads_found),
+        "ads": ads_found[:20],
+        "raw_content": scraped.get("content", "")[:5000],
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.competitor_ads.update_one(
+        {"competitor_id": competitor_id},
+        {"$set": ad_doc},
+        upsert=True,
+    )
+
+    return {"competitor": comp["name"], "ads_found": len(ads_found), "ads": ads_found[:10], "url": ad_lib_url}
+
+
+# ═══════════════════════════════════════════
+# SOCIAL MEDIA COMMENT SCRAPING
+# ═══════════════════════════════════════════
+
+async def scrape_social_comments(competitor_id: str) -> dict:
+    """Scrape social media pages for comments, engagement, and content themes."""
+    comp = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    if not comp:
+        raise HTTPException(404, "Competitor not found")
+
+    socials = comp.get("social_links", {})
+    results = {}
+
+    for platform in ["instagram", "facebook"]:
+        url = socials.get(platform, "")
+        if not url:
+            continue
+
+        scraped = await _scrape_url(url)
+        if scraped.get("error") or not scraped.get("content"):
+            results[platform] = {"error": scraped.get("error", "No content"), "engagement": {}}
+            continue
+
+        content = scraped["content"]
+
+        # Extract engagement signals
+        comments = []
+        themes = []
+        lines = content.split("\n")
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Count likes/comments/shares mentions
+            if any(kw in line.lower() for kw in ["comment", "like", "share", "view", "follower"]):
+                comments.append(line[:200])
+            # Content themes
+            if len(line) > 20 and len(line) < 300:
+                themes.append(line)
+
+        results[platform] = {
+            "title": scraped.get("title", ""),
+            "meta": scraped.get("meta_description", ""),
+            "engagement_signals": comments[:15],
+            "content_themes": themes[:20],
+            "content_length": len(content),
+        }
+
+    # Store
+    await db.competitor_social.update_one(
+        {"competitor_id": competitor_id},
+        {"$set": {
+            "competitor_id": competitor_id,
+            "competitor_name": comp["name"],
+            "platforms": results,
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    return {"competitor": comp["name"], "platforms": results}
+
+
+# ═══════════════════════════════════════════
+# GOOGLE REVIEWS SENTIMENT ANALYSIS
+# ═══════════════════════════════════════════
+
+async def scrape_google_reviews(competitor_id: str) -> dict:
+    """Scrape and analyze Google Reviews / GMB for a competitor."""
+    comp = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    if not comp:
+        raise HTTPException(404, "Competitor not found")
+
+    gmb_url = comp.get("social_links", {}).get("google_reviews", "")
+    if not gmb_url:
+        # Try to search Google Maps
+        name = comp["name"].replace(" ", "+")
+        gmb_url = f"https://www.google.com/maps/search/{name}+dubai+trading+academy"
+
+    scraped = await _scrape_url(gmb_url)
+    content = scraped.get("content", "")
+
+    # Extract review-like content
+    reviews = []
+    rating_mentions = []
+    lines = content.split("\n")
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Look for star ratings
+        if any(kw in line.lower() for kw in ["star", "rating", "review", "rated"]):
+            rating_mentions.append(line[:200])
+        # Look for review text (longer passages)
+        if len(line) > 40 and len(line) < 500 and not line.startswith("http"):
+            reviews.append(line)
+
+    # AI sentiment analysis on collected reviews
+    sentiment = {"positive": 0, "negative": 0, "neutral": 0, "themes": []}
+    if reviews:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+            review_text = "\n".join(reviews[:15])
+            prompt = f"""Analyze these review/comment snippets about "{comp['name']}" (a trading education company).
+Return JSON only:
+{{"positive": <count>, "negative": <count>, "neutral": <count>,
+"themes": ["theme 1", "theme 2", ...],
+"overall_sentiment": "positive/negative/mixed",
+"key_praise": ["what people like 1", ...],
+"key_complaints": ["what people dislike 1", ...],
+"estimated_rating": "X.X/5"}}
+
+REVIEWS:
+{review_text[:3000]}"""
+
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"reviews-{competitor_id}",
+                system_message="Analyze sentiment. Return only valid JSON.",
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+            resp = await chat.send_message(UserMessage(text=prompt))
+            json_match = re.search(r'\{[\s\S]*\}', resp)
+            if json_match:
+                sentiment = json.loads(json_match.group())
+        except Exception as e:
+            logger.error(f"Review sentiment error: {e}")
+            sentiment["error"] = str(e)
+
+    # Store
+    review_doc = {
+        "competitor_id": competitor_id,
+        "competitor_name": comp["name"],
+        "gmb_url": gmb_url,
+        "reviews_found": len(reviews),
+        "rating_mentions": rating_mentions[:10],
+        "sample_reviews": reviews[:10],
+        "sentiment": sentiment,
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.competitor_reviews.update_one(
+        {"competitor_id": competitor_id},
+        {"$set": review_doc},
+        upsert=True,
+    )
+
+    return review_doc
+
+
+# ═══════════════════════════════════════════
+# COMPARATIVE SCORING MATRIX
+# ═══════════════════════════════════════════
+
+async def generate_comparative_matrix() -> dict:
+    """Generate a multi-dimensional comparative scoring matrix: CLT vs all competitors."""
+    competitors = await db.competitors.find({"status": "active"}, {"_id": 0}).to_list(20)
+    if not competitors:
+        return {"matrix": [], "dimensions": []}
+
+    # Gather all intel for each competitor
+    all_intel = {}
+    for comp in competitors:
+        cid = comp["id"]
+        intel = await db.competitor_intel.find({"competitor_id": cid}, {"_id": 0}).to_list(10)
+        reviews = await db.competitor_reviews.find_one({"competitor_id": cid}, {"_id": 0})
+        ads = await db.competitor_ads.find_one({"competitor_id": cid}, {"_id": 0})
+        social = await db.competitor_social.find_one({"competitor_id": cid}, {"_id": 0})
+        all_intel[comp["name"]] = {
+            "website": comp.get("website", ""),
+            "intel": intel,
+            "reviews": reviews,
+            "ads": ads,
+            "social": social,
+            "notes": comp.get("notes", ""),
+        }
+
+    # Build summary for AI
+    summary = "COMPETITOR DATA SUMMARY:\n\n"
+    for name, data in all_intel.items():
+        summary += f"--- {name} ---\n"
+        summary += f"Website: {data['website']}\n"
+        summary += f"Notes: {data['notes']}\n"
+        if data["reviews"] and data["reviews"].get("sentiment"):
+            s = data["reviews"]["sentiment"]
+            summary += f"Reviews: sentiment={s.get('overall_sentiment','?')}, rating={s.get('estimated_rating','?')}\n"
+            if s.get("key_praise"):
+                summary += f"Praise: {', '.join(s['key_praise'][:3])}\n"
+            if s.get("key_complaints"):
+                summary += f"Complaints: {', '.join(s['key_complaints'][:3])}\n"
+        if data["ads"] and data["ads"].get("ads_found"):
+            summary += f"Active FB ads: {data['ads']['ads_found']}\n"
+        for i_doc in (data["intel"] or [])[:2]:
+            if i_doc.get("pricing"):
+                summary += f"Pricing: {i_doc['pricing'][:300]}\n"
+            if i_doc.get("courses"):
+                summary += f"Courses: {i_doc['courses'][:300]}\n"
+        summary += "\n"
+
+    # Use AI to generate comparative matrix
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+        prompt = f"""You are a competitive intelligence analyst for CLT Academy (forex/trading education, UAE).
+
+Based on available data, generate a comparative scoring matrix. Score each company (including CLT Academy) on a scale of 1-10 for each dimension.
+
+{summary[:6000]}
+
+Return JSON:
+{{
+  "dimensions": ["Course Quality", "Pricing Value", "Social Presence", "Review Sentiment", "Ad Activity", "Brand Trust", "Mentorship Quality", "Online Presence"],
+  "scores": {{
+    "CLT Academy": {{"Course Quality": 8, "Pricing Value": 7, ...}},
+    "CompetitorName": {{"Course Quality": 6, ...}},
+    ...
+  }},
+  "insights": ["insight 1 about competitive landscape", "insight 2", ...],
+  "clt_top_strengths": ["strength 1", ...],
+  "clt_improvement_areas": ["area 1", ...]
+}}
+
+Return ONLY JSON."""
+
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"matrix-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+            system_message="Competitive analyst. Return only valid JSON.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        resp = await chat.send_message(UserMessage(text=prompt))
+        json_match = re.search(r'\{[\s\S]*\}', resp)
+        if json_match:
+            matrix = json.loads(json_match.group())
+        else:
+            matrix = {"dimensions": [], "scores": {}, "insights": [resp[:500]]}
+
+    except Exception as e:
+        logger.error(f"Matrix generation error: {e}")
+        matrix = {"dimensions": [], "scores": {}, "insights": [f"Generation failed: {str(e)}"]}
+
+    # Store
+    await db.competitive_matrix.update_one(
+        {"type": "latest"},
+        {"$set": {"type": "latest", "matrix": matrix, "generated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    return {"matrix": matrix, "generated_at": datetime.now(timezone.utc).isoformat()}
+
+
+async def get_comparative_matrix() -> dict:
+    """Get the latest comparative scoring matrix."""
+    doc = await db.competitive_matrix.find_one({"type": "latest"}, {"_id": 0})
+    if not doc:
+        return {"matrix": None, "message": "No matrix generated yet."}
+    return doc
+
+
+# ═══════════════════════════════════════════
+# MARKETING CONTENT GENERATOR
+# ═══════════════════════════════════════════
+
+async def generate_marketing_content(focus: str = "general") -> dict:
+    """Generate marketing content ideas based on competitor analysis."""
+    # Gather competitive landscape
+    competitors = await db.competitors.find({"status": "active"}, {"_id": 0, "name": 1}).to_list(20)
+    comp_names = [c["name"] for c in competitors]
+
+    # Gather latest intel
+    ads = await db.competitor_ads.find({}, {"_id": 0, "competitor_name": 1, "ads": 1}).to_list(20)
+    reviews = await db.competitor_reviews.find({}, {"_id": 0, "competitor_name": 1, "sentiment": 1}).to_list(20)
+    battle_cards = await db.battle_cards.find({}, {"_id": 0, "competitor_name": 1, "battle_card": 1}).to_list(20)
+
+    context = f"COMPETITORS: {', '.join(comp_names)}\n\n"
+    for ad in ads:
+        if ad.get("ads"):
+            context += f"{ad['competitor_name']} ADS:\n"
+            for a in ad["ads"][:3]:
+                context += f"  - {a.get('text', '')[:200]}\n"
+    for rev in reviews:
+        s = rev.get("sentiment", {})
+        if s.get("key_complaints"):
+            context += f"{rev['competitor_name']} complaints: {', '.join(s['key_complaints'][:3])}\n"
+    for bc in battle_cards:
+        card = bc.get("battle_card", {})
+        if card.get("our_advantages"):
+            context += f"Our advantages vs {bc['competitor_name']}: {', '.join(card['our_advantages'][:3])}\n"
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+        prompt = f"""You are a marketing strategist for CLT Academy (forex/trading education, UAE).
+
+Focus area: {focus}
+
+Based on competitor intelligence:
+{context[:5000]}
+
+Generate marketing content ideas. Return JSON:
+{{
+  "content_ideas": [
+    {{
+      "type": "social_post/ad_copy/story/reel/email/blog",
+      "platform": "instagram/facebook/linkedin/email/whatsapp",
+      "headline": "...",
+      "body": "...",
+      "cta": "...",
+      "competitor_counter": "Which competitor weakness this exploits",
+      "languages": ["English", "Hindi", "Arabic"]
+    }},
+    ...
+  ],
+  "campaign_themes": ["theme 1 based on competitor gaps", ...],
+  "messaging_differentiation": ["how our messaging should differ from competitors", ...],
+  "content_calendar_suggestion": [
+    {{"day": "Monday", "content_type": "...", "theme": "..."}},
+    ...
+  ]
+}}
+
+Generate 5-8 content ideas. Return ONLY JSON."""
+
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"marketing-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+            system_message="Marketing strategist. Return only valid JSON.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        resp = await chat.send_message(UserMessage(text=prompt))
+        json_match = re.search(r'\{[\s\S]*\}', resp)
+        if json_match:
+            content = json.loads(json_match.group())
+        else:
+            content = {"content_ideas": [], "campaign_themes": [], "messaging_differentiation": [resp[:500]]}
+
+    except Exception as e:
+        logger.error(f"Marketing content error: {e}")
+        content = {"content_ideas": [], "error": str(e)}
+
+    # Store
+    await db.marketing_content.insert_one({
+        "focus": focus,
+        "content": content,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {"content": content, "focus": focus, "generated_at": datetime.now(timezone.utc).isoformat()}
+
+
+async def get_marketing_content() -> dict:
+    """Get the latest marketing content suggestions."""
+    doc = await db.marketing_content.find_one({}, {"_id": 0}, sort=[("generated_at", -1)])
+    if not doc:
+        return {"content": None, "message": "No content generated yet."}
+    return doc

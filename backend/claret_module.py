@@ -1043,18 +1043,104 @@ _reminder_loop_running = False
 _create_notification = None
 
 async def _reminder_check_loop():
-    """Background loop: checks reminders every 30 seconds."""
+    """Background loop: checks reminders every 30 seconds, proactive alerts every 15 minutes."""
     global _reminder_loop_running
     if _reminder_loop_running:
         return
     _reminder_loop_running = True
-    logger.info("Claret reminder check loop started")
+    logger.info("Claret reminder + proactive alert loop started")
+    tick = 0
     while True:
         try:
             await check_and_fire_reminders()
+            tick += 1
+            # Every 30 ticks (15 min) check proactive alerts
+            if tick >= 30:
+                tick = 0
+                await _check_proactive_alerts()
         except Exception as e:
             logger.error(f"Reminder loop error: {e}")
         await asyncio.sleep(30)
+
+
+async def _check_proactive_alerts():
+    """Check for proactive alerts: hot leads going cold, missed reminders."""
+    now = datetime.now(timezone.utc)
+    cutoff_48h = (now - timedelta(hours=48)).isoformat()
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+
+    # 1. Hot leads not contacted in 48+ hours
+    try:
+        hot_leads = await db.leads.find(
+            {
+                "pipeline_stage": {"$in": ["hot_lead", "warm_lead"]},
+                "assigned_to": {"$exists": True, "$ne": None},
+                "$or": [
+                    {"last_contacted_at": {"$lt": cutoff_48h}},
+                    {"last_contacted_at": {"$exists": False}},
+                ],
+            },
+            {"_id": 0, "id": 1, "full_name": 1, "assigned_to": 1, "pipeline_stage": 1, "amount": 1, "last_contacted_at": 1}
+        ).to_list(50)
+
+        # Group by assigned_to
+        by_agent = {}
+        for lead in hot_leads:
+            agent_id = lead.get("assigned_to")
+            if agent_id:
+                by_agent.setdefault(agent_id, []).append(lead)
+
+        for agent_id, leads in by_agent.items():
+            # Only send 1 notification per agent per day max
+            existing = await db.notifications.find_one({
+                "user_id": agent_id,
+                "type": "claret_proactive",
+                "created_at": {"$gte": cutoff_24h},
+            })
+            if existing:
+                continue
+
+            top_lead = max(leads, key=lambda x: x.get("amount", 0))
+            count = len(leads)
+            msg = f"You have {count} hot lead{'s' if count > 1 else ''} waiting! {top_lead.get('full_name', 'A prospect')}"
+            if top_lead.get("amount"):
+                msg += f" (AED {top_lead['amount']:,.0f})"
+            msg += " hasn't been contacted in 48+ hours. Want me to draft a follow-up script?"
+
+            if _create_notification:
+                await _create_notification(
+                    user_id=agent_id,
+                    title="Claret Alert: Leads Going Cold",
+                    message=msg,
+                    notif_type="claret_proactive",
+                    link="/claret",
+                )
+    except Exception as e:
+        logger.error(f"Hot lead alert error: {e}")
+
+    # 2. Missed reminders (fired but possibly not acted on after 2+ hours)
+    try:
+        cutoff_2h = (now - timedelta(hours=2)).isoformat()
+        missed = await db.claret_reminders.find(
+            {"status": "fired", "fired_at": {"$lt": cutoff_2h}, "followup_sent": {"$ne": True}},
+            {"_id": 0, "id": 1, "user_id": 1, "content": 1}
+        ).to_list(20)
+
+        for rem in missed:
+            if _create_notification:
+                await _create_notification(
+                    user_id=rem["user_id"],
+                    title="Claret: Missed Reminder",
+                    message=f"Did you forget? Reminder: {rem.get('content', 'Check your schedule')}",
+                    notif_type="claret_proactive",
+                    link="/claret",
+                )
+            await db.claret_reminders.update_one(
+                {"id": rem["id"]},
+                {"$set": {"followup_sent": True}},
+            )
+    except Exception as e:
+        logger.error(f"Missed reminder alert error: {e}")
 
 
 def start_reminder_loop(notification_fn):
