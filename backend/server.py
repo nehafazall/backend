@@ -17976,6 +17976,56 @@ competitor_intel.db = db
 competitor_intel.get_current_user = get_current_user
 competitor_intel.create_notification = create_notification
 
+# Marketing Calendar Module
+import marketing_calendar
+marketing_calendar.db = db
+
+# Marketing Calendar endpoints
+@api_router.get("/marketing/calendar/pages")
+async def _list_mkt_pages(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.list_pages()
+
+@api_router.post("/marketing/calendar/pages")
+async def _add_mkt_page(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    data["user_id"] = user["id"]
+    return await marketing_calendar.add_page(data)
+
+@api_router.put("/marketing/calendar/pages/{page_id}")
+async def _update_mkt_page(page_id: str, data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.update_page(page_id, data)
+
+@api_router.delete("/marketing/calendar/pages/{page_id}")
+async def _delete_mkt_page(page_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.delete_page(page_id)
+
+@api_router.post("/marketing/calendar/generate")
+async def _gen_mkt_cal(data: dict = Body({}), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.generate_calendar(data)
+
+@api_router.get("/marketing/calendar/entries")
+async def _get_mkt_cal(month: str = "", page_id: str = "", user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.get_calendar(month, page_id)
+
+@api_router.put("/marketing/calendar/entries/{entry_id}")
+async def _update_mkt_entry(entry_id: str, data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.update_calendar_entry(entry_id, data)
+
+@api_router.delete("/marketing/calendar/entries/{entry_id}")
+async def _delete_mkt_entry(entry_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.delete_calendar_entry(entry_id)
+
+@api_router.post("/marketing/calendar/entries/{entry_id}/suggest")
+async def _suggest_mkt_content(entry_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.suggest_content(entry_id)
+
+@api_router.get("/marketing/calendar/stats")
+async def _mkt_cal_stats(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await marketing_calendar.get_calendar_stats()
+
+@api_router.post("/marketing/calendar/check-deadlines")
+async def _check_mkt_deadlines(user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await marketing_calendar.check_deadlines()
+
 # Competitor Intelligence endpoints (CEO/Admin only)
 @api_router.get("/intelligence/competitors")
 async def _list_competitors(user=Depends(require_roles(["super_admin", "admin", "coo"]))):
@@ -30810,6 +30860,9 @@ async def startup_event():
     
     # Start Claret reminder check loop
     claret_module.start_reminder_loop(create_notification)
+    
+    # Start Marketing Calendar deadline check loop
+    marketing_calendar.start_deadline_loop(create_notification)
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
 

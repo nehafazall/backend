@@ -118,6 +118,7 @@ import MarketingSettingsPage from "@/pages/marketing/MarketingSettingsPage";
 import MarketingConnectorsPage from "@/pages/marketing/MarketingConnectorsPage";
 import MarketAnalysisPage from "@/pages/marketing/MarketAnalysisPage";
 import ContentStudioPage from "@/pages/marketing/ContentStudioPage";
+import MarketingCalendarPage from "@/pages/marketing/MarketingCalendarPage";
 
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
@@ -515,6 +516,11 @@ function AppRoutes() {
                 <Route path="marketing/content-studio" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
                         <ContentStudioPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/calendar" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <MarketingCalendarPage />
                     </ProtectedRoute>
                 } />
                 

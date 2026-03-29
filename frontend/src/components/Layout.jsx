@@ -240,6 +240,7 @@ const SECTIONS = {
         items: [
             { title: 'Analytics Dashboard', icon: BarChart3, path: '/marketing/dashboard' },
             { title: 'Competitor Intel', icon: Target, path: '/competitor-intelligence' },
+            { title: 'Content Calendar', icon: Calendar, path: '/marketing/calendar' },
             { title: 'Market Analysis', icon: TrendingUp, path: '/marketing/analysis' },
             { title: 'Content Studio', icon: Sparkles, path: '/marketing/content-studio' },
             { title: 'Lead Connectors', icon: Inbox, path: '/marketing/connectors' },
