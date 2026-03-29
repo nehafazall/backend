@@ -104,6 +104,8 @@ Sales Skills & Techniques:
 - Closing Techniques: Assumptive close, urgency close, trial close, value stack close
 - Follow-up Cadence: Best practices for converting leads to enrollments
 - Upselling/Cross-selling: How to pitch upgrades, advanced courses, and mentorship programs
+- Rapport Building: Mirror language, find common ground, use the "feel-felt-found" method
+- Social Proof: Use student success stories, trader results, community highlights
 
 Competition & Market Awareness:
 - CLT Academy operates in the online forex/trading education space
@@ -117,6 +119,33 @@ Industry Insights:
 - UAE specifically has favorable regulations for trading education businesses
 - Key demographics: 25-45 year olds, aspiring traders, career changers, passive income seekers
 - Common student journey: Curiosity → Free webinar → Paid course → Advanced mentorship → Independent trading
+
+MARKET ANALYSIS & FOREX CONTEXT:
+When discussing forex, trading, or market conditions, bring REAL intelligence:
+- Understand major currency pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD) and what drives them
+- Central bank policies: Fed, ECB, BOE, BOJ decisions affect trading education demand
+- Risk management: Teach the team about lot sizing, stop-loss concepts, risk-reward ratios so they can explain to prospects
+- Trading styles: Scalping, day trading, swing trading, position trading — know which CLT courses cover which
+- Technical analysis basics: Support/resistance, moving averages, RSI, MACD — be able to reference when a prospect asks "what will I learn?"
+- Fundamental analysis: News trading, NFP, CPI, interest rate decisions — help the team sound knowledgeable
+- When a prospect says "trading is gambling", counter with education + risk management + discipline framework
+
+WORK CULTURE & TEAM DYNAMICS:
+- You are the cultural heartbeat of CLT Synapse. You set the tone for the day.
+- Before meetings, help prep with quick stats and confidence boosters
+- After a tough call, offer specific coaching — not generic "you'll do better"
+- When someone shares a win, celebrate it publicly in your response and suggest they share with the team
+- Track patterns: If someone's mood has been low for 3+ days, gently suggest a 1-on-1 with their TL
+- Friday vibes: Be extra fun, share a trading joke or market fun fact
+- Monday energy: Be extra motivating, help them set weekly targets
+- Know when to be serious (missed targets, compliance issues) vs playful (casual chat, team banter)
+
+PRESSURE REDUCTION & MENTAL WELLNESS:
+- Recognize signs of burnout: short responses, declining mood scores, mention of overtime
+- Offer practical stress relief: "Take 5 minutes, walk to the kitchen, come back fresh. That lead will still be there."
+- Break down big targets into micro-goals: "50K target ÷ 20 working days = 2,500/day. That's literally 1 good closing. You can do this."
+- Normalize struggle: "Everyone hits a dry spell. The best closers have the thickest rejection calluses."
+- Suggest context switches: "Stuck on cold calls? Switch to your warm leads for 30 minutes. Fresh energy, fresh approach."
 
 When discussing these topics, be specific, data-driven, and actionable. Don't give generic advice — give CLT-specific strategies that the team can use TODAY.
 
@@ -861,11 +890,13 @@ async def _query_erp_data(user_id: str, role: str, query_type: str, query_hint: 
             query = {"assigned_to": user_id, "created_at": {"$gte": month_start}}
             if role in ("super_admin", "admin", "ceo", "sales_head"):
                 query = {"created_at": {"$gte": month_start}}
-            leads = await db.leads.find(query, {"_id": 0, "full_name": 1, "status": 1, "pipeline_stage": 1, "amount": 1, "created_at": 1}).to_list(500)
+            leads = await db.leads.find(query, {"_id": 0, "full_name": 1, "status": 1, "pipeline_stage": 1, "amount": 1, "created_at": 1, "last_contacted_at": 1, "source": 1, "phone": 1}).to_list(500)
             closed = [l for l in leads if l.get("pipeline_stage") in ("enrolled", "closed_won")]
             rejected = [l for l in leads if l.get("pipeline_stage") == "rejected"]
             hot = [l for l in leads if l.get("pipeline_stage") == "hot_lead"]
             warm = [l for l in leads if l.get("pipeline_stage") == "warm_lead"]
+            new_leads = [l for l in leads if l.get("pipeline_stage") in ("new", "new_lead")]
+            followup = [l for l in leads if l.get("pipeline_stage") in ("follow_up", "followup")]
             total_revenue = sum(l.get("amount", 0) for l in closed)
             conversion_rate = round(len(closed) / len(leads) * 100, 1) if leads else 0
 
@@ -873,14 +904,24 @@ async def _query_erp_data(user_id: str, role: str, query_type: str, query_hint: 
             results.append(f"Total leads: {len(leads)}")
             results.append(f"Closings (enrolled): {len(closed)} | Revenue: AED {total_revenue:,.0f}")
             results.append(f"Conversion rate: {conversion_rate}%")
-            results.append(f"Hot leads: {len(hot)} | Warm leads: {len(warm)} | Rejected: {len(rejected)}")
-            results.append(f"Pipeline remaining: {len(leads) - len(closed) - len(rejected)}")
+            results.append(f"Hot leads: {len(hot)} | Warm leads: {len(warm)} | New: {len(new_leads)} | Follow-up: {len(followup)} | Rejected: {len(rejected)}")
+            results.append(f"Active pipeline: {len(leads) - len(closed) - len(rejected)} leads")
             if closed:
                 avg_deal = total_revenue / len(closed)
                 results.append(f"Average deal size: AED {avg_deal:,.0f}")
                 results.append("Recent closings:")
                 for i, ld in enumerate(closed[:10], 1):
                     results.append(f"  {i}. {ld.get('full_name', 'Unknown')} - AED {ld.get('amount', 0)}")
+
+            # Pipeline advisor: prioritize untouched hot leads
+            now_iso = now.isoformat()
+            stale_hot = [l for l in hot if not l.get("last_contacted_at") or l.get("last_contacted_at", "") < (now - timedelta(hours=24)).isoformat()]
+            if stale_hot:
+                results.append(f"\n[PRIORITY ALERT: {len(stale_hot)} hot leads haven't been contacted in 24+ hours!]")
+                for ld in stale_hot[:5]:
+                    amt = f" (AED {ld['amount']:,.0f})" if ld.get("amount") else ""
+                    results.append(f"  - {ld.get('full_name', '?')}{amt} | Source: {ld.get('source', '?')}")
+
             # Add coaching context
             if conversion_rate < 8:
                 results.append("\n[COACHING NOTE: Conversion rate is below 8%. Focus on lead qualification and follow-up cadence.]")

@@ -116,6 +116,8 @@ import AnnouncementsPage from "@/pages/AnnouncementsPage";
 import MarketingDashboardPage from "@/pages/marketing/MarketingDashboardPage";
 import MarketingSettingsPage from "@/pages/marketing/MarketingSettingsPage";
 import MarketingConnectorsPage from "@/pages/marketing/MarketingConnectorsPage";
+import MarketAnalysisPage from "@/pages/marketing/MarketAnalysisPage";
+import ContentStudioPage from "@/pages/marketing/ContentStudioPage";
 
 // Approvals
 import ApprovalsPage from "@/pages/ApprovalsPage";
@@ -503,6 +505,16 @@ function AppRoutes() {
                 <Route path="marketing/connectors" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
                         <MarketingConnectorsPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/analysis" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <MarketAnalysisPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="marketing/content-studio" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'marketing']}>
+                        <ContentStudioPage />
                     </ProtectedRoute>
                 } />
                 

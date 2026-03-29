@@ -7070,14 +7070,14 @@ async def update_payment(payment_id: str, data: PaymentUpdate, user = Depends(ge
 
 # ==================== NOTIFICATIONS ====================
 
-async def create_notification(user_id: str, title: str, message: str, ntype: str = "info", link: str = None):
+async def create_notification(user_id: str, title: str, message: str, notif_type: str = "info", link: str = None, ntype: str = None, **kwargs):
     """Helper to create a notification for a user."""
     notif = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
         "title": title,
         "message": message,
-        "type": ntype,
+        "type": notif_type or ntype or "info",
         "link": link,
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -18034,6 +18034,51 @@ async def _gen_battle_card(competitor_id: str, user=Depends(require_roles(["supe
 @api_router.get("/intelligence/competitors/{competitor_id}/battle-card")
 async def _get_battle_card(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "sales_executive", "team_leader", "sales_head", "sales_manager"]))):
     return await competitor_intel.get_battle_card(competitor_id)
+
+# ── Phase 3: Deep Competitor Parsing Endpoints ──
+@api_router.post("/intelligence/competitors/{competitor_id}/fb-ads")
+async def _scrape_fb_ads(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.scrape_fb_ad_library(competitor_id)
+
+@api_router.post("/intelligence/competitors/{competitor_id}/social-comments")
+async def _scrape_social(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.scrape_social_comments(competitor_id)
+
+@api_router.post("/intelligence/competitors/{competitor_id}/reviews")
+async def _scrape_reviews(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.scrape_google_reviews(competitor_id)
+
+@api_router.get("/intelligence/comparative-matrix")
+async def _get_matrix(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing", "sales_manager"]))):
+    return await competitor_intel.get_comparative_matrix()
+
+@api_router.post("/intelligence/comparative-matrix")
+async def _gen_matrix(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.generate_comparative_matrix()
+
+@api_router.get("/intelligence/marketing-content")
+async def _get_mkt_content(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.get_marketing_content()
+
+@api_router.post("/intelligence/marketing-content")
+async def _gen_mkt_content(data: dict = Body({}), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    focus = data.get("focus", "general")
+    return await competitor_intel.generate_marketing_content(focus)
+
+@api_router.get("/intelligence/competitors/{competitor_id}/fb-ads")
+async def _get_fb_ads(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    doc = await db.competitor_ads.find_one({"competitor_id": competitor_id}, {"_id": 0})
+    return doc or {"competitor_id": competitor_id, "ads": [], "message": "No ad data yet. Click Scrape Ads first."}
+
+@api_router.get("/intelligence/competitors/{competitor_id}/social-comments")
+async def _get_social(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    doc = await db.competitor_social.find_one({"competitor_id": competitor_id}, {"_id": 0})
+    return doc or {"competitor_id": competitor_id, "platforms": {}, "message": "No social data yet."}
+
+@api_router.get("/intelligence/competitors/{competitor_id}/reviews")
+async def _get_reviews(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    doc = await db.competitor_reviews.find_one({"competitor_id": competitor_id}, {"_id": 0})
+    return doc or {"competitor_id": competitor_id, "sentiment": {}, "message": "No review data yet."}
 
 # Override the upload endpoint to inject auth
 @api_router.post("/claret/knowledge-base/upload")

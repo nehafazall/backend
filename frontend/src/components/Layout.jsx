@@ -211,7 +211,6 @@ const SECTIONS = {
             { title: 'Teams Management', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'sales_manager'] },
             { title: 'Password Resets', icon: Key, path: '/password-resets', roles: ['super_admin'] },
             { title: 'People Intelligence', icon: Brain, path: '/people-intelligence', roles: ['super_admin', 'admin'] },
-            { title: 'Competitor Intel', icon: Target, path: '/competitor-intelligence', roles: ['super_admin', 'admin'] },
             { title: 'Audit Log', icon: FileText, path: '/audit-log', roles: ['super_admin', 'admin'] },
             { title: 'User Management', icon: UserCircle, path: '/users', roles: ['super_admin', 'admin', 'hr'] },
         ],
@@ -240,6 +239,9 @@ const SECTIONS = {
         roles: ['super_admin', 'admin', 'marketing'],
         items: [
             { title: 'Analytics Dashboard', icon: BarChart3, path: '/marketing/dashboard' },
+            { title: 'Competitor Intel', icon: Target, path: '/competitor-intelligence' },
+            { title: 'Market Analysis', icon: TrendingUp, path: '/marketing/analysis' },
+            { title: 'Content Studio', icon: Sparkles, path: '/marketing/content-studio' },
             { title: 'Lead Connectors', icon: Inbox, path: '/marketing/connectors' },
             { title: 'Settings', icon: Settings, path: '/marketing/settings', roles: ['super_admin', 'admin'] },
         ],
