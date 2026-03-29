@@ -572,14 +572,32 @@ async def claret_chat(data: dict = Body(...)):
                     pass
 
     except Exception as e:
+        error_str = str(e).lower()
         logger.error(f"Claret AI error: {e}")
         lang = (profile or {}).get("language", "english")
-        if lang == "hinglish":
-            ai_message = "Arre yaar, thoda technical issue aa gaya! Ek baar aur try karo, main ready hoon! 💪"
-        elif lang == "manglish":
-            ai_message = "Machane, oru cheriya technical issue vannu! Onnu koodi try cheytho, njan ready aanu! 💪"
+
+        # Detect budget/quota exhaustion specifically
+        is_budget_error = any(kw in error_str for kw in ("budget", "exceeded", "quota", "rate_limit", "rate limit", "insufficient"))
+
+        if is_budget_error:
+            if lang == "hinglish":
+                ai_message = "Boss, abhi mera AI brain quota khatam ho gaya hai! Admin ko bolo Universal Key mein balance add karein (Profile > Universal Key > Add Balance). Tab tak main basic help de sakta hoon!"
+            elif lang == "manglish":
+                ai_message = "Machane, ente AI brain quota kazhinju! Admin-ode parayo Universal Key-il balance add cheyyaan (Profile > Universal Key > Add Balance). Athuvare basic help tharam!"
+            else:
+                ai_message = "My AI brain quota has run out! Please ask your admin to top up the Universal Key (Profile > Universal Key > Add Balance). I can still help with basic ERP data in the meantime!"
+
+            # Still try to answer with local ERP data if possible
+            local_answer = await _local_fallback_answer(user_id, user_role or "sales_executive", message)
+            if local_answer:
+                ai_message += f"\n\nHere's what I found from your ERP data:\n{local_answer}"
         else:
-            ai_message = "Hey, hit a small technical snag! Give me one more try — I'm ready to help! 💪"
+            if lang == "hinglish":
+                ai_message = "Arre yaar, thoda technical issue aa gaya! Ek baar aur try karo, main ready hoon!"
+            elif lang == "manglish":
+                ai_message = "Machane, oru cheriya technical issue vannu! Onnu koodi try cheytho, njan ready aanu!"
+            else:
+                ai_message = "Hey, hit a small technical snag! Give me one more try — I'm ready to help!"
         mood_scores = {}
         suggested_actions = []
         response_text = ai_message
@@ -807,6 +825,81 @@ async def update_claret_settings(data: dict = Body(...)):
         upsert=True,
     )
     return {"message": "Settings updated"}
+
+
+# ═══════════════════════════════════════════
+# LOCAL FALLBACK (when LLM is unavailable)
+# ═══════════════════════════════════════════
+
+async def _local_fallback_answer(user_id: str, role: str, message: str) -> str:
+    """Answer basic questions using ERP data without LLM when budget is exhausted."""
+    msg = message.lower().strip()
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    try:
+        # Lead/Sales questions
+        if any(kw in msg for kw in ("lead", "close", "enroll", "sale", "target", "pipeline", "revenue", "how many", "conversion")):
+            query = {"assigned_to": user_id, "created_at": {"$gte": month_start}}
+            if role in ("super_admin", "admin", "ceo", "sales_head"):
+                query = {"created_at": {"$gte": month_start}}
+            leads = await db.leads.find(query, {"_id": 0, "pipeline_stage": 1, "amount": 1, "sale_amount": 1}).to_list(1000)
+            total = len(leads)
+            closed = [l for l in leads if l.get("pipeline_stage") in ("enrolled", "closed_won")]
+            hot = [l for l in leads if l.get("pipeline_stage") == "hot_lead"]
+            warm = [l for l in leads if l.get("pipeline_stage") == "warm_lead"]
+            revenue = sum(l.get("sale_amount") or l.get("amount") or 0 for l in closed)
+            conv = round(len(closed) / total * 100, 1) if total else 0
+
+            return (
+                f"This month: {total} leads total | {len(closed)} closings | AED {revenue:,.0f} revenue\n"
+                f"Hot leads: {len(hot)} | Warm leads: {len(warm)} | Conversion rate: {conv}%\n"
+                f"Active pipeline: {total - len(closed)} leads remaining"
+            )
+
+        # Student questions
+        if any(kw in msg for kw in ("student", "activation", "onboard")):
+            total_students = await db.students.count_documents({})
+            new = await db.students.count_documents({"stage": "new_student"})
+            activated = await db.students.count_documents({"stage": "activated"})
+            return f"Total students: {total_students} | New: {new} | Activated: {activated}"
+
+        # Commission questions
+        if any(kw in msg for kw in ("commission", "earning", "bonus", "payout")):
+            txns = await db.commission_transactions.find(
+                {"agent_id": user_id, "month": now.strftime("%Y-%m")},
+                {"_id": 0, "amount": 1, "status": 1}
+            ).to_list(100)
+            total_comm = sum(t.get("amount", 0) for t in txns)
+            approved = sum(t.get("amount", 0) for t in txns if t.get("status") == "approved")
+            pending = sum(t.get("amount", 0) for t in txns if t.get("status") != "approved")
+            return f"This month's commission: AED {total_comm:,.0f} (Approved: AED {approved:,.0f} | Pending: AED {pending:,.0f})"
+
+        # Team questions
+        if any(kw in msg for kw in ("team", "member", "agent", "who")):
+            if role in ("super_admin", "admin", "ceo", "sales_head", "team_leader"):
+                agents = await db.users.find(
+                    {"is_active": True, "role": {"$in": ["sales_executive", "cs_agent"]}},
+                    {"_id": 0, "full_name": 1, "role": 1}
+                ).to_list(50)
+                names = [f"{a['full_name']} ({a['role']})" for a in agents[:15]]
+                return f"Active team members ({len(agents)}):\n" + "\n".join(f"  - {n}" for n in names)
+
+        # Reminder questions
+        if any(kw in msg for kw in ("reminder", "schedule", "task")):
+            reminders = await db.claret_reminders.find(
+                {"user_id": user_id, "status": {"$in": ["pending", "active"]}},
+                {"_id": 0, "content": 1, "reminder_time": 1}
+            ).sort("reminder_time", 1).to_list(10)
+            if reminders:
+                lines = [f"  - {r['content']} (at {r.get('reminder_time', '?')})" for r in reminders[:5]]
+                return f"Your upcoming reminders ({len(reminders)}):\n" + "\n".join(lines)
+            return "No pending reminders found."
+
+    except Exception as e:
+        logger.warning(f"Local fallback error: {e}")
+
+    return ""
 
 
 # ═══════════════════════════════════════════
