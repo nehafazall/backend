@@ -10,6 +10,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import BirdsEyeDashboard from "@/pages/BirdsEyeDashboard";
 import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
+import SalesDirectoryPage from "@/pages/SalesDirectoryPage";
 import HistoricalImportPage from "@/pages/sales/HistoricalImportPage";
 import CSHistoricalImportPage from "@/pages/cs/CSHistoricalImportPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
@@ -227,6 +228,13 @@ function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 
+                {/* Sales Directory (CEO, COO, Sales Manager) */}
+                <Route path="sales/directory" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'sales_manager']}>
+                        <SalesDirectoryPage />
+                    </ProtectedRoute>
+                } />
+
                 {/* Historical Sales Import (Super Admin only) */}
                 <Route path="sales/historical-import" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>

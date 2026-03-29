@@ -17993,16 +17993,16 @@ async def _claret_chat(data: dict = Body(...), user=Depends(get_current_user)):
     data["user_role"] = user.get("role", "")
     return await claret_module.claret_chat(data)
 
-# Chat history — own for regular users, any for CEO/HR
+# Chat history — own for regular users, CEO/COO only can view others
 @api_router.get("/claret/chat/history")
 async def _claret_history(user_id: str = None, session_id: str = None, limit: int = 50, user=Depends(get_current_user)):
-    if user["role"] not in ("super_admin", "coo", "hr", "admin"):
+    if user["role"] not in ("super_admin", "admin"):
         user_id = user["id"]
     return await claret_module.get_chat_history(user_id, session_id, limit)
 
 @api_router.get("/claret/chat/sessions")
 async def _claret_sessions(user_id: str = None, user=Depends(get_current_user)):
-    if user["role"] not in ("super_admin", "coo", "hr", "admin"):
+    if user["role"] not in ("super_admin", "admin"):
         user_id = user["id"]
     return await claret_module.get_chat_sessions(user_id)
 
@@ -18029,11 +18029,11 @@ async def _my_mood(days: int = 30, user=Depends(get_current_user)):
     return await claret_module.get_my_mood_scores(user["id"], days)
 
 @api_router.get("/claret/mood/team-overview")
-async def _team_mood(user=Depends(require_roles(["super_admin", "coo", "hr"]))):
+async def _team_mood(user=Depends(require_roles(["super_admin", "admin"]))):
     return await claret_module.get_team_mood_overview()
 
 @api_router.get("/claret/mood/analytics")
-async def _mood_analytics(days: int = 30, user=Depends(require_roles(["super_admin", "coo", "hr"]))):
+async def _mood_analytics(days: int = 30, user=Depends(require_roles(["super_admin", "admin"]))):
     return await claret_module.get_mood_analytics(days)
 
 @api_router.get("/claret/settings")
@@ -18058,6 +18058,56 @@ async def _save_profile(data: dict = Body(...), user=Depends(get_current_user)):
 @api_router.get("/claret/onboarding-questions")
 async def _onboarding_questions(language: str = "english"):
     return await claret_module.get_onboarding_questions(language)
+
+# ═══════ SECURITY: CEO-only Claret & Chat Data Access ═══════
+
+@api_router.get("/security/claret-profiles")
+async def _all_claret_profiles(user=Depends(require_roles(["super_admin", "admin"]))):
+    """CEO/COO only: Get all Claret profiles with personality insights."""
+    profiles = await db.claret_profiles.find({}, {"_id": 0}).to_list(500)
+    # Enrich with employee names
+    for p in profiles:
+        emp = await db.hr_employees.find_one({"user_id": p.get("user_id")}, {"_id": 0, "full_name": 1, "designation": 1, "department": 1})
+        if emp:
+            p["employee_name"] = emp.get("full_name", "")
+            p["designation"] = emp.get("designation", "")
+            p["department"] = emp.get("department", "")
+    return {"profiles": profiles}
+
+@api_router.get("/security/claret-chats")
+async def _all_claret_chats(user_id: str = None, days: int = 30, user=Depends(require_roles(["super_admin", "admin"]))):
+    """CEO/COO only: View Claret chat history for any user."""
+    from datetime import timedelta
+    query = {}
+    if user_id:
+        query["user_id"] = user_id
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    query["created_at"] = {"$gte": cutoff}
+    chats = await db.claret_chats.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"chats": chats}
+
+@api_router.get("/security/team-chat-data")
+async def _all_team_chats(days: int = 30, user=Depends(require_roles(["super_admin", "admin"]))):
+    """CEO/COO only: View all team chat conversations and messages."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    conversations = await db.chat_conversations.find(
+        {"updated_at": {"$gte": cutoff}},
+        {"_id": 0}
+    ).sort("updated_at", -1).to_list(100)
+    # Get message counts for each
+    for conv in conversations:
+        conv["message_count"] = await db.chat_messages.count_documents({"conversation_id": conv.get("id", "")})
+    return {"conversations": conversations}
+
+@api_router.get("/security/team-chat-messages/{conversation_id}")
+async def _team_chat_messages(conversation_id: str, user=Depends(require_roles(["super_admin", "admin"]))):
+    """CEO/COO only: Read messages from any team chat conversation."""
+    messages = await db.chat_messages.find(
+        {"conversation_id": conversation_id},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    return {"messages": messages}
 
 
 

@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 98 - All features verified working: 1) Sales Directory page at /sales/directory with enrolled students table, filters (month/year/agent/search), correct columns (Sr, Name, Email, Phone, Course, Amount, Paid By, Agent, Enrolled), descending order by enrolled_at. 2) Sales CRM Kanban/Table toggle working. 3) Security endpoints (claret-profiles, team-chat-data, claret-chats) restricted to CEO/Admin only - sales_executive correctly denied with 403. 4) Claret onboarding questions endpoint returns 7 MCQ + 3 open questions in English/Hinglish/Manglish. 5) Sales Directory access control working - sales_executive cannot access page (redirected, menu hidden, API returns 403).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_98.py",
+    "/app/test_reports/pytest/pytest_iteration_98.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_98.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all UI features verified)"
+  },
+  "test_credentials": {
+    "super_admin": "aqib@clt-academy.com / @Aqib1234",
+    "sales_executive": "aleesha@clt-academy.com / Aleesha@123"
+  },
+  "seed_data_creation": "None - used existing seeded data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 98 verified multiple new features: 1) Sales Directory page (/sales/directory) shows enrolled students with all required columns and filters. Data sorted by enrolled_at descending. 976 total enrolled students with AED 293,201 revenue. 2) Sales CRM has Kanban/Table toggle (displayMode state) - both views working. 3) Security endpoints (/api/security/claret-profiles, /api/security/team-chat-data, /api/security/claret-chats) restricted to super_admin and admin roles only. 4) Claret onboarding questions endpoint returns 7 MCQ + 3 open questions in 3 languages. 5) Access control verified - sales_executive cannot access Sales Directory (menu hidden, redirected on direct navigation, API returns 403). 6) Claret T&C checkbox appears on last open-ended question in onboarding modal.",
+  "features_verified": {
+    "sales_directory_page": {
+      "status": "PASS",
+      "details": "Page loads at /sales/directory with enrolled students table. Shows 976 enrolled students, AED 293,201 revenue. Columns: Sr, Name, Email, Phone, Course, Amount, Paid By, Agent, Enrolled. Filters: Month, Year, Agent, Search."
+    },
+    "sales_directory_sorting": {
+      "status": "PASS",
+      "details": "Data sorted by enrolled_at descending (most recent first - 25 Mar 2026 at top)."
+    },
+    "sales_crm_kanban_table_toggle": {
+      "status": "PASS",
+      "details": "Kanban/Table toggle working. Kanban shows 8 columns (New Lead, No Answer, Call Back, Warm Lead, Hot Lead, In Progress, Rejected, Enrolled). Table view shows leads in tabular format."
+    },
+    "security_claret_profiles": {
+      "status": "PASS",
+      "details": "GET /api/security/claret-profiles returns all Claret profiles. Accessible by super_admin/admin only. Sales executive gets 403."
+    },
+    "security_team_chat_data": {
+      "status": "PASS",
+      "details": "GET /api/security/team-chat-data returns team chat conversations. Accessible by super_admin/admin only. Sales executive gets 403."
+    },
+    "security_claret_chats": {
+      "status": "PASS",
+      "details": "GET /api/security/claret-chats returns Claret chat history. Accessible by super_admin/admin only."
+    },
+    "claret_onboarding_questions": {
+      "status": "PASS",
+      "details": "GET /api/claret/onboarding-questions returns 7 MCQ + 3 open questions. Available in English, Hinglish, Manglish."
+    },
+    "sales_directory_access_control": {
+      "status": "PASS",
+      "details": "Sales Directory restricted to super_admin, admin, sales_manager. Sales executive: menu hidden, redirected on direct navigation, API returns 403."
+    },
+    "claret_tnc_checkbox": {
+      "status": "PASS",
+      "details": "T&C checkbox appears on last open-ended question in ClaretOnboardingModal. Required before saving profile."
+    }
+  }
+}

@@ -119,6 +119,7 @@ const SECTIONS = {
         items: [
             { title: 'Sales CRM', icon: Phone, path: '/sales' },
             { title: 'Sales Dashboard', icon: TrendingUp, path: '/sales/dashboard' },
+            { title: 'Sales Directory', icon: Users, path: '/sales/directory', roles: ['super_admin', 'admin', 'sales_manager'] },
             { title: 'My Commissions', icon: DollarSign, path: '/commission-dashboard' },
             { title: "Today's Follow-ups", icon: Bell, path: '/followups' },
             { title: 'Historical Import', icon: Upload, path: '/sales/historical-import', roles: ['super_admin'] },

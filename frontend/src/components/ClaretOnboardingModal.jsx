@@ -19,6 +19,7 @@ const ClaretOnboardingModal = ({ userId, userName, onComplete }) => {
   const [mcqIndex, setMcqIndex] = useState(0);
   const [openIndex, setOpenIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [agreedTnC, setAgreedTnC] = useState(false);
 
   useEffect(() => {
     if (step === 1 && questions.mcq.length === 0) {
@@ -250,9 +251,25 @@ const ClaretOnboardingModal = ({ userId, userName, onComplete }) => {
                 data-testid="open-answer-input"
               />
 
+              {/* T&C checkbox - show on last question */}
+              {openIndex === questions.open.length - 1 && (
+                <label className="flex items-start gap-2 cursor-pointer text-xs text-muted-foreground" data-testid="tnc-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={agreedTnC}
+                    onChange={e => setAgreedTnC(e.target.checked)}
+                    className="mt-0.5 rounded border-border"
+                    data-testid="tnc-checkbox"
+                  />
+                  <span>
+                    I agree that my responses and conversations with Claret may be stored securely and used to personalize my experience. This data is handled confidentially by the organization.
+                  </span>
+                </label>
+              )}
+
               <button
                 onClick={handleOpenNext}
-                disabled={saving}
+                disabled={saving || (openIndex === questions.open.length - 1 && !agreedTnC)}
                 className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
                 data-testid="onboarding-open-next"
               >

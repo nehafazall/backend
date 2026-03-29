@@ -73,6 +73,8 @@ import {
     Package,
     ShoppingCart,
     CheckCircle,
+    LayoutGrid,
+    List,
 } from 'lucide-react';
 
 const LEAD_STAGES = [
@@ -427,6 +429,7 @@ const SalesCRMPage = () => {
     const isTeamLeader = ['team_leader', 'sales_manager', 'master_of_academics'].includes(user?.role);
     const isHeadOrAdmin = isSuperAdmin || isTeamLeader || user?.role === 'admin';
     const [viewMode, setViewMode] = useState(isHeadOrAdmin ? 'team' : 'my_leads');
+    const [displayMode, setDisplayMode] = useState('kanban'); // 'kanban' or 'table'
 
     // Pipeline stages that require course selection
     const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
@@ -940,10 +943,78 @@ const SalesCRMPage = () => {
                 </div>
             )}
 
-            {/* Kanban Board */}
+            {/* Kanban/Table Toggle */}
+            <div className="flex items-center justify-between">
+                <div className="inline-flex rounded-lg border p-1 bg-muted/30" data-testid="sales-display-toggle">
+                    <button
+                        onClick={() => setDisplayMode('kanban')}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${displayMode === 'kanban' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="sales-kanban-toggle"
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Kanban
+                    </button>
+                    <button
+                        onClick={() => setDisplayMode('table')}
+                        className={`px-3 py-1 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${displayMode === 'table' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="sales-table-toggle"
+                    >
+                        <List className="h-3.5 w-3.5" />
+                        Table
+                    </button>
+                </div>
+            </div>
+
+            {/* Kanban Board or Table View */}
             {loading ? (
                 <div className="flex items-center justify-center h-96">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                </div>
+            ) : displayMode === 'table' ? (
+                /* Table View */
+                <div className="border rounded-lg overflow-hidden" data-testid="sales-table-view">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/50 border-b">
+                            <tr>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-10">#</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Phone</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Stage</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Course Interest</th>
+                                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Amount</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Agent</th>
+                                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {leads.map((lead, idx) => {
+                                const stageObj = LEAD_STAGES.find(s => s.id === lead.pipeline_stage);
+                                return (
+                                    <tr key={lead.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => handleViewLead(lead)} data-testid={`sales-table-row-${idx}`}>
+                                        <td className="px-4 py-2.5 text-muted-foreground">{(currentPage - 1) * pageSize + idx + 1}</td>
+                                        <td className="px-4 py-2.5 font-medium">{lead.full_name || '—'}</td>
+                                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{lead.phone || '—'}</td>
+                                        <td className="px-4 py-2.5">
+                                            {stageObj ? (
+                                                <Badge className={`${stageObj.color} text-white text-[10px]`}>{stageObj.label}</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[10px]">{lead.pipeline_stage}</Badge>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs">{lead.interested_course_name || lead.course_interest || '—'}</td>
+                                        <td className="px-4 py-2.5 text-right font-mono text-xs">AED {(lead.sale_amount || lead.enrollment_amount || 0).toLocaleString()}</td>
+                                        <td className="px-4 py-2.5 text-xs">{lead.assigned_to_name || '—'}</td>
+                                        <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                            {lead.updated_at ? new Date(lead.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {leads.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No leads found</div>
+                    )}
                 </div>
             ) : (
                 <DndContext
