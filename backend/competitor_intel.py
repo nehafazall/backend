@@ -60,6 +60,8 @@ async def add_competitor(data: dict = Body(...)):
             "youtube": data.get("youtube", "").strip(),
             "twitter": data.get("twitter", "").strip(),
             "google_reviews": data.get("google_reviews", "").strip(),
+            "fb_ad_library": data.get("fb_ad_library", "").strip(),
+            "tiktok": data.get("tiktok", "").strip(),
         },
         "notes": data.get("notes", "").strip(),
         "status": "active",
@@ -83,7 +85,7 @@ async def update_competitor(competitor_id: str, data: dict = Body(...)):
             update[field] = data[field]
     if "social_links" in data:
         update["social_links"] = data["social_links"]
-    for social in ("instagram", "facebook", "linkedin", "youtube", "twitter", "google_reviews"):
+    for social in ("instagram", "facebook", "linkedin", "youtube", "twitter", "google_reviews", "fb_ad_library", "tiktok"):
         if social in data:
             update[f"social_links.{social}"] = data[social]
 

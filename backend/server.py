@@ -18014,6 +18014,19 @@ async def _daily_briefing(user=Depends(get_current_user)):
 async def _send_briefings(user=Depends(require_roles(["super_admin", "admin"]))):
     return await competitor_intel.send_daily_briefings()
 
+# ── Claret Schedule & Reminders ──────────────────────────────
+@api_router.get("/claret/schedule")
+async def _claret_schedule(user=Depends(get_current_user)):
+    return await claret_module.get_user_schedule(user["id"])
+
+@api_router.get("/claret/reminders")
+async def _claret_reminders(status: str = "", user=Depends(get_current_user)):
+    return await claret_module.get_user_reminders(user["id"], status)
+
+@api_router.delete("/claret/reminders/{reminder_id}")
+async def _del_reminder(reminder_id: str, user=Depends(get_current_user)):
+    return await claret_module.delete_reminder(reminder_id)
+
 @api_router.post("/intelligence/competitors/{competitor_id}/battle-card")
 async def _gen_battle_card(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo"]))):
     return await competitor_intel.generate_battle_card(competitor_id)
@@ -30749,6 +30762,9 @@ async def startup_event():
     
     # Start competitor intelligence daily auto-scrape scheduler
     competitor_intel.start_scheduler()
+    
+    # Start Claret reminder check loop
+    claret_module.start_reminder_loop(create_notification)
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
 

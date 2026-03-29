@@ -24,7 +24,9 @@ const SOCIAL_FIELDS = [
   { key: 'linkedin', label: 'LinkedIn', icon: Linkedin, placeholder: 'https://linkedin.com/company/...' },
   { key: 'youtube', label: 'YouTube', icon: Youtube, placeholder: 'https://youtube.com/@...' },
   { key: 'twitter', label: 'X / Twitter', icon: Twitter, placeholder: 'https://x.com/...' },
-  { key: 'google_reviews', label: 'Google Reviews', icon: Star, placeholder: 'https://maps.google.com/...' },
+  { key: 'google_reviews', label: 'Google Reviews / GMB', icon: Star, placeholder: 'https://maps.google.com/...' },
+  { key: 'fb_ad_library', label: 'FB Ad Library', icon: Search, placeholder: 'https://www.facebook.com/ads/library/?active_status=active&ad_type=all&...' },
+  { key: 'tiktok', label: 'TikTok', icon: Globe, placeholder: 'https://tiktok.com/@...' },
 ];
 
 export default function CompetitorIntelligencePage() {
@@ -41,6 +43,7 @@ export default function CompetitorIntelligencePage() {
   const [form, setForm] = useState({
     name: '', website: '', notes: '',
     instagram: '', facebook: '', linkedin: '', youtube: '', twitter: '', google_reviews: '',
+    fb_ad_library: '', tiktok: '',
   });
 
   const fetchCompetitors = useCallback(async () => {
@@ -59,7 +62,7 @@ export default function CompetitorIntelligencePage() {
     try {
       await apiClient.post('/intelligence/competitors', form);
       toast.success(`${form.name} added!`);
-      setForm({ name: '', website: '', notes: '', instagram: '', facebook: '', linkedin: '', youtube: '', twitter: '', google_reviews: '' });
+      setForm({ name: '', website: '', notes: '', instagram: '', facebook: '', linkedin: '', youtube: '', twitter: '', google_reviews: '', fb_ad_library: '', tiktok: '' });
       setShowAdd(false);
       fetchCompetitors();
     } catch (e) {

@@ -7,6 +7,7 @@ Handles: Chat with Claude Sonnet 4.5, Knowledge Base CRUD, Mood Scoring, TTS, Tr
 import os
 import re
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -79,8 +80,19 @@ YOUR CAPABILITIES:
 - Summarize documents, give bullet points, explain in simple terms
 - Track mood and engagement through natural conversation
 - Provide sales coaching, techniques, and objection handling strategies
-- Discuss market trends, competition, and industry insights
+- Discuss market trends, competition, and industry insights using REAL-TIME WEB DATA when available
 - Share motivational frameworks and growth mindset strategies
+- SET REMINDERS: When user says "remind me...", acknowledge it and confirm the time. The system auto-creates the reminder.
+- MATH & TARGET CALCULATIONS: Help with quick math. "I have 3 days and need 50K target" → "You need ~16,667 AED/day. Here's your approach..."
+- PIPELINE ADVISOR: When ERP data is available, analyze their pipeline and suggest who to call first based on deal size, stage, and last contact
+- DAY PLANNER: Help plan their day based on their pipeline, targets, and pending tasks
+- WORK MEMORY: You remember important work context from previous conversations. Use WORK_MEMORY context below when available.
+- COMPETITOR INTELLIGENCE: When competitor data is available, give specific comparative analysis with actionable sales talking points
+
+YOU ARE THE BRAIN. THE TEAM IS THE EXECUTION ENGINE.
+Your job is to think, analyze, prioritize, and advise. Be proactive — suggest actions before they're asked.
+If someone shares a number, calculate the implications. If someone mentions a lead, suggest the approach.
+Think like a senior sales coach + data analyst + executive assistant combined.
 
 SALES INTELLIGENCE & COACHING:
 You are deeply knowledgeable about sales in the forex/trading education industry. When asked about sales skills, competition, or market:
@@ -426,6 +438,38 @@ async def claret_chat(data: dict = Body(...)):
     system = _build_system_prompt(profile=profile, role=user_role, erp_context=erp_context)
     if emp:
         system += f"\n\nCurrent user: {emp.get('full_name', user_name)}, {emp.get('designation','')}, {emp.get('department','')} department."
+
+    # Inject work memory (recent work notes from past conversations)
+    try:
+        work_notes = await db.claret_work_memory.find(
+            {"user_id": user_id},
+            {"_id": 0, "message": 1, "ai_response": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(10)
+        if work_notes:
+            memory_text = "\n=== WORK MEMORY (from past conversations) ===\n"
+            for wn in work_notes[:5]:
+                memory_text += f"- User said: {wn.get('message', '')[:200]}\n"
+            system += memory_text
+    except Exception:
+        pass
+
+    # Inject today's reminders context
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        today_end = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59).isoformat()
+        today_reminders = await db.claret_reminders.find(
+            {"user_id": user_id, "reminder_time": {"$gte": today_start, "$lte": today_end}},
+            {"_id": 0, "content": 1, "reminder_time": 1, "status": 1}
+        ).to_list(20)
+        if today_reminders:
+            rem_text = "\n=== TODAY'S REMINDERS ===\n"
+            for r in today_reminders:
+                rem_text += f"- [{r.get('status','pending')}] {r.get('content','')} at {r.get('reminder_time','')}\n"
+            system += rem_text
+    except Exception:
+        pass
+
     if kb_context:
         system += f"\n\nRELEVANT KNOWLEDGE BASE CONTENT:\n{kb_context}"
     if comp_context:
@@ -538,6 +582,23 @@ async def claret_chat(data: dict = Body(...)):
     }
     await db.claret_chats.insert_one(assistant_chat)
 
+    # ── Reminder Detection & Storage ──
+    reminder_set = None
+    reminder_keywords = ["remind me", "set a reminder", "set reminder", "remind at", "reminder for", "don't let me forget", "dont let me forget", "alert me", "notify me"]
+    if any(kw in message.lower() for kw in reminder_keywords):
+        reminder_set = await _parse_and_store_reminder(user_id, user_name, message, ai_message)
+
+    # ── Store work context in memory (for Claret to remember across sessions) ──
+    work_keywords = ["meeting", "call", "follow up", "follow-up", "deadline", "target", "presentation", "pitch", "demo", "schedule", "plan", "agenda", "task", "todo", "to-do"]
+    if any(kw in message.lower() for kw in work_keywords):
+        await db.claret_work_memory.insert_one({
+            "user_id": user_id,
+            "message": message,
+            "ai_response": ai_message[:500],
+            "context_type": "work_note",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     # Update daily mood score
     if mood_scores:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -560,6 +621,7 @@ async def claret_chat(data: dict = Body(...)):
         "mood_scores": mood_scores,
         "suggested_actions": suggested_actions,
         "session_id": session_id,
+        "reminder_set": reminder_set,
     }
 
 
@@ -874,3 +936,172 @@ async def _query_erp_data(user_id: str, role: str, query_type: str, query_hint: 
         results.append(f"[Error querying {query_type} data]")
 
     return "\n".join(results) if results else f"No {query_type} data found."
+
+
+
+# ═══════════════════════════════════════════
+# REMINDER SYSTEM
+# ═══════════════════════════════════════════
+
+async def _parse_and_store_reminder(user_id: str, user_name: str, message: str, ai_response: str) -> dict:
+    """Parse a natural language reminder request and store it."""
+    import re as _re
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    # Try to extract time from message (e.g., "at 3:00", "at 3pm", "at 15:00")
+    time_match = _re.search(r'at\s+(\d{1,2})[:\.]?(\d{0,2})\s*(am|pm|AM|PM)?', message)
+    hour, minute = None, 0
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2)) if time_match.group(2) else 0
+        ampm = (time_match.group(3) or "").lower()
+        if ampm == "pm" and hour < 12:
+            hour += 12
+        elif ampm == "am" and hour == 12:
+            hour = 0
+
+    # Check for "tomorrow"
+    if "tomorrow" in message.lower():
+        target_date = today + timedelta(days=1)
+    else:
+        target_date = today
+
+    # Default to 1 hour from now if no time specified
+    if hour is None:
+        reminder_time = (now + timedelta(hours=1)).isoformat()
+    else:
+        # Use UAE timezone offset (+4)
+        from datetime import timezone as tz
+        uae_offset = timedelta(hours=4)
+        target_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute, tzinfo=tz(uae_offset))
+        reminder_time = target_dt.astimezone(timezone.utc).isoformat()
+
+    # Extract reminder content (remove the "remind me" prefix)
+    content = message
+    for prefix in ["remind me to", "remind me at", "remind me", "set a reminder to", "set reminder for", "set reminder to", "notify me to", "alert me to"]:
+        if content.lower().startswith(prefix):
+            content = content[len(prefix):].strip()
+            break
+
+    # Remove time portion from content
+    content = _re.sub(r'\bat\s+\d{1,2}[:\.]?\d{0,2}\s*(am|pm|AM|PM)?\b', '', content).strip()
+    content = _re.sub(r'\btomorrow\b', '', content, flags=_re.IGNORECASE).strip()
+    if not content:
+        content = message
+
+    reminder = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "user_name": user_name,
+        "content": content,
+        "original_message": message,
+        "reminder_time": reminder_time,
+        "status": "pending",
+        "notified": False,
+        "created_at": now.isoformat(),
+    }
+    await db.claret_reminders.insert_one(reminder)
+
+    return {
+        "id": reminder["id"],
+        "content": content,
+        "reminder_time": reminder_time,
+        "status": "set",
+    }
+
+
+async def check_and_fire_reminders():
+    """Background task: check for due reminders and create notifications."""
+    now = datetime.now(timezone.utc).isoformat()
+    due_reminders = await db.claret_reminders.find(
+        {"status": "pending", "notified": False, "reminder_time": {"$lte": now}},
+        {"_id": 0}
+    ).to_list(50)
+
+    for rem in due_reminders:
+        try:
+            # Create a notification
+            if _create_notification:
+                await _create_notification(
+                    user_id=rem["user_id"],
+                    title="Claret Reminder",
+                    message=rem["content"],
+                    notif_type="reminder",
+                    link="/claret",
+                )
+            # Mark as notified
+            await db.claret_reminders.update_one(
+                {"id": rem["id"]},
+                {"$set": {"notified": True, "status": "fired", "fired_at": now}}
+            )
+        except Exception as e:
+            logger.error(f"Reminder fire error: {e}")
+
+
+_reminder_loop_running = False
+_create_notification = None
+
+async def _reminder_check_loop():
+    """Background loop: checks reminders every 30 seconds."""
+    global _reminder_loop_running
+    if _reminder_loop_running:
+        return
+    _reminder_loop_running = True
+    logger.info("Claret reminder check loop started")
+    while True:
+        try:
+            await check_and_fire_reminders()
+        except Exception as e:
+            logger.error(f"Reminder loop error: {e}")
+        await asyncio.sleep(30)
+
+
+def start_reminder_loop(notification_fn):
+    """Call from server.py startup."""
+    global _create_notification
+    _create_notification = notification_fn
+    asyncio.get_event_loop().create_task(_reminder_check_loop())
+
+
+# ═══════════════════════════════════════════
+# SCHEDULE / DAY PLANNER
+# ═══════════════════════════════════════════
+
+async def get_user_schedule(user_id: str = ""):
+    """Get user's full schedule for today: reminders, follow-ups, meetings."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    today_end = now.replace(hour=23, minute=59, second=59).isoformat()
+
+    reminders, work_notes = await asyncio.gather(
+        db.claret_reminders.find(
+            {"user_id": user_id, "reminder_time": {"$gte": today_start, "$lte": today_end}},
+            {"_id": 0}
+        ).sort("reminder_time", 1).to_list(50),
+        db.claret_work_memory.find(
+            {"user_id": user_id},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(20),
+    )
+
+    return {
+        "date": now.strftime("%Y-%m-%d"),
+        "reminders": reminders,
+        "work_notes": work_notes[:10],
+    }
+
+
+async def get_user_reminders(user_id: str = "", status: str = ""):
+    """Get user's reminders."""
+    query = {"user_id": user_id}
+    if status:
+        query["status"] = status
+    reminders = await db.claret_reminders.find(query, {"_id": 0}).sort("reminder_time", 1).to_list(100)
+    return {"reminders": reminders}
+
+
+async def delete_reminder(reminder_id: str):
+    """Delete a reminder."""
+    await db.claret_reminders.delete_one({"id": reminder_id})
+    return {"message": "Reminder deleted"}

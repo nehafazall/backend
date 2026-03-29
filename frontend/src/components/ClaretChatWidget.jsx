@@ -24,6 +24,39 @@ const ClaretChatWidget = () => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Auto-open Claret when a reminder/notification fires
+  useEffect(() => {
+    if (!user) return;
+    const checkNotifications = async () => {
+      try {
+        const res = await apiClient.get('/notifications?unread=true&limit=5');
+        const notifs = res.data?.notifications || res.data || [];
+        const claretNotif = notifs.find(n => 
+          (n.type === 'reminder' || n.link === '/claret') && !n.read
+        );
+        if (claretNotif && !isOpen) {
+          setIsOpen(true);
+          // Auto-add the notification as a Claret message
+          setMessages(prev => {
+            const alreadyShown = prev.some(m => m.notifId === claretNotif.id);
+            if (alreadyShown) return prev;
+            return [...prev, {
+              role: "assistant",
+              message: `**Reminder:** ${claretNotif.message || claretNotif.title}`,
+              time: new Date().toISOString(),
+              notifId: claretNotif.id,
+              isReminder: true,
+            }];
+          });
+          // Mark as read
+          try { await apiClient.put(`/notifications/${claretNotif.id}/read`); } catch {}
+        }
+      } catch {}
+    };
+    const interval = setInterval(checkNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user, isOpen]);
+
   useEffect(() => {
     if (user) {
       const sid = `claret-${user.id}-${new Date().toISOString().slice(0, 10)}`;
@@ -139,6 +172,7 @@ const ClaretChatWidget = () => {
         mood_scores: res.data.mood_scores,
         suggested_actions: res.data.suggested_actions,
         hasWebData: !!webContext,
+        reminderSet: res.data.reminder_set || null,
         time: new Date().toISOString(),
       }]);
       if (res.data.mood_scores?.mood_label) {
@@ -266,6 +300,16 @@ const ClaretChatWidget = () => {
                   {msg.hasWebData && (
                     <div className="flex items-center gap-1 text-[10px] text-indigo-500 mb-1">
                       <Globe className="w-3 h-3" /> Powered by live web data
+                    </div>
+                  )}
+                  {msg.isReminder && (
+                    <div className="flex items-center gap-1 text-[10px] text-amber-500 mb-1">
+                      <Sparkles className="w-3 h-3" /> Reminder
+                    </div>
+                  )}
+                  {msg.reminderSet && (
+                    <div className="mt-1.5 p-1.5 bg-amber-500/10 rounded text-[10px] text-amber-600 border border-amber-500/20">
+                      Reminder set for {new Date(msg.reminderSet.reminder_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </div>
                   )}
                   <p className="whitespace-pre-wrap">{msg.message}</p>
