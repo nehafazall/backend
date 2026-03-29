@@ -3608,6 +3608,23 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 logger.error(f"Auto commission txn failed for lead {lead_id}: {e}")
 
             # Create student record with SLA tracking
+            # Resolve course name from catalog
+            resolved_course_name = ""
+            if course_id:
+                cat_entry = await db.course_catalog.find_one(
+                    {"$or": [{"id": course_id}, {"name": {"$regex": f"^{course_id}$", "$options": "i"}}]},
+                    {"_id": 0, "name": 1, "type": 1}
+                )
+                if cat_entry:
+                    resolved_course_name = cat_entry.get("name", "")
+                if not resolved_course_name:
+                    # Try legacy courses collection
+                    legacy = await db.courses.find_one({"id": course_id}, {"_id": 0, "name": 1})
+                    if legacy:
+                        resolved_course_name = legacy.get("name", "")
+            if not resolved_course_name:
+                resolved_course_name = update_data.get("course_name") or update_data.get("interested_course_name") or existing.get("interested_course_name") or course_id or ""
+
             student_data = {
                 "id": str(uuid.uuid4()),
                 "lead_id": lead_id,
@@ -3616,15 +3633,17 @@ async def update_lead(lead_id: str, data: LeadUpdate, user = Depends(get_current
                 "email": existing.get("email"),
                 "country": existing.get("country"),
                 "package_bought": course_id,
+                "current_course_name": resolved_course_name,
+                "enrollment_amount": sale_amount or existing.get("sale_amount") or existing.get("amount") or 0,
                 "stage": "new_student",
                 "mentor_stage": "new_student",
                 "onboarding_complete": False,
                 "classes_attended": 0,
                 "upgrade_eligible": False,
-                "activation_call_at": None,  # CS SLA tracking
+                "activation_call_at": None,
                 "sla_status": "ok",
                 "sla_warning_at": None,
-                "call_recording_url": None,  # 3CX placeholder
+                "call_recording_url": None,
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat()
             }
@@ -5475,6 +5494,62 @@ async def migrate_students_to_new_student(
         "message": f"Migrated {result.modified_count} students to 'New Student' stage for activation",
         "migrated_count": result.modified_count
     }
+
+@api_router.post("/students/backfill-from-leads")
+async def backfill_students_from_leads(
+    user = Depends(require_roles(["super_admin"]))
+):
+    """Backfill students missing enrollment_amount and course name from their linked leads."""
+    students = await db.students.find(
+        {"$or": [
+            {"enrollment_amount": {"$in": [None, 0, ""]}},
+            {"current_course_name": {"$in": [None, ""]}},
+        ]},
+        {"_id": 0, "id": 1, "lead_id": 1, "package_bought": 1, "enrollment_amount": 1, "current_course_name": 1}
+    ).to_list(5000)
+
+    updated = 0
+    for stu in students:
+        updates = {}
+        lead = None
+        if stu.get("lead_id"):
+            lead = await db.leads.find_one({"id": stu["lead_id"]}, {"_id": 0, "sale_amount": 1, "amount": 1, "course_id": 1, "course_name": 1, "interested_course_name": 1, "enrollment_amount": 1})
+
+        # Fix amount
+        if not stu.get("enrollment_amount"):
+            amt = 0
+            if lead:
+                amt = lead.get("sale_amount") or lead.get("enrollment_amount") or lead.get("amount") or 0
+            if amt:
+                updates["enrollment_amount"] = amt
+
+        # Fix course name
+        if not stu.get("current_course_name"):
+            course_name = ""
+            course_id = stu.get("package_bought") or (lead.get("course_id") if lead else "")
+            if course_id:
+                cat = await db.course_catalog.find_one(
+                    {"$or": [{"id": course_id}, {"name": {"$regex": f"^{course_id}$", "$options": "i"}}]},
+                    {"_id": 0, "name": 1}
+                )
+                if cat:
+                    course_name = cat["name"]
+                if not course_name:
+                    leg = await db.courses.find_one({"id": course_id}, {"_id": 0, "name": 1})
+                    if leg:
+                        course_name = leg["name"]
+            if not course_name and lead:
+                course_name = lead.get("course_name") or lead.get("interested_course_name") or ""
+            if course_name:
+                updates["current_course_name"] = course_name
+
+        if updates:
+            updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.students.update_one({"id": stu["id"]}, {"$set": updates})
+            updated += 1
+
+    return {"message": f"Backfilled {updated} students out of {len(students)} with missing data", "updated": updated}
+
 
 @api_router.get("/students")
 async def get_students(
