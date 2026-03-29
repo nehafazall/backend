@@ -11,6 +11,7 @@ import BirdsEyeDashboard from "@/pages/BirdsEyeDashboard";
 import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import SalesDirectoryPage from "@/pages/SalesDirectoryPage";
+import SecurityIntelligencePage from "@/pages/SecurityIntelligencePage";
 import HistoricalImportPage from "@/pages/sales/HistoricalImportPage";
 import CSHistoricalImportPage from "@/pages/cs/CSHistoricalImportPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
@@ -578,6 +579,13 @@ function AppRoutes() {
                 <Route path="password-resets" element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                         <PasswordResetPage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* People Intelligence (CEO/COO only) */}
+                <Route path="people-intelligence" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+                        <SecurityIntelligencePage />
                     </ProtectedRoute>
                 } />
                 
