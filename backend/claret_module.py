@@ -25,26 +25,59 @@ require_roles = None
 UPLOAD_DIR = "/app/backend/uploads/knowledge_base"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-CLARET_SYSTEM_PROMPT = """You are Claret, the AI assistant for CLT Academy's ERP system called CLT Synapse.
+def _build_system_prompt(profile: dict = None, role: str = "", erp_context: str = "") -> str:
+    """Build a personalized system prompt based on user's Claret profile."""
+    lang = (profile or {}).get("language", "english")
+    nickname = (profile or {}).get("nickname", "")
+    personality_summary = (profile or {}).get("personality_summary", "")
+
+    lang_instructions = {
+        "english": "Respond fully in English. Keep it professional yet friendly.",
+        "hinglish": "Respond in Hinglish — mix Hindi and English naturally. Use 'yaar', 'bhai', 'sahi hai', 'kya baat hai', 'accha', 'theek hai' etc. Think how urban Indian professionals talk.",
+        "manglish": "Respond in Manglish — mix Malayalam and English naturally. Use 'machane', 'pwoli', 'adipoli', 'seri', 'athe', 'kollaam', 'enthu paranj' etc. Think how Malayali professionals talk in casual settings.",
+    }
+
+    user_profile_line = f'USER PROFILE: Call this person "{nickname}". ' if nickname else ''
+    personality_line = f'PERSONALITY INSIGHTS: {personality_summary}' if personality_summary else ''
+    role_line = f'USER ROLE: {role}. Only discuss modules this role has access to.' if role else ''
+
+    erp_section = ""
+    if erp_context:
+        erp_section = f"ERP_CONTEXT (real data from the system — use this to answer data questions):\n{erp_context}"
+
+    prompt = f"""You are Claret, the AI assistant for CLT Academy's ERP system called CLT Synapse.
 
 YOUR PERSONALITY:
 - You are warm, witty, empathetic, and genuinely caring about people's well-being
 - You speak casually but respectfully — like a close, wise friend at work
-- You naturally mix English with Malayalam (Manglish) and Hindi (Hinglish) phrases when chatting
-- You use humor, knock-knock jokes, trending memes references, and light banter to ease tension
-- You are NEVER preachy or direct about lessons — always indirect, through stories, analogies, or humor
-- You motivate through competition awareness ("others are hustling, what's your edge?") but in a fun way
-- You ask personal questions genuinely — "Hey, you seem quiet today, everything okay?" "What's on your mind?"
+- You use humor, stories, analogies, and light banter to keep the vibe alive
+- You are NEVER preachy — always indirect, through stories, analogies, or humor
+- You motivate through friendly competition awareness but in a fun way
+- You ask personal questions genuinely — "Hey, you seem quiet today, everything okay?"
 - When someone seems down, you lighten the mood first, then subtly check in
 - You celebrate small wins enthusiastically
 
+CRITICAL RULES:
+- You NEVER say "I don't know", "I'm not sure", "brain freeze", or any variant of being stuck
+- You ALWAYS keep the conversation going. If you don't have an immediate answer, you ASK CLARIFYING QUESTIONS
+- If a user asks about ERP data (closings, leads, students, commissions, attendance), and you have ERP_CONTEXT below, USE IT to give real numbers
+- If the user says "I have X closings but ERP shows Y", compare the data, list the records, and ask which one is missing
+- You are CONVERSATIONAL. You guide, you ask, you dig deeper. You never dead-end a conversation
+- If you need more info to answer, ASK FOR IT. Example: "Let me check — which month are you looking at?" or "Can you tell me the student's name?"
+
+LANGUAGE:
+{lang_instructions.get(lang, lang_instructions["english"])}
+
+{user_profile_line}
+{personality_line}
+{role_line}
+
 YOUR CAPABILITIES:
 - Answer questions about ERP navigation (Sales CRM, HR, Attendance, Commissions, etc.)
+- Query and analyze real ERP data when provided in ERP_CONTEXT
 - Explain company SOPs, policies, and training materials from the knowledge base
 - Summarize documents, give bullet points, explain in simple terms
-- Translate content to Malayalam for easy understanding
-- Read text aloud (user can click TTS button)
-- Track mood and engagement — you naturally gauge how someone feels through conversation
+- Track mood and engagement through natural conversation
 
 MOOD ASSESSMENT (do this subtly, never announce it):
 After each exchange, internally assess the user's mood on a 1-10 scale across:
@@ -55,27 +88,103 @@ After each exchange, internally assess the user's mood on a 1-10 scale across:
 - overall_mood (1=terrible, 10=amazing)
 Include a mood_label: one of [Excited, Happy, Motivated, Calm, Neutral, Tired, Anxious, Stressed, Sad, Frustrated, Overwhelmed]
 
-LANGUAGE STYLE:
-- Default: English with occasional Malayalam/Hindi phrases
-- If user writes in Malayalam or Hindi, match their language
-- Use "machane", "bro", "yaar", "sahi hai", "pwoli", "adipoli" naturally
-- Keep responses concise (2-4 sentences usually) unless explaining something complex
+{erp_section}
 
 RESPONSE FORMAT:
 Always return a JSON object (no markdown wrapping):
-{
+{{
   "message": "your response text here",
-  "mood_scores": {
+  "mood_scores": {{
     "energy_level": 7,
     "stress_level": 3,
     "motivation": 8,
     "happiness": 7,
     "overall_mood": 7,
     "mood_label": "Motivated"
-  },
-  "suggested_actions": ["optional array of suggested follow-up actions"]
-}
+  }},
+  "suggested_actions": ["optional array of suggested follow-up actions"],
+  "needs_erp_lookup": false
+}}
+
+If the user is asking about ERP data and you DON'T have ERP_CONTEXT yet, set "needs_erp_lookup" to true and include "erp_query_type" (one of: "leads", "students", "commissions", "attendance", "upgrades", "enrollments") and "erp_query_hint" (what to search for). Example:
+{{
+  "message": "Let me pull up your numbers real quick...",
+  "needs_erp_lookup": true,
+  "erp_query_type": "leads",
+  "erp_query_hint": "user closings this month",
+  "mood_scores": {{ ... }}
+}}
 """
+    return prompt
+
+
+# Role -> accessible ERP modules mapping
+ROLE_ERP_ACCESS = {
+    "super_admin": ["leads", "students", "commissions", "attendance", "upgrades", "enrollments", "hr", "finance"],
+    "admin": ["leads", "students", "commissions", "attendance", "upgrades", "enrollments", "hr"],
+    "ceo": ["leads", "students", "commissions", "attendance", "upgrades", "enrollments", "hr", "finance"],
+    "hr": ["attendance", "hr", "students"],
+    "cs_head": ["students", "upgrades", "commissions"],
+    "cs_agent": ["students", "upgrades"],
+    "sales_head": ["leads", "commissions", "enrollments"],
+    "team_leader": ["leads", "commissions", "enrollments"],
+    "sales_executive": ["leads", "commissions"],
+    "mentor": ["students", "leads"],
+    "master_of_academics": ["students", "leads", "commissions"],
+    "operations": ["students", "enrollments"],
+}
+
+
+ONBOARDING_QUESTIONS = {
+    "english": {
+        "mcq": [
+            {"q": "What drives you most at work?", "options": ["Achievement & Goals", "Learning New Things", "Team & Collaboration", "Recognition & Praise", "Financial Growth"]},
+            {"q": "How do you handle pressure?", "options": ["Take a short break", "Push through it", "Talk to someone", "Plan & prioritize", "Music or distraction"]},
+            {"q": "What's your ideal work style?", "options": ["Independent & focused", "Team brainstorming", "A healthy mix", "Flexible hours", "Structured routine"]},
+            {"q": "When you feel low, what helps most?", "options": ["Talking to a friend", "Music or entertainment", "Exercise or a walk", "Good food", "Just need time alone"]},
+            {"q": "What kind of motivation works best for you?", "options": ["Friendly competition", "Words of encouragement", "Seeing real data/progress", "Freedom & autonomy", "Public recognition"]},
+            {"q": "How do you prefer feedback?", "options": ["Direct and honest", "Gentle and supportive", "Through examples", "Written so I can reflect", "One-on-one privately"]},
+            {"q": "What describes your energy pattern?", "options": ["Morning person - peak early", "Afternoon warrior", "Night owl - peak late", "Consistent all day", "Depends on my mood"]},
+        ],
+        "open": [
+            {"q": "What's one thing that always makes your day better?"},
+            {"q": "What's your personal motto or mantra that keeps you going?"},
+            {"q": "If you could describe yourself in 3 words, what would they be?"},
+        ],
+    },
+    "hinglish": {
+        "mcq": [
+            {"q": "Kaam mein aapko sabse zyada kya drive karta hai?", "options": ["Achievement & Goals", "Naya seekhna", "Team & Collaboration", "Recognition & Tareef", "Paisa & Growth"]},
+            {"q": "Pressure mein aap kya karte ho?", "options": ["Thoda break le leta hoon", "Push through karta hoon", "Kisi se baat karta hoon", "Plan banata hoon", "Music ya distraction"]},
+            {"q": "Aapka ideal kaam karne ka style kya hai?", "options": ["Akele focused", "Team brainstorming", "Mix of both", "Flexible timing", "Fixed routine"]},
+            {"q": "Jab mood down ho toh kya karte ho?", "options": ["Dost se baat", "Music sun leta hoon", "Walk ya exercise", "Accha khana", "Akele time chahiye"]},
+            {"q": "Kaunsa motivation aapke liye best kaam karta hai?", "options": ["Friendly competition", "Encouragement ke words", "Data aur progress dekhna", "Apni marzi se kaam", "Public recognition"]},
+            {"q": "Feedback kaise prefer karte ho?", "options": ["Seedha aur honest", "Gentle aur supportive", "Examples ke saath", "Likhit mein", "Private mein one-on-one"]},
+            {"q": "Aapka energy pattern kaisa hai?", "options": ["Subah active", "Dopahar mein peak", "Raat ko best kaam", "Din bhar consistent", "Mood pe depend karta hai"]},
+        ],
+        "open": [
+            {"q": "Ek cheez bataiye jo aapka din hamesha accha bana deti hai?"},
+            {"q": "Aapka personal motto ya mantra kya hai jo aapko chalte rakhta hai?"},
+            {"q": "Agar aap apne aap ko 3 shabdon mein describe karein toh woh kya honge?"},
+        ],
+    },
+    "manglish": {
+        "mcq": [
+            {"q": "Work-il ninnaye eath aanu ettavum drive cheyyunnathu?", "options": ["Achievement & Goals", "Puthuya kaaryangal padikkal", "Team & Collaboration", "Recognition & Praise", "Financial Growth"]},
+            {"q": "Pressure varubol eath aanu cheyyuka?", "options": ["Oru cheriya break edukum", "Push through cheyyum", "Aarenkilum kaarayude talk cheyyum", "Plan undaakkum", "Music or distraction"]},
+            {"q": "Ningalude ideal work style eath aanu?", "options": ["Independent & focused", "Team brainstorming", "Randum koodi oru mix", "Flexible time", "Fixed routine"]},
+            {"q": "Mood down aakumbol eath help cheyyum?", "options": ["Koottukaaran koode samsaarikkal", "Music/entertainment", "Walk or exercise", "Nalla food", "Thaniye irikkanam"]},
+            {"q": "Eath type motivation aanu ningalkku best work cheyyunnathu?", "options": ["Friendly competition", "Encouraging words", "Real data & progress kaanunnathu", "Freedom & autonomy", "Public recognition"]},
+            {"q": "Feedback engane aanu prefer cheyyunnathu?", "options": ["Direct and honest", "Gentle aayittu", "Examples koode", "Ezhuthi tharunnathu", "Private-aayittu one-on-one"]},
+            {"q": "Ningalude energy pattern engane aanu?", "options": ["Morning person - raavile active", "Uchakku sheriyaakum", "Raathri aanu peak", "Full day consistent", "Mood-ine depend cheyyum"]},
+        ],
+        "open": [
+            {"q": "Oru kaaryam paranju thaa, ath eppozhum ningalude divasam nannayaakkum?"},
+            {"q": "Ningalude personal motto or mantra eath aanu?"},
+            {"q": "3 vaakkil ningale describe cheythaal eath aayirikkum?"},
+        ],
+    },
+}
 
 IDLE_PROMPTS = [
     "Hey! Been a while since you said anything. Everything alright? 😊",
@@ -228,9 +337,10 @@ async def _get_kb_context(query: str) -> str:
 
 @router.post("/chat")
 async def claret_chat(data: dict = Body(...)):
-    """Main chat endpoint. Sends user message to Claude, stores everything."""
+    """Main chat endpoint. Sends user message to Claude with personalized context."""
     user_id = data.get("user_id", "")
     user_name = data.get("user_name", "")
+    user_role = data.get("user_role", "")
     message = data.get("message", "").strip()
     session_id = data.get("session_id", "")
 
@@ -238,6 +348,9 @@ async def claret_chat(data: dict = Body(...)):
         raise HTTPException(400, "Message is required")
     if not session_id:
         session_id = f"claret-{user_id}-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+
+    # Get user's Claret profile for personalization
+    profile = await db.claret_profiles.find_one({"user_id": user_id}, {"_id": 0})
 
     # Get recent chat history for context
     recent = await db.claret_chats.find(
@@ -252,8 +365,26 @@ async def claret_chat(data: dict = Body(...)):
     # Get user's employee info for personalization
     emp = await db.hr_employees.find_one({"user_id": user_id}, {"_id": 0, "full_name": 1, "designation": 1, "department": 1})
 
-    # Build system message with context
-    system = CLARET_SYSTEM_PROMPT
+    # Check if message seems like an ERP data question — do a pre-emptive lookup
+    erp_context = ""
+    data_keywords = ["closing", "lead", "student", "commission", "attendance", "upgrade", "enrollment", "number", "count", "how many", "list", "show me", "my data", "report", "total", "sales", "target"]
+    if any(kw in message.lower() for kw in data_keywords):
+        # Determine query type from message
+        query_type = "leads"  # default
+        if any(w in message.lower() for w in ["student", "cs", "kanban", "stage"]):
+            query_type = "students"
+        elif any(w in message.lower() for w in ["commission", "earning"]):
+            query_type = "commissions"
+        elif any(w in message.lower() for w in ["attendance", "punch", "late"]):
+            query_type = "attendance"
+        elif any(w in message.lower() for w in ["upgrade"]):
+            query_type = "upgrades"
+        elif any(w in message.lower() for w in ["enrollment", "enrol"]):
+            query_type = "enrollments"
+        erp_context = await _query_erp_data(user_id, user_role or "sales_executive", query_type, message)
+
+    # Build personalized system prompt
+    system = _build_system_prompt(profile=profile, role=user_role, erp_context=erp_context)
     if emp:
         system += f"\n\nCurrent user: {emp.get('full_name', user_name)}, {emp.get('designation','')}, {emp.get('department','')} department."
     if kb_context:
@@ -283,7 +414,6 @@ async def claret_chat(data: dict = Body(...)):
         # Parse JSON response
         import json
         try:
-            # Try to extract JSON from response
             json_match = re.search(r'\{[\s\S]*\}', response_text)
             if json_match:
                 parsed = json.loads(json_match.group())
@@ -296,9 +426,41 @@ async def claret_chat(data: dict = Body(...)):
         mood_scores = parsed.get("mood_scores", {})
         suggested_actions = parsed.get("suggested_actions", [])
 
+        # If AI flagged it needs ERP data and we didn't provide it, do a second pass
+        if parsed.get("needs_erp_lookup") and not erp_context:
+            qt = parsed.get("erp_query_type", "leads")
+            qh = parsed.get("erp_query_hint", message)
+            erp_data = await _query_erp_data(user_id, user_role or "sales_executive", qt, qh)
+            if erp_data and "[Error" not in erp_data:
+                # Second call with ERP data
+                system2 = _build_system_prompt(profile=profile, role=user_role, erp_context=erp_data)
+                chat2 = LlmChat(
+                    api_key=api_key,
+                    session_id=session_id + "-erp",
+                    system_message=system2,
+                ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+                chat2.messages.append({"role": "user", "content": message})
+                response_text2 = await chat2.send_message(UserMessage(text=f"Here is the ERP data you requested:\n{erp_data}\n\nNow answer the user's question: {message}"))
+                try:
+                    json_match2 = re.search(r'\{[\s\S]*\}', response_text2)
+                    if json_match2:
+                        parsed2 = json.loads(json_match2.group())
+                        ai_message = parsed2.get("message", response_text2)
+                        mood_scores = parsed2.get("mood_scores", mood_scores)
+                        suggested_actions = parsed2.get("suggested_actions", suggested_actions)
+                        response_text = response_text2
+                except:
+                    pass
+
     except Exception as e:
         logger.error(f"Claret AI error: {e}")
-        ai_message = "Oops, I had a brain freeze! 🧊 Give me a sec and try again, machane."
+        lang = (profile or {}).get("language", "english")
+        if lang == "hinglish":
+            ai_message = "Arre yaar, thoda technical issue aa gaya! Ek baar aur try karo, main ready hoon! 💪"
+        elif lang == "manglish":
+            ai_message = "Machane, oru cheriya technical issue vannu! Onnu koodi try cheytho, njan ready aanu! 💪"
+        else:
+            ai_message = "Hey, hit a small technical snag! Give me one more try — I'm ready to help! 💪"
         mood_scores = {}
         suggested_actions = []
         response_text = ai_message
@@ -508,3 +670,144 @@ async def update_claret_settings(data: dict = Body(...)):
         upsert=True,
     )
     return {"message": "Settings updated"}
+
+
+# ═══════════════════════════════════════════
+# CLARET PROFILE (ONBOARDING)
+# ═══════════════════════════════════════════
+
+@router.get("/profile")
+async def get_claret_profile(user_id: str):
+    """Get user's Claret profile. Returns null if not set up."""
+    profile = await db.claret_profiles.find_one({"user_id": user_id}, {"_id": 0})
+    return {"profile": profile}
+
+
+@router.post("/profile")
+async def save_claret_profile(data: dict = Body(...)):
+    """Save or update user's Claret onboarding profile."""
+    user_id = data.get("user_id", "")
+    if not user_id:
+        raise HTTPException(400, "user_id required")
+
+    answers = data.get("answers", {})
+    language = data.get("language", "english")
+
+    # Build personality summary from answers
+    mcq_answers = answers.get("mcq", [])
+    open_answers = answers.get("open", [])
+    summary_parts = []
+    for i, ans in enumerate(mcq_answers):
+        summary_parts.append(f"Q{i+1}: {ans}")
+    for i, ans in enumerate(open_answers):
+        if ans.strip():
+            summary_parts.append(f"Open{i+1}: {ans}")
+    personality_summary = "; ".join(summary_parts)
+
+    profile = {
+        "user_id": user_id,
+        "name": data.get("name", ""),
+        "nickname": data.get("nickname", ""),
+        "language": language,
+        "answers": answers,
+        "personality_summary": personality_summary,
+        "motivation_frequency": data.get("motivation_frequency", "sometimes"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    await db.claret_profiles.update_one(
+        {"user_id": user_id},
+        {"$set": profile},
+        upsert=True,
+    )
+
+    return {"message": "Profile saved", "profile": profile}
+
+
+@router.get("/onboarding-questions")
+async def get_onboarding_questions(language: str = "english"):
+    """Get personality questions in the specified language."""
+    lang = language.lower()
+    questions = ONBOARDING_QUESTIONS.get(lang, ONBOARDING_QUESTIONS["english"])
+    return {"questions": questions, "language": lang}
+
+
+# ═══════════════════════════════════════════
+# ERP DATA QUERY (for Claret intelligence)
+# ═══════════════════════════════════════════
+
+async def _query_erp_data(user_id: str, role: str, query_type: str, query_hint: str = "") -> str:
+    """Query ERP data based on user's role and question context. Returns a text summary."""
+    allowed = ROLE_ERP_ACCESS.get(role, [])
+    if query_type not in allowed:
+        return f"[You don't have access to {query_type} data]"
+
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    results = []
+
+    try:
+        if query_type == "leads":
+            # Get user's leads/closings for current month
+            query = {"assigned_to": user_id, "created_at": {"$gte": month_start}}
+            if role in ("super_admin", "admin", "ceo", "sales_head"):
+                query = {"created_at": {"$gte": month_start}}
+            leads = await db.leads.find(query, {"_id": 0, "full_name": 1, "status": 1, "pipeline_stage": 1, "amount": 1, "created_at": 1}).to_list(200)
+            closed = [l for l in leads if l.get("pipeline_stage") in ("enrolled", "closed_won")]
+            results.append(f"Total leads this month: {len(leads)}")
+            results.append(f"Closings (enrolled): {len(closed)}")
+            if closed:
+                results.append("Closed leads list:")
+                for i, ld in enumerate(closed[:50], 1):
+                    results.append(f"  {i}. {ld.get('full_name', 'Unknown')} - AED {ld.get('amount', 0)}")
+
+        elif query_type == "students":
+            query = {}
+            if role in ("cs_agent",):
+                query["cs_agent_id"] = user_id
+            students = await db.students.find(query, {"_id": 0, "full_name": 1, "stage": 1, "enrollment_amount": 1, "phone": 1}).to_list(500)
+            stage_counts = {}
+            for s in students:
+                stage = s.get("stage", "unknown")
+                stage_counts[stage] = stage_counts.get(stage, 0) + 1
+            results.append(f"Total students: {len(students)}")
+            for stage, count in sorted(stage_counts.items(), key=lambda x: -x[1]):
+                results.append(f"  {stage}: {count}")
+
+        elif query_type == "commissions":
+            results.append("Commission data — please check the Commission Dashboard for detailed breakdowns.")
+
+        elif query_type == "attendance":
+            from datetime import date
+            today = date.today().isoformat()
+            att = await db.attendance.find({"user_id": user_id, "date": today}, {"_id": 0}).to_list(5)
+            if att:
+                a = att[0]
+                results.append(f"Today's attendance: Punch in {a.get('punch_in', 'N/A')}, Punch out {a.get('punch_out', 'N/A')}")
+            else:
+                results.append("No attendance record found for today.")
+
+        elif query_type == "upgrades":
+            query = {}
+            if role in ("cs_agent",):
+                query["cs_agent_id"] = user_id
+            ups = await db.cs_upgrades.find(query, {"_id": 0, "student_name": 1, "upgrade_amount": 1, "upgrade_date": 1}).sort("upgrade_date", -1).to_list(50)
+            results.append(f"Total upgrades: {len(ups)}")
+            for u in ups[:20]:
+                results.append(f"  - {u.get('student_name', '?')}: AED {u.get('upgrade_amount', 0)} on {u.get('upgrade_date', '?')}")
+
+        elif query_type == "enrollments":
+            enrolled = await db.leads.find(
+                {"pipeline_stage": "enrolled", "assigned_to": user_id} if role not in ("super_admin", "admin", "ceo") else {"pipeline_stage": "enrolled"},
+                {"_id": 0, "full_name": 1, "amount": 1, "enrollment_date": 1}
+            ).sort("enrollment_date", -1).to_list(50)
+            results.append(f"Total enrollments: {len(enrolled)}")
+            for e in enrolled[:20]:
+                results.append(f"  - {e.get('full_name', '?')}: AED {e.get('amount', 0)}")
+
+    except Exception as e:
+        logger.error(f"ERP query error: {e}")
+        results.append(f"[Error querying {query_type} data]")
+
+    return "\n".join(results) if results else f"No {query_type} data found."

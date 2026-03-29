@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth, apiClient } from "@/lib/api";
-import { Send, X, Mic, Volume2, VolumeX, Sparkles, MessageCircle, Minimize2 } from "lucide-react";
+import { Send, X, Mic, Volume2, VolumeX, Sparkles, MessageCircle, Minimize2, Settings } from "lucide-react";
+import ClaretOnboardingModal from "./ClaretOnboardingModal";
 
 const MOOD_EMOJIS = {
   Excited: "🤩", Happy: "😊", Motivated: "💪", Calm: "😌", Neutral: "😐",
@@ -16,6 +17,9 @@ const ClaretChatWidget = () => {
   const [sessionId, setSessionId] = useState("");
   const [currentMood, setCurrentMood] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -23,14 +27,27 @@ const ClaretChatWidget = () => {
     if (user) {
       const sid = `claret-${user.id}-${new Date().toISOString().slice(0, 10)}`;
       setSessionId(sid);
+      // Check if user has a Claret profile
+      apiClient.get(`/claret/profile?user_id=${user.id}`)
+        .then(res => {
+          setProfile(res.data.profile);
+          setProfileChecked(true);
+        })
+        .catch(() => setProfileChecked(true));
     }
   }, [user]);
 
   useEffect(() => {
-    if (isOpen && sessionId && messages.length === 0) {
+    if (isOpen && profileChecked && !profile) {
+      setShowOnboarding(true);
+    }
+  }, [isOpen, profileChecked, profile]);
+
+  useEffect(() => {
+    if (isOpen && sessionId && messages.length === 0 && profile) {
       loadHistory();
     }
-  }, [isOpen, sessionId]);
+  }, [isOpen, sessionId, profile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,9 +66,16 @@ const ClaretChatWidget = () => {
         const lastMood = res.data.chats.filter(c => c.mood_scores?.mood_label).pop();
         if (lastMood) setCurrentMood(lastMood.mood_scores);
       } else {
+        const nick = profile?.nickname || user?.full_name?.split(" ")[0] || "there";
+        const lang = profile?.language || "english";
+        const greetings = {
+          english: `Hey ${nick}! I'm Claret, your buddy here at CLT Synapse. Ask me anything about the ERP, your data, company policies, or just chat! How's your day going?`,
+          hinglish: `Hey ${nick}! Main Claret hoon, tumhara buddy CLT Synapse mein. ERP ke baare mein kuch bhi pucho, apna data check karo, ya bas baat karo! Kya haal hai yaar?`,
+          manglish: `Hey ${nick}! Njan Claret aanu, ningalude buddy CLT Synapse-il. ERP-ne kurichu enthenkilum chodhikku, data check cheyyuu, allenkil just chat cheyyuu! Engane und machane?`,
+        };
         setMessages([{
           role: "assistant",
-          message: `Hey ${user?.full_name?.split(" ")[0] || "there"}! I'm Claret, your buddy here at CLT Synapse. Ask me anything about the ERP, company policies, or just chat! Kya haal hai? 😊`,
+          message: greetings[lang] || greetings.english,
           time: new Date().toISOString(),
         }]);
       }
@@ -69,6 +93,7 @@ const ClaretChatWidget = () => {
       const res = await apiClient.post("/claret/chat", {
         message: userMsg,
         session_id: sessionId,
+        user_role: user?.role || "",
       });
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -122,8 +147,25 @@ const ClaretChatWidget = () => {
 
   if (!user) return null;
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    // Refresh profile
+    apiClient.get(`/claret/profile?user_id=${user.id}`)
+      .then(res => setProfile(res.data.profile))
+      .catch(() => {});
+  };
+
   return (
     <>
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <ClaretOnboardingModal
+          userId={user.id}
+          userName={user.full_name || ""}
+          onComplete={handleOnboardingComplete}
+        />
+      )}
+
       {/* Floating Button */}
       {!isOpen && (
         <button
@@ -158,6 +200,9 @@ const ClaretChatWidget = () => {
                   {MOOD_EMOJIS[currentMood.mood_label] || "😊"} {currentMood.mood_label}
                 </span>
               )}
+              <button onClick={() => setShowOnboarding(true)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors" title="Settings">
+                <Settings className="w-4 h-4" />
+              </button>
               <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
                 <Minimize2 className="w-4 h-4" />
               </button>

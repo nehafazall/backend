@@ -17990,6 +17990,7 @@ async def _kb_upload(
 async def _claret_chat(data: dict = Body(...), user=Depends(get_current_user)):
     data["user_id"] = user["id"]
     data["user_name"] = user["full_name"]
+    data["user_role"] = user.get("role", "")
     return await claret_module.claret_chat(data)
 
 # Chat history — own for regular users, any for CEO/HR
@@ -18043,6 +18044,20 @@ async def _get_settings(user=Depends(get_current_user)):
 async def _update_settings(data: dict = Body(...), user=Depends(get_current_user)):
     data["user_id"] = user["id"]
     return await claret_module.update_claret_settings(data)
+
+@api_router.get("/claret/profile")
+async def _get_profile(user_id: str = None, user=Depends(get_current_user)):
+    uid = user_id or user["id"]
+    return await claret_module.get_claret_profile(uid)
+
+@api_router.post("/claret/profile")
+async def _save_profile(data: dict = Body(...), user=Depends(get_current_user)):
+    data["user_id"] = user["id"]
+    return await claret_module.save_claret_profile(data)
+
+@api_router.get("/claret/onboarding-questions")
+async def _onboarding_questions(language: str = "english"):
+    return await claret_module.get_onboarding_questions(language)
 
 
 
