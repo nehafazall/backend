@@ -79,11 +79,9 @@ import {
 
 const LEAD_STAGES = [
     { id: 'new_lead', label: 'New Lead', color: 'bg-blue-500' },
-    { id: 'no_answer', label: 'No Answer', color: 'bg-orange-500' },
     { id: 'call_back', label: 'Call Back', color: 'bg-purple-500' },
     { id: 'warm_lead', label: 'Warm Lead', color: 'bg-yellow-500' },
     { id: 'hot_lead', label: 'Hot Lead', color: 'bg-orange-600' },
-    { id: 'in_progress', label: 'In Progress', color: 'bg-cyan-500' },
     { id: 'rejected', label: 'Rejected', color: 'bg-rose-500' },
     { id: 'enrolled', label: 'Enrolled', color: 'bg-emerald-500' },
 ];
@@ -119,7 +117,7 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging, isSuperAd
     };
 
     const hasReminder = lead.reminder_date && !lead.reminder_completed;
-    const isPipelineStage = ['warm_lead', 'hot_lead', 'in_progress'].includes(lead.stage);
+    const isPipelineStage = ['warm_lead', 'hot_lead'].includes(lead.stage);
     const isClosedLead = lead.stage === 'enrolled' || lead.stage === 'rejected';
     const closedCardStyle = lead.stage === 'enrolled'
         ? 'border-l-4 border-l-emerald-500 bg-emerald-500/5'
@@ -438,7 +436,7 @@ const SalesCRMPage = () => {
     const [displayMode, setDisplayMode] = useState('kanban'); // 'kanban' or 'table'
 
     // Pipeline stages that require course selection
-    const PIPELINE_STAGES = ['warm_lead', 'hot_lead', 'in_progress'];
+    const PIPELINE_STAGES = ['warm_lead', 'hot_lead'];
 
     // Drag and drop sensors
     const sensors = useSensors(
@@ -1438,7 +1436,7 @@ const SalesCRMPage = () => {
                                             </div>
                                         )}
                                         
-                                        {['call_back', 'warm_lead', 'hot_lead', 'in_progress'].includes(updateData.stage) && (
+                                        {['call_back', 'warm_lead', 'hot_lead'].includes(updateData.stage) && (
                                             <div className="space-y-2">
                                                 <Label>Follow-up Date</Label>
                                                 <Input
