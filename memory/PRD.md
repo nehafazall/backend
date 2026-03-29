@@ -1,115 +1,105 @@
 # CLT Synapse ERP — Product Requirements Document
 
 ## Original Problem Statement
-Full-stack ERP system (React + FastAPI + MongoDB) for CLT Academy managing sales CRM, customer service, HR, finance, commissions, and operational workflows. Enhanced with Claret AI assistant for employee wellness, motivation, and knowledge base access.
+A comprehensive ERP system for CLT Academy handling Sales CRM, Customer Service, HR, Finance, Commissions, Attendance, and AI-powered features (Claret AI assistant).
+
+## Core Users
+- **CEO/Super Admin**: Full access, executive dashboards, approval workflows
+- **Sales Executives & Team Leaders**: Lead management, CRM, commissions
+- **CS Agents & CS Head**: Student lifecycle management (Kanban/Table)
+- **Mentors & Academic Masters**: Student mentoring, class tracking
+- **HR & Finance**: Employee management, payroll, documents
 
 ## Architecture
-- **Frontend**: React (CRA + Craco) with Shadcn/UI, Tailwind CSS
-- **Backend**: FastAPI monolith (`server.py` ~31K lines) + `claret_module.py` + `hr_module.py`
-- **Database**: MongoDB Atlas (`clt_academy_erp`)
-- **AI**: Claude Sonnet 4.5 via emergentintegrations (EMERGENT_LLM_KEY)
-- **Integrations**: Google Sheets, Meta Ads, SMTP, 3CX, BioCloud, MetaTrader 5
+- **Frontend**: React + Shadcn/UI + Tailwind + Recharts
+- **Backend**: FastAPI (monolith server.py ~31K lines)
+- **Database**: MongoDB Atlas
+- **AI**: Claude Sonnet 4.5 via Emergent LLM Key
+- **Integrations**: Meta Ads API, SMTP/Gmail, 3CX, Google Sheets, MT5 (blocked)
 
-## Implemented Features
+---
 
-### CS Kanban Overhaul (Mar 28, 2026) — NEW
-- Removed stages: In Progress, Interested, Not Interested (only 5 active stages remain)
-- Per-column server-side pagination (50 per page, each column fetches independently)
-- Kanban/Table view toggle
-- All columns fit on one screen, no horizontal scrolling
-- Real student counts displayed (not capped)
+## What's Been Implemented
 
-### Claret Chat Widget Repositioned (Mar 28, 2026)
-- Moved from bottom-right to bottom-left corner
+### Commission Engine (Complete)
+- Course + Addon decomposition logic
+- Team Leader commissions (no 18K benchmark)
+- CS agent commission summary on dashboard
+- Course Commission management in Commission Engine page
+- AsyncIO parallelization for CEO view (~32s → ~7.5s)
 
-### HR Shift Fix (Mar 28, 2026)
-- Fixed EmployeeResponse Pydantic model to include shift_id and country fields
-- Shift dropdown now dynamically fetches shifts from /api/hr/shifts
+### UI/UX & Access Control (Complete)
+- Role-based sidebar filtering (strict)
+- Testing badge hidden for non-admins
+- Master of Academics = Team Leader permissions
+- Color tags for students (Handle With Care, VIP, Priority, etc.)
 
-### Claret AI Assistant (Mar 28-29, 2026)
-- **AI Chatbot**: Floating widget (bottom-left) on all pages, powered by Claude Sonnet 4.5
-  - Personality: Warm, witty, empathetic. Responds in user's chosen language
-  - Features: ERP navigation help, policy Q&A, motivation, mood check-ins
-  - **ERP Data Access**: Claret can query real ERP data (leads, students, commissions, attendance, upgrades) based on user's role
-  - **Never "brain freeze"**: Always conversational, asks clarifying questions, queries data when needed
-  - TTS (browser built-in speech synthesis)
-  - All chats stored in `claret_chats` collection
-- **Onboarding Modal (Mar 29, 2026)**: First-time setup on Claret open
-  - Step 1: Name, Nickname, Language (English / Hinglish / Manglish)
-  - Step 2: 7 MCQ personality questions in chosen language
-  - Step 3: 3 open-ended personality questions
-  - T&C checkbox required before saving
-  - Settings gear to re-open onboarding
-  - Profile stored in `claret_profiles` collection
+### CS Kanban & Table View (Complete)
+- Independent per-column pagination
+- Table View toggle with Stage Filter dropdown
+- Decoupled date filter from Table View
 
-### Sales Directory (Mar 29, 2026)
-- New page at `/sales/directory` — CEO, COO, Sales Manager access
-- Table: Sr No, Name, Email, Phone, Course, Amount, Paid By (payment method), Agent, Enrolled date
-- Filters: Month, Year, Agent, Search
-- Descending order by enrolled_at (most recent first)
-- Summary cards: Total Enrolled, Revenue, Period, Avg Deal Size
+### Sales Features (Complete)
+- Table View toggle for Sales CRM
+- Sales Directory page (CEO/COO/Manager only)
+- Historical Import page
 
-### Sales CRM Table View (Mar 29, 2026)
-- Kanban/Table toggle added to Sales CRM page
-- Table view shows all leads in standard table format
+### Claret AI (Complete — Phase 1)
+- Chat with Claude Sonnet 4.5
+- Onboarding Modal (Name, Nickname, Language: English/Hinglish/Manglish, 10 MCQs, T&C)
+- Knowledge Base CRUD with PDF extraction
+- ERP data querying (leads, students, commissions, attendance, upgrades)
+- Mood scoring and tracking
+- Positioned bottom-left
+- **Sales Intelligence prompt** (SPIN selling, objection handling, competition awareness)
+- **Daily Briefing Engine** — personalized morning briefings with pipeline, follow-ups, motivation, competitive edge
+- **Competitor Context Injection** — Claret pulls scraped competitor data into conversations
 
-### Security & Privacy (Mar 29, 2026)
-- Team chat data restricted to CEO/COO only
-- Claret chat data and profiles restricted to CEO/COO only
-- Security API endpoints: /api/security/claret-profiles, /api/security/claret-chats, /api/security/team-chat-data, /api/security/team-chat-messages/{id}
-- Claret mood analytics restricted to super_admin/admin
+### Competitor Intelligence Hub (Complete — Phase 1)
+- Competitor CRUD (Add/Edit/Delete)
+- Web scraping engine (website, social links, Google reviews)
+- Intel storage with tabs (Overview, Pricing, Courses, Raw Content)
+- Scrape All batch action
+- 6 competitors seeded: Delta Trading Academy, FundFloat, Mithuns Money Market, Stellar FX, James Trading Institute, Moneytize
 
-### CS Table View Fix (Mar 28, 2026)
-- Stage filter dropdown in Table view
-- Removed date filter restriction from Table view so all records show
-- **Knowledge Base**: Separate module at `/knowledge-base`
-  - Upload: PDF, DOCX, XLSX, TXT, video files
-  - Categories: SOPs, Policies, Training Materials, Training Videos, General
-  - Search, filter, download functionality
-  - AI reads uploaded PDFs for context in chat responses
-  - Access: All users can read; HR/Admin/CEO/COO can upload/delete
-- **Claret Dashboard**: Mood tracking at `/claret`
-  - 5 dimensions: Energy, Stress, Motivation, Happiness, Overall (1-10)
-  - Mood labels: Excited, Happy, Motivated, Calm, Neutral, Tired, Anxious, Stressed, Sad, Frustrated, Overwhelmed
-  - Mood Journey calendar (last 30 days with emojis)
-  - 6 customizable theme presets (colors stored per user)
-  - CEO/HR: Team Overview tab, Analytics tab (distribution, daily trend)
-  - Employee: Self-awareness via own mood scores
+### People Intelligence / Security (Complete)
+- Claret chat monitoring dashboard
+- Team chat monitoring
+- Personality profiles from Claret onboarding
 
-### Organization Map (Mar 28, 2026) — UPDATED
-- Drag-and-drop: Admin/HR/CEO/COO can drag people between departments
-- Backend: PUT /api/organization/move-user endpoint
-- Department heads dynamically pulled from database
+### Executive Dashboard (Complete)
+- Revenue KPIs, department breakdown, attendance
+- Top performers, lead sources, document expiry
+- **Team Mood Pulse** — Average Claret AI mood scores per team (XLNC, CHALLENGER, GLADIATORS, etc.)
 
-### SSHR & HR Attendance Overhaul (Mar 28, 2026)
-- Monthly stats, calendar view, Sunday-only OFF, late recalculation, missing employees
+### Transaction History Fix (Complete)
+- CS Student Detail Modal restructured into tabbed interface (Info/Transactions/Calls/Update)
+- TransactionHistory component now accessible via dedicated "Transactions" tab
 
-### CEO Commission Approval Workflow (Mar 28, 2026)
-- Approval-dependent commission display, COO access
+---
 
-## Key Database Collections (New)
-- `knowledge_base`: Document metadata + extracted text for AI
-- `claret_chats`: All chat messages (user + assistant) per session
-- `claret_mood_scores`: Daily mood scores per user
-- `claret_settings`: Dashboard theme preferences per user
+## Pending Issues
+| Issue | Priority | Status |
+|-------|----------|--------|
+| MT5 Web API 403 | P2 | BLOCKED (broker whitelist) |
 
-## Key Credentials
-- CEO: aqib@clt-academy.com / @Aqib1234
-- CS Head: falja@clt-academy.com / Falja@123
-- Sales Executive: aleesha@clt-academy.com / Aleesha@123
+## Upcoming Tasks (P1-P2)
+1. **Competitor Intelligence Phase 2**: Auto-scheduling scrape jobs, social media parsing, Google Reviews sentiment, marketing content generation
+2. **Claret AI Phase 2**: Real-time web search integration, call reminders via Claret, sales performance coaching with actual conversion data
+3. **CEO Commission Approval Workflow**: Monthly approve/reject flow
+4. **Closed Lead Color-Coding**: Visual differentiation in CRM
+5. **Net Pay Chart Fix**: Salary data from hr_employees collection
 
-## Prioritized Backlog
-
-### P0 (Blocked)
-- MT5 Web API: Awaiting broker whitelist
-
-### P1
-- Invoice Generation — Auto-generate PDF invoices
-- WhatsApp Integration — Send templated messages
-
-### P2
+## Future / Backlog (P2-P3)
+- Invoice Generation (PDF)
+- WhatsApp Business API Integration
+- Executive Dashboard (CEO single-page overview)
 - Workflow Automation Engine
 - Scheduled Email Reports
+- Refactor server.py (31K+ lines → modular routes)
 
-### P3
-- Refactor monolithic server.py (~31K lines)
+## Credentials
+- CEO: aqib@clt-academy.com / @Aqib1234
+- CS Head: falja@clt-academy.com / Falja@123
+- Master of Academics: edwin@clt-academy.com / Edwin@123
+- Sales Executive: aleesha@clt-academy.com / Aleesha@123
