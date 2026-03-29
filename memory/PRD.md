@@ -9,11 +9,11 @@ A comprehensive ERP system for CLT Academy handling Sales CRM, Customer Service,
 - **CS Agents & CS Head**: Student lifecycle management (Kanban/Table)
 - **Mentors & Academic Masters**: Student mentoring, class tracking
 - **HR & Finance**: Employee management, payroll, documents
-- **Marketing**: Competitor intelligence, market analysis, content generation
+- **Marketing**: Competitor intelligence, market analysis, content calendar, content generation
 
 ## Architecture
 - **Frontend**: React + Shadcn/UI + Tailwind + Recharts + Puter.js (web search)
-- **Backend**: FastAPI (server.py ~31K lines + claret_module.py + competitor_intel.py)
+- **Backend**: FastAPI (server.py ~31K lines + claret_module.py + competitor_intel.py + marketing_calendar.py)
 - **Database**: MongoDB Atlas
 - **AI**: Claude Sonnet 4.5 via Emergent LLM Key
 - **Integrations**: Meta Ads API, SMTP/Gmail, 3CX, Google Sheets, MT5 (blocked), Puter.js
@@ -28,51 +28,40 @@ A comprehensive ERP system for CLT Academy handling Sales CRM, Customer Service,
 - Drag-and-drop with course selection for pipeline stages
 - Color-coded closed leads (green=enrolled, red=rejected)
 
+### CS Section (Updated 2026-03-29)
+- Sidebar order: Customer Service (Kanban) → CS Dashboard → My Commissions → Student Directory → Student Portal → Merge Approvals → CS Historical Import
+
+### Marketing Calendar (NEW 2026-03-29)
+- **Page Management**: Add social media pages with platform (IG, X, FB, YouTube, TikTok, LinkedIn), URL, handle, posting frequency (daily/alternate_day/twice_a_week/weekly/biweekly), auto-assigned color
+- **Calendar Auto-generation**: Based on each page's posting frequency, generates entries for 30 days
+- **Content Pipeline**: Planned → Video Shot → Edited → Approved → Posted — clickable status buttons in entry detail
+- **Color-coded Pages**: Each page gets unique color, visible in calendar grid and legend
+- **AI Content Suggestions**: Per-entry AI ideas based on page theme + competitor activity (uses Claude Sonnet 4.5)
+- **Deadline Notifications**: Background loop (every 2 hours) checks for entries due in 48 hours that aren't approved/posted, notifies marketing head via Claret
+- **Pipeline Tab**: Board view grouping entries by status with progress bars per page
+- Backend: `/app/backend/marketing_calendar.py`
+- Frontend: `/app/frontend/src/pages/marketing/MarketingCalendarPage.jsx`
+- Route: `/marketing/calendar`
+
+### Marketing Intelligence (2026-03-29)
+- **Market Analysis Page** (`/marketing/analysis`): Scoring Matrix, Review Sentiment, FB Ad Analysis, Social Intel
+- **Content Studio Page** (`/marketing/content-studio`): AI marketing content generator with focus areas
+- **Competitor Intelligence Hub**: CRUD, web scraping, AI Battle Cards, daily briefings
+
 ### Claret AI — Work Companion (Complete + Enhanced)
 - Chat with Claude Sonnet 4.5 (Hinglish/English/Manglish based on preference)
-- **Natural Language Reminders**: auto-parsed, stored, fires as notification + auto-opens widget
-- **Pipeline Advisor**: Analyzes user's hot leads with priority alerts for stale leads
-- **Target Calculator**, **Day Planner**, **Work Memory**
-- **Real-time Web Search**: Puter.js integration
-- **Sales Coaching**: SPIN selling, objection handling, conversion rate analysis with real ERP data
-- **Forex Market Intelligence**: Currency pairs, central bank policies, risk management, technical analysis
-- **Work Culture & Wellness**: Burnout detection, pressure reduction, micro-goal setting, context switching advice
-- **Competitor Context**: Auto-injects scraped competitor data
-- **Proactive Alerts**: Background loop (every 15 min) checks for cold hot leads (48h+) and missed reminders
+- Natural Language Reminders, Pipeline Advisor, Target Calculator, Day Planner
+- Real-time Web Search (Puter.js), Sales Coaching (SPIN selling, objection handling)
+- Forex Market Intelligence, Work Culture & Wellness coaching
+- Proactive Alerts: Background loop checks for cold hot leads (48h+) and missed reminders
 - Onboarding Modal, Knowledge Base CRUD, Mood scoring
-
-### Marketing Intelligence (NEW - 2026-03-29)
-- **Market Analysis Page** (`/marketing/analysis`):
-  - Scoring Matrix tab: CLT vs 6 competitors across 8 dimensions with AI insights
-  - Review Sentiment tab: Google Reviews/GMB sentiment analysis per competitor
-  - FB Ad Analysis tab: Facebook Ad Library deep parsing
-  - Social Intel tab: Instagram/Facebook engagement signals and content themes
-- **Content Studio Page** (`/marketing/content-studio`):
-  - AI-generated marketing content ideas based on competitor intelligence
-  - Focus areas: General, Social Media, Paid Ads, Email, Counter Competitors, Brand Awareness, Lead Gen
-  - Campaign themes, messaging differentiation, weekly content calendar
-- Competitor Intelligence Hub: CRUD, web scraping, AI Battle Cards, daily briefings
-- Auto-daily scraping at 04:00 UTC
 
 ### Commission Engine (Complete)
 - Course + Addon decomposition, TL commissions (no 18K benchmark)
-- CEO Commission Approval Workflow
-- Net Pay scatter chart
-
-### UI/UX & Access Control (Complete)
-- Role-based sidebar filtering
-- Marketing section: Analytics Dashboard, Competitor Intel, Market Analysis, Content Studio, Lead Connectors, Settings
-- CS Student Detail Modal: Tabbed
+- CEO Commission Approval Workflow, Net Pay scatter chart
 
 ### Executive Dashboard (Complete)
-- Revenue KPIs, department breakdown, attendance, top performers
-- Team Mood Pulse
-
-### Background Services
-- Competitor auto-scrape scheduler (daily 04:00 UTC)
-- Claret reminder check loop (every 30 seconds) + proactive alerts (every 15 min)
-- MT5 auto-sync loop
-- Daily finance report scheduler
+- Revenue KPIs, department breakdown, attendance, top performers, Team Mood Pulse
 
 ---
 
@@ -80,6 +69,7 @@ A comprehensive ERP system for CLT Academy handling Sales CRM, Customer Service,
 | Issue | Priority | Status |
 |-------|----------|--------|
 | MT5 Web API 403 | P2 | BLOCKED (broker whitelist) |
+| LLM Budget Exceeded | P1 | User needs to add balance in Profile → Universal Key |
 
 ## Upcoming Tasks
 1. **WhatsApp Business API Integration** (P1)
