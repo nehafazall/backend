@@ -12,6 +12,7 @@ import SalesCRMPage from "@/pages/SalesCRMPage";
 import SalesDashboard from "@/pages/SalesDashboard";
 import SalesDirectoryPage from "@/pages/SalesDirectoryPage";
 import SecurityIntelligencePage from "@/pages/SecurityIntelligencePage";
+import CompetitorIntelligencePage from "@/pages/CompetitorIntelligencePage";
 import HistoricalImportPage from "@/pages/sales/HistoricalImportPage";
 import CSHistoricalImportPage from "@/pages/cs/CSHistoricalImportPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
@@ -586,6 +587,13 @@ function AppRoutes() {
                 <Route path="people-intelligence" element={
                     <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
                         <SecurityIntelligencePage />
+                    </ProtectedRoute>
+                } />
+                
+                {/* Competitor Intelligence (CEO/COO only) */}
+                <Route path="competitor-intelligence" element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'coo']}>
+                        <CompetitorIntelligencePage />
                     </ProtectedRoute>
                 } />
                 

@@ -66,17 +66,39 @@ const ClaretChatWidget = () => {
         const lastMood = res.data.chats.filter(c => c.mood_scores?.mood_label).pop();
         if (lastMood) setCurrentMood(lastMood.mood_scores);
       } else {
+        // First interaction today — show daily briefing + greeting
         const nick = profile?.nickname || user?.full_name?.split(" ")[0] || "there";
         const lang = profile?.language || "english";
-        const greetings = {
-          english: `Hey ${nick}! I'm Claret, your buddy here at CLT Synapse. Ask me anything about the ERP, your data, company policies, or just chat! How's your day going?`,
-          hinglish: `Hey ${nick}! Main Claret hoon, tumhara buddy CLT Synapse mein. ERP ke baare mein kuch bhi pucho, apna data check karo, ya bas baat karo! Kya haal hai yaar?`,
-          manglish: `Hey ${nick}! Njan Claret aanu, ningalude buddy CLT Synapse-il. ERP-ne kurichu enthenkilum chodhikku, data check cheyyuu, allenkil just chat cheyyuu! Engane und machane?`,
+
+        // Fetch daily briefing
+        let briefingText = "";
+        try {
+          const briefRes = await apiClient.get(`/intelligence/daily-briefing?user_id=${user.id}`);
+          const sections = briefRes.data?.sections || [];
+          if (sections.length > 0) {
+            const sectionIcons = { target: "🎯", clock: "⏰", users: "👥", zap: "⚡", shield: "🛡️" };
+            briefingText = sections.map(s => {
+              const icon = sectionIcons[s.icon] || "📌";
+              return `${icon} **${s.title}**\n${s.items.map(i => `  ${i}`).join("\n")}`;
+            }).join("\n\n");
+          }
+        } catch { /* no briefing available */ }
+
+        const greetBase = {
+          english: `Good morning ${nick}!`,
+          hinglish: `Good morning ${nick}!`,
+          manglish: `Good morning ${nick}!`,
         };
+        const greeting = greetBase[lang] || greetBase.english;
+        const fullMsg = briefingText
+          ? `${greeting} Here's your daily briefing:\n\n${briefingText}\n\nHow can I help you today?`
+          : `Hey ${nick}! I'm Claret, your buddy here at CLT Synapse. Ask me anything about the ERP, your data, competitors, sales tips, or just chat! How's your day going?`;
+
         setMessages([{
           role: "assistant",
-          message: greetings[lang] || greetings.english,
+          message: fullMsg,
           time: new Date().toISOString(),
+          isBriefing: true,
         }]);
       }
     } catch { /* ignore */ }

@@ -17970,6 +17970,50 @@ from hr_module import (
 import claret_module
 claret_module.init_module(db, get_current_user, require_roles)
 
+# Competitor Intelligence Module
+import competitor_intel
+competitor_intel.db = db
+competitor_intel.get_current_user = get_current_user
+competitor_intel.create_notification = create_notification
+
+# Competitor Intelligence endpoints (CEO/Admin only)
+@api_router.get("/intelligence/competitors")
+async def _list_competitors(user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.list_competitors()
+
+@api_router.post("/intelligence/competitors")
+async def _add_competitor(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    data["user_id"] = user["id"]
+    return await competitor_intel.add_competitor(data)
+
+@api_router.put("/intelligence/competitors/{competitor_id}")
+async def _update_competitor(competitor_id: str, data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.update_competitor(competitor_id, data)
+
+@api_router.delete("/intelligence/competitors/{competitor_id}")
+async def _delete_competitor(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.delete_competitor(competitor_id)
+
+@api_router.post("/intelligence/competitors/{competitor_id}/scrape")
+async def _scrape_competitor(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.scrape_competitor(competitor_id)
+
+@api_router.get("/intelligence/competitors/{competitor_id}/intel")
+async def _get_competitor_intel(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.get_competitor_intel(competitor_id)
+
+@api_router.post("/intelligence/competitors/scrape-all")
+async def _scrape_all(user=Depends(require_roles(["super_admin", "admin"]))):
+    return await competitor_intel.scrape_all_competitors()
+
+@api_router.get("/intelligence/daily-briefing")
+async def _daily_briefing(user=Depends(get_current_user)):
+    return await competitor_intel.get_daily_briefing(user["id"])
+
+@api_router.post("/intelligence/daily-briefing/send-all")
+async def _send_briefings(user=Depends(require_roles(["super_admin", "admin"]))):
+    return await competitor_intel.send_daily_briefings()
+
 # Override the upload endpoint to inject auth
 @api_router.post("/claret/knowledge-base/upload")
 async def _kb_upload(

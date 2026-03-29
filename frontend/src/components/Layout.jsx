@@ -71,6 +71,7 @@ import {
     ListTodo,
     Sparkles,
     Brain,
+    Target,
 } from 'lucide-react';
 import CLTLogo from '@/components/CLTLogo';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -210,6 +211,7 @@ const SECTIONS = {
             { title: 'Teams Management', icon: Users, path: '/teams', roles: ['super_admin', 'admin', 'sales_manager'] },
             { title: 'Password Resets', icon: Key, path: '/password-resets', roles: ['super_admin'] },
             { title: 'People Intelligence', icon: Brain, path: '/people-intelligence', roles: ['super_admin', 'admin'] },
+            { title: 'Competitor Intel', icon: Target, path: '/competitor-intelligence', roles: ['super_admin', 'admin'] },
             { title: 'Audit Log', icon: FileText, path: '/audit-log', roles: ['super_admin', 'admin'] },
             { title: 'User Management', icon: UserCircle, path: '/users', roles: ['super_admin', 'admin', 'hr'] },
         ],

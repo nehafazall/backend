@@ -391,6 +391,16 @@ async def claret_chat(data: dict = Body(...)):
     # Get KB context
     kb_context = await _get_kb_context(message)
 
+    # Get competitive intelligence context if question relates to competition/market
+    comp_context = ""
+    comp_keywords = ["competitor", "competition", "better than", "compare", "versus", "vs", "market", "trend", "delta trading", "fundfloat", "mithun", "stellar", "james trading", "moneytize", "pricing", "their course", "other academy", "sell better", "how to sell", "objection", "differentiat"]
+    if any(kw in message.lower() for kw in comp_keywords):
+        try:
+            import competitor_intel
+            comp_context = await competitor_intel.get_competitive_context(message)
+        except Exception as e:
+            logger.warning(f"Competitor context error: {e}")
+
     # Get user's employee info for personalization
     emp = await db.hr_employees.find_one({"user_id": user_id}, {"_id": 0, "full_name": 1, "designation": 1, "department": 1})
 
@@ -418,6 +428,8 @@ async def claret_chat(data: dict = Body(...)):
         system += f"\n\nCurrent user: {emp.get('full_name', user_name)}, {emp.get('designation','')}, {emp.get('department','')} department."
     if kb_context:
         system += f"\n\nRELEVANT KNOWLEDGE BASE CONTENT:\n{kb_context}"
+    if comp_context:
+        system += f"\n\n{comp_context}\n\nUse this real competitor data to give specific, actionable advice. Compare CLT's strengths against these competitors when relevant."
 
     # Call Claude via emergentintegrations
     try:
