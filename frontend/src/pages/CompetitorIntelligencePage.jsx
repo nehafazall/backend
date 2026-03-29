@@ -33,6 +33,8 @@ export default function CompetitorIntelligencePage() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedComp, setSelectedComp] = useState(null);
   const [intel, setIntel] = useState(null);
+  const [battleCard, setBattleCard] = useState(null);
+  const [generatingCard, setGeneratingCard] = useState(false);
   const [scraping, setScraping] = useState({});
   const [scrapingAll, setScrapingAll] = useState(false);
 
@@ -99,10 +101,25 @@ export default function CompetitorIntelligencePage() {
   const viewIntel = async (id) => {
     const comp = competitors.find(c => c.id === id);
     setSelectedComp(comp);
+    setBattleCard(null);
     try {
-      const res = await apiClient.get(`/intelligence/competitors/${id}/intel`);
-      setIntel(res.data);
+      const [intelRes, cardRes] = await Promise.all([
+        apiClient.get(`/intelligence/competitors/${id}/intel`),
+        apiClient.get(`/intelligence/competitors/${id}/battle-card`).catch(() => ({ data: { battle_card: null } })),
+      ]);
+      setIntel(intelRes.data);
+      setBattleCard(cardRes.data?.battle_card || null);
     } catch { toast.error('Failed to load intel'); }
+  };
+
+  const generateBattleCard = async (id) => {
+    setGeneratingCard(true);
+    try {
+      const res = await apiClient.post(`/intelligence/competitors/${id}/battle-card`);
+      setBattleCard(res.data?.battle_card || null);
+      toast.success('Battle Card generated!');
+    } catch { toast.error('Failed to generate battle card'); }
+    finally { setGeneratingCard(false); }
   };
 
   return (
@@ -202,6 +219,7 @@ export default function CompetitorIntelligencePage() {
             <Tabs defaultValue="overview">
               <TabsList className="h-8">
                 <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+                <TabsTrigger value="battlecard" className="text-xs">Battle Card</TabsTrigger>
                 <TabsTrigger value="pricing" className="text-xs">Pricing</TabsTrigger>
                 <TabsTrigger value="courses" className="text-xs">Courses</TabsTrigger>
                 <TabsTrigger value="raw" className="text-xs">Raw Content</TabsTrigger>
@@ -224,6 +242,72 @@ export default function CompetitorIntelligencePage() {
                     <p className="text-sm text-muted-foreground text-center py-6">No intel yet. Click scrape to gather data.</p>
                   )}
                 </div>
+              </TabsContent>
+
+              {/* Battle Card Tab */}
+              <TabsContent value="battlecard" className="mt-3" data-testid="tab-battlecard">
+                {battleCard ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-violet-500/5 border border-violet-500/20 rounded-lg">
+                      <h4 className="text-sm font-semibold mb-1">Overview</h4>
+                      <p className="text-xs text-muted-foreground">{battleCard.overview}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                        <h4 className="text-xs font-semibold text-red-600 mb-1">Their Strengths</h4>
+                        <ul className="space-y-1">
+                          {(battleCard.strengths || []).map((s, i) => <li key={i} className="text-[11px] text-muted-foreground">{s}</li>)}
+                        </ul>
+                      </div>
+                      <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                        <h4 className="text-xs font-semibold text-amber-600 mb-1">Their Weaknesses</h4>
+                        <ul className="space-y-1">
+                          {(battleCard.weaknesses || []).map((s, i) => <li key={i} className="text-[11px] text-muted-foreground">{s}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                      <h4 className="text-xs font-semibold text-emerald-600 mb-1">Our Advantages</h4>
+                      <ul className="space-y-1">
+                        {(battleCard.our_advantages || []).map((s, i) => <li key={i} className="text-[11px] text-muted-foreground flex gap-1"><span className="text-emerald-500 flex-shrink-0">+</span>{s}</li>)}
+                      </ul>
+                    </div>
+                    {battleCard.objection_counters?.length > 0 && (
+                      <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                        <h4 className="text-xs font-semibold text-blue-600 mb-2">Objection Counters</h4>
+                        <div className="space-y-2">
+                          {battleCard.objection_counters.map((oc, i) => (
+                            <div key={i} className="text-[11px]">
+                              <p className="text-red-500 font-medium">"{oc.objection}"</p>
+                              <p className="text-muted-foreground ml-2 mt-0.5">{oc.counter}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {battleCard.key_talking_points?.length > 0 && (
+                      <div className="p-3 bg-muted/30 rounded-lg border">
+                        <h4 className="text-xs font-semibold mb-1">Key Talking Points for Sales Calls</h4>
+                        <ul className="space-y-1">
+                          {battleCard.key_talking_points.map((tp, i) => <li key={i} className="text-[11px] text-muted-foreground flex gap-1"><span className="text-indigo-500 flex-shrink-0">-</span>{tp}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <Button variant="outline" size="sm" className="text-xs" onClick={() => generateBattleCard(selectedComp.id)} disabled={generatingCard}>
+                      {generatingCard ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                      Regenerate
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Target className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground mb-3">No battle card yet. Generate one from scraped data.</p>
+                    <Button size="sm" onClick={() => generateBattleCard(selectedComp.id)} disabled={generatingCard} data-testid="gen-battlecard-btn">
+                      {generatingCard ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
+                      {generatingCard ? 'Generating...' : 'Generate Battle Card'}
+                    </Button>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="pricing" className="mt-3">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth, apiClient } from "@/lib/api";
-import { Send, X, Mic, Volume2, VolumeX, Sparkles, MessageCircle, Minimize2, Settings } from "lucide-react";
+import { Send, X, Mic, Volume2, VolumeX, Sparkles, MessageCircle, Minimize2, Settings, Globe } from "lucide-react";
 import ClaretOnboardingModal from "./ClaretOnboardingModal";
+import { puterWebSearch, needsWebSearch } from "@/lib/puterSearch";
 
 const MOOD_EMOJIS = {
   Excited: "🤩", Happy: "😊", Motivated: "💪", Calm: "😌", Neutral: "😐",
@@ -112,25 +113,42 @@ const ClaretChatWidget = () => {
     setLoading(true);
 
     try {
+      // Check if message needs real-time web search
+      let webContext = "";
+      if (needsWebSearch(userMsg)) {
+        setMessages(prev => [...prev, {
+          role: "system",
+          message: "Searching the web for latest info...",
+          isSearching: true,
+          time: new Date().toISOString(),
+        }]);
+        webContext = await puterWebSearch(userMsg);
+        // Remove the searching indicator
+        setMessages(prev => prev.filter(m => !m.isSearching));
+      }
+
       const res = await apiClient.post("/claret/chat", {
         message: userMsg,
         session_id: sessionId,
         user_role: user?.role || "",
+        web_context: webContext || undefined,
       });
       setMessages(prev => [...prev, {
         role: "assistant",
         message: res.data.message,
         mood_scores: res.data.mood_scores,
         suggested_actions: res.data.suggested_actions,
+        hasWebData: !!webContext,
         time: new Date().toISOString(),
       }]);
       if (res.data.mood_scores?.mood_label) {
         setCurrentMood(res.data.mood_scores);
       }
     } catch {
+      setMessages(prev => prev.filter(m => !m.isSearching));
       setMessages(prev => [...prev, {
         role: "assistant",
-        message: "Oops, something went wrong! Try again? 🙏",
+        message: "Oops, something went wrong! Try again?",
         time: new Date().toISOString(),
       }]);
     }
@@ -234,12 +252,22 @@ const ClaretChatWidget = () => {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3" data-testid="claret-messages">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : msg.role === "system" ? "justify-center" : "justify-start"}`}>
+                {msg.role === "system" && msg.isSearching ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full animate-pulse">
+                    <Globe className="w-3 h-3 animate-spin" /> Searching the web...
+                  </div>
+                ) : (
                 <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                   msg.role === "user"
                     ? "bg-indigo-600 text-white rounded-br-sm"
                     : "bg-muted rounded-bl-sm"
                 }`}>
+                  {msg.hasWebData && (
+                    <div className="flex items-center gap-1 text-[10px] text-indigo-500 mb-1">
+                      <Globe className="w-3 h-3" /> Powered by live web data
+                    </div>
+                  )}
                   <p className="whitespace-pre-wrap">{msg.message}</p>
                   {msg.role === "assistant" && (
                     <div className="flex gap-1 mt-1.5 pt-1 border-t border-border/20">
@@ -274,6 +302,7 @@ const ClaretChatWidget = () => {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             ))}
             {loading && (

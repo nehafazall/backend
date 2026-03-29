@@ -431,6 +431,11 @@ async def claret_chat(data: dict = Body(...)):
     if comp_context:
         system += f"\n\n{comp_context}\n\nUse this real competitor data to give specific, actionable advice. Compare CLT's strengths against these competitors when relevant."
 
+    # Inject real-time web search context from frontend (Puter.js)
+    web_context = data.get("web_context", "")
+    if web_context:
+        system += f"\n\n=== REAL-TIME WEB SEARCH RESULTS ===\n{web_context[:4000]}\n\nThe above is LIVE web data. Use it to answer the user's question with the most current information available. Cite sources when possible."
+
     # Call Claude via emergentintegrations
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -794,14 +799,31 @@ async def _query_erp_data(user_id: str, role: str, query_type: str, query_hint: 
             query = {"assigned_to": user_id, "created_at": {"$gte": month_start}}
             if role in ("super_admin", "admin", "ceo", "sales_head"):
                 query = {"created_at": {"$gte": month_start}}
-            leads = await db.leads.find(query, {"_id": 0, "full_name": 1, "status": 1, "pipeline_stage": 1, "amount": 1, "created_at": 1}).to_list(200)
+            leads = await db.leads.find(query, {"_id": 0, "full_name": 1, "status": 1, "pipeline_stage": 1, "amount": 1, "created_at": 1}).to_list(500)
             closed = [l for l in leads if l.get("pipeline_stage") in ("enrolled", "closed_won")]
-            results.append(f"Total leads this month: {len(leads)}")
-            results.append(f"Closings (enrolled): {len(closed)}")
+            rejected = [l for l in leads if l.get("pipeline_stage") == "rejected"]
+            hot = [l for l in leads if l.get("pipeline_stage") == "hot_lead"]
+            warm = [l for l in leads if l.get("pipeline_stage") == "warm_lead"]
+            total_revenue = sum(l.get("amount", 0) for l in closed)
+            conversion_rate = round(len(closed) / len(leads) * 100, 1) if leads else 0
+
+            results.append(f"=== SALES PERFORMANCE (This Month) ===")
+            results.append(f"Total leads: {len(leads)}")
+            results.append(f"Closings (enrolled): {len(closed)} | Revenue: AED {total_revenue:,.0f}")
+            results.append(f"Conversion rate: {conversion_rate}%")
+            results.append(f"Hot leads: {len(hot)} | Warm leads: {len(warm)} | Rejected: {len(rejected)}")
+            results.append(f"Pipeline remaining: {len(leads) - len(closed) - len(rejected)}")
             if closed:
-                results.append("Closed leads list:")
-                for i, ld in enumerate(closed[:50], 1):
+                avg_deal = total_revenue / len(closed)
+                results.append(f"Average deal size: AED {avg_deal:,.0f}")
+                results.append("Recent closings:")
+                for i, ld in enumerate(closed[:10], 1):
                     results.append(f"  {i}. {ld.get('full_name', 'Unknown')} - AED {ld.get('amount', 0)}")
+            # Add coaching context
+            if conversion_rate < 8:
+                results.append("\n[COACHING NOTE: Conversion rate is below 8%. Focus on lead qualification and follow-up cadence.]")
+            elif conversion_rate > 15:
+                results.append("\n[COACHING NOTE: Excellent conversion rate! Consider mentoring others on your approach.]")
 
         elif query_type == "students":
             query = {}

@@ -18014,6 +18014,14 @@ async def _daily_briefing(user=Depends(get_current_user)):
 async def _send_briefings(user=Depends(require_roles(["super_admin", "admin"]))):
     return await competitor_intel.send_daily_briefings()
 
+@api_router.post("/intelligence/competitors/{competitor_id}/battle-card")
+async def _gen_battle_card(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo"]))):
+    return await competitor_intel.generate_battle_card(competitor_id)
+
+@api_router.get("/intelligence/competitors/{competitor_id}/battle-card")
+async def _get_battle_card(competitor_id: str, user=Depends(require_roles(["super_admin", "admin", "coo", "sales_executive", "team_leader", "sales_head", "sales_manager"]))):
+    return await competitor_intel.get_battle_card(competitor_id)
+
 # Override the upload endpoint to inject auth
 @api_router.post("/claret/knowledge-base/upload")
 async def _kb_upload(
@@ -30738,6 +30746,9 @@ async def startup_event():
     
     # Start MT5 auto-sync scheduler (8 AM, 4 PM, 12 AM UAE time)
     asyncio.create_task(mt5_auto_sync_loop())
+    
+    # Start competitor intelligence daily auto-scrape scheduler
+    competitor_intel.start_scheduler()
     
     logger.info("CLT Synapse ERP v2.0 started successfully")
 

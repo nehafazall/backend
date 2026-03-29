@@ -120,10 +120,16 @@ const LeadCard = ({ lead, onUpdate, onView, onSetReminder, isDragging, isSuperAd
 
     const hasReminder = lead.reminder_date && !lead.reminder_completed;
     const isPipelineStage = ['warm_lead', 'hot_lead', 'in_progress'].includes(lead.stage);
+    const isClosedLead = lead.stage === 'enrolled' || lead.stage === 'rejected';
+    const closedCardStyle = lead.stage === 'enrolled'
+        ? 'border-l-4 border-l-emerald-500 bg-emerald-500/5'
+        : lead.stage === 'rejected'
+        ? 'border-l-4 border-l-rose-500 bg-rose-500/5'
+        : '';
 
     return (
         <div
-            className={`kanban-card stage-${lead.stage} animate-fade-in ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''}`}
+            className={`kanban-card stage-${lead.stage} animate-fade-in ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${closedCardStyle}`}
             onClick={() => !isDragging && onView(lead)}
             data-testid={`lead-card-${lead.id}`}
         >
@@ -990,7 +996,7 @@ const SalesCRMPage = () => {
                             {leads.map((lead, idx) => {
                                 const stageObj = LEAD_STAGES.find(s => s.id === lead.pipeline_stage);
                                 return (
-                                    <tr key={lead.id} className="hover:bg-muted/30 cursor-pointer transition-colors" onClick={() => handleViewLead(lead)} data-testid={`sales-table-row-${idx}`}>
+                                    <tr key={lead.id} className={`hover:bg-muted/30 cursor-pointer transition-colors ${lead.pipeline_stage === 'enrolled' ? 'bg-emerald-500/5 border-l-2 border-l-emerald-500' : lead.pipeline_stage === 'rejected' ? 'bg-rose-500/5 border-l-2 border-l-rose-500' : ''}`} onClick={() => handleViewLead(lead)} data-testid={`sales-table-row-${idx}`}>
                                         <td className="px-4 py-2.5 text-muted-foreground">{(currentPage - 1) * pageSize + idx + 1}</td>
                                         <td className="px-4 py-2.5 font-medium">{lead.full_name || '—'}</td>
                                         <td className="px-4 py-2.5 text-muted-foreground text-xs">{lead.phone || '—'}</td>

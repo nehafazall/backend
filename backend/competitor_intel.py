@@ -313,8 +313,8 @@ async def _generate_agent_briefing(user_id: str, user_name: str, role: str) -> d
             {"assigned_to": user_id, "created_at": {"$gte": month_start}},
             {"_id": 0, "pipeline_stage": 1, "amount": 1, "full_name": 1}
         ).to_list(500)
-        closed = [l for l in leads if l.get("pipeline_stage") in ("enrolled", "closed_won")]
-        total_revenue = sum(l.get("amount", 0) for l in closed)
+        closed = [ld for ld in leads if ld.get("pipeline_stage") in ("enrolled", "closed_won")]
+        total_revenue = sum(ld.get("amount", 0) for ld in closed)
 
         briefing["sections"].append({
             "title": "Sales Pipeline",
@@ -482,3 +482,165 @@ async def scrape_all_competitors():
             results[comp["name"]] = f"Error: {str(e)}"
 
     return {"message": f"Scraped {len(competitors)} competitors", "results": results}
+
+
+# ═══════════════════════════════════════════
+# AUTO-SCHEDULED DAILY SCRAPING
+# ═══════════════════════════════════════════
+
+_scheduler_running = False
+
+async def _daily_scrape_loop():
+    """Background loop: scrapes all competitors once daily at ~04:00 UTC."""
+    global _scheduler_running
+    if _scheduler_running:
+        return
+    _scheduler_running = True
+    logger.info("Competitor auto-scrape scheduler started")
+
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            # Next 04:00 UTC
+            target = now.replace(hour=4, minute=0, second=0, microsecond=0)
+            if now >= target:
+                target += timedelta(days=1)
+            wait_secs = (target - now).total_seconds()
+            logger.info(f"Next auto-scrape in {wait_secs/3600:.1f}h at {target.isoformat()}")
+            await asyncio.sleep(wait_secs)
+
+            # Run the scrape
+            logger.info("Auto-scrape triggered")
+            competitors = await db.competitors.find({"status": "active"}, {"_id": 0, "id": 1, "name": 1}).to_list(20)
+            for comp in competitors:
+                try:
+                    await scrape_competitor(comp["id"])
+                    await asyncio.sleep(2)  # Throttle between competitors
+                except Exception as e:
+                    logger.error(f"Auto-scrape failed for {comp['name']}: {e}")
+
+            # Also send daily briefings
+            try:
+                await send_daily_briefings()
+            except Exception as e:
+                logger.error(f"Daily briefing send failed: {e}")
+
+            logger.info(f"Auto-scrape complete for {len(competitors)} competitors")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Scheduler error: {e}")
+            await asyncio.sleep(3600)  # Retry in 1 hour
+
+
+def start_scheduler():
+    """Call from server.py startup to begin the daily scrape loop."""
+    asyncio.get_event_loop().create_task(_daily_scrape_loop())
+
+
+# ═══════════════════════════════════════════
+# BATTLE CARDS (AI-Generated)
+# ═══════════════════════════════════════════
+
+async def generate_battle_card(competitor_id: str) -> dict:
+    """Generate an AI-powered battle card for a competitor using scraped intel."""
+    comp = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    if not comp:
+        raise HTTPException(404, "Competitor not found")
+
+    # Get scraped intel
+    intel_docs = await db.competitor_intel.find(
+        {"competitor_id": competitor_id, "content": {"$ne": ""}},
+        {"_id": 0}
+    ).to_list(10)
+
+    intel_summary = ""
+    for doc in intel_docs:
+        intel_summary += f"\n[{doc.get('source_type', 'web')}] {doc.get('title', '')}\n"
+        intel_summary += (doc.get('content', '')[:1500] + "\n")
+        if doc.get('pricing'):
+            intel_summary += f"PRICING: {doc['pricing'][:500]}\n"
+        if doc.get('courses'):
+            intel_summary += f"COURSES: {doc['courses'][:500]}\n"
+
+    if not intel_summary.strip():
+        return {
+            "competitor": comp["name"],
+            "battle_card": {
+                "overview": f"No scraped data available for {comp['name']}. Please scrape first.",
+                "strengths": [], "weaknesses": [], "our_advantages": [],
+                "objection_counters": [], "pricing_comparison": "",
+                "key_talking_points": [],
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # Use Claude to generate the battle card
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+        prompt = f"""You are a competitive intelligence analyst for CLT Academy (a forex/trading education company in the UAE).
+
+Based on this scraped data about our competitor "{comp['name']}", generate a Battle Card in JSON format.
+
+COMPETITOR DATA:
+{intel_summary[:4000]}
+
+Generate a JSON object with these exact keys:
+{{
+  "overview": "2-3 sentence summary of this competitor",
+  "strengths": ["their strength 1", "their strength 2", ...],
+  "weaknesses": ["their weakness 1", "their weakness 2", ...],
+  "our_advantages": ["how CLT is better point 1", "point 2", ...],
+  "objection_counters": [
+    {{"objection": "They are cheaper", "counter": "Our mentorship ratio is 1:5 while they..."}},
+    ...
+  ],
+  "pricing_comparison": "Brief comparison of pricing if available",
+  "key_talking_points": ["point for sales reps to use", ...]
+}}
+
+Return ONLY the JSON object, no markdown or explanation."""
+
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"battlecard-{competitor_id}",
+            system_message="You are a competitive intelligence analyst. Return only valid JSON.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        response = await chat.send_message(UserMessage(text=prompt))
+
+        # Parse JSON
+        json_match = re.search(r'\{[\s\S]*\}', response)
+        if json_match:
+            battle_card = json.loads(json_match.group())
+        else:
+            battle_card = {"overview": response[:500], "strengths": [], "weaknesses": [], "our_advantages": [], "objection_counters": [], "pricing_comparison": "", "key_talking_points": []}
+
+    except Exception as e:
+        logger.error(f"Battle card generation error: {e}")
+        battle_card = {"overview": f"AI generation failed: {str(e)}", "strengths": [], "weaknesses": [], "our_advantages": [], "objection_counters": [], "pricing_comparison": "", "key_talking_points": []}
+
+    # Store the battle card
+    card_doc = {
+        "competitor_id": competitor_id,
+        "competitor_name": comp["name"],
+        "battle_card": battle_card,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.battle_cards.update_one(
+        {"competitor_id": competitor_id},
+        {"$set": card_doc},
+        upsert=True,
+    )
+
+    return card_doc
+
+
+async def get_battle_card(competitor_id: str) -> dict:
+    """Get stored battle card for a competitor."""
+    card = await db.battle_cards.find_one({"competitor_id": competitor_id}, {"_id": 0})
+    if not card:
+        return {"competitor_id": competitor_id, "battle_card": None, "message": "No battle card generated yet. Click 'Generate' first."}
+    return card
