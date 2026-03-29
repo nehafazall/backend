@@ -23,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ImportButton from '@/components/ImportButton';
 import ReminderModal from '@/components/ReminderModal';
@@ -1187,257 +1188,154 @@ const CustomerServicePage = () => {
 
             {/* Student Detail Modal */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Student Details</DialogTitle>
-                        <DialogDescription>
-                            View and update student information
-                        </DialogDescription>
-                    </DialogHeader>
-                    
+                <DialogContent className="max-w-2xl max-h-[90vh]">
                     {selectedStudent && (
-                        <div className="space-y-6">
-                            {/* Student Info */}
-                            <Card>
-                                <CardContent className="pt-6">
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-16 h-16 rounded-full bg-emerald-600 flex items-center justify-center text-white text-2xl font-bold">
-                                            {selectedStudent.full_name?.charAt(0)}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="text-xl font-semibold">{selectedStudent.full_name}</h3>
-                                            <div className="flex items-center gap-4 mt-2 text-muted-foreground">
-                                                <span className="flex items-center gap-1">
-                                                    <Phone className="h-4 w-4" />
-                                                    {selectedStudent.phone}
-                                                    <ClickToCall 
-                                                        phoneNumber={selectedStudent.phone} 
-                                                        contactId={selectedStudent.id} 
-                                                        contactName={selectedStudent.full_name}
-                                                        variant="outline"
-                                                        size="sm"
-                                                        showLabel={true}
-                                                        className="ml-2"
-                                                    />
-                                                </span>
-                                                {selectedStudent.email && (
-                                                    <span className="flex items-center gap-1">
-                                                        <Mail className="h-4 w-4" />
-                                                        {selectedStudent.email}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-3">
-                                                <Badge className={CS_STAGES.find(s => s.id === selectedStudent.stage)?.color}>
-                                                    {CS_STAGES.find(s => s.id === selectedStudent.stage)?.label}
-                                                </Badge>
-                                                {selectedStudent.onboarding_complete && (
-                                                    <Badge className="bg-emerald-500">Onboarded</Badge>
-                                                )}
-                                                {selectedStudent.upgrade_eligible && (
-                                                    <Badge className="bg-yellow-500">Upgrade Eligible</Badge>
-                                                )}
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="ml-auto text-xs gap-1"
-                                                    data-testid="merge-student-btn"
-                                                    onClick={() => {
-                                                        setMergeStudent(selectedStudent);
-                                                        setShowMergeModal(true);
-                                                    }}
-                                                >
-                                                    <GitMerge className="h-3.5 w-3.5" />
-                                                    Merge
-                                                </Button>
-                                            </div>
-                                            {/* Color Tag Picker */}
-                                            <div className="flex items-center gap-2 mt-3 flex-wrap" data-testid="color-tag-picker">
-                                                <span className="text-xs text-muted-foreground mr-1"><Palette className="h-3 w-3 inline mr-1" />Tag:</span>
-                                                {COLOR_TAGS.map(tag => (
-                                                    <button
-                                                        key={tag.id}
-                                                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${selectedStudent.color_tag === tag.id ? tag.color + ' ring-2 ring-offset-1 ring-current font-bold' : 'border-muted text-muted-foreground hover:border-foreground'}`}
-                                                        onClick={() => handleColorTag(selectedStudent, selectedStudent.color_tag === tag.id ? null : tag.id)}
-                                                        data-testid={`color-tag-btn-${tag.id}`}
-                                                    >
-                                                        <div className={`h-2 w-2 rounded-full ${tag.dot}`} />
-                                                        {tag.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                        <>
+                            {/* Compact Header - Always Visible */}
+                            <div className="flex items-center gap-3 pb-3 border-b">
+                                <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                                    {selectedStudent.full_name?.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-semibold truncate">{selectedStudent.full_name}</h3>
+                                        <Badge className={`text-[10px] ${CS_STAGES.find(s => s.id === selectedStudent.stage)?.color}`}>
+                                            {CS_STAGES.find(s => s.id === selectedStudent.stage)?.label}
+                                        </Badge>
+                                        {selectedStudent.onboarding_complete && <Badge className="bg-emerald-500 text-[10px]">Onboarded</Badge>}
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
-                                        <div>
-                                            <span className="text-muted-foreground">Package:</span>
-                                            <span className="ml-2">{selectedStudent.package_bought || 'N/A'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Country:</span>
-                                            <span className="ml-2">{selectedStudent.country || 'N/A'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Classes Attended:</span>
-                                            <span className="ml-2 font-mono">{selectedStudent.classes_attended || 0}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">CS Agent:</span>
-                                            <span className="ml-2">{selectedStudent.cs_agent_name || 'Unassigned'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Mentor:</span>
-                                            <span className="ml-2">{selectedStudent.mentor_name || 'Not Assigned'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Enrolled:</span>
-                                            <span className="ml-2">{formatDate(selectedStudent.created_at)}</span>
-                                        </div>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selectedStudent.phone}</span>
+                                        {selectedStudent.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{selectedStudent.email}</span>}
+                                        <span>{selectedStudent.package_bought || 'N/A'}</span>
                                     </div>
+                                </div>
+                                <ClickToCall 
+                                    phoneNumber={selectedStudent.phone} 
+                                    contactId={selectedStudent.id} 
+                                    contactName={selectedStudent.full_name}
+                                    variant="outline"
+                                    size="sm"
+                                    showLabel={false}
+                                />
+                                <Button variant="outline" size="sm" className="text-xs gap-1" data-testid="merge-student-btn"
+                                    onClick={() => { setMergeStudent(selectedStudent); setShowMergeModal(true); }}>
+                                    <GitMerge className="h-3 w-3" /> Merge
+                                </Button>
+                            </div>
 
-                                    {/* Student Code / External ID */}
-                                    <div className="mt-4 flex items-center gap-3">
+                            {/* Tabbed Content */}
+                            <Tabs defaultValue="info" className="mt-2">
+                                <TabsList className="grid w-full grid-cols-4 h-8">
+                                    <TabsTrigger value="info" className="text-xs" data-testid="tab-info">Info</TabsTrigger>
+                                    <TabsTrigger value="transactions" className="text-xs" data-testid="tab-transactions">
+                                        <DollarSign className="h-3 w-3 mr-1" />Transactions
+                                    </TabsTrigger>
+                                    <TabsTrigger value="calls" className="text-xs" data-testid="tab-calls">
+                                        <PhoneCall className="h-3 w-3 mr-1" />Calls
+                                    </TabsTrigger>
+                                    <TabsTrigger value="update" className="text-xs" data-testid="tab-update">Update</TabsTrigger>
+                                </TabsList>
+
+                                {/* INFO TAB */}
+                                <TabsContent value="info" className="mt-3 space-y-4" data-testid="tab-content-info">
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div><span className="text-muted-foreground">Package:</span><span className="ml-2">{selectedStudent.package_bought || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Country:</span><span className="ml-2">{selectedStudent.country || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Classes:</span><span className="ml-2 font-mono">{selectedStudent.classes_attended || 0}</span></div>
+                                        <div><span className="text-muted-foreground">CS Agent:</span><span className="ml-2">{selectedStudent.cs_agent_name || 'Unassigned'}</span></div>
+                                        <div><span className="text-muted-foreground">Mentor:</span><span className="ml-2">{selectedStudent.mentor_name || 'Not Assigned'}</span></div>
+                                        <div><span className="text-muted-foreground">Enrolled:</span><span className="ml-2">{formatDate(selectedStudent.created_at)}</span></div>
+                                    </div>
+                                    {/* Student Code */}
+                                    <div className="flex items-center gap-3">
                                         <Label className="text-sm text-muted-foreground whitespace-nowrap">Student ID:</Label>
-                                        <Input
-                                            value={selectedStudent.student_code || ''}
-                                            placeholder="Enter external student code"
-                                            className="h-8 text-sm font-mono max-w-[200px]"
-                                            data-testid="student-code-input"
-                                            onChange={async (e) => {
-                                                const code = e.target.value;
-                                                setSelectedStudent(prev => ({ ...prev, student_code: code }));
-                                            }}
-                                            onBlur={async (e) => {
-                                                const code = e.target.value;
-                                                try {
-                                                    await apiClient.patch(`/students/${selectedStudent.id}/student-code`, { student_code: code });
-                                                } catch { /* silent */ }
-                                            }}
+                                        <Input value={selectedStudent.student_code || ''} placeholder="Enter student code"
+                                            className="h-8 text-sm font-mono max-w-[200px]" data-testid="student-code-input"
+                                            onChange={(e) => setSelectedStudent(prev => ({ ...prev, student_code: e.target.value }))}
+                                            onBlur={async (e) => { try { await apiClient.patch(`/students/${selectedStudent.id}/student-code`, { student_code: e.target.value }); } catch {} }}
                                         />
                                     </div>
-                                    
-                                    {/* 3CX Call Center Integration */}
-                                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-muted-foreground/20">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <PhoneCall className="h-4 w-4 text-primary" />
-                                            <Label className="text-sm font-medium">3CX Call Center</Label>
-                                            <Badge variant="outline" className="text-xs ml-auto bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>
-                                        </div>
-                                        
-                                        {/* Call Recording Link */}
-                                        {selectedStudent.call_recording_url && (
-                                            <div className="mb-3">
-                                                <Label className="text-xs text-muted-foreground">Latest Recording</Label>
-                                                <a 
-                                                    href={selectedStudent.call_recording_url} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-2 text-sm text-primary hover:underline mt-1"
-                                                >
-                                                    🎵 Play Recording
-                                                </a>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Call History */}
-                                        <CallHistory contactId={selectedStudent.id} />
+                                    {/* Color Tags */}
+                                    <div className="flex items-center gap-2 flex-wrap" data-testid="color-tag-picker">
+                                        <span className="text-xs text-muted-foreground mr-1"><Palette className="h-3 w-3 inline mr-1" />Tag:</span>
+                                        {COLOR_TAGS.map(tag => (
+                                            <button key={tag.id}
+                                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${selectedStudent.color_tag === tag.id ? tag.color + ' ring-2 ring-offset-1 ring-current font-bold' : 'border-muted text-muted-foreground hover:border-foreground'}`}
+                                                onClick={() => handleColorTag(selectedStudent, selectedStudent.color_tag === tag.id ? null : tag.id)}
+                                                data-testid={`color-tag-btn-${tag.id}`}>
+                                                <div className={`h-2 w-2 rounded-full ${tag.dot}`} />{tag.label}
+                                            </button>
+                                        ))}
                                     </div>
-                                </CardContent>
-                            </Card>
-                            
-                            {/* Customer Transaction History */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <DollarSign className="h-4 w-4 text-emerald-500" />
-                                        Transaction History
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
+                                    {/* Upgrade Path */}
+                                    {(selectedStudent.upgrade_history?.length > 0 || selectedStudent.current_course_name || selectedStudent.is_upgraded_student) && (
+                                        <UpgradePathIndicator
+                                            currentCourse={selectedStudent.current_course_name || selectedStudent.package_bought}
+                                            upgradeHistory={selectedStudent.upgrade_history || []}
+                                            showHistory={true}
+                                        />
+                                    )}
+                                </TabsContent>
+
+                                {/* TRANSACTIONS TAB */}
+                                <TabsContent value="transactions" className="mt-3" data-testid="tab-content-transactions">
                                     <TransactionHistory studentId={selectedStudent.id} />
-                                </CardContent>
-                            </Card>
-                            
-                            {/* Upgrade Journey Path */}
-                            {(selectedStudent.upgrade_history?.length > 0 || selectedStudent.current_course_name || selectedStudent.is_upgraded_student) && (
-                                <UpgradePathIndicator
-                                    currentCourse={selectedStudent.current_course_name || selectedStudent.package_bought}
-                                    upgradeHistory={selectedStudent.upgrade_history || []}
-                                    showHistory={true}
-                                />
-                            )}
-                            
-                            {/* Update Section */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-lg">Update Student</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                                </TabsContent>
+
+                                {/* CALLS TAB */}
+                                <TabsContent value="calls" className="mt-3 space-y-3" data-testid="tab-content-calls">
+                                    {selectedStudent.call_recording_url && (
+                                        <div className="p-3 bg-muted/50 rounded-lg border">
+                                            <Label className="text-xs text-muted-foreground">Latest Recording</Label>
+                                            <a href={selectedStudent.call_recording_url} target="_blank" rel="noopener noreferrer"
+                                                className="flex items-center gap-2 text-sm text-primary hover:underline mt-1">
+                                                Play Recording
+                                            </a>
+                                        </div>
+                                    )}
+                                    <CallHistory contactId={selectedStudent.id} />
+                                </TabsContent>
+
+                                {/* UPDATE TAB */}
+                                <TabsContent value="update" className="mt-3 space-y-4" data-testid="tab-content-update">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>Move to Stage</Label>
-                                            <Select
-                                                value={updateData.stage}
-                                                onValueChange={(value) => setUpdateData({ ...updateData, stage: value })}
-                                            >
-                                                <SelectTrigger data-testid="cs-stage-select">
-                                                    <SelectValue placeholder="Select stage" />
-                                                </SelectTrigger>
+                                            <Select value={updateData.stage} onValueChange={(value) => setUpdateData({ ...updateData, stage: value })}>
+                                                <SelectTrigger data-testid="cs-stage-select"><SelectValue placeholder="Select stage" /></SelectTrigger>
                                                 <SelectContent>
                                                     {CS_STAGES.map((stage) => (
-                                                        <SelectItem key={stage.id} value={stage.id}>
-                                                            {stage.label}
-                                                        </SelectItem>
+                                                        <SelectItem key={stage.id} value={stage.id}>{stage.label}</SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        
                                         <div className="space-y-2">
                                             <Label>Classes Attended</Label>
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                value={updateData.classes_attended}
+                                            <Input type="number" min="0" value={updateData.classes_attended}
                                                 onChange={(e) => setUpdateData({ ...updateData, classes_attended: parseInt(e.target.value) || 0 })}
-                                                data-testid="classes-input"
-                                            />
+                                                data-testid="classes-input" />
                                         </div>
                                     </div>
-                                    
                                     <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="onboarding"
-                                            checked={updateData.onboarding_complete}
+                                        <Checkbox id="onboarding" checked={updateData.onboarding_complete}
                                             onCheckedChange={(checked) => setUpdateData({ ...updateData, onboarding_complete: checked })}
-                                            data-testid="onboarding-checkbox"
-                                        />
+                                            data-testid="onboarding-checkbox" />
                                         <Label htmlFor="onboarding">Onboarding Complete</Label>
                                     </div>
-                                    
                                     <div className="space-y-2">
                                         <Label>Notes</Label>
-                                        <Textarea
-                                            value={updateData.notes}
-                                            onChange={(e) => setUpdateData({ ...updateData, notes: e.target.value })}
-                                            placeholder="Add notes..."
-                                            rows={3}
-                                            data-testid="cs-notes-input"
-                                        />
+                                        <Textarea value={updateData.notes} onChange={(e) => setUpdateData({ ...updateData, notes: e.target.value })}
+                                            placeholder="Add notes..." rows={3} data-testid="cs-notes-input" />
                                     </div>
-                                </CardContent>
-                            </Card>
-                            
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setShowDetailModal(false)}>
-                                    Cancel
-                                </Button>
-                                <Button onClick={handleUpdateStudent} data-testid="update-student-btn">
-                                    Update Student
-                                </Button>
-                            </DialogFooter>
-                        </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setShowDetailModal(false)}>Cancel</Button>
+                                        <Button onClick={handleUpdateStudent} data-testid="update-student-btn">Update Student</Button>
+                                    </DialogFooter>
+                                </TabsContent>
+                            </Tabs>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>

@@ -6,14 +6,15 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area,
+  PieChart, Pie, Cell, Legend, AreaChart, Area, RadarChart, PolarGrid,
+  PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts';
 import {
   DollarSign, Users, TrendingUp, Target, UserPlus,
   Clock, ShieldCheck, ShieldAlert, ArrowRight, BarChart3,
   Building2, Award, Zap, RefreshCw, UserCheck,
   Trophy, Medal, Star, Activity, CalendarCheck, FileWarning,
-  GraduationCap, Wallet, Briefcase,
+  GraduationCap, Wallet, Briefcase, Heart, Smile, Brain,
 } from 'lucide-react';
 
 const DEPT_COLORS = { sales: '#dc2626', cs: '#3b82f6', mentors: '#10b981' };
@@ -91,11 +92,18 @@ export default function ExecutiveDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [teamMood, setTeamMood] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
-    try { setData((await apiClient.get('/executive/dashboard')).data); }
-    catch (e) { console.error(e); }
+    try {
+      const [dashRes, moodRes] = await Promise.all([
+        apiClient.get('/executive/dashboard'),
+        apiClient.get('/executive/team-mood').catch(() => ({ data: { teams: [] } })),
+      ]);
+      setData(dashRes.data);
+      setTeamMood(moodRes.data);
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
@@ -377,6 +385,60 @@ export default function ExecutiveDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Team Mood Scores (from Claret AI) */}
+      {teamMood?.teams?.length > 0 && (
+        <div className="space-y-2" data-testid="team-mood-section">
+          <div className="flex items-center gap-2">
+            <Heart className="h-4 w-4 text-rose-500" />
+            <h2 className="text-sm font-semibold">Team Mood Pulse</h2>
+            <Badge variant="outline" className="text-[9px] ml-1">Last 30 Days</Badge>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {teamMood.teams.map((team) => {
+              const mood = team.avg_mood;
+              const moodColor = !mood ? 'text-muted-foreground' : mood >= 7 ? 'text-emerald-600' : mood >= 5 ? 'text-amber-600' : 'text-red-600';
+              const moodBg = !mood ? 'bg-muted/30' : mood >= 7 ? 'bg-emerald-500/5 border-emerald-500/20' : mood >= 5 ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20';
+              const moodIcon = !mood ? '---' : mood >= 8 ? '🔥' : mood >= 6 ? '😊' : mood >= 4 ? '😐' : '😓';
+              return (
+                <Card key={team.team_id} className={`border ${moodBg} transition-all hover:scale-[1.01]`} data-testid={`team-mood-${team.team_id}`}>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold truncate flex-1" title={team.team_name}>{team.team_name}</p>
+                      <span className="text-lg ml-1">{moodIcon}</span>
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className={`text-2xl font-bold font-mono ${moodColor}`}>{mood ? mood.toFixed(1) : 'N/A'}</p>
+                        <p className="text-[10px] text-muted-foreground">{team.active_users}/{team.member_count} active</p>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        {team.avg_energy != null && <p className="text-[9px] text-muted-foreground">Energy: <span className="font-mono font-medium">{team.avg_energy}</span></p>}
+                        {team.avg_motivation != null && <p className="text-[9px] text-muted-foreground">Drive: <span className="font-mono font-medium">{team.avg_motivation}</span></p>}
+                        {team.avg_stress != null && <p className="text-[9px] text-muted-foreground">Stress: <span className="font-mono font-medium text-red-500">{team.avg_stress}</span></p>}
+                      </div>
+                    </div>
+                    {/* Member mini-list */}
+                    {team.members?.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/30 space-y-0.5">
+                        {team.members.slice(0, 3).map((m, i) => (
+                          <div key={i} className="flex items-center justify-between text-[10px]">
+                            <span className="truncate text-muted-foreground">{m.name?.split(' ')[0]}</span>
+                            <span className={`font-mono font-medium ${m.avg_mood ? (m.avg_mood >= 7 ? 'text-emerald-600' : m.avg_mood >= 5 ? 'text-amber-600' : 'text-red-500') : 'text-muted-foreground'}`}>
+                              {m.avg_mood ? m.avg_mood.toFixed(1) : '—'}
+                            </span>
+                          </div>
+                        ))}
+                        {team.members.length > 3 && <p className="text-[9px] text-muted-foreground text-center">+{team.members.length - 3} more</p>}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Recent Enrollments */}
       <Card className="border border-border/50">

@@ -30148,6 +30148,101 @@ async def get_executive_dashboard(user=Depends(get_current_user)):
     }
 
 
+# ─── Team Mood Scores (Executive Dashboard) ──────────────────────────────
+@api_router.get("/executive/team-mood")
+async def get_executive_team_mood(user=Depends(get_current_user)):
+    """Aggregate Claret mood scores by team for the Executive Dashboard."""
+    if user["role"] not in ("super_admin", "admin"):
+        raise HTTPException(403, "Restricted")
+
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=30)).isoformat()
+
+    # Parallel: get all teams, all users with team_id, and recent claret chats with mood
+    all_teams_raw, all_users_raw, recent_chats = await asyncio.gather(
+        db.teams.find({}, {"_id": 0, "id": 1, "name": 1, "department": 1}).to_list(50),
+        db.users.find(
+            {"is_active": True, "team_id": {"$exists": True, "$ne": None}},
+            {"_id": 0, "id": 1, "full_name": 1, "team_id": 1}
+        ).to_list(500),
+        db.claret_chats.find(
+            {"created_at": {"$gte": cutoff}, "mood_scores.overall_mood": {"$exists": True}},
+            {"_id": 0, "user_id": 1, "mood_scores": 1}
+        ).to_list(5000),
+    )
+
+    # Build user -> team mapping
+    user_team = {u["id"]: u["team_id"] for u in all_users_raw}
+    user_names = {u["id"]: u["full_name"] for u in all_users_raw}
+    team_names = {t["id"]: t["name"] for t in all_teams_raw}
+    team_depts = {t["id"]: t.get("department", "") for t in all_teams_raw}
+
+    # Aggregate mood scores per user (last 30 days average)
+    user_moods = {}
+    for chat in recent_chats:
+        uid = chat.get("user_id")
+        ms = chat.get("mood_scores", {})
+        overall = ms.get("overall_mood")
+        if uid and overall and isinstance(overall, (int, float)):
+            if uid not in user_moods:
+                user_moods[uid] = {"scores": [], "energy": [], "motivation": [], "stress": [], "happiness": []}
+            user_moods[uid]["scores"].append(overall)
+            if ms.get("energy_level"):
+                user_moods[uid]["energy"].append(ms["energy_level"])
+            if ms.get("motivation"):
+                user_moods[uid]["motivation"].append(ms["motivation"])
+            if ms.get("stress_level"):
+                user_moods[uid]["stress"].append(ms["stress_level"])
+            if ms.get("happiness"):
+                user_moods[uid]["happiness"].append(ms["happiness"])
+
+    # Group by team
+    team_data = {}
+    for uid, tid in user_team.items():
+        tname = team_names.get(tid, f"Team {tid[:6]}")
+        if tname not in team_data:
+            team_data[tname] = {"team_id": tid, "department": team_depts.get(tid, ""), "members": [], "scores": [], "energy": [], "motivation": [], "stress": [], "happiness": []}
+        um = user_moods.get(uid)
+        avg_score = round(sum(um["scores"]) / len(um["scores"]), 1) if um and um["scores"] else None
+        team_data[tname]["members"].append({
+            "name": user_names.get(uid, "?"),
+            "avg_mood": avg_score,
+            "chats": len(um["scores"]) if um else 0,
+        })
+        if um and um["scores"]:
+            team_data[tname]["scores"].extend(um["scores"])
+            team_data[tname]["energy"].extend(um["energy"])
+            team_data[tname]["motivation"].extend(um["motivation"])
+            team_data[tname]["stress"].extend(um["stress"])
+            team_data[tname]["happiness"].extend(um["happiness"])
+
+    # Build response: per-team averages
+    result = []
+    for tname, td in team_data.items():
+        # Skip teams with no proper name
+        if tname.strip() in ("Team", "") or len(tname.strip()) < 3:
+            continue
+        avg = lambda lst: round(sum(lst) / len(lst), 1) if lst else None
+        result.append({
+            "team_name": tname.strip(),
+            "team_id": td["team_id"],
+            "department": td["department"],
+            "member_count": len(td["members"]),
+            "avg_mood": avg(td["scores"]),
+            "avg_energy": avg(td["energy"]),
+            "avg_motivation": avg(td["motivation"]),
+            "avg_stress": avg(td["stress"]),
+            "avg_happiness": avg(td["happiness"]),
+            "active_users": sum(1 for m in td["members"] if m["avg_mood"] is not None),
+            "members": sorted(td["members"], key=lambda x: x.get("avg_mood") or 0, reverse=True),
+        })
+
+    # Sort by avg_mood descending (teams with data first)
+    result.sort(key=lambda x: x.get("avg_mood") or 0, reverse=True)
+
+    return {"teams": result, "period": "last_30_days"}
+
+
 # ─── Organization Map ───────────────────────────────────────────────────
 @api_router.get("/organization/map")
 async def get_organization_map(user=Depends(get_current_user)):
