@@ -509,26 +509,81 @@ async def claret_chat(data: dict = Body(...)):
     if web_context:
         system += f"\n\n=== REAL-TIME WEB SEARCH RESULTS ===\n{web_context[:4000]}\n\nThe above is LIVE web data. Use it to answer the user's question with the most current information available. Cite sources when possible."
 
-    # Call Claude via emergentintegrations
+    # ── Smart routing: Internal ERP queries vs External/Creative ──
+    msg_lower = message.lower()
+    is_internal_query = any(kw in msg_lower for kw in (
+        "lead", "close", "enroll", "sale", "target", "pipeline", "revenue", "commission",
+        "student", "activation", "team", "agent", "reminder", "schedule", "how many",
+        "my data", "my stats", "conversion", "kpi", "performance", "dashboard",
+    ))
+
+    # For pure internal ERP questions, get data first and try to answer locally
+    erp_local_data = ""
+    if is_internal_query:
+        erp_local_data = await _local_fallback_answer(user_id, user_role or "sales_executive", message)
+
+    # Call LLM — Primary: Claude (Universal Key), Fallback: Gemini (free)
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
 
         api_key = os.environ.get("EMERGENT_LLM_KEY", "")
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=system,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
 
-        # Add history
-        for h in recent[-6:]:
-            if h.get("role") == "user":
-                chat.messages.append({"role": "user", "content": h["message"]})
-            elif h.get("role") == "assistant":
-                chat.messages.append({"role": "assistant", "content": h.get("raw_response", h["message"])})
+        # If internal query and we have local data, inject it into the prompt
+        if erp_local_data:
+            system += f"\n\n=== LIVE ERP DATA (from database) ===\n{erp_local_data}\n\nUse this REAL data to answer. Do NOT make up numbers."
 
-        user_msg = UserMessage(text=message)
-        response_text = await chat.send_message(user_msg)
+        # Try Claude first (primary)
+        llm_succeeded = False
+        budget_exhausted = False
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=session_id,
+                system_message=system,
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+            for h in recent[-6:]:
+                if h.get("role") == "user":
+                    chat.messages.append({"role": "user", "content": h["message"]})
+                elif h.get("role") == "assistant":
+                    chat.messages.append({"role": "assistant", "content": h.get("raw_response", h["message"])})
+
+            user_msg = UserMessage(text=message)
+            response_text = await chat.send_message(user_msg)
+            llm_succeeded = True
+        except Exception as claude_err:
+            err_str = str(claude_err).lower()
+            budget_exhausted = any(kw in err_str for kw in ("budget", "exceeded", "quota", "insufficient"))
+            if not budget_exhausted:
+                raise claude_err
+            logger.warning(f"Claude budget exhausted, falling back to Gemini")
+
+        # Fallback: Gemini (free tier)
+        if not llm_succeeded and budget_exhausted and gemini_key:
+            try:
+                chat = LlmChat(
+                    api_key=gemini_key,
+                    session_id=session_id + "-gemini",
+                    system_message=system,
+                ).with_model("gemini", "gemini-2.5-flash")
+
+                for h in recent[-4:]:
+                    if h.get("role") == "user":
+                        chat.messages.append({"role": "user", "content": h["message"]})
+                    elif h.get("role") == "assistant":
+                        chat.messages.append({"role": "assistant", "content": h.get("raw_response", h["message"])})
+
+                user_msg = UserMessage(text=message)
+                response_text = await chat.send_message(user_msg)
+                llm_succeeded = True
+                logger.info("Gemini fallback succeeded")
+            except Exception as gemini_err:
+                logger.error(f"Gemini fallback also failed: {gemini_err}")
+                raise gemini_err
+
+        if not llm_succeeded:
+            raise Exception("All LLM providers failed")
 
         # Parse JSON response
         import json
