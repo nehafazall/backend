@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
@@ -96,6 +97,7 @@ export default function BDDashboardPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Business Development Dashboard</h1>
                     <p className="text-muted-foreground text-sm">Redeposit performance and student pipeline</p>
+                    <div className="mt-1"><CallAnalyticsWidget compact /></div>
                 </div>
                 <div className="flex items-center gap-3">
                     <Select value={period} onValueChange={setPeriod}>

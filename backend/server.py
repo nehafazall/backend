@@ -15794,6 +15794,147 @@ async def get_3cx_yearly_summary(
     result.sort(key=lambda x: x["total_seconds"], reverse=True)
     return {"year": year, "data": result}
 
+@api_router.get("/3cx/call-analytics")
+async def get_call_analytics(user=Depends(get_current_user)):
+    """
+    Call analytics for dashboard widgets.
+    Returns: today's stats, this month's stats, top dialed numbers (managers/CEO only).
+    Role-based: agents see own, TL sees team, CEO/admin sees all.
+    """
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    month_start = now.strftime("%Y-%m-01")
+
+    role = user.get("role", "")
+    user_id = user["id"]
+    is_manager = role in ["super_admin", "admin", "coo", "sales_manager"]
+    is_tl = role in ["team_leader", "master_of_academics"]
+
+    # Build extension → user mapping
+    all_users = await db.users.find(
+        {"is_active": True},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "threecx_extension": 1, "team_leader_id": 1}
+    ).to_list(300)
+    ext_to_user = {u["threecx_extension"]: u for u in all_users if u.get("threecx_extension")}
+    uid_to_info = {u["id"]: u for u in all_users}
+
+    # Determine visible user IDs
+    if is_manager:
+        visible_ids = {u["id"] for u in all_users}
+    elif is_tl:
+        visible_ids = {u["id"] for u in all_users if u.get("team_leader_id") == user_id or u["id"] == user_id}
+    else:
+        visible_ids = {user_id}
+
+    # Fetch all calls this month with duration > 0
+    month_calls = await db.call_logs.find({
+        "call_date": {"$gte": month_start},
+        "call_duration": {"$gt": 0},
+    }, {"_id": 0, "initiated_by": 1, "agent_extension": 1, "call_duration": 1, "call_date": 1, "phone_number": 1, "contact_name": 1, "contact_id": 1, "call_direction": 1}).to_list(20000)
+
+    # Also fetch 0-duration calls (initiated but not completed) for call count
+    month_all = await db.call_logs.find({
+        "call_date": {"$gte": month_start},
+    }, {"_id": 0, "initiated_by": 1, "agent_extension": 1, "call_duration": 1, "call_date": 1, "phone_number": 1, "contact_name": 1}).to_list(20000)
+
+    def get_uid(log):
+        uid = log.get("initiated_by")
+        if uid:
+            return uid
+        ext = log.get("agent_extension")
+        if ext and ext in ext_to_user:
+            return ext_to_user[ext]["id"]
+        return None
+
+    # Per-agent aggregation
+    agent_stats = {}
+    phone_dial_count = {}  # phone_number → {count, contact_name, contact_id, callers}
+
+    for log in month_all:
+        uid = get_uid(log)
+        if not uid or uid not in visible_ids:
+            continue
+
+        if uid not in agent_stats:
+            agent_stats[uid] = {
+                "today_seconds": 0, "today_calls": 0, "today_answered": 0,
+                "month_seconds": 0, "month_calls": 0, "month_answered": 0,
+            }
+
+        dur = log.get("call_duration", 0)
+        call_date = (log.get("call_date") or "")[:10]
+        is_today = call_date == today
+        has_dur = dur > 0
+
+        agent_stats[uid]["month_calls"] += 1
+        if has_dur:
+            agent_stats[uid]["month_seconds"] += dur
+            agent_stats[uid]["month_answered"] += 1
+        if is_today:
+            agent_stats[uid]["today_calls"] += 1
+            if has_dur:
+                agent_stats[uid]["today_seconds"] += dur
+                agent_stats[uid]["today_answered"] += 1
+
+        # Track most dialed numbers (for managers)
+        if (is_manager or is_tl) and log.get("phone_number"):
+            ph = log["phone_number"]
+            if ph not in phone_dial_count:
+                phone_dial_count[ph] = {"count": 0, "contact_name": log.get("contact_name", ""), "contact_id": log.get("contact_id", ""), "callers": set()}
+            phone_dial_count[ph]["count"] += 1
+            phone_dial_count[ph]["callers"].add(uid)
+            if log.get("contact_name") and not phone_dial_count[ph]["contact_name"]:
+                phone_dial_count[ph]["contact_name"] = log["contact_name"]
+
+    # Build agent leaderboard
+    leaderboard = []
+    for uid, stats in agent_stats.items():
+        info = uid_to_info.get(uid, {})
+        leaderboard.append({
+            "user_id": uid,
+            "user_name": info.get("full_name", "Unknown"),
+            "role": info.get("role", ""),
+            "today_minutes": round(stats["today_seconds"] / 60, 1),
+            "today_calls": stats["today_calls"],
+            "today_answered": stats["today_answered"],
+            "month_minutes": round(stats["month_seconds"] / 60, 1),
+            "month_calls": stats["month_calls"],
+            "month_answered": stats["month_answered"],
+        })
+    leaderboard.sort(key=lambda x: x["month_minutes"], reverse=True)
+
+    # My own stats
+    my = agent_stats.get(user_id, {"today_seconds": 0, "today_calls": 0, "today_answered": 0, "month_seconds": 0, "month_calls": 0, "month_answered": 0})
+
+    # Top dialed numbers (managers only)
+    top_dialed = []
+    if is_manager or is_tl:
+        sorted_phones = sorted(phone_dial_count.items(), key=lambda x: x[1]["count"], reverse=True)[:20]
+        for ph, data in sorted_phones:
+            top_dialed.append({
+                "phone_number": ph,
+                "contact_name": data["contact_name"],
+                "contact_id": data["contact_id"],
+                "dial_count": data["count"],
+                "unique_callers": len(data["callers"]),
+            })
+
+    return {
+        "my_stats": {
+            "today_minutes": round(my["today_seconds"] / 60, 1),
+            "today_calls": my["today_calls"],
+            "today_answered": my["today_answered"],
+            "month_minutes": round(my["month_seconds"] / 60, 1),
+            "month_calls": my["month_calls"],
+            "month_answered": my["month_answered"],
+        },
+        "leaderboard": leaderboard,
+        "top_dialed": top_dialed,
+        "is_manager": is_manager or is_tl,
+    }
+
+
+
 @api_router.post("/3cx/click-to-call")
 async def click_to_call(phone_number: str, contact_id: Optional[str] = None, user = Depends(get_current_user)):
     """

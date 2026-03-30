@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth, apiClient } from '@/lib/api';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -295,6 +296,7 @@ const SalesDashboard = () => {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Sales Dashboard</h1>
                     <p className="text-muted-foreground">Performance analytics & insights — click any chart to drill down</p>
+                    <div className="mt-1"><CallAnalyticsWidget compact /></div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     <Filter className="h-4 w-4 text-muted-foreground" />

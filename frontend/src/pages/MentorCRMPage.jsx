@@ -37,6 +37,7 @@ import {
     DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { PeriodFilter } from '@/components/PeriodFilter';
 import { Pagination } from '@/components/Pagination';
@@ -689,6 +690,9 @@ const MentorCRMPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* Call Stats */}
+            <CallAnalyticsWidget compact />
 
             {/* View Mode Toggle for Academic Master / Admin */}
             {isHeadOrAdmin && (

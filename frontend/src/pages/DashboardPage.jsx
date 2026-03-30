@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 import {
     BarChart,
     Bar,
@@ -265,6 +266,9 @@ const DashboardPage = () => {
                     </Badge>
                 </div>
             </div>
+
+            {/* Call Analytics */}
+            <CallAnalyticsWidget />
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -14,6 +14,7 @@ import {
     Filter, ShieldCheck, Trophy, Zap, ChevronRight,
 } from 'lucide-react';
 import { PerformanceInsightBanner } from '@/components/PerformanceInsightBanner';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 
 const COLORS = ['#EF3340', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
 const PERIOD_OPTIONS = [
@@ -228,6 +229,7 @@ const CSDashboard = () => {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">CS Dashboard</h1>
                     <p className="text-muted-foreground">Upgrade revenue, commissions & team performance — click charts to drill down</p>
+                    <div className="mt-1"><CallAnalyticsWidget compact /></div>
                 </div>
                 <div className="flex items-center gap-3">
                     {isHeadOrAdmin && (

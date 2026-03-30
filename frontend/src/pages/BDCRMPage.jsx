@@ -22,6 +22,7 @@ import {
 import { PeriodFilter } from '@/components/PeriodFilter';
 import { TransactionHistory } from '@/components/TransactionHistory';
 import { ClickToCall, CallHistory } from '@/components/ClickToCall';
+import CallAnalyticsWidget from '@/components/CallAnalyticsWidget';
 import ReminderModal from '@/components/ReminderModal';
 import { Pagination } from '@/components/Pagination';
 import {
@@ -423,6 +424,9 @@ export default function BDCRMPage() {
                     )}
                 </div>
             </div>
+
+            {/* Call Stats */}
+            <CallAnalyticsWidget compact />
 
             {/* All-Time Stats */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
