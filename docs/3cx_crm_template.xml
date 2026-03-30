@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<Crm>
+  <CrmName>CLT Synapse ERP</CrmName>
+  <Version>1</Version>
+  <Country>AE</Country>
+  <SupportsEmojis>false</SupportsEmojis>
+
+  <Number Prefix="AsIs" MaxLength="" />
+
+  <Connection MaxConcurrentRequests="5" />
+
+  <Parameters>
+    <Parameter Name="ERP_URL" Type="String" Title="ERP Base URL:" Default="https://erp.clt-academy.com" />
+  </Parameters>
+
+  <Authentication Type="No" />
+
+  <Scenarios>
+
+    <!-- ═══ CONTACT LOOKUP BY PHONE NUMBER ═══ -->
+    <!-- 3CX calls this on every inbound/outbound call to identify the contact -->
+    <Scenario Id="" Type="REST">
+      <Request 
+        Url="[ERP_URL]/api/3cx/contact-lookup?phone_number=[Number]" 
+        RequestType="Get" 
+        ResponseType="Json" />
+      <Rules>
+        <Rule Type="Any">found</Rule>
+      </Rules>
+      <Variables>
+        <Variable Name="ContactFirstName" Path="first_name" />
+        <Variable Name="ContactLastName" Path="last_name" />
+        <Variable Name="ContactPhone" Path="phone_mobile" />
+        <Variable Name="ContactEmail" Path="email" />
+        <Variable Name="ContactId" Path="contact_id" />
+        <Variable Name="ContactCompany" Path="company_name" />
+        <Variable Name="ContactCrmUrl" Path="contact_url" />
+      </Variables>
+      <Outputs>
+        <Output Type="FirstName" Value="[ContactFirstName]" />
+        <Output Type="LastName" Value="[ContactLastName]" />
+        <Output Type="Email" Value="[ContactEmail]" />
+        <Output Type="CompanyName" Value="[ContactCompany]" />
+        <Output Type="PhoneBusiness" Value="[ContactPhone]" />
+        <Output Type="ContactUrl" Value="[ERP_URL][ContactCrmUrl]" />
+        <Output Type="EntityId" Value="[ContactId]" />
+      </Outputs>
+    </Scenario>
+
+    <!-- ═══ CALL JOURNALING (ReportCall) ═══ -->
+    <!-- 3CX calls this AFTER every call ends — sends duration, direction, etc. -->
+    <Scenario Id="ReportCall" Type="REST">
+      <Request
+        Url="[ERP_URL]/api/3cx/webhook"
+        RequestType="Post"
+        RequestContentType="application/json"
+        RequestEncoding="Json"
+        ResponseType="Json">
+        <PostValues>
+          <Value Key="phonenumber" Passes="1">[Number]</Value>
+          <Value Key="duration" Passes="1">[Duration]</Value>
+          <Value Key="direction" Passes="1">[CallDirection]</Value>
+          <Value Key="type" Passes="1">[CallType]</Value>
+          <Value Key="extension" Passes="1">[Agent]</Value>
+          <Value Key="name" Passes="1">[Name]</Value>
+          <Value Key="contact_id" Passes="1">[EntityId]</Value>
+          <Value Key="timestamp" Passes="1">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
+        </PostValues>
+      </Request>
+    </Scenario>
+
+  </Scenarios>
+</Crm>
