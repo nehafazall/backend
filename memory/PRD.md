@@ -15,15 +15,36 @@ Build and maintain a comprehensive ERP system for CLT Academy (forex/trading edu
 - CS Head (falja@clt-academy.com)
 - Sales Executives, Mentors, BD Managers, Marketing team
 
-## Completed Features (Latest Session — March 30, 2026)
-- **BD & Mentor CRM Modal Unification**: Both now use tabbed design (Info | Transactions | Calls | Update) matching CustomerServicePage
-- **3CX Webhook Integration**: Built flexible `/api/3cx/webhook` endpoint that accepts 3CX native payload formats, auto-matches click-to-call logs, parses duration strings
-- **3CX Setup Guide**: API endpoint `/api/3cx/webhook-setup-guide` returns configuration instructions
-- **Call History UX**: 0-duration calls now show "Dialed — awaiting 3CX sync" badge instead of misleading "0:00"
-- **Facebook Ad Library Intelligence**: New "Ad Intelligence" tab in Marketing Analysis with search, AI analysis, counter-ad generation
-- **Ad Library API endpoints**: Search, analyze, save token, get saved searches
+## Completed Features (Session — March 30, 2026)
 
-## Previously Completed
+### Phase 1: UI Modal Unification
+- BD CRM & Mentor CRM modals now use identical tabbed design (Info | Transactions | Calls | Update) matching CustomerServicePage
+- Compact header with avatar, name, stage badge, phone, click-to-call, reminder button
+- Accessibility: hidden DialogTitle for screen readers
+
+### Phase 2: 3CX Automatic Call Data Sync
+- Built flexible `POST /api/3cx/webhook` — accepts 3CX native payload formats (multiple field names, duration string parsing "3:45" → 225s)
+- Smart matching: updates existing click-to-call "initiated" logs instead of creating duplicates
+- Setup guide at `GET /api/3cx/webhook-setup-guide`
+- Call history UI shows "Dialed — awaiting 3CX sync" badge for 0-duration calls
+- **ACTION NEEDED**: Configure 3CX admin panel to POST to `{domain}/api/3cx/webhook`
+
+### Phase 3: Facebook Ad Library Intelligence
+- New "Ad Intelligence" tab in Marketing Analysis
+- Search competitor ads by keyword/name with country filter
+- AI-powered competitor analysis: messaging patterns, emotional triggers, CTAs
+- Auto-generated counter-ads for CLT Academy
+- Meta API token management (full API access or web scrape fallback)
+
+### Phase 4: Redeposit/Deposit Cycle System
+- **BD CRM**: Students in "Closed (Redeposit)" column get green banner ("Awaiting Redeposit Recording")
+- **Mentor CRM**: Students in "Closed (Deposit)" column get green banner ("Awaiting Deposit Recording")
+- After redeposit is recorded → student auto-cycles back to "New Student" with `redeposit_count` incremented
+- Green "x{count}" badge on cards showing redeposit history
+- "Redeposit Students" filter toggle on both BD and Mentor CRM pages
+- Same student can re-enter the pipeline for another redeposit in the same month
+
+## Previously Completed (Earlier Sessions)
 - Commission decomposition (Course + Addon)
 - Sales/CS Dashboard integration
 - Role-based sidebar filtering
@@ -50,15 +71,18 @@ Build and maintain a comprehensive ERP system for CLT Academy (forex/trading edu
 - Executive Dashboard (CEO single-page view)
 - Weekly Competitive Digest auto-email
 
-## Key API Endpoints
+## Key API Endpoints (New)
 - `POST /api/3cx/webhook` — Flexible 3CX webhook (public, no auth)
 - `POST /api/3cx/call-journal` — Structured call journal
 - `GET /api/3cx/webhook-setup-guide` — Setup instructions
 - `POST /api/intelligence/ad-library/search` — Search FB Ad Library
 - `POST /api/intelligence/ad-library/analyze` — AI competitor ad analysis
-- `GET /api/intelligence/ad-library/searches` — Saved searches
 - `PUT /api/settings/meta-ad-token` — Save Meta API token
-- `GET /api/settings/meta-ad-token-status` — Token status
+- `POST /api/bd/record-redeposit` — Records redeposit & cycles student back
+
+## Test Reports
+- iteration_105.json: 3CX webhook + Ad Intelligence + Modal unification (100% pass)
+- iteration_106.json: Redeposit cycle system (100% pass)
 
 ## Credentials
 - Super Admin: aqib@clt-academy.com / @Aqib1234
