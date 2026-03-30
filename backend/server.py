@@ -18370,6 +18370,53 @@ async def _get_reviews(competitor_id: str, user=Depends(require_roles(["super_ad
     doc = await db.competitor_reviews.find_one({"competitor_id": competitor_id}, {"_id": 0})
     return doc or {"competitor_id": competitor_id, "sentiment": {}, "message": "No review data yet."}
 
+# ═══ Facebook Ad Library Intelligence ═══
+@api_router.post("/intelligence/ad-library/search")
+async def _search_ad_library(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    search_terms = data.get("search_terms", "").strip()
+    if not search_terms:
+        raise HTTPException(400, "search_terms required")
+    country = data.get("country", "AE")
+    limit = data.get("limit", 25)
+    page_id = data.get("page_id", "")
+    return await competitor_intel.search_ad_library(search_terms, country, limit, page_id)
+
+@api_router.post("/intelligence/ad-library/analyze")
+async def _analyze_ad_library(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    search_terms = data.get("search_terms", "").strip()
+    if not search_terms:
+        raise HTTPException(400, "search_terms required")
+    return await competitor_intel.analyze_competitor_ads_ai(search_terms)
+
+@api_router.get("/intelligence/ad-library/searches")
+async def _get_ad_searches(user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.get_saved_ad_searches()
+
+@api_router.get("/intelligence/ad-library/analysis")
+async def _get_ad_analysis(search_terms: str, user=Depends(require_roles(["super_admin", "admin", "coo", "marketing"]))):
+    return await competitor_intel.get_ad_analysis(search_terms)
+
+@api_router.put("/settings/meta-ad-token")
+async def _save_meta_ad_token(data: dict = Body(...), user=Depends(require_roles(["super_admin", "admin"]))):
+    token = data.get("token", "").strip()
+    if not token:
+        raise HTTPException(400, "Token required")
+    await db.settings.update_one(
+        {"key": "meta_ad_library_token"},
+        {"$set": {"key": "meta_ad_library_token", "value": token, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return {"message": "Meta Ad Library token saved"}
+
+@api_router.get("/settings/meta-ad-token-status")
+async def _get_meta_token_status(user=Depends(require_roles(["super_admin", "admin"]))):
+    doc = await db.settings.find_one({"key": "meta_ad_library_token"}, {"_id": 0})
+    if doc and doc.get("value"):
+        return {"configured": True, "updated_at": doc.get("updated_at", "")}
+    return {"configured": False}
+
+
+
 # Override the upload endpoint to inject auth
 @api_router.post("/claret/knowledge-base/upload")
 async def _kb_upload(

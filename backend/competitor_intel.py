@@ -1080,3 +1080,259 @@ async def get_marketing_content() -> dict:
     if not doc:
         return {"content": None, "message": "No content generated yet."}
     return doc
+
+
+
+# ═══════════════════════════════════════════
+# FACEBOOK AD LIBRARY API INTEGRATION
+# ═══════════════════════════════════════════
+
+META_AD_LIBRARY_URL = "https://graph.facebook.com/v19.0/ads_archive"
+
+async def search_ad_library(search_terms: str, country: str = "AE", limit: int = 25, page_id: str = None) -> dict:
+    """Search Facebook Ad Library using the Graph API or web scraping fallback."""
+    # Try Graph API first if token exists
+    settings = await db.settings.find_one({"key": "meta_ad_library_token"}, {"_id": 0})
+    access_token = settings.get("value", "") if settings else ""
+
+    ads = []
+    source = "none"
+
+    if access_token:
+        try:
+            params = {
+                "access_token": access_token,
+                "search_terms": search_terms,
+                "ad_reached_countries": country,
+                "ad_active_status": "ALL",
+                "fields": "page_id,page_name,ad_delivery_start_time,ad_delivery_stop_time,ad_creative_bodies,ad_creative_link_captions,ad_creative_link_titles,ad_creative_link_descriptions,ad_snapshot_url,publisher_platforms,estimated_audience_size,impressions,spend,currency",
+                "limit": min(limit, 50),
+            }
+            if page_id:
+                params["search_page_ids"] = page_id
+
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.get(META_AD_LIBRARY_URL, params=params)
+                data = resp.json()
+
+            if "data" in data:
+                source = "meta_api"
+                for ad in data["data"]:
+                    bodies = ad.get("ad_creative_bodies", [])
+                    titles = ad.get("ad_creative_link_titles", [])
+                    descs = ad.get("ad_creative_link_descriptions", [])
+                    captions = ad.get("ad_creative_link_captions", [])
+                    ads.append({
+                        "page_name": ad.get("page_name", ""),
+                        "page_id": ad.get("page_id", ""),
+                        "ad_text": bodies[0] if bodies else "",
+                        "headline": titles[0] if titles else "",
+                        "description": descs[0] if descs else "",
+                        "cta_caption": captions[0] if captions else "",
+                        "snapshot_url": ad.get("ad_snapshot_url", ""),
+                        "platforms": ad.get("publisher_platforms", []),
+                        "start_date": ad.get("ad_delivery_start_time", ""),
+                        "end_date": ad.get("ad_delivery_stop_time", ""),
+                        "audience_size": ad.get("estimated_audience_size", {}),
+                        "impressions": ad.get("impressions", {}),
+                        "spend": ad.get("spend", {}),
+                        "currency": ad.get("currency", ""),
+                    })
+            elif "error" in data:
+                logger.warning(f"Meta Ad Library API error: {data['error'].get('message', '')}")
+        except Exception as e:
+            logger.error(f"Meta Ad Library API failed: {e}")
+
+    # Fallback: scrape for each competitor matching search terms
+    if not ads:
+        source = "web_scrape"
+        comps = await db.competitors.find(
+            {"name": {"$regex": search_terms, "$options": "i"}},
+            {"_id": 0}
+        ).to_list(5)
+
+        for comp in comps:
+            cached = await db.competitor_ads.find_one({"competitor_id": comp["id"]}, {"_id": 0})
+            if cached and cached.get("ads"):
+                for a in cached["ads"][:10]:
+                    ads.append({
+                        "page_name": comp["name"],
+                        "page_id": "",
+                        "ad_text": a.get("text", ""),
+                        "headline": "",
+                        "description": "",
+                        "cta_caption": a.get("cta", ""),
+                        "snapshot_url": "",
+                        "platforms": ["facebook"],
+                        "start_date": a.get("status", ""),
+                        "end_date": "",
+                        "audience_size": {},
+                        "impressions": {},
+                        "spend": {},
+                        "currency": "",
+                    })
+
+        # If still no results, attempt a live scrape
+        if not ads and comps:
+            for comp in comps[:2]:
+                result = await scrape_fb_ad_library(comp["id"])
+                for a in result.get("ads", [])[:10]:
+                    ads.append({
+                        "page_name": comp["name"],
+                        "page_id": "",
+                        "ad_text": a.get("text", ""),
+                        "headline": "",
+                        "description": "",
+                        "cta_caption": a.get("cta", ""),
+                        "snapshot_url": "",
+                        "platforms": ["facebook"],
+                        "start_date": a.get("status", ""),
+                        "end_date": "",
+                        "audience_size": {},
+                        "impressions": {},
+                        "spend": {},
+                        "currency": "",
+                    })
+
+    # Store search results
+    search_doc = {
+        "search_terms": search_terms,
+        "country": country,
+        "source": source,
+        "ads_count": len(ads),
+        "ads": ads[:50],
+        "searched_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ad_library_searches.update_one(
+        {"search_terms": search_terms.lower()},
+        {"$set": search_doc},
+        upsert=True,
+    )
+
+    return search_doc
+
+
+async def analyze_competitor_ads_ai(search_terms: str) -> dict:
+    """Use AI to analyze competitor ad patterns and generate counter-messaging."""
+    # Get stored ad data
+    search = await db.ad_library_searches.find_one(
+        {"search_terms": {"$regex": search_terms, "$options": "i"}},
+        {"_id": 0}
+    )
+    if not search or not search.get("ads"):
+        return {"error": "No ad data found. Search the Ad Library first."}
+
+    ads_text = ""
+    for i, ad in enumerate(search["ads"][:20], 1):
+        ads_text += f"\nAD #{i} ({ad.get('page_name', 'Unknown')}):\n"
+        if ad.get("ad_text"):
+            ads_text += f"  Body: {ad['ad_text'][:300]}\n"
+        if ad.get("headline"):
+            ads_text += f"  Headline: {ad['headline']}\n"
+        if ad.get("description"):
+            ads_text += f"  Description: {ad['description'][:200]}\n"
+        if ad.get("cta_caption"):
+            ads_text += f"  CTA: {ad['cta_caption']}\n"
+        if ad.get("platforms"):
+            ads_text += f"  Platforms: {', '.join(ad['platforms'])}\n"
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+
+        prompt = f"""You are a senior digital marketing strategist for CLT Academy (a forex/trading education company in the UAE).
+
+Analyze these competitor ads found in the Facebook Ad Library for the search "{search_terms}":
+
+{ads_text[:6000]}
+
+Provide a detailed analysis in this exact JSON format:
+{{
+  "messaging_patterns": [
+    {{"pattern": "Description of a messaging pattern", "frequency": "How common", "examples": ["example 1"]}}
+  ],
+  "key_themes": ["theme 1", "theme 2"],
+  "common_ctas": ["CTA 1", "CTA 2"],
+  "emotional_triggers": ["trigger 1", "trigger 2"],
+  "target_audience_signals": ["signal 1", "signal 2"],
+  "competitor_strengths": ["what they do well in ads"],
+  "competitor_weaknesses": ["gaps we can exploit"],
+  "counter_ads": [
+    {{
+      "headline": "Our counter-ad headline",
+      "body": "Ad body text for CLT Academy",
+      "cta": "Call to action",
+      "angle": "What angle this uses",
+      "target_platform": "facebook/instagram"
+    }}
+  ],
+  "strategic_recommendations": ["recommendation 1", "recommendation 2"],
+  "ad_spend_insights": "Any observations about spend patterns if data available"
+}}
+
+Return ONLY the JSON object, no markdown."""
+
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"ad-analysis-{search_terms[:20]}",
+            system_message="You are a digital marketing strategist. Return only valid JSON.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        response = await chat.send_message(UserMessage(text=prompt))
+        json_match = re.search(r'\{[\s\S]*\}', response)
+        if json_match:
+            analysis = json.loads(json_match.group())
+        else:
+            analysis = {"messaging_patterns": [], "key_themes": [], "counter_ads": [], "strategic_recommendations": [response[:500]]}
+
+    except Exception as e:
+        logger.error(f"Ad analysis AI error: {e}")
+        # Fallback to Gemini
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            gemini_key = os.environ.get("GEMINI_API_KEY", "")
+            if gemini_key:
+                chat = LlmChat(
+                    api_key=gemini_key,
+                    session_id=f"ad-analysis-gemini-{search_terms[:20]}",
+                    system_message="You are a digital marketing strategist. Return only valid JSON.",
+                ).with_model("google", "gemini-2.5-flash")
+                response = await chat.send_message(UserMessage(text=prompt))
+                json_match = re.search(r'\{[\s\S]*\}', response)
+                analysis = json.loads(json_match.group()) if json_match else {"error": "Parse failed"}
+            else:
+                analysis = {"error": f"AI analysis failed: {str(e)}"}
+        except Exception as e2:
+            analysis = {"error": f"All AI providers failed: {str(e)}, {str(e2)}"}
+
+    # Store analysis
+    analysis_doc = {
+        "search_terms": search_terms,
+        "analysis": analysis,
+        "ads_analyzed": len(search.get("ads", [])),
+        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ad_library_analysis.update_one(
+        {"search_terms": search_terms.lower()},
+        {"$set": analysis_doc},
+        upsert=True,
+    )
+
+    return analysis_doc
+
+
+async def get_saved_ad_searches() -> dict:
+    """Get all saved ad library searches."""
+    searches = await db.ad_library_searches.find(
+        {}, {"_id": 0, "search_terms": 1, "ads_count": 1, "source": 1, "searched_at": 1}
+    ).sort("searched_at", -1).to_list(20)
+    return {"searches": searches}
+
+
+async def get_ad_analysis(search_terms: str) -> dict:
+    """Get stored AI analysis for ad library search."""
+    doc = await db.ad_library_analysis.find_one(
+        {"search_terms": {"$regex": search_terms, "$options": "i"}},
+        {"_id": 0}
+    )
+    return doc or {"analysis": None, "message": "No analysis yet."}

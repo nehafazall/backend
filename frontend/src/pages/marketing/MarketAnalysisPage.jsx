@@ -3,12 +3,16 @@ import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   TrendingUp, Star, ThumbsUp, ThumbsDown, Minus, Loader2,
   RefreshCw, BarChart3, Shield, MessageCircle, Zap, AlertTriangle,
+  Search, Eye, Target, Megaphone, Copy, ExternalLink, Sparkles, Globe,
 } from 'lucide-react';
 
 const SCORE_COLOR = (score) => {
@@ -34,6 +38,17 @@ export default function MarketAnalysisPage() {
   const [socialData, setSocialData] = useState({});
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState({});
+  // Ad Intelligence state
+  const [adSearchTerm, setAdSearchTerm] = useState('');
+  const [adSearchCountry, setAdSearchCountry] = useState('AE');
+  const [adSearchResults, setAdSearchResults] = useState(null);
+  const [adSearching, setAdSearching] = useState(false);
+  const [adAnalysis, setAdAnalysis] = useState(null);
+  const [adAnalyzing, setAdAnalyzing] = useState(false);
+  const [savedSearches, setSavedSearches] = useState([]);
+  const [tokenConfigured, setTokenConfigured] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [newToken, setNewToken] = useState('');
 
   const fetchCompetitors = useCallback(async () => {
     try {
@@ -51,6 +66,67 @@ export default function MarketAnalysisPage() {
   }, []);
 
   useEffect(() => { fetchCompetitors(); fetchMatrix(); }, [fetchCompetitors, fetchMatrix]);
+
+  // Load ad intelligence data on mount
+  useEffect(() => {
+    apiClient.get('/intelligence/ad-library/searches').then(r => setSavedSearches(r.data?.searches || [])).catch(() => {});
+    apiClient.get('/settings/meta-ad-token-status').then(r => setTokenConfigured(r.data?.configured || false)).catch(() => {});
+  }, []);
+
+  const handleAdSearch = async () => {
+    if (!adSearchTerm.trim()) return;
+    setAdSearching(true);
+    setAdAnalysis(null);
+    try {
+      const res = await apiClient.post('/intelligence/ad-library/search', {
+        search_terms: adSearchTerm, country: adSearchCountry, limit: 30,
+      });
+      setAdSearchResults(res.data);
+      setSavedSearches(prev => {
+        const exists = prev.find(s => s.search_terms?.toLowerCase() === adSearchTerm.toLowerCase());
+        if (exists) return prev;
+        return [{ search_terms: adSearchTerm, ads_count: res.data?.ads_count || 0, source: res.data?.source, searched_at: new Date().toISOString() }, ...prev];
+      });
+      toast.success(`Found ${res.data?.ads_count || 0} ads (${res.data?.source === 'meta_api' ? 'Meta API' : 'Web Scrape'})`);
+    } catch { toast.error('Ad search failed'); }
+    finally { setAdSearching(false); }
+  };
+
+  const handleAdAnalyze = async () => {
+    if (!adSearchTerm.trim()) return;
+    setAdAnalyzing(true);
+    try {
+      const res = await apiClient.post('/intelligence/ad-library/analyze', { search_terms: adSearchTerm });
+      setAdAnalysis(res.data?.analysis || res.data);
+      toast.success('AI analysis complete');
+    } catch { toast.error('Analysis failed'); }
+    finally { setAdAnalyzing(false); }
+  };
+
+  const loadSavedSearch = async (terms) => {
+    setAdSearchTerm(terms);
+    setAdSearching(true);
+    try {
+      const [searchRes, analysisRes] = await Promise.all([
+        apiClient.post('/intelligence/ad-library/search', { search_terms: terms, country: adSearchCountry }),
+        apiClient.get(`/intelligence/ad-library/analysis?search_terms=${encodeURIComponent(terms)}`),
+      ]);
+      setAdSearchResults(searchRes.data);
+      if (analysisRes.data?.analysis) setAdAnalysis(analysisRes.data.analysis);
+    } catch { toast.error('Failed to load saved search'); }
+    finally { setAdSearching(false); }
+  };
+
+  const saveMetaToken = async () => {
+    if (!newToken.trim()) return;
+    try {
+      await apiClient.put('/settings/meta-ad-token', { token: newToken });
+      setTokenConfigured(true);
+      setShowTokenInput(false);
+      setNewToken('');
+      toast.success('Meta Ad Library token saved!');
+    } catch { toast.error('Failed to save token'); }
+  };
 
   const generateMatrix = async () => {
     setMatrixLoading(true);
@@ -126,8 +202,11 @@ export default function MarketAnalysisPage() {
       <Tabs defaultValue="matrix" className="space-y-4">
         <TabsList>
           <TabsTrigger value="matrix" data-testid="tab-matrix">Scoring Matrix</TabsTrigger>
+          <TabsTrigger value="ad-intel" data-testid="tab-ad-intel">
+            <Megaphone className="h-3 w-3 mr-1" />Ad Intelligence
+          </TabsTrigger>
           <TabsTrigger value="reviews" data-testid="tab-reviews">Review Sentiment</TabsTrigger>
-          <TabsTrigger value="ads" data-testid="tab-ads">FB Ad Analysis</TabsTrigger>
+          <TabsTrigger value="ads" data-testid="tab-ads">FB Ad Scraper</TabsTrigger>
           <TabsTrigger value="social" data-testid="tab-social">Social Intel</TabsTrigger>
         </TabsList>
 
@@ -237,6 +316,247 @@ export default function MarketAnalysisPage() {
           </Card>
         </TabsContent>
 
+        {/* ═══ AD INTELLIGENCE TAB ═══ */}
+        <TabsContent value="ad-intel">
+          <div className="space-y-4">
+            {/* Token Status + Search Bar */}
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Megaphone className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-semibold">Facebook Ad Library Intelligence</span>
+                    <Badge variant="outline" className={tokenConfigured ? 'text-emerald-600 border-emerald-500 text-[10px]' : 'text-amber-600 border-amber-500 text-[10px]'}>
+                      {tokenConfigured ? 'API Connected' : 'Scrape Mode'}
+                    </Badge>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-[10px] h-6" onClick={() => setShowTokenInput(!showTokenInput)}>
+                    {tokenConfigured ? 'Update Token' : 'Connect Meta API'}
+                  </Button>
+                </div>
+                {showTokenInput && (
+                  <div className="flex gap-2 p-2 bg-muted/30 rounded border">
+                    <Input placeholder="Paste Meta Ad Library access token..." value={newToken} onChange={e => setNewToken(e.target.value)}
+                      className="text-xs h-8 flex-1" data-testid="meta-token-input" type="password" />
+                    <Button size="sm" className="h-8 text-xs" onClick={saveMetaToken} disabled={!newToken.trim()}>Save</Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowTokenInput(false)}>Cancel</Button>
+                  </div>
+                )}
+                {!tokenConfigured && !showTokenInput && (
+                  <p className="text-[10px] text-muted-foreground">Without a Meta API token, ads are fetched via web scraping (limited). Connect your token for full Ad Library access.</p>
+                )}
+                {/* Search */}
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input placeholder="Search competitor ads (e.g., forex trading academy, trading course)..."
+                      value={adSearchTerm} onChange={e => setAdSearchTerm(e.target.value)}
+                      className="pl-8 h-8 text-sm" data-testid="ad-search-input"
+                      onKeyDown={e => e.key === 'Enter' && handleAdSearch()} />
+                  </div>
+                  <Select value={adSearchCountry} onValueChange={setAdSearchCountry}>
+                    <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AE">UAE</SelectItem>
+                      <SelectItem value="US">USA</SelectItem>
+                      <SelectItem value="GB">UK</SelectItem>
+                      <SelectItem value="IN">India</SelectItem>
+                      <SelectItem value="ALL">All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8" onClick={handleAdSearch} disabled={adSearching || !adSearchTerm.trim()} data-testid="ad-search-btn">
+                    {adSearching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1" />}
+                    Search Ads
+                  </Button>
+                </div>
+                {/* Saved Searches */}
+                {savedSearches.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">Recent:</span>
+                    {savedSearches.slice(0, 6).map((s, i) => (
+                      <button key={i} onClick={() => loadSavedSearch(s.search_terms)}
+                        className="px-2 py-0.5 text-[10px] rounded-full border hover:bg-muted transition-colors">
+                        {s.search_terms} <span className="text-muted-foreground">({s.ads_count})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Results Grid */}
+            {adSearchResults && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Left: Ad List */}
+                <div className="lg:col-span-2 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold">{adSearchResults.ads_count || 0} Competitor Ads Found</h3>
+                      <Badge variant="outline" className="text-[9px]">
+                        {adSearchResults.source === 'meta_api' ? <><Globe className="h-2.5 w-2.5 mr-0.5" />Meta API</> : 'Web Scrape'}
+                      </Badge>
+                    </div>
+                    <Button size="sm" className="h-7 text-[10px] gap-1" onClick={handleAdAnalyze} disabled={adAnalyzing || !adSearchResults.ads?.length} data-testid="analyze-ads-btn">
+                      {adAnalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {adAnalyzing ? 'Analyzing...' : 'AI Analyze & Generate Counter-Ads'}
+                    </Button>
+                  </div>
+                  <ScrollArea className="max-h-[600px]">
+                    <div className="space-y-2">
+                      {(adSearchResults.ads || []).map((ad, i) => (
+                        <Card key={i} className="overflow-hidden" data-testid={`ad-result-${i}`}>
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">
+                                  {ad.page_name?.charAt(0) || '?'}
+                                </div>
+                                <span className="text-xs font-semibold">{ad.page_name || 'Unknown Page'}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {ad.platforms?.map((p, j) => (
+                                  <Badge key={j} variant="outline" className="text-[8px] capitalize">{p}</Badge>
+                                ))}
+                                {ad.start_date && <span className="text-[9px] text-muted-foreground">{ad.start_date.slice(0, 10)}</span>}
+                              </div>
+                            </div>
+                            {ad.headline && (
+                              <p className="text-xs font-semibold text-foreground">{ad.headline}</p>
+                            )}
+                            {ad.ad_text && (
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{ad.ad_text.slice(0, 400)}{ad.ad_text.length > 400 ? '...' : ''}</p>
+                            )}
+                            {ad.description && (
+                              <p className="text-[10px] text-muted-foreground/70 italic">{ad.description.slice(0, 200)}</p>
+                            )}
+                            <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                              <div className="flex items-center gap-2">
+                                {ad.cta_caption && <Badge className="text-[9px] bg-blue-500">{ad.cta_caption}</Badge>}
+                                {ad.audience_size?.lower_bound && (
+                                  <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
+                                    <Target className="h-2.5 w-2.5" />{Number(ad.audience_size.lower_bound).toLocaleString()}–{Number(ad.audience_size.upper_bound).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                {ad.snapshot_url && (
+                                  <a href={ad.snapshot_url} target="_blank" rel="noopener noreferrer">
+                                    <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5"><Eye className="h-2.5 w-2.5 mr-0.5" />View</Button>
+                                  </a>
+                                )}
+                                <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5"
+                                  onClick={() => { navigator.clipboard.writeText(ad.ad_text || ''); toast.success('Ad text copied'); }}>
+                                  <Copy className="h-2.5 w-2.5 mr-0.5" />Copy
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                {/* Right: AI Analysis Panel */}
+                <div className="space-y-3">
+                  {adAnalysis && !adAnalysis.error ? (
+                    <>
+                      {/* Messaging Patterns */}
+                      {adAnalysis.messaging_patterns?.length > 0 && (
+                        <Card>
+                          <CardContent className="p-3 space-y-2">
+                            <h4 className="text-xs font-semibold flex items-center gap-1"><Target className="h-3 w-3 text-purple-500" /> Messaging Patterns</h4>
+                            {adAnalysis.messaging_patterns.map((p, i) => (
+                              <div key={i} className="p-2 bg-purple-500/5 rounded border border-purple-500/20">
+                                <p className="text-[11px] font-medium">{p.pattern}</p>
+                                <p className="text-[9px] text-muted-foreground">{p.frequency}</p>
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+                      {/* Key Themes + CTAs */}
+                      <Card>
+                        <CardContent className="p-3 space-y-2">
+                          <h4 className="text-xs font-semibold flex items-center gap-1"><Zap className="h-3 w-3 text-amber-500" /> Themes & Triggers</h4>
+                          {adAnalysis.key_themes?.length > 0 && (
+                            <div><span className="text-[9px] text-muted-foreground">Themes:</span><div className="flex flex-wrap gap-1 mt-0.5">{adAnalysis.key_themes.map((t, i) => <Badge key={i} variant="outline" className="text-[9px]">{t}</Badge>)}</div></div>
+                          )}
+                          {adAnalysis.emotional_triggers?.length > 0 && (
+                            <div><span className="text-[9px] text-muted-foreground">Emotional Triggers:</span><div className="flex flex-wrap gap-1 mt-0.5">{adAnalysis.emotional_triggers.map((t, i) => <Badge key={i} className="text-[9px] bg-rose-500/80">{t}</Badge>)}</div></div>
+                          )}
+                          {adAnalysis.common_ctas?.length > 0 && (
+                            <div><span className="text-[9px] text-muted-foreground">Common CTAs:</span><div className="flex flex-wrap gap-1 mt-0.5">{adAnalysis.common_ctas.map((c, i) => <Badge key={i} className="text-[9px] bg-blue-500/80">{c}</Badge>)}</div></div>
+                          )}
+                        </CardContent>
+                      </Card>
+                      {/* Counter-Ads */}
+                      {adAnalysis.counter_ads?.length > 0 && (
+                        <Card className="border-emerald-500/30">
+                          <CardContent className="p-3 space-y-2">
+                            <h4 className="text-xs font-semibold flex items-center gap-1 text-emerald-600"><Sparkles className="h-3 w-3" /> AI Counter-Ads for CLT</h4>
+                            {adAnalysis.counter_ads.map((ad, i) => (
+                              <div key={i} className="p-2 bg-emerald-500/5 rounded border border-emerald-500/20 space-y-1">
+                                <p className="text-[11px] font-bold">{ad.headline}</p>
+                                <p className="text-[10px] text-muted-foreground">{ad.body}</p>
+                                <div className="flex items-center justify-between pt-1">
+                                  <div className="flex gap-1">
+                                    <Badge className="text-[8px] bg-blue-500">{ad.cta}</Badge>
+                                    <Badge variant="outline" className="text-[8px] capitalize">{ad.target_platform}</Badge>
+                                  </div>
+                                  <Button variant="ghost" size="sm" className="h-5 text-[9px] px-1.5"
+                                    onClick={() => { navigator.clipboard.writeText(`${ad.headline}\n\n${ad.body}\n\nCTA: ${ad.cta}`); toast.success('Counter-ad copied!'); }}>
+                                    <Copy className="h-2.5 w-2.5 mr-0.5" />Copy
+                                  </Button>
+                                </div>
+                                {ad.angle && <p className="text-[9px] text-muted-foreground italic">Angle: {ad.angle}</p>}
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+                      {/* Strategic Recs */}
+                      {adAnalysis.strategic_recommendations?.length > 0 && (
+                        <Card>
+                          <CardContent className="p-3 space-y-1.5">
+                            <h4 className="text-xs font-semibold flex items-center gap-1"><Shield className="h-3 w-3 text-blue-500" /> Strategic Recommendations</h4>
+                            {adAnalysis.strategic_recommendations.map((r, i) => (
+                              <p key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
+                                <span className="text-blue-500 font-bold mt-px">{i + 1}.</span> {r}
+                              </p>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
+                  ) : adAnalysis?.error ? (
+                    <Card className="border-red-500/30">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-red-500">{adAnalysis.error}</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="border-dashed">
+                      <CardContent className="p-6 text-center">
+                        <Sparkles className="h-6 w-6 mx-auto mb-2 text-muted-foreground/30" />
+                        <p className="text-xs text-muted-foreground">Search for competitor ads, then click "AI Analyze" to get messaging patterns and counter-ad suggestions.</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!adSearchResults && (
+              <div className="text-center py-12">
+                <Megaphone className="h-10 w-10 mx-auto mb-3 text-muted-foreground/20" />
+                <p className="text-sm text-muted-foreground">Search the Facebook Ad Library to discover competitor ads</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Enter a competitor name, keyword, or industry term above</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         {/* ═══ REVIEW SENTIMENT TAB ═══ */}
         <TabsContent value="reviews">
           <div className="space-y-3">
@@ -305,10 +625,10 @@ export default function MarketAnalysisPage() {
           </div>
         </TabsContent>
 
-        {/* ═══ FB AD ANALYSIS TAB ═══ */}
+        {/* ═══ FB AD SCRAPER TAB (Legacy per-competitor) ═══ */}
         <TabsContent value="ads">
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Parse Facebook Ad Library for active competitor ads, CTAs, and messaging strategies.</p>
+            <p className="text-xs text-muted-foreground">Per-competitor Facebook Ad Library scraping. For richer analysis, use the "Ad Intelligence" tab above.</p>
             {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {competitors.map(comp => {

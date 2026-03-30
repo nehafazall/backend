@@ -13,6 +13,7 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -465,145 +466,169 @@ export default function BDCRMPage() {
 
             {/* Student Detail Modal */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="bd-student-detail-modal">
-                    <DialogHeader>
-                        <DialogTitle>{selectedStudent?.full_name}</DialogTitle>
-                        <DialogDescription>Student Details &amp; Call Center</DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="max-w-2xl max-h-[90vh]" data-testid="bd-student-detail-modal">
                     {selectedStudent && (
-                        <div className="space-y-4">
-                            {/* Contact Info + Call Button */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-sky-600 text-white flex items-center justify-center text-lg font-medium">
-                                        {selectedStudent.full_name?.charAt(0) || '?'}
+                        <>
+                            {/* Compact Header - Always Visible */}
+                            <div className="flex items-center gap-3 pb-3 border-b">
+                                <div className="w-10 h-10 rounded-full bg-sky-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                                    {selectedStudent.full_name?.charAt(0) || '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-semibold truncate">{selectedStudent.full_name}</h3>
+                                        <Badge className={`text-[10px] ${BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.color}`}>
+                                            {BD_STAGES.find(s => s.id === selectedStudent.bd_stage)?.label}
+                                        </Badge>
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-mono text-sm">{selectedStudent.phone}</span>
-                                            <ClickToCall
-                                                phoneNumber={selectedStudent.phone}
-                                                contactId={selectedStudent.id}
-                                                contactName={selectedStudent.full_name}
-                                                variant="outline"
-                                                size="sm"
-                                                showLabel={true}
-                                            />
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selectedStudent.phone}</span>
+                                        {selectedStudent.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{selectedStudent.email}</span>}
+                                        <span>{selectedStudent.package_bought || selectedStudent.current_course_name || 'N/A'}</span>
+                                    </div>
+                                </div>
+                                <ClickToCall
+                                    phoneNumber={selectedStudent.phone}
+                                    contactId={selectedStudent.id}
+                                    contactName={selectedStudent.full_name}
+                                    variant="outline"
+                                    size="sm"
+                                    showLabel={false}
+                                />
+                                <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => setShowReminderModal(true)} data-testid="bd-set-reminder-btn">
+                                    <Bell className="h-3 w-3" /> Reminder
+                                </Button>
+                            </div>
+
+                            {/* Tabbed Content */}
+                            <Tabs defaultValue="info" className="mt-2">
+                                <TabsList className="grid w-full grid-cols-4 h-8">
+                                    <TabsTrigger value="info" className="text-xs" data-testid="bd-tab-info">Info</TabsTrigger>
+                                    <TabsTrigger value="transactions" className="text-xs" data-testid="bd-tab-transactions">
+                                        <DollarSign className="h-3 w-3 mr-1" />Transactions
+                                    </TabsTrigger>
+                                    <TabsTrigger value="calls" className="text-xs" data-testid="bd-tab-calls">
+                                        <PhoneCall className="h-3 w-3 mr-1" />Calls
+                                    </TabsTrigger>
+                                    <TabsTrigger value="update" className="text-xs" data-testid="bd-tab-update">Update</TabsTrigger>
+                                </TabsList>
+
+                                {/* INFO TAB */}
+                                <TabsContent value="info" className="mt-3 space-y-4" data-testid="bd-tab-content-info">
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div><span className="text-muted-foreground">Course:</span><span className="ml-2">{selectedStudent.package_bought || selectedStudent.current_course_name || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">BD Agent:</span><span className="ml-2">{selectedStudent.bd_agent_name || 'Unassigned'}</span></div>
+                                        <div><span className="text-muted-foreground">Mentor:</span><span className="ml-2">{selectedStudent.mentor_name || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Enrollment:</span><span className="ml-2 font-mono">{fmtAED(selectedStudent.enrollment_amount)}</span></div>
+                                        <div><span className="text-muted-foreground">Language:</span><span className="ml-2">{selectedStudent.preferred_language || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Country:</span><span className="ml-2">{selectedStudent.country || 'N/A'}</span></div>
+                                    </div>
+                                    {selectedStudent.reminder_date && !selectedStudent.reminder_completed && (
+                                        <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800 text-sm">
+                                            <span className="flex items-center gap-1 text-amber-600 font-medium"><Bell className="h-3 w-3" /> Reminder: {selectedStudent.reminder_date} {selectedStudent.reminder_time || ''}</span>
+                                            {selectedStudent.reminder_note && <p className="text-xs text-muted-foreground mt-0.5">{selectedStudent.reminder_note}</p>}
                                         </div>
-                                        {selectedStudent.email && <p className="text-xs text-muted-foreground">{selectedStudent.email}</p>}
+                                    )}
+                                    {/* Color Tags */}
+                                    <div className="flex items-center gap-2 flex-wrap" data-testid="bd-color-tag-picker">
+                                        <span className="text-xs text-muted-foreground mr-1">Tag:</span>
+                                        {Object.entries(COLOR_TAG_STYLES).map(([id, tag]) => (
+                                            <button key={id}
+                                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${selectedStudent.color_tag === id ? tag.color + ' ring-2 ring-offset-1 ring-current font-bold' : 'border-muted text-muted-foreground hover:border-foreground'}`}
+                                                onClick={async () => {
+                                                    const newTag = selectedStudent.color_tag === id ? null : id;
+                                                    try {
+                                                        await apiClient.patch(`/students/${selectedStudent.id}/color-tag`, { color_tag: newTag });
+                                                        setSelectedStudent(prev => ({ ...prev, color_tag: newTag }));
+                                                        setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, color_tag: newTag } : s));
+                                                    } catch { toast.error('Failed to update tag'); }
+                                                }}
+                                                data-testid={`bd-color-tag-btn-${id}`}>
+                                                <div className={`h-2 w-2 rounded-full ${tag.dot}`} />{tag.label}
+                                            </button>
+                                        ))}
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Select value={selectedStudent.bd_stage} onValueChange={async (val) => {
-                                        try {
-                                            await apiClient.put(`/bd/students/${selectedStudent.id}/stage`, { bd_stage: val });
-                                            setSelectedStudent(prev => ({ ...prev, bd_stage: val }));
-                                            setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, bd_stage: val } : s));
-                                            toast.success(`Stage updated to ${BD_STAGES.find(s => s.id === val)?.label}`);
-                                        } catch { toast.error('Failed to update stage'); }
-                                    }}>
-                                        <SelectTrigger className="w-[180px] h-8" data-testid="bd-stage-change-dropdown">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {BD_STAGES.map(st => (
-                                                <SelectItem key={st.id} value={st.id}>
-                                                    <span className="flex items-center gap-1.5">
-                                                        <span className={`w-2 h-2 rounded-full ${st.color}`} />
-                                                        {st.label}
-                                                    </span>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Button variant="outline" size="sm" onClick={() => setShowReminderModal(true)} data-testid="bd-set-reminder-btn">
-                                        <Bell className="h-3.5 w-3.5 mr-1.5" /> Reminder
-                                    </Button>
-                                </div>
-                            </div>
+                                </TabsContent>
 
-                            {/* Info Grid */}
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div><Label className="text-muted-foreground">Course</Label><p>{selectedStudent.package_bought || selectedStudent.current_course_name || 'N/A'}</p></div>
-                                <div><Label className="text-muted-foreground">BD Agent</Label><p>{selectedStudent.bd_agent_name || 'Unassigned'}</p></div>
-                                <div><Label className="text-muted-foreground">Mentor</Label><p>{selectedStudent.mentor_name || 'N/A'}</p></div>
-                                <div><Label className="text-muted-foreground">Enrollment</Label><p>{fmtAED(selectedStudent.enrollment_amount)}</p></div>
-                                <div><Label className="text-muted-foreground">Language</Label><p>{selectedStudent.preferred_language || 'N/A'}</p></div>
-                                {selectedStudent.reminder_date && !selectedStudent.reminder_completed && (
-                                    <div><Label className="text-muted-foreground">Next Reminder</Label>
-                                        <p className="flex items-center gap-1 text-amber-600"><Bell className="h-3 w-3" /> {selectedStudent.reminder_date} {selectedStudent.reminder_time || ''}</p>
-                                        {selectedStudent.reminder_note && <p className="text-xs text-muted-foreground mt-0.5">{selectedStudent.reminder_note}</p>}
-                                    </div>
-                                )}
-                            </div>
+                                {/* TRANSACTIONS TAB */}
+                                <TabsContent value="transactions" className="mt-3" data-testid="bd-tab-content-transactions">
+                                    <TransactionHistory studentId={selectedStudent.id} />
+                                </TabsContent>
 
-                            {/* 3CX Call History & Recordings */}
-                            <div className="p-3 bg-muted/50 rounded-lg border border-muted-foreground/20">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <PhoneCall className="h-4 w-4 text-primary" />
-                                    <Label className="text-sm font-medium">3CX Call Center</Label>
-                                    <Badge variant="outline" className="text-xs ml-auto bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>
-                                </div>
-                                <CallHistory contactId={selectedStudent.id} />
-                            </div>
-
-                            {/* Call Notes / Comments */}
-                            <div className="space-y-2">
-                                <Label className="flex items-center gap-1.5 text-sm font-medium">
-                                    <FileText className="h-3.5 w-3.5" /> Follow-up Notes
-                                </Label>
-                                {/* Add new note */}
-                                <div className="flex gap-2">
-                                    <Textarea
-                                        value={newNote}
-                                        onChange={e => setNewNote(e.target.value)}
-                                        placeholder="Add call notes, discussion summary..."
-                                        rows={2}
-                                        className="flex-1 text-sm"
-                                        data-testid="bd-note-input"
-                                    />
-                                    <Button size="sm" onClick={handleAddNote} disabled={!newNote.trim() || savingNote}
-                                        className="self-end" data-testid="bd-save-note-btn">
-                                        <Send className="h-3.5 w-3.5" />
-                                    </Button>
-                                </div>
-                                {/* Existing notes */}
-                                {studentNotes.length > 0 && (
-                                    <ScrollArea className="max-h-[140px]">
-                                        <div className="space-y-1.5">
-                                            {studentNotes.map(n => (
-                                                <div key={n.id} className="p-2 bg-muted/50 rounded text-sm border-l-2 border-sky-400">
-                                                    <p className="whitespace-pre-wrap">{n.text}</p>
-                                                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2">
-                                                        <span>{n.created_by_name}</span>
-                                                        <span>{new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                                    </p>
+                                {/* CALLS TAB */}
+                                <TabsContent value="calls" className="mt-3 space-y-3" data-testid="bd-tab-content-calls">
+                                    <CallHistory contactId={selectedStudent.id} />
+                                    {/* Follow-up Notes */}
+                                    <div className="space-y-2 pt-3 border-t">
+                                        <Label className="flex items-center gap-1.5 text-sm font-medium">
+                                            <FileText className="h-3.5 w-3.5" /> Follow-up Notes
+                                        </Label>
+                                        <div className="flex gap-2">
+                                            <Textarea value={newNote} onChange={e => setNewNote(e.target.value)}
+                                                placeholder="Add call notes, discussion summary..." rows={2}
+                                                className="flex-1 text-sm" data-testid="bd-note-input" />
+                                            <Button size="sm" onClick={handleAddNote} disabled={!newNote.trim() || savingNote}
+                                                className="self-end" data-testid="bd-save-note-btn">
+                                                <Send className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                        {studentNotes.length > 0 && (
+                                            <ScrollArea className="max-h-[140px]">
+                                                <div className="space-y-1.5">
+                                                    {studentNotes.map(n => (
+                                                        <div key={n.id} className="p-2 bg-muted/50 rounded text-sm border-l-2 border-sky-400">
+                                                            <p className="whitespace-pre-wrap">{n.text}</p>
+                                                            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2">
+                                                                <span>{n.created_by_name}</span>
+                                                                <span>{new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                            </p>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                                {studentNotes.length === 0 && (
-                                    <p className="text-xs text-muted-foreground py-2">No notes yet. Add your first call note above.</p>
-                                )}
-                            </div>
+                                            </ScrollArea>
+                                        )}
+                                        {studentNotes.length === 0 && (
+                                            <p className="text-xs text-muted-foreground py-2">No notes yet. Add your first call note above.</p>
+                                        )}
+                                    </div>
+                                </TabsContent>
 
-                            {/* Customer Transaction History */}
-                            <div>
-                                <Label className="text-muted-foreground flex items-center gap-1.5 mb-2">
-                                    <DollarSign className="h-3.5 w-3.5 text-emerald-500" /> Transaction History
-                                </Label>
-                                <TransactionHistory studentId={selectedStudent.id} />
-                            </div>
-                        </div>
+                                {/* UPDATE TAB */}
+                                <TabsContent value="update" className="mt-3 space-y-4" data-testid="bd-tab-content-update">
+                                    <div className="space-y-2">
+                                        <Label>Move to Stage</Label>
+                                        <Select value={selectedStudent.bd_stage} onValueChange={async (val) => {
+                                            try {
+                                                await apiClient.put(`/bd/students/${selectedStudent.id}/stage`, { bd_stage: val });
+                                                setSelectedStudent(prev => ({ ...prev, bd_stage: val }));
+                                                setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, bd_stage: val } : s));
+                                                toast.success(`Stage updated to ${BD_STAGES.find(s => s.id === val)?.label}`);
+                                            } catch { toast.error('Failed to update stage'); }
+                                        }}>
+                                            <SelectTrigger data-testid="bd-stage-change-dropdown"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {BD_STAGES.map(st => (
+                                                    <SelectItem key={st.id} value={st.id}>
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className={`w-2 h-2 rounded-full ${st.color}`} />
+                                                            {st.label}
+                                                        </span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <DialogFooter className="pt-2">
+                                        <Button variant="outline" onClick={() => setShowDetailModal(false)}>Close</Button>
+                                        <Button onClick={() => { setShowRedepositModal(true); setShowDetailModal(false); }}
+                                            data-testid="bd-record-redeposit-btn">
+                                            <DollarSign className="h-4 w-4 mr-2" /> Record Redeposit
+                                        </Button>
+                                    </DialogFooter>
+                                </TabsContent>
+                            </Tabs>
+                        </>
                     )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDetailModal(false)}>Close</Button>
-                        <Button onClick={() => { setShowRedepositModal(true); setShowDetailModal(false); }}
-                            data-testid="bd-record-redeposit-btn">
-                            <DollarSign className="h-4 w-4 mr-2" /> Record Redeposit
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

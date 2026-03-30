@@ -22,6 +22,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ImportButton from '@/components/ImportButton';
@@ -742,170 +743,128 @@ const MentorCRMPage = () => {
 
             {/* Student Detail Modal */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Student Mentorship</DialogTitle>
-                        <DialogDescription>
-                            Manage student progress and redeposit tracking
-                        </DialogDescription>
-                    </DialogHeader>
-                    
+                <DialogContent className="max-w-2xl max-h-[90vh]">
                     {selectedStudent && (
-                        <div className="space-y-6">
-                            {/* Student Info */}
-                            <Card>
-                                <CardContent className="pt-6">
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-16 h-16 rounded-full bg-orange-600 flex items-center justify-center text-white text-2xl font-bold">
-                                            {selectedStudent.full_name?.charAt(0)}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="text-xl font-semibold">{selectedStudent.full_name}</h3>
-                                            <div className="flex items-center gap-4 mt-2 text-muted-foreground">
-                                                <span className="flex items-center gap-1">
-                                                    <Phone className="h-4 w-4" />
-                                                    {selectedStudent.phone}
-                                                    <ClickToCall 
-                                                        phoneNumber={selectedStudent.phone} 
-                                                        contactId={selectedStudent.id} 
-                                                        contactName={selectedStudent.full_name}
-                                                        variant="outline"
-                                                        size="sm"
-                                                        showLabel={true}
-                                                        className="ml-2"
-                                                    />
-                                                </span>
-                                                {selectedStudent.email && (
-                                                    <span className="flex items-center gap-1">
-                                                        <Mail className="h-4 w-4" />
-                                                        {selectedStudent.email}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-3">
-                                                <Badge className={MENTOR_STAGES.find(s => s.id === selectedStudent.mentor_stage)?.color || 'bg-blue-500'}>
-                                                    {MENTOR_STAGES.find(s => s.id === selectedStudent.mentor_stage)?.label || 'New Student'}
-                                                </Badge>
-                                            </div>
-                                        </div>
+                        <>
+                            {/* Compact Header - Always Visible */}
+                            <div className="flex items-center gap-3 pb-3 border-b">
+                                <div className="w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                                    {selectedStudent.full_name?.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-base font-semibold truncate">{selectedStudent.full_name}</h3>
+                                        <Badge className={`text-[10px] ${MENTOR_STAGES.find(s => s.id === selectedStudent.mentor_stage)?.color || 'bg-blue-500'}`}>
+                                            {MENTOR_STAGES.find(s => s.id === selectedStudent.mentor_stage)?.label || 'New Student'}
+                                        </Badge>
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
-                                        <div>
-                                            <span className="text-muted-foreground">Trading Level:</span>
-                                            <span className="ml-2">{selectedStudent.trading_level || 'Beginner'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Preferred Language:</span>
-                                            <span className="ml-2">{selectedStudent.preferred_language || 'English'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Classes Attended:</span>
-                                            <span className="ml-2 font-mono">{selectedStudent.classes_attended || 0}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Learning Goals:</span>
-                                            <span className="ml-2">{selectedStudent.learning_goals || 'N/A'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Package:</span>
-                                            <span className="ml-2">{selectedStudent.package_bought || 'N/A'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Enrolled:</span>
-                                            <span className="ml-2">{formatDate(selectedStudent.created_at)}</span>
-                                        </div>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selectedStudent.phone}</span>
+                                        {selectedStudent.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{selectedStudent.email}</span>}
+                                        <span>{selectedStudent.package_bought || 'N/A'}</span>
                                     </div>
-                                    
-                                    {/* 3CX Call Center Integration */}
-                                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-muted-foreground/20">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <PhoneCall className="h-4 w-4 text-primary" />
-                                            <Label className="text-sm font-medium">3CX Call Center</Label>
-                                            <Badge variant="outline" className="text-xs ml-auto bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>
-                                        </div>
-                                        
-                                        {/* Call Recording Link */}
-                                        {selectedStudent.call_recording_url && (
-                                            <div className="mb-3">
-                                                <Label className="text-xs text-muted-foreground">Latest Recording</Label>
-                                                <a 
-                                                    href={selectedStudent.call_recording_url} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-2 text-sm text-primary hover:underline mt-1"
-                                                >
-                                                    🎵 Play Recording
-                                                </a>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Call History */}
-                                        <CallHistory contactId={selectedStudent.id} />
+                                </div>
+                                <ClickToCall
+                                    phoneNumber={selectedStudent.phone}
+                                    contactId={selectedStudent.id}
+                                    contactName={selectedStudent.full_name}
+                                    variant="outline"
+                                    size="sm"
+                                    showLabel={false}
+                                />
+                                <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => { setReminderStudent(selectedStudent); setShowReminderModal(true); }} data-testid="mentor-set-reminder-btn">
+                                    <Bell className="h-3 w-3" /> Reminder
+                                </Button>
+                            </div>
+
+                            {/* Tabbed Content */}
+                            <Tabs defaultValue="info" className="mt-2">
+                                <TabsList className="grid w-full grid-cols-4 h-8">
+                                    <TabsTrigger value="info" className="text-xs" data-testid="mentor-tab-info">Info</TabsTrigger>
+                                    <TabsTrigger value="transactions" className="text-xs" data-testid="mentor-tab-transactions">
+                                        <DollarSign className="h-3 w-3 mr-1" />Transactions
+                                    </TabsTrigger>
+                                    <TabsTrigger value="calls" className="text-xs" data-testid="mentor-tab-calls">
+                                        <PhoneCall className="h-3 w-3 mr-1" />Calls
+                                    </TabsTrigger>
+                                    <TabsTrigger value="update" className="text-xs" data-testid="mentor-tab-update">Update</TabsTrigger>
+                                </TabsList>
+
+                                {/* INFO TAB */}
+                                <TabsContent value="info" className="mt-3 space-y-4" data-testid="mentor-tab-content-info">
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div><span className="text-muted-foreground">Package:</span><span className="ml-2">{selectedStudent.package_bought || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Trading Level:</span><span className="ml-2">{selectedStudent.trading_level || 'Beginner'}</span></div>
+                                        <div><span className="text-muted-foreground">Classes:</span><span className="ml-2 font-mono">{selectedStudent.classes_attended || 0}</span></div>
+                                        <div><span className="text-muted-foreground">Language:</span><span className="ml-2">{selectedStudent.preferred_language || 'English'}</span></div>
+                                        <div><span className="text-muted-foreground">Learning Goals:</span><span className="ml-2">{selectedStudent.learning_goals || 'N/A'}</span></div>
+                                        <div><span className="text-muted-foreground">Enrolled:</span><span className="ml-2">{formatDate(selectedStudent.created_at)}</span></div>
                                     </div>
-                                </CardContent>
-                            </Card>
-                            
-                            {/* Customer Transaction History */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <DollarSign className="h-4 w-4 text-emerald-500" />
-                                        Transaction History
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
+                                    {/* Color Tags */}
+                                    <div className="flex items-center gap-2 flex-wrap" data-testid="mentor-color-tag-picker">
+                                        <span className="text-xs text-muted-foreground mr-1">Tag:</span>
+                                        {Object.entries(MENTOR_COLOR_TAG_STYLES).map(([id, tag]) => (
+                                            <button key={id}
+                                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] border transition-all ${selectedStudent.color_tag === id ? tag.color + ' ring-2 ring-offset-1 ring-current font-bold' : 'border-muted text-muted-foreground hover:border-foreground'}`}
+                                                onClick={async () => {
+                                                    const newTag = selectedStudent.color_tag === id ? null : id;
+                                                    try {
+                                                        await apiClient.patch(`/students/${selectedStudent.id}/color-tag`, { color_tag: newTag });
+                                                        setSelectedStudent(prev => ({ ...prev, color_tag: newTag }));
+                                                        setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, color_tag: newTag } : s));
+                                                    } catch { toast.error('Failed to update tag'); }
+                                                }}
+                                                data-testid={`mentor-color-tag-btn-${id}`}>
+                                                <div className={`h-2 w-2 rounded-full ${tag.dot}`} />{tag.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </TabsContent>
+
+                                {/* TRANSACTIONS TAB */}
+                                <TabsContent value="transactions" className="mt-3" data-testid="mentor-tab-content-transactions">
                                     <TransactionHistory studentId={selectedStudent.id} />
-                                </CardContent>
-                            </Card>
-                            
-                            {/* Update Section */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-lg">Update Mentorship Status</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                                </TabsContent>
+
+                                {/* CALLS TAB */}
+                                <TabsContent value="calls" className="mt-3 space-y-3" data-testid="mentor-tab-content-calls">
+                                    {selectedStudent.call_recording_url && (
+                                        <div className="p-3 bg-muted/50 rounded-lg border">
+                                            <Label className="text-xs text-muted-foreground">Latest Recording</Label>
+                                            <a href={selectedStudent.call_recording_url} target="_blank" rel="noopener noreferrer"
+                                                className="flex items-center gap-2 text-sm text-primary hover:underline mt-1">
+                                                Play Recording
+                                            </a>
+                                        </div>
+                                    )}
+                                    <CallHistory contactId={selectedStudent.id} />
+                                </TabsContent>
+
+                                {/* UPDATE TAB */}
+                                <TabsContent value="update" className="mt-3 space-y-4" data-testid="mentor-tab-content-update">
                                     <div className="space-y-2">
                                         <Label>Mentorship Stage</Label>
-                                        <Select
-                                            value={updateData.mentor_stage}
-                                            onValueChange={(value) => setUpdateData({ ...updateData, mentor_stage: value })}
-                                        >
-                                            <SelectTrigger data-testid="mentor-stage-select">
-                                                <SelectValue placeholder="Select stage" />
-                                            </SelectTrigger>
+                                        <Select value={updateData.mentor_stage} onValueChange={(value) => setUpdateData({ ...updateData, mentor_stage: value })}>
+                                            <SelectTrigger data-testid="mentor-stage-select"><SelectValue placeholder="Select stage" /></SelectTrigger>
                                             <SelectContent>
                                                 {MENTOR_STAGES.map((stage) => (
-                                                    <SelectItem key={stage.id} value={stage.id}>
-                                                        {stage.label}
-                                                    </SelectItem>
+                                                    <SelectItem key={stage.id} value={stage.id}>{stage.label}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    
                                     <div className="space-y-2">
                                         <Label>Session Notes</Label>
-                                        <Textarea
-                                            value={updateData.notes}
-                                            onChange={(e) => setUpdateData({ ...updateData, notes: e.target.value })}
-                                            placeholder="Add session notes, progress updates, redeposit recommendations..."
-                                            rows={4}
-                                            data-testid="mentor-notes-input"
-                                        />
+                                        <Textarea value={updateData.notes} onChange={(e) => setUpdateData({ ...updateData, notes: e.target.value })}
+                                            placeholder="Add session notes, progress updates..." rows={3} data-testid="mentor-notes-input" />
                                     </div>
-                                </CardContent>
-                            </Card>
-                            
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setShowDetailModal(false)}>
-                                    Cancel
-                                </Button>
-                                <Button onClick={handleUpdateStudent} data-testid="update-mentor-btn">
-                                    Update Status
-                                </Button>
-                            </DialogFooter>
-                        </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setShowDetailModal(false)}>Cancel</Button>
+                                        <Button onClick={handleUpdateStudent} data-testid="update-mentor-btn">Update Status</Button>
+                                    </DialogFooter>
+                                </TabsContent>
+                            </Tabs>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>
