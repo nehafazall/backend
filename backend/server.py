@@ -7,6 +7,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import UpdateOne
 import os
+import json
 import logging
 import asyncio
 from pathlib import Path
@@ -15384,40 +15385,84 @@ async def threecx_contact_create(request: ThreeCXContactCreateRequest):
 async def threecx_call_journal(request: ThreeCXCallJournalRequest):
     """
     3CX Call Journaling
-    Logs call details when call completes
+    Logs call details when call completes.
+    Also attempts to update a matching 'initiated' call log from click-to-call.
     """
     now = datetime.now(timezone.utc).isoformat()
-    call_id = str(uuid.uuid4())
-    
-    # Determine contact type and get contact info
+
+    # Normalize phone for matching
+    phone_raw = request.phone_number or ""
+    phone_clean = phone_raw.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    phone_suffix = phone_clean[-10:] if len(phone_clean) >= 10 else phone_clean
+
+    # Determine contact by contact_id OR phone lookup
     contact_type = None
     contact_name = None
-    
-    if request.contact_id:
-        lead = await db.leads.find_one({"id": request.contact_id})
+    contact_id = request.contact_id
+
+    if contact_id:
+        lead = await db.leads.find_one({"id": contact_id})
         if lead:
             contact_type = "lead"
             contact_name = lead.get("full_name")
-            # Update lead's last activity and call recording
-            update_data = {"last_activity": now, "updated_at": now}
-            if request.recording_file:
-                update_data["call_recording_url"] = request.recording_file
-            await db.leads.update_one({"id": request.contact_id}, {"$set": update_data})
         else:
-            student = await db.students.find_one({"id": request.contact_id})
+            student = await db.students.find_one({"id": contact_id})
             if student:
                 contact_type = "student"
                 contact_name = student.get("full_name")
-                # Update student's call recording
-                update_data = {"updated_at": now}
-                if request.recording_file:
-                    update_data["call_recording_url"] = request.recording_file
-                await db.students.update_one({"id": request.contact_id}, {"$set": update_data})
-    
-    # Create call log entry
+    else:
+        # Phone-based lookup to find the contact
+        lead = await db.leads.find_one({"phone": {"$regex": phone_suffix + "$"}})
+        if lead:
+            contact_type = "lead"
+            contact_name = lead.get("full_name")
+            contact_id = lead["id"]
+        else:
+            student = await db.students.find_one({"phone": {"$regex": phone_suffix + "$"}})
+            if student:
+                contact_type = "student"
+                contact_name = student.get("full_name")
+                contact_id = student["id"]
+
+    # Update recording URL on contact record
+    if contact_id and request.recording_file:
+        coll = db.leads if contact_type == "lead" else db.students
+        await coll.update_one({"id": contact_id}, {"$set": {"call_recording_url": request.recording_file, "last_activity": now, "updated_at": now}})
+
+    # Try to find and update an existing 'initiated' click-to-call log (within last 2 hours)
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    existing = await db.call_logs.find_one({
+        "phone_number": {"$regex": phone_suffix + "$"},
+        "status": "initiated",
+        "call_duration": 0,
+        "call_date": {"$gte": cutoff},
+    }, sort=[("call_date", -1)])
+
+    if existing:
+        # Update the initiated log with real call data
+        await db.call_logs.update_one({"id": existing["id"]}, {"$set": {
+            "call_type": request.call_type,
+            "call_direction": request.call_direction,
+            "call_duration": request.call_duration,
+            "recording_file": request.recording_file,
+            "agent_extension": request.agent_extension or existing.get("extension"),
+            "notes": request.notes,
+            "status": "completed",
+            "contact_id": contact_id or existing.get("contact_id"),
+            "contact_type": contact_type or existing.get("contact_type"),
+            "contact_name": contact_name or existing.get("contact_name"),
+            "completed_at": now,
+            "system": "3CX",
+        }})
+        logger.info(f"3CX: Updated initiated call {existing['id']} — {request.call_direction} to {request.phone_number}, duration: {request.call_duration}s")
+        return {"success": True, "call_id": existing["id"], "message": "Existing call updated with completion data"}
+
+    # No matching initiated log — create a new one (inbound calls, etc.)
+    call_id = str(uuid.uuid4())
     call_log = {
         "id": call_id,
-        "contact_id": request.contact_id,
+        "contact_id": contact_id,
         "contact_type": contact_type,
         "contact_name": contact_name or request.name,
         "phone_number": request.phone_number,
@@ -15428,19 +15473,66 @@ async def threecx_call_journal(request: ThreeCXCallJournalRequest):
         "recording_file": request.recording_file,
         "agent_extension": request.agent_extension,
         "notes": request.notes,
+        "status": "completed",
         "logged_at": now,
-        "system": "3CX"
+        "system": "3CX",
     }
-    
     await db.call_logs.insert_one(call_log)
-    
-    logger.info(f"3CX: Call logged - {request.call_direction} {request.call_type} to {request.phone_number}, duration: {request.call_duration}s")
-    
-    return {
-        "success": True,
-        "call_id": call_id,
-        "message": "Call logged successfully"
-    }
+    logger.info(f"3CX: New call logged — {request.call_direction} {request.call_type} to {request.phone_number}, duration: {request.call_duration}s")
+    return {"success": True, "call_id": call_id, "message": "Call logged successfully"}
+
+
+@api_router.post("/3cx/webhook")
+async def threecx_webhook_flexible(request: Request):
+    """
+    Flexible 3CX Webhook Receiver.
+    Accepts 3CX native webhook payloads (various formats) and normalizes them.
+    Configure this URL in your 3CX Admin > Integrations > Webhook/API Request.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    logger.info(f"3CX Webhook received: {json.dumps(body)[:500]}")
+
+    # Normalize 3CX webhook fields (3CX sends various field names)
+    phone = body.get("phonenumber") or body.get("phone_number") or body.get("Number") or body.get("callerid") or ""
+    duration = body.get("duration") or body.get("call_duration") or body.get("Duration") or 0
+    direction = body.get("direction") or body.get("call_direction") or body.get("Direction") or "Outbound"
+    call_type = body.get("type") or body.get("call_type") or body.get("Type") or "Answered"
+    recording = body.get("recording") or body.get("recording_file") or body.get("RecordingUrl") or ""
+    extension = body.get("extension") or body.get("agent_extension") or body.get("Extension") or ""
+    contact_id = body.get("contact_id") or body.get("ContactId") or ""
+    name = body.get("name") or body.get("ContactName") or body.get("contact_name") or ""
+    timestamp = body.get("timestamp") or body.get("Timestamp") or body.get("datetime") or ""
+
+    # Parse duration if string
+    if isinstance(duration, str):
+        try:
+            parts = duration.split(":")
+            if len(parts) == 3:
+                duration = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:
+                duration = int(parts[0]) * 60 + int(parts[1])
+            else:
+                duration = int(float(duration))
+        except (ValueError, IndexError):
+            duration = 0
+
+    # Map to ThreeCXCallJournalRequest and process
+    journal_req = ThreeCXCallJournalRequest(
+        call_type=call_type,
+        phone_number=phone,
+        call_direction=direction,
+        name=name,
+        contact_id=contact_id if contact_id else None,
+        call_duration=int(duration),
+        timestamp=timestamp if timestamp else None,
+        recording_file=recording if recording else None,
+        agent_extension=extension if extension else None,
+    )
+    return await threecx_call_journal(journal_req)
 
 @api_router.get("/3cx/call-history/{contact_id}")
 async def get_call_history(contact_id: str, user = Depends(get_current_user)):
@@ -15740,6 +15832,54 @@ async def click_to_call(phone_number: str, contact_id: Optional[str] = None, use
         "extension": user.get("threecx_extension"),
         "message": "Call initiated - connect via 3CX client"
     }
+
+
+@api_router.get("/3cx/webhook-setup-guide")
+async def threecx_webhook_guide(request: Request):
+    """Returns the 3CX webhook configuration guide with the correct URL."""
+    base_url = str(request.base_url).rstrip("/")
+    # Try to determine the production URL
+    prod_url = os.environ.get("BACKEND_URL", base_url)
+    return {
+        "title": "3CX Webhook Integration Setup Guide",
+        "webhook_urls": {
+            "primary": f"{prod_url}/api/3cx/webhook",
+            "structured": f"{prod_url}/api/3cx/call-journal",
+        },
+        "steps": [
+            "1. Log into your 3CX Management Console (admin panel)",
+            "2. Go to Settings > Integrations (or Advanced > API / Webhooks)",
+            "3. Under 'CRM Integration' or 'Webhook', add a new webhook",
+            "4. Set the Webhook URL to the 'primary' URL above",
+            "5. Set Method to POST, Content-Type to application/json",
+            "6. Enable the following triggers: Call Answered, Call Ended, Call Missed",
+            "7. Map the following 3CX fields in the webhook payload template:",
+        ],
+        "payload_template": {
+            "phonenumber": "{{caller.number}} or {{callee.number}}",
+            "duration": "{{call.duration}}",
+            "direction": "{{call.direction}}",
+            "type": "{{call.type}}",
+            "extension": "{{agent.extension}}",
+            "name": "{{contact.name}}",
+            "recording": "{{call.recording_url}}",
+            "timestamp": "{{call.start_time}}",
+        },
+        "supported_field_names": {
+            "phone": ["phonenumber", "phone_number", "Number", "callerid"],
+            "duration": ["duration", "call_duration", "Duration (seconds or HH:MM:SS)"],
+            "direction": ["direction", "call_direction", "Direction (Inbound/Outbound)"],
+            "recording": ["recording", "recording_file", "RecordingUrl"],
+            "extension": ["extension", "agent_extension", "Extension"],
+        },
+        "notes": [
+            "The webhook accepts 3CX native formats — no custom transformation needed.",
+            "Duration can be in seconds (225) or time format (3:45 or 0:03:45).",
+            "Call data is automatically matched to click-to-call records using phone number.",
+            "No authentication required on the webhook URL — use IP whitelist in production.",
+        ],
+    }
+
 
 # ==================== QC / CALL QUALITY ENDPOINTS ====================
 

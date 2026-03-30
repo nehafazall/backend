@@ -1,0 +1,101 @@
+{
+  "summary": "Iteration 105 - 3CX Webhook Integration & Ad Intelligence Features Testing Complete. All 15 backend tests passed. Frontend verified: BD CRM modal has 4 tabs (Info, Transactions, Calls, Update), Mentor CRM modal has 4 tabs, Marketing Analysis page has Ad Intelligence tab with search bar and API Connected badge, 'awaiting 3CX sync' badge visible for 0-duration calls.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "BD CRM Modal / Mentor CRM Modal",
+        "issues": ["Console warning: DialogContent requires DialogTitle for accessibility - consider adding VisuallyHidden DialogTitle"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_105_3cx_ad_intel.py",
+    "/app/test_reports/pytest/pytest_iteration_105.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor accessibility warning: Dialog modals should have DialogTitle for screen reader users (can use VisuallyHidden component)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_105_3cx_ad_intel.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "super_admin": "aqib@clt-academy.com / @Aqib1234"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 105 verified: 1) 3CX Webhook: POST /api/3cx/webhook accepts flexible payloads with various field names (phonenumber/phone_number, duration/call_duration), parses duration strings ('3:45' -> 225s, '0:03:45' -> 225s), no auth required. 2) Webhook Setup Guide: GET /api/3cx/webhook-setup-guide returns URLs and configuration steps. 3) Ad Library Intelligence: POST /api/intelligence/ad-library/search accepts search_terms and returns ads, GET /api/intelligence/ad-library/searches returns saved searches. 4) Meta Token: PUT /api/settings/meta-ad-token saves token, GET /api/settings/meta-ad-token-status returns configured status. 5) BD CRM Modal: /bd page shows tabbed dialog with Info, Transactions, Calls, Update tabs. 6) Mentor CRM Modal: /mentor page shows tabbed dialog with same 4 tabs. 7) Call History: Shows 'Dialed — awaiting 3CX sync' badge for 0-duration calls. 8) Marketing Analysis: /marketing/analysis has Ad Intelligence tab with search bar.",
+  "features_verified": {
+    "3cx_webhook_basic_payload": {
+      "status": "PASS",
+      "details": "POST /api/3cx/webhook accepts basic payload with phonenumber, duration, direction, type, extension, name"
+    },
+    "3cx_webhook_duration_mm_ss": {
+      "status": "PASS",
+      "details": "Duration string '3:45' parsed as 225 seconds"
+    },
+    "3cx_webhook_duration_hh_mm_ss": {
+      "status": "PASS",
+      "details": "Duration string '0:03:45' parsed as 225 seconds"
+    },
+    "3cx_webhook_integer_duration": {
+      "status": "PASS",
+      "details": "Integer duration 180 accepted"
+    },
+    "3cx_webhook_alternative_fields": {
+      "status": "PASS",
+      "details": "Alternative field names (phone_number, call_duration, call_direction, call_type) accepted"
+    },
+    "3cx_webhook_empty_payload": {
+      "status": "PASS",
+      "details": "Empty payload handled gracefully"
+    },
+    "3cx_webhook_setup_guide": {
+      "status": "PASS",
+      "details": "GET /api/3cx/webhook-setup-guide returns webhook URLs and configuration steps"
+    },
+    "ad_library_search": {
+      "status": "PASS",
+      "details": "POST /api/intelligence/ad-library/search accepts search_terms and returns results"
+    },
+    "ad_library_saved_searches": {
+      "status": "PASS",
+      "details": "GET /api/intelligence/ad-library/searches returns saved searches"
+    },
+    "meta_ad_token_status": {
+      "status": "PASS",
+      "details": "GET /api/settings/meta-ad-token-status returns configured status"
+    },
+    "meta_ad_token_save": {
+      "status": "PASS",
+      "details": "PUT /api/settings/meta-ad-token saves token successfully"
+    },
+    "bd_crm_modal_tabs": {
+      "status": "PASS",
+      "details": "BD CRM modal has 4 tabs: Info, Transactions, Calls, Update"
+    },
+    "mentor_crm_modal_tabs": {
+      "status": "PASS",
+      "details": "Mentor CRM modal has 4 tabs: Info, Transactions, Calls, Update"
+    },
+    "call_history_awaiting_sync_badge": {
+      "status": "PASS",
+      "details": "Call history shows 'Dialed — awaiting 3CX sync' badge for 0-duration calls"
+    },
+    "marketing_ad_intelligence_tab": {
+      "status": "PASS",
+      "details": "Marketing Analysis page has Ad Intelligence tab with search bar and API Connected badge"
+    }
+  }
+}

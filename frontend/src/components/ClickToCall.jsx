@@ -187,7 +187,7 @@ export function CallHistory({ contactId, className = "" }) {
     }
 
     const formatDuration = (seconds) => {
-        if (!seconds) return '0:00';
+        if (!seconds || seconds === 0) return '0:00';
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -208,37 +208,41 @@ export function CallHistory({ contactId, className = "" }) {
         <div className={`space-y-2 ${className}`}>
             <h4 className="text-sm font-medium">Recent Calls</h4>
             <div className="space-y-1 max-h-48 overflow-y-auto">
-                {calls.slice(0, 10).map((call) => (
-                    <div 
-                        key={call.call_id} 
-                        className="flex items-center justify-between text-xs p-2 bg-muted/50 rounded"
-                    >
-                        <div className="flex items-center gap-2">
-                            {call.call_direction === 'Inbound' ? (
-                                <PhoneCall className="h-3 w-3 text-blue-500" />
-                            ) : (
-                                <Phone className="h-3 w-3 text-green-500" />
-                            )}
-                            <span className={call.call_type === 'Missed' ? 'text-red-500' : ''}>
-                                {call.call_direction} {call.call_type === 'Missed' && '(Missed)'}
-                            </span>
+                {calls.slice(0, 10).map((call) => {
+                    const isInitiated = call.call_duration === 0 || call.call_duration === null;
+                    return (
+                        <div 
+                            key={call.call_id} 
+                            className={`flex items-center justify-between text-xs p-2 rounded ${isInitiated ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-muted/50'}`}
+                        >
+                            <div className="flex items-center gap-2">
+                                {call.call_direction === 'Inbound' ? (
+                                    <PhoneCall className="h-3 w-3 text-blue-500" />
+                                ) : (
+                                    <Phone className={`h-3 w-3 ${isInitiated ? 'text-amber-500' : 'text-green-500'}`} />
+                                )}
+                                <span className={call.call_type === 'Missed' ? 'text-red-500' : ''}>
+                                    {call.call_direction} {call.call_type === 'Missed' && '(Missed)'}
+                                </span>
+                                {isInitiated && <span className="text-[9px] text-amber-600 font-medium px-1 py-0.5 bg-amber-100 rounded">Dialed — awaiting 3CX sync</span>}
+                            </div>
+                            <div className="flex items-center gap-3 text-muted-foreground">
+                                {!isInitiated && <span className="font-mono">{formatDuration(call.call_duration)}</span>}
+                                <span>{formatDate(call.call_date)}</span>
+                                {call.recording_url && (
+                                    <a 
+                                        href={call.recording_url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline text-[10px]"
+                                    >
+                                        Recording
+                                    </a>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-3 text-muted-foreground">
-                            <span>{formatDuration(call.call_duration)}</span>
-                            <span>{formatDate(call.call_date)}</span>
-                            {call.recording_url && (
-                                <a 
-                                    href={call.recording_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-primary hover:underline"
-                                >
-                                    🎵
-                                </a>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
