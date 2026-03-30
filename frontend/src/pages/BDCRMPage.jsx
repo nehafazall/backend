@@ -467,6 +467,7 @@ export default function BDCRMPage() {
             {/* Student Detail Modal */}
             <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
                 <DialogContent className="max-w-2xl max-h-[90vh]" data-testid="bd-student-detail-modal">
+                    <DialogHeader className="sr-only"><DialogTitle>{selectedStudent?.full_name || 'Student Details'}</DialogTitle></DialogHeader>
                     {selectedStudent && (
                         <>
                             {/* Compact Header - Always Visible */}
