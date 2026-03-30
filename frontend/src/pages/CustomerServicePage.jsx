@@ -543,9 +543,7 @@ const CustomerServicePage = () => {
 
     const isHeadOrAdmin = ['cs_head', 'super_admin', 'admin'].includes(user?.role);
     const isSuperAdmin = user?.role === 'super_admin';
-    const [viewMode, setViewMode] = useState(
-        ['cs_head', 'super_admin', 'admin'].includes(user?.role) ? 'team' : 'my_work'
-    );
+    const [viewMode, setViewMode] = useState('my_work');
     const [csAgentsList, setCsAgentsList] = useState([]);
     const [filterCSAgent, setFilterCSAgent] = useState('all');
     const [displayMode, setDisplayMode] = useState('kanban'); // 'kanban' or 'table'

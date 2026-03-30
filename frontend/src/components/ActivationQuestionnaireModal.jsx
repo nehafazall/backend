@@ -86,7 +86,8 @@ const ActivationQuestionnaireModal = ({
         }
         
         if (!formData.trading_account_number?.trim()) {
-            newErrors.trading_account_number = 'Trading Account Number is required to activate';
+            // MT5 account number is optional - can be added later
+            // No validation error
         }
         
         if (!formData.kyc_completed) {
@@ -233,13 +234,13 @@ const ActivationQuestionnaireModal = ({
                             {/* Trading Account Number */}
                             <div className="space-y-2">
                                 <Label className="text-sm font-medium">
-                                    3. Trading Account Number *
-                                    <Badge variant="destructive" className="ml-2 text-xs">Required</Badge>
+                                    3. Trading Account Number (MT5)
+                                    <Badge variant="outline" className="ml-2 text-xs">Optional — can be added later</Badge>
                                 </Label>
                                 <Input
                                     value={formData.trading_account_number}
                                     onChange={(e) => handleInputChange('trading_account_number', e.target.value)}
-                                    placeholder="Cannot activate without this"
+                                    placeholder="Enter MT5 account number (optional)"
                                     className={errors.trading_account_number ? 'border-red-500' : ''}
                                     data-testid="trading-account-input"
                                 />
