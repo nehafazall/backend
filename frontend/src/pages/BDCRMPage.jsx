@@ -60,13 +60,20 @@ const BD_ROLES_SET = new Set(['business_development', 'business_development_mana
 
 const BDStudentCard = ({ student, onView, isDragging, isSuperAdmin, bdAgents, onReassign }) => {
     const colorTag = student.color_tag ? COLOR_TAG_STYLES[student.color_tag] : null;
+    const isInClosed = student.bd_stage === 'closed';
+    const hasRedeposited = (student.redeposit_count || 0) > 0;
     return (
         <div
-            className={`kanban-card stage-${student.bd_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${colorTag ? `${colorTag.color.split(' ')[0]} border-2 ${colorTag.color.split(' ')[1]}` : ''}`}
+            className={`kanban-card stage-${student.bd_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${isInClosed ? 'bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-300/30' : colorTag ? `${colorTag.color.split(' ')[0]} border-2 ${colorTag.color.split(' ')[1]}` : ''}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`bd-card-${student.id}`}
         >
-            {colorTag && (
+            {isInClosed && (
+                <div className="-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md bg-emerald-500 text-white">
+                    <DollarSign className="h-3 w-3" /> Awaiting Redeposit Recording
+                </div>
+            )}
+            {!isInClosed && colorTag && (
                 <div className={`-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md ${colorTag.color}`}>
                     <colorTag.icon className="h-3 w-3" />
                     {colorTag.label}
@@ -81,7 +88,14 @@ const BDStudentCard = ({ student, onView, isDragging, isSuperAdmin, bdAgents, on
                         {student.full_name?.charAt(0) || '?'}
                     </div>
                     <div>
-                        <p className="font-medium text-sm">{student.full_name}</p>
+                        <div className="flex items-center gap-1">
+                            <p className="font-medium text-sm">{student.full_name}</p>
+                            {hasRedeposited && (
+                                <Badge className="bg-emerald-500 text-white text-[10px] px-1 py-0">
+                                    <DollarSign className="h-2 w-2 mr-0.5" />x{student.redeposit_count}
+                                </Badge>
+                            )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{student.package_bought || student.current_course_name || 'N/A'}</p>
                     </div>
                 </div>
@@ -322,7 +336,7 @@ export default function BDCRMPage() {
                 amount: parseFloat(redepositData.amount_aed),
                 date: redepositData.date,
             });
-            toast.success('Redeposit recorded successfully');
+            toast.success('Redeposit recorded — student moved back to New Students');
             setShowRedepositModal(false);
             setRedepositData({ amount_aed: '', date: new Date().toISOString().slice(0, 10) });
             fetchStudents();
@@ -367,7 +381,8 @@ export default function BDCRMPage() {
         fetchStudents();
     };
 
-    const filteredStudents = students;
+    const [showRedepositOnly, setShowRedepositOnly] = useState(false);
+    const filteredStudents = showRedepositOnly ? students.filter(s => (s.redeposit_count || 0) > 0) : students;
     const draggedStudent = students.find(s => s.id === activeId);
 
     return (
@@ -382,6 +397,17 @@ export default function BDCRMPage() {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     <PeriodFilter onChange={setPeriodFilter} dateFieldOptions={[{ value: 'deposit_date', label: 'By Deposit Date' }]} />
+                    <Button
+                        variant={showRedepositOnly ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => setShowRedepositOnly(!showRedepositOnly)}
+                        data-testid="bd-redeposit-filter"
+                    >
+                        <DollarSign className="h-3 w-3" />
+                        Redeposit Students
+                        {showRedepositOnly && <span>({filteredStudents.length})</span>}
+                    </Button>
                     {isSuperAdmin && bdAgents.length > 0 && (
                         <Select value={filterAgent} onValueChange={setFilterAgent}>
                             <SelectTrigger className="w-[180px]" data-testid="bd-agent-filter">

@@ -100,14 +100,21 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging, isSuperAdmin,
     const courseColors = getCourseColor(courseName);
     const hasCourse = !!courseName;
     const colorTag = student.color_tag ? MENTOR_COLOR_TAG_STYLES[student.color_tag] : null;
+    const isInClosed = student.mentor_stage === 'closed';
+    const hasRedeposited = (student.redeposit_count || 0) > 0;
 
     return (
         <div
-            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${colorTag ? `${colorTag.color.split(' ')[0]} border-2 ${colorTag.color.split(' ')[1]}` : hasCourse ? `${courseColors.border} border-l-4` : ''}`}
+            className={`kanban-card stage-${student.mentor_stage} animate-fade-in cursor-pointer ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''} ${isInClosed ? 'bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-400 dark:border-emerald-600 ring-1 ring-emerald-300/30' : colorTag ? `${colorTag.color.split(' ')[0]} border-2 ${colorTag.color.split(' ')[1]}` : hasCourse ? `${courseColors.border} border-l-4` : ''}`}
             onClick={() => !isDragging && onView(student)}
             data-testid={`mentor-card-${student.id}`}
         >
-            {colorTag && (
+            {isInClosed && (
+                <div className="-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md bg-emerald-500 text-white">
+                    <DollarSign className="h-3 w-3" /> Awaiting Deposit Recording
+                </div>
+            )}
+            {!isInClosed && colorTag && (
                 <div className={`-mx-3 -mt-3 mb-2 px-3 py-1 flex items-center gap-1.5 text-[10px] font-semibold rounded-t-md ${colorTag.color}`}>
                     <colorTag.icon className="h-3 w-3" />
                     {colorTag.label}
@@ -122,7 +129,14 @@ const StudentCard = ({ student, onView, onSetReminder, isDragging, isSuperAdmin,
                         {student.full_name?.charAt(0) || '?'}
                     </div>
                     <div>
-                        <p className="font-medium text-sm">{student.full_name}</p>
+                        <div className="flex items-center gap-1">
+                            <p className="font-medium text-sm">{student.full_name}</p>
+                            {hasRedeposited && (
+                                <Badge className="bg-emerald-500 text-white text-[10px] px-1 py-0">
+                                    <DollarSign className="h-2 w-2 mr-0.5" />x{student.redeposit_count}
+                                </Badge>
+                            )}
+                        </div>
                         {hasCourse ? (
                             <Badge className={`${courseColors.bg} ${courseColors.text} ${courseColors.border} border text-[10px] px-1.5 py-0`}>
                                 {courseColors.label}
@@ -308,6 +322,7 @@ const MentorCRMPage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('my_work'); // 'my_work' | 'team'
+    const [showRedepositOnly, setShowRedepositOnly] = useState(false);
     const [teamMentors, setTeamMentors] = useState([]);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showReminderModal, setShowReminderModal] = useState(false);
@@ -527,7 +542,11 @@ const MentorCRMPage = () => {
         if (targetStage && targetStage !== activeStudent.mentor_stage) {
             try {
                 await studentApi.update(activeStudentId, { mentor_stage: targetStage });
-                toast.success(`Student moved to ${MENTOR_STAGES.find(s => s.id === targetStage)?.label}`);
+                if (targetStage === 'closed') {
+                    toast.success('Deposit recorded — student cycled back to New Students');
+                } else {
+                    toast.success(`Student moved to ${MENTOR_STAGES.find(s => s.id === targetStage)?.label}`);
+                }
                 fetchStudents();
             } catch (error) {
                 toast.error('Failed to move student');
@@ -541,7 +560,11 @@ const MentorCRMPage = () => {
         
         try {
             await studentApi.update(selectedStudent.id, updateData);
-            toast.success('Student updated successfully');
+            if (updateData.mentor_stage === 'closed') {
+                toast.success('Deposit recorded — student cycled back to New Students');
+            } else {
+                toast.success('Student updated successfully');
+            }
             setShowDetailModal(false);
             fetchStudents();
         } catch (error) {
@@ -637,6 +660,16 @@ const MentorCRMPage = () => {
                         dateFields={[{ value: 'deposit_date', label: 'Deposit Date' }]}
                         onChange={setMentorPeriodFilter}
                     />
+                    <Button
+                        variant={showRedepositOnly ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => setShowRedepositOnly(!showRedepositOnly)}
+                        data-testid="mentor-redeposit-filter"
+                    >
+                        <DollarSign className="h-3 w-3" />
+                        Redeposit Students
+                    </Button>
                     {['super_admin', 'admin', 'academic_master'].includes(user?.role) && (
                         <>
                             <ImportButton templateType="students_mentor" title="Import Students" onSuccess={fetchStudents} />
@@ -705,7 +738,7 @@ const MentorCRMPage = () => {
                             <KanbanColumn
                                 key={stage.id}
                                 stage={stage}
-                                students={students}
+                                students={showRedepositOnly ? students.filter(s => (s.redeposit_count || 0) > 0) : students}
                                 onView={handleViewStudent}
                                 onSetReminder={handleSetReminder}
                                 onHeaderClick={undefined}

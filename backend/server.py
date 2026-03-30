@@ -6098,6 +6098,14 @@ async def update_student(student_id: str, data: StudentUpdate, user = Depends(ge
                 f"/mentor/students/{student_id}"
             )
     
+    # Auto-cycle: When mentor moves student to "closed" (deposit done), cycle back to "new_student"
+    if update_data.get("mentor_stage") == "closed" and existing.get("mentor_stage") != "closed":
+        update_data["mentor_stage"] = "new_student"
+        update_data["last_redeposit_date"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # Increment redeposit count via $inc (handled separately after $set)
+        await db.students.update_one({"id": student_id}, {"$inc": {"redeposit_count": 1}})
+        logger.info(f"Mentor deposit cycle: Student {existing.get('full_name')} cycled back to new_student")
+    
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     await db.students.update_one({"id": student_id}, {"$set": update_data})
@@ -6471,8 +6479,16 @@ async def bd_record_redeposit(
     except Exception as e:
         logger.error(f"Auto commission txn failed for BD redeposit {redeposit_record['id']}: {e}")
 
-    # Move student to "closed" in BD kanban
-    await db.students.update_one({"id": student_id}, {"$set": {"bd_stage": "closed", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    # Cycle student back to "new_student" and increment redeposit count
+    await db.students.update_one({"id": student_id}, {
+        "$set": {
+            "bd_stage": "new_student",
+            "last_redeposit_date": date,
+            "last_redeposit_amount": amount_aed,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "$inc": {"redeposit_count": 1},
+    })
     
     await log_activity("student", student_id, "bd_redeposit_recorded", user, {"amount_aed": amount_aed})
     
