@@ -2844,6 +2844,155 @@ async def update_user_preferences(data: UserPreferencesUpdate, user = Depends(ge
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
     return updated
 
+
+async def _auto_transfer_students(deactivated_user_id: str, deactivated_name: str, role_type: str, admin_user: dict):
+    """Round-robin transfer students/leads from a deactivated mentor/CS agent to active ones."""
+    now = datetime.now(timezone.utc).isoformat()
+
+    if role_type == "mentor":
+        # Find active mentors
+        active_mentors = await db.users.find(
+            {"role": {"$regex": "^(mentor|master_of_academics)", "$options": "i"}, "is_active": True, "id": {"$ne": deactivated_user_id}},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(20)
+        if not active_mentors:
+            return 0
+
+        # Find students assigned to the deactivated mentor
+        students = await db.students.find(
+            {"$or": [{"mentor_id": deactivated_user_id}, {"assigned_mentor_id": deactivated_user_id}]},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(5000)
+
+        for i, stu in enumerate(students):
+            new_mentor = active_mentors[i % len(active_mentors)]
+            await db.students.update_one(
+                {"id": stu["id"]},
+                {"$set": {
+                    "mentor_id": new_mentor["id"],
+                    "mentor_name": new_mentor["full_name"],
+                    "assigned_mentor_id": new_mentor["id"],
+                    "assigned_mentor_name": new_mentor["full_name"],
+                    "updated_at": now,
+                    "transfer_note": f"Auto-transferred from {deactivated_name} (deactivated) on {now[:10]}",
+                }}
+            )
+        # Notify admin
+        if students:
+            await create_notification(
+                user_id=admin_user["id"],
+                title=f"Students Reassigned from {deactivated_name}",
+                message=f"{len(students)} students auto-transferred from {deactivated_name} to {len(active_mentors)} active mentors via round-robin.",
+                notif_type="system",
+                link="/cs/directory",
+            )
+        return len(students)
+
+    elif role_type == "cs_agent":
+        # Find active CS agents
+        active_agents = await db.users.find(
+            {"role": {"$in": ["cs_agent", "cs_head"]}, "is_active": True, "id": {"$ne": deactivated_user_id}},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(20)
+        if not active_agents:
+            return 0
+
+        # Find students assigned to the deactivated CS agent
+        students = await db.students.find(
+            {"cs_agent_id": deactivated_user_id},
+            {"_id": 0, "id": 1, "full_name": 1}
+        ).to_list(5000)
+
+        for i, stu in enumerate(students):
+            new_agent = active_agents[i % len(active_agents)]
+            await db.students.update_one(
+                {"id": stu["id"]},
+                {"$set": {
+                    "cs_agent_id": new_agent["id"],
+                    "cs_agent_name": new_agent["full_name"],
+                    "updated_at": now,
+                    "transfer_note": f"Auto-transferred from {deactivated_name} (deactivated) on {now[:10]}",
+                }}
+            )
+        if students:
+            await create_notification(
+                user_id=admin_user["id"],
+                title=f"Students Reassigned from {deactivated_name}",
+                message=f"{len(students)} students auto-transferred from {deactivated_name} to {len(active_agents)} active CS agents via round-robin.",
+                notif_type="system",
+                link="/cs",
+            )
+        return len(students)
+    return 0
+
+
+@api_router.post("/students/transfer-from-inactive")
+async def transfer_from_inactive_mentors(user=Depends(require_roles(["super_admin", "admin"]))):
+    """One-time migration: transfer students from ALL inactive mentors to active ones via round-robin."""
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Find inactive mentor-type users
+    inactive_mentors = await db.users.find(
+        {"is_active": False, "$or": [
+            {"role": {"$in": ["mentor", "master_of_academics"]}},
+            {"designation": {"$regex": "mentor", "$options": "i"}},
+        ]},
+        {"_id": 0, "id": 1, "full_name": 1}
+    ).to_list(50)
+
+    # Also find staff/other roles who have students assigned as mentor
+    all_inactive = await db.users.find({"is_active": False}, {"_id": 0, "id": 1, "full_name": 1}).to_list(200)
+    inactive_ids = {u["id"]: u["full_name"] for u in all_inactive}
+
+    # Check which of these have students
+    students_to_transfer = await db.students.find(
+        {"$or": [
+            {"mentor_id": {"$in": list(inactive_ids.keys())}},
+            {"assigned_mentor_id": {"$in": list(inactive_ids.keys())}},
+        ]},
+        {"_id": 0, "id": 1, "full_name": 1, "mentor_id": 1, "assigned_mentor_id": 1}
+    ).to_list(5000)
+
+    if not students_to_transfer:
+        return {"message": "No students found assigned to inactive mentors", "transferred": 0}
+
+    # Find active mentors
+    active_mentors = await db.users.find(
+        {"role": {"$regex": "^(mentor|master_of_academics)", "$options": "i"}, "is_active": True},
+        {"_id": 0, "id": 1, "full_name": 1}
+    ).to_list(20)
+
+    if not active_mentors:
+        return {"message": "No active mentors found to transfer to", "transferred": 0}
+
+    transferred = 0
+    assignments = {}
+    for i, stu in enumerate(students_to_transfer):
+        new_mentor = active_mentors[i % len(active_mentors)]
+        old_id = stu.get("mentor_id") or stu.get("assigned_mentor_id") or ""
+        old_name = inactive_ids.get(old_id, "Unknown")
+
+        await db.students.update_one(
+            {"id": stu["id"]},
+            {"$set": {
+                "mentor_id": new_mentor["id"],
+                "mentor_name": new_mentor["full_name"],
+                "assigned_mentor_id": new_mentor["id"],
+                "assigned_mentor_name": new_mentor["full_name"],
+                "updated_at": now,
+                "transfer_note": f"Migrated from {old_name} (inactive) on {now[:10]}",
+            }}
+        )
+        transferred += 1
+        assignments[new_mentor["full_name"]] = assignments.get(new_mentor["full_name"], 0) + 1
+
+    return {
+        "message": f"Transferred {transferred} students from {len(set(stu.get('mentor_id') or stu.get('assigned_mentor_id') or '' for stu in students_to_transfer))} inactive mentors",
+        "transferred": transferred,
+        "distribution": assignments,
+    }
+
+
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)):
     existing = await db.users.find_one({"id": user_id})
@@ -2975,6 +3124,22 @@ async def update_user(user_id: str, data: Dict, user = Depends(get_current_user)
         entity_name=existing.get("full_name"),
         changes={"old": old_values, "new": {k: v for k, v in data.items() if k not in ["password", "_id"]}}
     )
+    
+    # AUTO-TRANSFER: When a mentor/CS agent is deactivated, redistribute their students
+    if "is_active" in data and data["is_active"] is False:
+        old_role = existing.get("role", "")
+        is_mentor_type = old_role in ("mentor", "master_of_academics") or "mentor" in existing.get("designation", "").lower()
+        is_cs_type = old_role in ("cs_agent", "cs_head")
+        
+        if is_mentor_type:
+            transferred = await _auto_transfer_students(user_id, existing.get("full_name", ""), "mentor", user)
+            if transferred > 0:
+                logger.info(f"Auto-transferred {transferred} students from deactivated mentor {existing.get('full_name')}")
+        
+        if is_cs_type:
+            transferred = await _auto_transfer_students(user_id, existing.get("full_name", ""), "cs_agent", user)
+            if transferred > 0:
+                logger.info(f"Auto-transferred {transferred} students from deactivated CS agent {existing.get('full_name')}")
     
     updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
     return updated
